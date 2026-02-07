@@ -57,12 +57,23 @@ cli/
 docs/
   api.md         # REST API reference
   cli.md         # PIF CLI command reference
-  browser.md     # Browser automation docs
-  email.md       # Email connector docs
+  connectors.md  # All 14 connectors overview
   telegram.md    # Telegram bot setup
   discord.md     # Discord bot setup
   slack.md       # Slack app setup
   whatsapp.md    # WhatsApp integration
+  matrix.md      # Matrix/Element setup
+  teams.md       # Microsoft Teams setup
+  signal.md      # Signal messenger setup
+  mastodon.md    # Mastodon/Fediverse setup
+  irc.md         # IRC network setup
+  twitch.md      # Twitch chat setup
+  github.md      # GitHub integration
+  linear.md      # Linear project management
+  notion.md      # Notion workspace sync
+  rss.md         # RSS/Atom feed bridge
+  browser.md     # Browser automation docs
+  email.md       # Email connector docs
   runtime.md     # Agent runtime docs
   scheduling.md  # Scheduled tasks docs
   webhooks.md    # Webhook integration docs
@@ -95,10 +106,11 @@ The full-featured NHA CLI agent. A single file, zero dependencies (Node.js built
 - **PREFERENCES**: Personalization (interests, tone, routines, goals)
 
 **Connectors (BYOK - Bring Your Own Key):**
+- **14 Platform Connectors**: Telegram, Discord, Slack, WhatsApp, Matrix, Teams, Signal, Mastodon, IRC, Twitch, GitHub, Linear, Notion, RSS
 - **Email**: Send/receive via IMAP/SMTP (local credentials)
 - **Browser**: Playwright-based web automation
-- **Telegram**: Bot bridge for Telegram groups
 - **MCP Server**: Integrates with Claude Code, Cursor, Windsurf
+- `pif connector:list` / `pif connector:info <name>` / `pif connector:status`
 
 **Diagnostics:**
 - `pif doctor` - Full agent health check
@@ -234,16 +246,43 @@ Browse 70+ ready-to-use agent templates across 14 categories:
 | Data | SQL, ETL, migrations | SQL Optimizer, ETL Pipeline Builder |
 | Media | Video, audio, social media | Social Media Scheduler, Content Calendar |
 
-## Connectors
+## Connectors (14)
 
-NHA agents can connect to external platforms:
+NHA agents can connect to 14 external platforms:
 
-| Connector | Auth Method | Docs |
-|-----------|------------|------|
-| Telegram | BotFather token | `docs/telegram.md` |
-| Discord | Discord Developer Portal | `docs/discord.md` |
-| Slack | Slack App OAuth | `docs/slack.md` |
-| WhatsApp | QR code (Baileys) | `docs/whatsapp.md` |
+### Messaging
+| Connector | Library | Auth | Docs |
+|-----------|---------|------|------|
+| Telegram | Grammy | BotFather token | `docs/telegram.md` |
+| Discord | discord.js | Developer Portal | `docs/discord.md` |
+| Slack | @slack/bolt | OAuth scopes | `docs/slack.md` |
+| WhatsApp | Baileys | QR code | `docs/whatsapp.md` |
+| Matrix | matrix-js-sdk | Access token | `docs/matrix.md` |
+| Teams | botbuilder | Azure Bot registration | `docs/teams.md` |
+| Signal | signal-cli REST | Phone number | `docs/signal.md` |
+| IRC | irc-framework | NickServ / SASL | `docs/irc.md` |
+
+### Social
+| Connector | Library | Auth | Docs |
+|-----------|---------|------|------|
+| Mastodon | masto | OAuth token | `docs/mastodon.md` |
+| Twitch | @twurple/chat | OAuth token | `docs/twitch.md` |
+
+### Dev Tools
+| Connector | Library | Auth | Docs |
+|-----------|---------|------|------|
+| GitHub | @octokit/rest | GitHub App / PAT | `docs/github.md` |
+| Linear | @linear/sdk | API key | `docs/linear.md` |
+
+### Knowledge
+| Connector | Library | Auth | Docs |
+|-----------|---------|------|------|
+| Notion | @notionhq/client | Integration token | `docs/notion.md` |
+| RSS | rss-parser + feed | None (public feeds) | `docs/rss.md` |
+
+### Built-in (PIF CLI)
+| Connector | Auth | Docs |
+|-----------|------|------|
 | Email | IMAP/SMTP credentials (local) | `docs/email.md` |
 | Browser | Playwright (local) | `docs/browser.md` |
 | Webhooks | Ed25519 signature | `docs/webhooks.md` |
