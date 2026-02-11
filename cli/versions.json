@@ -26,11 +26,23 @@
     ]
   },
   "legion-x": {
-    "latest": "1.1",
+    "latest": "1.2",
     "file": "legionx.mjs",
     "minNodeVersion": 22,
     "description": "Legion X — Free tier. Uses YOUR API key with server-side orchestration.",
     "versions": [
+      {
+        "version": "1.2",
+        "file": "legionx.mjs",
+        "date": "2026-02-11",
+        "highlights": [
+          "Rate-Aware Executor — adaptive serialization for Tier 1 API keys",
+          "Automatic tier detection from provider rate limit headers",
+          "Retry with exponential backoff on 429 (3 attempts)",
+          "Sequential pacing for low-tier keys — sessions complete without 429 errors",
+          "Zero quality degradation — identical prompts, tokens, and deliberation rounds"
+        ]
+      },
       {
         "version": "1.1",
         "file": "legionx.mjs",
@@ -38,9 +50,7 @@
         "highlights": [
           "ProjectScanner v2 — two-pass scanning with file inventory + deep read",
           "Agent-specific code injection — each agent sees only relevant source files",
-          "Round-robin priority filling — 80%+ coverage of security-relevant files",
-          "Pattern-based security extraction (regex, not just keywords)",
-          "120K char budget (was 60K) for deeper project analysis"
+          "120K char budget for deeper project analysis"
         ]
       },
       {
@@ -49,8 +59,7 @@
         "date": "2026-02-10",
         "highlights": [
           "Server-side orchestration with your own API key",
-          "41 agents: 12 primary + 29 sub-agents across 11 categories",
-          "Geth Consensus multi-round deliberation with cross-reading",
+          "42 agents: 13 primary + 29 sub-agents across 13 categories",
           "Single provider per session (Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere)",
           "Session transcripts saved to ~/.legion/sessions/",
           "Physical process isolation — your key never touches server LLM keys"

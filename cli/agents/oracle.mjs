@@ -14,7 +14,7 @@
  * ╚══════════════════════════════════════════════╝
  *
  * Primary analytics agent.
- * Sub-agents: NAVI (exploration), EDI (statistics), JARVIS (dashboards)
+ * Sub-agents: NAVI (exploration), EDI (statistics), JARVIS (dashboards), HERALD (news), EPICURE (recipes)
  */
 
 export var AGENT_CARD = {

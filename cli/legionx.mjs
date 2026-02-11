@@ -23,7 +23,7 @@
  * 42 agents: 13 primary + 29 sub-agents across 11 categories.
  * Single LLM provider per session (chosen by user: anthropic, openai, or gemini).
  *
- * @version X
+ * @version 1.2
  * @license MIT
  */
 
@@ -39,7 +39,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = 'X';
+var VERSION = '1.2';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');

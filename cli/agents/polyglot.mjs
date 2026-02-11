@@ -11,7 +11,7 @@
  * Translation agent. Tries LibreTranslate (localhost:5000) first,
  * falls back to LLM translation. Supports 30+ languages.
  *
- * Parent agent: CODEC (communication)
+ * Parent agent: BABEL (integration)
  */
 
 import fs from 'fs';
@@ -20,7 +20,7 @@ import path from 'path';
 export var AGENT_CARD = {
   name: 'polyglot',
   displayName: 'POLYGLOT',
-  category: 'communication',
+  category: 'integration',
   origin: 'Polyglot (Many Tongues)',
   tagline: 'Every language is a universe',
   capabilities: [
@@ -33,7 +33,7 @@ export var AGENT_CARD = {
   ],
   inputTypes: ['text'],
   outputTypes: ['translated-text', 'localized-content', 'analysis'],
-  parentAgent: 'codec',
+  parentAgent: 'babel',
 };
 
 export var SYSTEM_PROMPT =

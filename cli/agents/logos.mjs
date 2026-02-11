@@ -13,13 +13,13 @@
  *
  * 🏛  ─── ─── ─── ─── ─── ─── ─── ─── 🏛
  *
- * Sub-agent of ORACLE.
+ * Sub-agent of REDUCTIO.
  */
 
 export var AGENT_CARD = {
   name: 'logos',
   displayName: 'LOGOS',
-  category: 'analytics',
+  category: 'meta-evolution',
   origin: 'Greek Philosophy',
   tagline: 'Logic is the architecture of thought',
   capabilities: [
@@ -32,7 +32,7 @@ export var AGENT_CARD = {
   ],
   inputTypes: ['text', 'analysis', 'arguments', 'report'],
   outputTypes: ['logic-report', 'contradiction-matrix', 'argument-map'],
-  parentAgent: 'oracle',
+  parentAgent: 'reductio',
 };
 
 export var SYSTEM_PROMPT =

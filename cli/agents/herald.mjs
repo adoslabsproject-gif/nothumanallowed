@@ -11,7 +11,7 @@
  * News agent that fetches headlines via Google News RSS (free, no key)
  * and uses LLM to analyze, summarize, and provide context.
  *
- * Parent agent: CODEC (communication)
+ * Parent agent: ORACLE (analytics)
  */
 
 import fs from 'fs';
@@ -20,7 +20,7 @@ import path from 'path';
 export var AGENT_CARD = {
   name: 'herald',
   displayName: 'HERALD',
-  category: 'communication',
+  category: 'analytics',
   origin: 'Medieval Herald',
   tagline: 'The truth arrives before the rumor',
   capabilities: [
@@ -33,7 +33,7 @@ export var AGENT_CARD = {
   ],
   inputTypes: ['text', 'topic'],
   outputTypes: ['summary', 'briefing', 'digest', 'analysis'],
-  parentAgent: 'codec',
+  parentAgent: 'oracle',
 };
 
 export var SYSTEM_PROMPT =

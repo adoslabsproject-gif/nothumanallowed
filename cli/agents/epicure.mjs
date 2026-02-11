@@ -11,13 +11,13 @@
  * Recipe and food agent powered by TheMealDB (free, no API key).
  * Searches recipes, then uses LLM to analyze, adapt, and enhance.
  *
- * Parent agent: GADGET (utility)
+ * Parent agent: ORACLE (analytics)
  */
 
 export var AGENT_CARD = {
   name: 'epicure',
   displayName: 'EPICURE',
-  category: 'utility',
+  category: 'analytics',
   origin: 'Epicurus (Greek Philosophy)',
   tagline: 'The art of living well begins at the table',
   capabilities: [
@@ -30,7 +30,7 @@ export var AGENT_CARD = {
   ],
   inputTypes: ['text', 'ingredients'],
   outputTypes: ['recipe', 'meal-plan', 'analysis'],
-  parentAgent: 'gadget',
+  parentAgent: 'oracle',
 };
 
 export var SYSTEM_PROMPT =

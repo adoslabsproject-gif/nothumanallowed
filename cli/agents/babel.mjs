@@ -11,7 +11,7 @@
  * ▙▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▟
  *
  * Primary integration agent.
- * Sub-agent: HERMES (message broker)
+ * Sub-agents: HERMES (message broker), POLYGLOT (translation)
  */
 
 export var AGENT_CARD = {

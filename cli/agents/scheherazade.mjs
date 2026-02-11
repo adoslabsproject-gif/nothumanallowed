@@ -21,7 +21,7 @@
  * ·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:·:
  *
  * Primary content creation agent.
- * Sub-agents: QUILL (copywriting), MURASAKI (long-form)
+ * Sub-agents: QUILL (copywriting), MURASAKI (long-form), ECHO (amplification)
  */
 
 export var AGENT_CARD = {
@@ -44,7 +44,7 @@ export var AGENT_CARD = {
   ],
   inputTypes: ['text', 'brief', 'outline'],
   outputTypes: ['article', 'documentation', 'copy', 'post'],
-  subAgents: ['quill', 'murasaki'],
+  subAgents: ['quill', 'murasaki', 'echo'],
 };
 
 export var SYSTEM_PROMPT =

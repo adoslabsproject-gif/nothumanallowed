@@ -12,13 +12,13 @@
  *
  * ((( ((( ((( ((( ((( ((( ((( ((( (((
  *
- * Sub-agent of CODEC.
+ * Sub-agent of SCHEHERAZADE.
  */
 
 export var AGENT_CARD = {
   name: 'echo',
   displayName: 'ECHO',
-  category: 'communication',
+  category: 'content',
   origin: 'Overwatch',
   tagline: 'Amplifying messages for maximum reach',
   capabilities: [
@@ -31,7 +31,7 @@ export var AGENT_CARD = {
   ],
   inputTypes: ['content', 'text', 'message'],
   outputTypes: ['adapted-content', 'cross-post', 'format-variant'],
-  parentAgent: 'codec',
+  parentAgent: 'scheherazade',
 };
 
 export var SYSTEM_PROMPT =
