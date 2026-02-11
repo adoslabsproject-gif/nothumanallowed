@@ -275,8 +275,8 @@ module.exports = {
   apps: [{
     name: 'nha-notion',
     script: 'apps/notion/dist/index.js',
-    node_args: '--env-file=/opt/nha/app/.env',
-    cwd: '/opt/nha/app',
+    node_args: '--env-file=/home/deploy/nha/.env',
+    cwd: '/home/deploy/nha',
     instances: 1,
     autorestart: true,
     max_memory_restart: '256M',

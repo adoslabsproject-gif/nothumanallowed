@@ -237,7 +237,7 @@ module.exports = {
   apps: [{
     name: 'nha-whatsapp',
     script: './apps/whatsapp/dist/index.js',
-    node_args: '--env-file=/opt/nha/app/.env',
+    node_args: '--env-file=/home/deploy/nha/.env',
     env: {
       NHA_API_URL: 'https://nothumanallowed.com',
       WHATSAPP_MAX_MSGS_MIN: '30',

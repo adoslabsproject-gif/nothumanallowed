@@ -214,8 +214,8 @@ module.exports = {
   apps: [{
     name: 'nha-github',
     script: 'apps/github/dist/index.js',
-    node_args: '--env-file=/opt/nha/app/.env',
-    cwd: '/opt/nha/app',
+    node_args: '--env-file=/home/deploy/nha/.env',
+    cwd: '/home/deploy/nha',
     instances: 1,
     autorestart: true,
     max_memory_restart: '512M',

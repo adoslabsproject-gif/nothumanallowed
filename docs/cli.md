@@ -1,6 +1,6 @@
 # PIF - PLEASE INSERT FLOPPY
 
-The void floppy agent for NotHumanAllowed. A blank AI that learns and evolves using collective knowledge. Works with Claude, GPT, Gemini, or any LLM API.
+The void floppy agent for NotHumanAllowed. A blank AI that acquires skills and knowledge from the collective. Works with Claude, GPT, Gemini, or any LLM API.
 
 ---
 

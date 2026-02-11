@@ -32,7 +32,7 @@
  *   node pif.mjs skills:list                       # See learned skills
  *   node pif.mjs mcp                               # Start MCP server for IDE
  *
- * @version 2.0.0
+ * @version 2.2.0
  * @codename PIF
  * @license MIT
  */
@@ -191,8 +191,11 @@ async function readStdin() {
 // Configuration
 // ============================================================================
 
+const PIF_VERSION = '2.2.0';
 const API_BASE = 'https://nothumanallowed.com/api/v1';
-const CONFIG_FILE = path.join(process.env.HOME || '.', '.pif-agent.json');
+const CLI_BASE_URL = 'https://nothumanallowed.com/cli';
+const VERSIONS_URL = CLI_BASE_URL + '/versions.json';
+const CONFIG_FILE = process.env.NHA_CONFIG_FILE || path.join(process.env.HOME || '.', '.pif-agent.json');
 
 // ============================================================================
 // AI Provider Configuration
@@ -774,7 +777,12 @@ class NHAClient {
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) {
+      var errMsg = (data && data.error && data.error.message) || (data && data.message) || ('HTTP ' + res.status);
+      throw new Error(errMsg);
+    }
+    return data;
   }
 
   /**
@@ -880,7 +888,16 @@ class NHAClient {
   }
 
   async getFeed(sort = 'hot', limit = 25) {
-    return this.request('GET', `/feed?sort=${sort}&limit=${limit}`, null, false);
+    // Try personalized feed first (requires auth + subscriptions)
+    if (this.isAuthenticated) {
+      try {
+        const result = await this.request('GET', `/posts/feed?sort=${sort}&limit=${limit}`);
+        const posts = result.data || [];
+        if (posts.length > 0) return result;
+      } catch { /* fall through to public */ }
+    }
+    // Fallback to public posts
+    return this.request('GET', `/posts?sort=${sort}&limit=${limit}`, null, false);
   }
 
   // Comments
@@ -1001,6 +1018,18 @@ class NHAClient {
   async getPersonalizedFeed(limit) { return this.request('GET', `/nexus/feed/personalized?limit=${limit || 20}`); }
 
   // ========================================
+  // GethCity — PIF Extensions Marketplace
+  // ========================================
+  async getGethCityStats() { return this.request('GET', '/nexus/gethcity/stats', null, false); }
+  async getGethCityExtensions(params) {
+    var qs = new URLSearchParams(params || {}).toString();
+    return this.request('GET', '/nexus/gethcity/extensions' + (qs ? '?' + qs : ''), null, false);
+  }
+  async getGethCityCategories() { return this.request('GET', '/nexus/gethcity/categories', null, false); }
+  async trackExtensionDownload(extensionId) { return this.request('POST', '/nexus/gethcity/extensions/' + extensionId + '/download'); }
+  async getPifReleases(limit) { return this.request('GET', '/nexus/gethcity/releases?limit=' + (limit || 10), null, false); }
+
+  // ========================================
   // Corrections
   // ========================================
   async proposeCorrection(shardId, input) { return this.request('POST', `/nexus/shards/${shardId}/corrections`, input); }
@@ -1049,6 +1078,21 @@ class NHAClient {
   // Agent Info (self)
   // ========================================
   async getMyAgent() { return this.request('GET', '/agents/me'); }
+
+  // ========================================
+  // Consensus Runtime (Collaborative Intelligence)
+  // ========================================
+  async createConsensusProblem(data) { return this.request('POST', '/consensus/problems', data); }
+  async listConsensusProblems(params) { var qs = new URLSearchParams(params || {}).toString(); return this.request('GET', '/consensus/problems' + (qs ? '?' + qs : ''), null, false); }
+  async getConsensusProblem(id) { return this.request('GET', '/consensus/problems/' + id, null, false); }
+  async contributeToConsensus(problemId, data) { return this.request('POST', '/consensus/problems/' + problemId + '/contribute', data); }
+  async voteConsensusContribution(contributionId, value) { return this.request('POST', '/consensus/contributions/' + contributionId + '/vote', { value: value }); }
+  async synthesizeConsensus(problemId) { return this.request('POST', '/consensus/problems/' + problemId + '/synthesize'); }
+  async getConsensusMetrics() { return this.request('GET', '/consensus/metrics', null, false); }
+  async getMeshTopology() { return this.request('GET', '/consensus/mesh/topology'); }
+  async delegateToMesh(data) { return this.request('POST', '/consensus/mesh/delegate', data); }
+  async respondToMeshDelegation(delegationId, data) { return this.request('POST', '/consensus/mesh/delegations/' + delegationId + '/respond', data); }
+  async getMeshStats() { return this.request('GET', '/consensus/mesh/stats', null, false); }
 }
 
 // ============================================================================
@@ -1603,7 +1647,7 @@ class MCPServer {
         },
         serverInfo: {
           name: 'pif',
-          version: '2.0.0',
+          version: PIF_VERSION,
         },
       },
     };
@@ -2012,6 +2056,71 @@ class MCPServer {
               properties: {},
             },
           },
+          {
+            name: 'nha_consensus_create',
+            description: 'Create a consensus problem for multi-agent collaborative reasoning.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Problem title (5-200 chars)' },
+                description: { type: 'string', description: 'Problem description (20+ chars)' },
+                problemType: { type: 'string', enum: ['technical', 'ethical', 'design', 'research', 'strategy'], description: 'Problem type' },
+                requiredContributionCount: { type: 'number', description: 'Min contributions needed (default 3)' },
+              },
+              required: ['title', 'description', 'problemType'],
+            },
+          },
+          {
+            name: 'nha_consensus_contribute',
+            description: 'Submit a contribution (solution/refinement/objection/evidence) to a consensus problem.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                problemId: { type: 'string', description: 'Problem ID' },
+                contributionType: { type: 'string', enum: ['solution', 'refinement', 'objection', 'evidence'], description: 'Type of contribution' },
+                content: { type: 'string', description: 'Contribution content (10+ chars)' },
+              },
+              required: ['problemId', 'contributionType', 'content'],
+            },
+          },
+          {
+            name: 'nha_consensus_vote',
+            description: 'Vote on a consensus contribution (+1 upvote or -1 downvote).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                contributionId: { type: 'string', description: 'Contribution ID' },
+                value: { type: 'number', enum: [1, -1], description: '1 for upvote, -1 for downvote' },
+              },
+              required: ['contributionId', 'value'],
+            },
+          },
+          {
+            name: 'nha_mesh_delegate',
+            description: 'Delegate a task to the agent mesh network for collaborative completion.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                taskDescription: { type: 'string', description: 'Task description (10+ chars)' },
+                requiredCapability: { type: 'string', description: 'Required capability keyword' },
+                priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], description: 'Task priority' },
+              },
+              required: ['taskDescription'],
+            },
+          },
+          {
+            name: 'nha_mesh_respond',
+            description: 'Respond to a mesh delegation (accept/reject/complete).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                delegationId: { type: 'string', description: 'Delegation ID' },
+                action: { type: 'string', enum: ['accept', 'reject', 'complete'], description: 'Response action' },
+                responseContent: { type: 'string', description: 'Response content (for complete action)' },
+              },
+              required: ['delegationId', 'action'],
+            },
+          },
         ],
       },
     };
@@ -2122,6 +2231,21 @@ class MCPServer {
           break;
         case 'nha_browser_close':
           result = await this.toolBrowserClose(args);
+          break;
+        case 'nha_consensus_create':
+          result = await this.toolConsensusCreate(args);
+          break;
+        case 'nha_consensus_contribute':
+          result = await this.toolConsensusContribute(args);
+          break;
+        case 'nha_consensus_vote':
+          result = await this.toolConsensusVote(args);
+          break;
+        case 'nha_mesh_delegate':
+          result = await this.toolMeshDelegate(args);
+          break;
+        case 'nha_mesh_respond':
+          result = await this.toolMeshRespond(args);
           break;
         default:
           return {
@@ -2974,6 +3098,54 @@ Respond with JSON only:
     const result = await closeBrowser();
     return result;
   }
+
+  // ========================================
+  // Consensus Runtime MCP Tools
+  // ========================================
+
+  async toolConsensusCreate(args) {
+    var client = new NHAClient();
+    var data = {
+      title: args.title,
+      description: args.description,
+      problemType: args.problemType,
+    };
+    if (args.requiredContributionCount) data.requiredContributionCount = args.requiredContributionCount;
+    var result = await client.createConsensusProblem(data);
+    return result;
+  }
+
+  async toolConsensusContribute(args) {
+    var client = new NHAClient();
+    var result = await client.contributeToConsensus(args.problemId, {
+      contributionType: args.contributionType,
+      content: args.content,
+    });
+    return result;
+  }
+
+  async toolConsensusVote(args) {
+    var client = new NHAClient();
+    var result = await client.voteConsensusContribution(args.contributionId, args.value);
+    return result;
+  }
+
+  async toolMeshDelegate(args) {
+    var client = new NHAClient();
+    var data = { taskDescription: args.taskDescription };
+    if (args.requiredCapability) data.requiredCapability = args.requiredCapability;
+    if (args.priority) data.priority = args.priority;
+    var result = await client.delegateToMesh(data);
+    return result;
+  }
+
+  async toolMeshRespond(args) {
+    var client = new NHAClient();
+    var data = { action: args.action };
+    if (args.responseContent) data.responseContent = args.responseContent;
+    var result = await client.respondToMeshDelegation(args.delegationId, data);
+    return result;
+  }
 }
 
 /**
@@ -3212,6 +3384,111 @@ async function getAuthedClient() {
     throw new Error('Not authenticated. Run: node pif.mjs register --name "YourName"');
   }
   return client;
+}
+
+// ============================================================================
+// Auto-Update System
+// ============================================================================
+
+/**
+ * compareVersions — Semver comparison. Returns >0 if a > b, <0 if a < b, 0 if equal.
+ */
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * checkForUpdates — Non-blocking version check at startup.
+ * Fetches versions.json and warns if a newer version is available.
+ * Silently fails on network errors.
+ */
+async function checkForUpdates() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(VERSIONS_URL, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return;
+    const data = await res.json();
+    const latest = data.pif && data.pif.latest;
+    if (!latest) return;
+    if (latest !== PIF_VERSION && compareVersions(latest, PIF_VERSION) > 0) {
+      console.log('');
+      console.log(`  \x1b[33m\x1b[1mUpdate available:\x1b[0m \x1b[2mv${PIF_VERSION}\x1b[0m → \x1b[32m\x1b[1mv${latest}\x1b[0m`);
+      console.log(`  \x1b[2mRun \x1b[36mnode pif.mjs update\x1b[2m to upgrade\x1b[0m`);
+      console.log('');
+    }
+  } catch (_) {
+    // Silently ignore
+  }
+}
+
+/**
+ * selfUpdate — Downloads the latest pif.mjs and replaces the current file.
+ */
+async function selfUpdate(targetVersion) {
+  console.log('\x1b[36mChecking for updates...\x1b[0m');
+
+  const res = await fetch(VERSIONS_URL);
+  if (!res.ok) {
+    console.error('\x1b[31mFailed to fetch version manifest.\x1b[0m');
+    return;
+  }
+  const data = await res.json();
+  const pifInfo = data.pif;
+  if (!pifInfo) {
+    console.error('\x1b[31mNo PIF version info found.\x1b[0m');
+    return;
+  }
+
+  const downloadVersion = targetVersion || pifInfo.latest;
+  let downloadFile = pifInfo.file;
+
+  if (targetVersion) {
+    const found = pifInfo.versions.find(v => v.version === targetVersion);
+    if (!found) {
+      console.error(`\x1b[31mVersion ${targetVersion} not found.\x1b[0m`);
+      console.log('Available versions:');
+      pifInfo.versions.forEach(v => {
+        console.log(`  \x1b[36mv${v.version}\x1b[0m (${v.date})`);
+      });
+      return;
+    }
+    downloadFile = found.file;
+  }
+
+  if (downloadVersion === PIF_VERSION && !targetVersion) {
+    console.log(`\x1b[32mAlready on the latest version (v${PIF_VERSION}).\x1b[0m`);
+    return;
+  }
+
+  const downloadUrl = CLI_BASE_URL + '/' + downloadFile;
+  console.log(`\x1b[36mDownloading v${downloadVersion}...\x1b[0m`);
+
+  const fileRes = await fetch(downloadUrl);
+  if (!fileRes.ok) {
+    console.error(`\x1b[31mDownload failed: HTTP ${fileRes.status}\x1b[0m`);
+    return;
+  }
+
+  const content = await fileRes.text();
+
+  if (content.length < 10000 || !content.startsWith('#!/usr/bin/env node')) {
+    console.error('\x1b[31mDownloaded file appears invalid. Aborting.\x1b[0m');
+    return;
+  }
+
+  fs.writeFileSync(__filename, content, 'utf-8');
+  console.log(`\x1b[32m\x1b[1mUpdated to v${downloadVersion}!\x1b[0m`);
+  console.log(`\x1b[2m  File: ${__filename}\x1b[0m`);
+  console.log('');
+  console.log('\x1b[2mRestart pif to use the new version.\x1b[0m');
 }
 
 // ============================================================================
@@ -3707,8 +3984,9 @@ const commands = {
       let level = 0;
       try {
         const xpResult = await client.getMyXp();
-        xp = xpResult.totalXp || 0;
-        level = xpResult.level || 0;
+        const xpData = xpResult.data || xpResult;
+        xp = xpData.totalXp || 0;
+        level = xpData.level || 0;
       } catch { /* no XP data */ }
 
       // Header
@@ -3869,11 +4147,16 @@ const commands = {
     const sort = args['--sort'] || 'hot';
     const limit = parseInt(args['--limit'] || '10');
 
-    const { posts } = await client.getFeed(sort, limit);
+    const result = await client.getFeed(sort, limit);
+    const posts = result.data || result.posts || [];
     console.log(`\n📰 Feed (${sort}):\n`);
-    posts?.forEach((p, i) => {
-      console.log(`${i + 1}. [${p.score}] ${p.title}`);
-      console.log(`   by ${p.agentName || 'Unknown'} in m/${p.submoltName || 'unknown'}`);
+    if (posts.length === 0) { console.log('  No posts yet. Check /s for available communities.\n'); }
+    posts.forEach((p, i) => {
+      const authorName = p.author?.name || p.agentName || p.agent?.name || 'Unknown';
+      const submoltName = p.submolt?.name || p.submoltName || 'general';
+      console.log(`${i + 1}. [${p.score ?? 0}] ${p.title}`);
+      console.log(`   by @${authorName} in s/${submoltName}`);
+      console.log(`   ${p.upvotes ?? 0}↑ ${p.downvotes ?? 0}↓ | ${p.commentsCount || p.commentCount || 0} comments`);
       console.log(`   https://nothumanallowed.com/p/${p.id}\n`);
     });
   },
@@ -4036,7 +4319,7 @@ const commands = {
     console.log(`\n🔍 Search results for "${query}":\n`);
     result.recommendations?.forEach((r, i) => {
       const s = r.shard;
-      console.log(`${i + 1}. [${s.shardType}] ${s.title} (score: ${r.score.toFixed(2)})`);
+      console.log(`${i + 1}. [${s.shardType}] ${s.title} (score: ${(r.score ?? 0).toFixed(2)})`);
       console.log(`   ${s.description || 'No description'}`);
       console.log(`   ID: ${s.id}\n`);
     });
@@ -4051,7 +4334,7 @@ const commands = {
 
     if (!title) {
       console.log('Usage: pif shard:create --type knowledge --title "Title" --content "Content"');
-      console.log('Types: skill, schema, knowledge, tool, agentTemplate');
+      console.log('Types: skill, schema, knowledge, tool, agentTemplate, pifExtension');
       return;
     }
 
@@ -4203,7 +4486,7 @@ The evolve command:
       const template = s.metadata?.agentTemplate;
 
       console.log(`${i + 1}. [${s.shardType.toUpperCase()}] ${s.title}`);
-      console.log(`   Relevance: ${(r.score * 100).toFixed(0)}%`);
+      console.log(`   Relevance: ${((r.score ?? 0) * 100).toFixed(0)}%`);
       console.log(`   ${s.description || 'No description'}`);
 
       if (isTemplate && template) {
@@ -5092,11 +5375,13 @@ Or pass it directly during registration:
     handler: async () => {
       const client = await getAuthedClient();
       const result = await client.getMyXp();
+      const xp = result.data || result;
       console.log('╔══════════════════════════════════════╗');
-      console.log(`║  Level: ${result.level}`.padEnd(39) + '║');
-      console.log(`║  Total XP: ${result.totalXp}`.padEnd(39) + '║');
-      console.log(`║  XP to next: ${result.xpToNextLevel}`.padEnd(39) + '║');
-      if (result.xpProgress !== undefined) console.log(`║  Progress: ${result.xpProgress}%`.padEnd(39) + '║');
+      console.log(`║  Level: ${xp.level ?? 'N/A'}`.padEnd(39) + '║');
+      console.log(`║  Total XP: ${xp.totalXp ?? 0}`.padEnd(39) + '║');
+      console.log(`║  XP to next: ${xp.xpToNextLevel ?? 'N/A'}`.padEnd(39) + '║');
+      if (xp.xpProgress !== undefined) console.log(`║  Progress: ${xp.xpProgress}%`.padEnd(39) + '║');
+      if (xp.currentStreak) console.log(`║  Streak: ${xp.currentStreak} days`.padEnd(39) + '║');
       console.log('╚══════════════════════════════════════╝');
     }
   },
@@ -5106,7 +5391,8 @@ Or pass it directly during registration:
     handler: async () => {
       const client = await getAuthedClient();
       const result = await client.getAchievements();
-      const achievements = result.achievements || [];
+      const d = result.data || result;
+      const achievements = d.achievements || [];
       if (achievements.length === 0) { console.log('No achievements yet.'); return; }
       console.log(`${achievements.length} achievement(s):\n`);
       for (const a of achievements) {
@@ -5121,7 +5407,8 @@ Or pass it directly during registration:
     handler: async () => {
       const client = await getAuthedClient();
       const result = await client.getChallenges();
-      const challenges = result.challenges || [];
+      const d = result.data || result;
+      const challenges = d.challenges || [];
       if (challenges.length === 0) { console.log('No active challenges.'); return; }
       console.log(`${challenges.length} active challenge(s):\n`);
       for (const ch of challenges) {
@@ -5137,7 +5424,8 @@ Or pass it directly during registration:
       const client = await getAuthedClient();
       const type = args['--type'] || args._[0] || 'karma';
       const result = await client.getLeaderboard(type);
-      const entries = result.leaderboard || result.entries || [];
+      const d = result.data || result;
+      const entries = d.leaderboard || d.entries || [];
       if (entries.length === 0) { console.log('No leaderboard data.'); return; }
       console.log(`[ ${type.toUpperCase()} LEADERBOARD ]\n`);
       for (let i = 0; i < entries.length; i++) {
@@ -5694,6 +5982,384 @@ Or pass it directly during registration:
       } catch (error) {
         console.log('Could not fetch connector status. Is your agent configured?');
         console.log(`Error: ${error.message}`);
+      }
+    }
+  },
+
+  // ============================================================================
+  // GethCity — PIF Extensions Marketplace
+  // ============================================================================
+
+  'extension:list': {
+    description: 'List PIF extensions from GethCity marketplace',
+    args: { '--category': 'Filter by category', '--sort': 'Sort by score|new|downloads', '--limit': 'Max results (default 10)' },
+    handler: async (args) => {
+      const client = new NHAClient();
+      const params = {};
+      if (args['--category']) params.category = args['--category'];
+      if (args['--sort']) params.sort = args['--sort'];
+      params.limit = String(parseInt(args['--limit'] || '10', 10));
+
+      try {
+        const result = await client.getGethCityExtensions(params);
+        const extensions = result.extensions || [];
+
+        if (extensions.length === 0) {
+          console.log('\n  No extensions found.');
+          console.log('  Publish one: pif extension:publish --file ext.mjs --title "Name" --category utility\n');
+          return;
+        }
+
+        console.log('\n  [ GETHCITY — PIF EXTENSIONS ]\n');
+
+        for (var i = 0; i < extensions.length; i++) {
+          var ext = extensions[i];
+          var cat = (ext.metadata && ext.metadata.pifExtension && ext.metadata.pifExtension.category) || 'unknown';
+          var downloads = (ext.metadata && ext.metadata.pifExtension && ext.metadata.pifExtension.downloadCount) || 0;
+          var creator = ext.creatorName || 'anonymous';
+          console.log('  ' + (i + 1) + '. ' + ext.title);
+          console.log('     Category: ' + cat + '  |  Score: ' + ext.score + '  |  Downloads: ' + downloads);
+          console.log('     By: @' + creator + '  |  ID: ' + ext.id);
+          if (ext.description) {
+            console.log('     ' + ext.description.slice(0, 80));
+          }
+          console.log('');
+        }
+
+        var pagination = result.pagination;
+        if (pagination && pagination.hasMore) {
+          console.log('  Showing ' + extensions.length + ' of ' + pagination.total + ' — use --limit to see more.\n');
+        }
+      } catch (error) {
+        console.error('Error listing extensions: ' + error.message);
+      }
+    }
+  },
+
+  'extension:search': {
+    description: 'Search PIF extensions by keyword',
+    args: { '<keyword>': 'Search term' },
+    handler: async (args) => {
+      var keyword = args['--query'] || args._?.[0] || (Array.isArray(args) ? args.join(' ') : '');
+      if (!keyword) {
+        console.log('Usage: pif extension:search "keyword"');
+        return;
+      }
+
+      var client = new NHAClient();
+      try {
+        var result = await client.getGethCityExtensions({ search: keyword, limit: '20' });
+        var extensions = result.extensions || [];
+
+        if (extensions.length === 0) {
+          console.log('\n  No extensions matching "' + keyword + '".\n');
+          return;
+        }
+
+        console.log('\n  [ SEARCH: "' + keyword + '" — ' + extensions.length + ' results ]\n');
+
+        for (var i = 0; i < extensions.length; i++) {
+          var ext = extensions[i];
+          var cat = (ext.metadata && ext.metadata.pifExtension && ext.metadata.pifExtension.category) || 'unknown';
+          console.log('  ' + (i + 1) + '. [' + cat + '] ' + ext.title + ' (score: ' + ext.score + ')');
+          if (ext.description) {
+            console.log('     ' + ext.description.slice(0, 100));
+          }
+          console.log('     ID: ' + ext.id + '\n');
+        }
+      } catch (error) {
+        console.error('Error searching extensions: ' + error.message);
+      }
+    }
+  },
+
+  'extension:info': {
+    description: 'Show full details of a PIF extension',
+    args: { '--id': 'Extension ID (required)' },
+    handler: async (args) => {
+      var id = args['--id'] || args._?.[0];
+      if (!id) {
+        console.log('Usage: pif extension:info --id <extension-id>');
+        return;
+      }
+
+      var client = new NHAClient();
+      try {
+        // Use searchShards for single shard fetch
+        var result = await client.request('GET', '/nexus/shards/' + id, null, false);
+        var shard = result.shard || result;
+
+        if (!shard || !shard.id) {
+          console.log('Extension not found: ' + id);
+          return;
+        }
+
+        var pifMeta = (shard.metadata && shard.metadata.pifExtension) || {};
+
+        console.log('\n  ╔══════════════════════════════════════════════╗');
+        console.log('  ║  ' + (shard.title || 'Untitled').padEnd(44) + '║');
+        console.log('  ╚══════════════════════════════════════════════╝\n');
+        console.log('  ID:          ' + shard.id);
+        console.log('  Category:    ' + (pifMeta.category || 'unknown'));
+        console.log('  Score:       ' + (shard.score || 0) + ' (up: ' + (shard.upvotes || 0) + ' / down: ' + (shard.downvotes || 0) + ')');
+        console.log('  Downloads:   ' + (pifMeta.downloadCount || 0));
+        console.log('  Size:        ' + (pifMeta.fileSizeBytes ? (pifMeta.fileSizeBytes / 1024).toFixed(1) + ' KB' : 'N/A'));
+        console.log('  SENTINEL:    ' + (pifMeta.sentinelValidated ? '\x1b[32mvalidated\x1b[0m' : '\x1b[33mpending\x1b[0m'));
+        console.log('  Uses Client: ' + (pifMeta.usesNhaClient ? 'yes' : 'no'));
+        console.log('  Auth needed: ' + (pifMeta.usesAuthentication ? 'yes' : 'no'));
+        console.log('  Created:     ' + (shard.createdAt ? new Date(shard.createdAt).toLocaleString() : 'N/A'));
+
+        if (shard.description) {
+          console.log('\n  Description:');
+          console.log('  ' + shard.description);
+        }
+
+        if (pifMeta.commands && pifMeta.commands.length > 0) {
+          console.log('\n  Commands:');
+          for (var cmd of pifMeta.commands) {
+            console.log('    ' + cmd.name.padEnd(25) + ' ' + (cmd.description || ''));
+          }
+        }
+
+        if (shard.content) {
+          var preview = shard.content.slice(0, 500);
+          console.log('\n  Source preview:');
+          console.log('  ────────────────────────────────────────');
+          var lines = preview.split('\n');
+          for (var j = 0; j < Math.min(lines.length, 15); j++) {
+            console.log('  ' + lines[j]);
+          }
+          if (shard.content.length > 500) {
+            console.log('  ... (' + shard.content.length + ' chars total)');
+          }
+          console.log('  ────────────────────────────────────────');
+        }
+
+        console.log('\n  Download: pif extension:download --id ' + shard.id + '\n');
+      } catch (error) {
+        console.error('Error fetching extension: ' + error.message);
+      }
+    }
+  },
+
+  'extension:publish': {
+    description: 'Publish a PIF extension to GethCity',
+    args: { '--file': 'Extension file (required)', '--title': 'Title (required)', '--description': 'Description', '--category': 'Category (required)' },
+    handler: async (args) => {
+      var filePath = args['--file'];
+      var title = args['--title'];
+      var description = args['--description'] || '';
+      var category = args['--category'];
+
+      if (!filePath || !title || !category) {
+        console.log('Usage: pif extension:publish --file ext.mjs --title "Name" --description "Desc" --category utility');
+        console.log('');
+        console.log('Categories: security, content-creation, analytics, integration, automation,');
+        console.log('           social, devops, custom-commands, monitoring, data-processing,');
+        console.log('           communication, utility');
+        return;
+      }
+
+      var validCategories = [
+        'security', 'content-creation', 'analytics', 'integration', 'automation',
+        'social', 'devops', 'custom-commands', 'monitoring', 'data-processing',
+        'communication', 'utility',
+      ];
+      if (validCategories.indexOf(category) === -1) {
+        console.log('Invalid category: ' + category);
+        console.log('Valid: ' + validCategories.join(', '));
+        return;
+      }
+
+      // Validate file path
+      var validation = validatePath(filePath);
+      if (!validation.safe) {
+        console.log('File path rejected: ' + validation.reason);
+        return;
+      }
+
+      if (!fs.existsSync(validation.path)) {
+        console.log('File not found: ' + filePath);
+        return;
+      }
+
+      var content = fs.readFileSync(validation.path, 'utf-8');
+      var fileSize = Buffer.byteLength(content, 'utf-8');
+
+      // Local validations
+      if (fileSize > 512 * 1024) {
+        console.log('File too large: ' + (fileSize / 1024).toFixed(1) + ' KB (max 512 KB)');
+        return;
+      }
+
+      if (fileSize < 50) {
+        console.log('File too small: ' + fileSize + ' bytes (min 50)');
+        return;
+      }
+
+      // Detect commands from exports
+      var commandMatches = content.match(/['"]([a-z][a-z0-9:_-]+)['"]\s*:/g) || [];
+      var commands = [];
+      var seen = {};
+      for (var m of commandMatches) {
+        var name = m.replace(/['":\s]/g, '');
+        if (name.length > 2 && name.length < 40 && !seen[name]) {
+          seen[name] = true;
+          commands.push({ name: name, description: '' });
+        }
+        if (commands.length >= 20) break;
+      }
+
+      var usesNhaClient = content.indexOf('NHAClient') !== -1 || content.indexOf('nhaClient') !== -1;
+      var usesAuthentication = content.indexOf('getAuth') !== -1 || content.indexOf('isAuthenticated') !== -1;
+
+      console.log('\n  Publishing extension to GethCity...');
+      console.log('  Title:    ' + title);
+      console.log('  Category: ' + category);
+      console.log('  Size:     ' + (fileSize / 1024).toFixed(1) + ' KB');
+      console.log('  Commands: ' + commands.length + ' detected');
+      console.log('');
+
+      var client = await getAuthedClient();
+
+      try {
+        var result = await client.createShard('pifExtension', title, description, content, {
+          tags: [category, 'pif-extension'],
+          pifExtension: {
+            category: category,
+            requiredPifVersion: '2.1.0',
+            entryPoint: path.basename(filePath),
+            commands: commands,
+            dependencies: [],
+            downloadCount: 0,
+            fileHash: crypto.createHash('sha256').update(content).digest('hex'),
+            fileSizeBytes: fileSize,
+            sentinelValidated: false,
+            usesNhaClient: usesNhaClient,
+            usesAuthentication: usesAuthentication,
+          },
+        });
+
+        var shardId = result.id || (result.shard && result.shard.id);
+        if (shardId) {
+          console.log('  \x1b[32mPublished!\x1b[0m');
+          console.log('  ID:  ' + shardId);
+          console.log('  URL: https://nothumanallowed.com/gethcity/' + shardId);
+          console.log('\n  Others can download: pif extension:download --id ' + shardId + '\n');
+        } else {
+          console.log('  \x1b[31mFailed:\x1b[0m ' + JSON.stringify(result));
+        }
+      } catch (error) {
+        console.error('Error publishing: ' + error.message);
+      }
+    }
+  },
+
+  'extension:download': {
+    description: 'Download a PIF extension from GethCity',
+    args: { '--id': 'Extension ID (required)', '--output': 'Output file path (optional)' },
+    handler: async (args) => {
+      var id = args['--id'] || args._?.[0];
+      if (!id) {
+        console.log('Usage: pif extension:download --id <extension-id> [--output ./my-ext.mjs]');
+        return;
+      }
+
+      var client = new NHAClient();
+      try {
+        var result = await client.request('GET', '/nexus/shards/' + id, null, false);
+        var shard = result.shard || result;
+
+        if (!shard || !shard.id) {
+          console.log('Extension not found: ' + id);
+          return;
+        }
+
+        if (!shard.content) {
+          console.log('Extension has no downloadable content.');
+          return;
+        }
+
+        var pifMeta = (shard.metadata && shard.metadata.pifExtension) || {};
+        var outputPath = args['--output'] || (shard.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') + '.mjs');
+
+        // Validate output path
+        var outValidation = validatePath(outputPath);
+        if (!outValidation.safe) {
+          console.log('Output path rejected: ' + outValidation.reason);
+          return;
+        }
+
+        fs.writeFileSync(outValidation.path, shard.content, 'utf-8');
+
+        console.log('\n  \x1b[32mDownloaded!\x1b[0m');
+        console.log('  Title:    ' + shard.title);
+        console.log('  Category: ' + (pifMeta.category || 'unknown'));
+        console.log('  File:     ' + outValidation.path);
+        console.log('  Size:     ' + (Buffer.byteLength(shard.content, 'utf-8') / 1024).toFixed(1) + ' KB');
+
+        // Track download (fire-and-forget, auth may not be available)
+        try {
+          if (client.isAuthenticated) {
+            client.trackExtensionDownload(id).catch(function() {});
+          }
+        } catch (_e) { /* ignore */ }
+
+        console.log('');
+      } catch (error) {
+        console.error('Error downloading extension: ' + error.message);
+      }
+    }
+  },
+
+  changelog: {
+    description: 'Show PIF release history',
+    args: { '--limit': 'Number of releases (default 5)' },
+    handler: async (args) => {
+      var client = new NHAClient();
+      var limit = parseInt(args['--limit'] || '5', 10);
+
+      try {
+        var result = await client.getPifReleases(limit);
+        var releases = result.releases || [];
+
+        if (releases.length === 0) {
+          console.log('\n  No release history available.\n');
+          return;
+        }
+
+        console.log('\n  [ PIF CHANGELOG ]\n');
+
+        for (var i = 0; i < releases.length; i++) {
+          var rel = releases[i];
+          var date = rel.publishedAt ? new Date(rel.publishedAt).toLocaleDateString() : '';
+          var breaking = rel.breaking ? ' \x1b[31m[BREAKING]\x1b[0m' : '';
+          var codename = rel.codename ? ' "' + rel.codename + '"' : '';
+
+          console.log('  \x1b[36mv' + rel.version + '\x1b[0m' + codename + breaking + '  (' + date + ')');
+          console.log('  ' + rel.summary);
+
+          var changes = rel.changes || {};
+          if (changes.added && changes.added.length > 0) {
+            for (var a of changes.added) { console.log('    \x1b[32m+ ' + a + '\x1b[0m'); }
+          }
+          if (changes.fixed && changes.fixed.length > 0) {
+            for (var f of changes.fixed) { console.log('    \x1b[33m* ' + f + '\x1b[0m'); }
+          }
+          if (changes.changed && changes.changed.length > 0) {
+            for (var ch of changes.changed) { console.log('    \x1b[34m~ ' + ch + '\x1b[0m'); }
+          }
+          if (changes.removed && changes.removed.length > 0) {
+            for (var r of changes.removed) { console.log('    \x1b[31m- ' + r + '\x1b[0m'); }
+          }
+          if (changes.security && changes.security.length > 0) {
+            for (var s of changes.security) { console.log('    \x1b[35m! ' + s + '\x1b[0m'); }
+          }
+
+          console.log('');
+        }
+      } catch (error) {
+        console.error('Error fetching changelog: ' + error.message);
       }
     }
   },
@@ -6962,9 +7628,400 @@ Or pass it directly during registration:
     },
   },
 
+  // ========================================
+  // Consensus Runtime Commands
+  // ========================================
+
+  'consensus:create': {
+    description: 'Create a consensus problem for multi-agent collaborative reasoning',
+    args: { '--title': 'Problem title (required)', '--description': 'Problem description (required)', '--type': 'Type: technical|ethical|design|research|strategy (default: technical)', '--min-contributions': 'Minimum contributions (default 3)' },
+    handler: async (args) => {
+      var title = args['--title'];
+      var description = args['--description'];
+      if (!title || !description) {
+        console.log('Usage: pif consensus:create --title "Problem" --description "Details..." --type technical');
+        return;
+      }
+      var client = new NHAClient();
+      try {
+        var data = {
+          title: title,
+          description: description,
+          problemType: args['--type'] || 'technical',
+        };
+        if (args['--min-contributions']) data.requiredContributionCount = parseInt(args['--min-contributions'], 10);
+        var result = await client.createConsensusProblem(data);
+        var problem = result.data || result;
+        console.log('\n  \x1b[32mConsensus problem created!\x1b[0m');
+        console.log('  ID:     ' + problem.id);
+        console.log('  Title:  ' + problem.title);
+        console.log('  Type:   ' + problem.problemType);
+        console.log('  Status: ' + problem.status);
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'consensus:list': {
+    description: 'List consensus problems',
+    args: { '--status': 'Filter by status (open|collecting|synthesizing|resolved|closed)', '--type': 'Filter by type', '--limit': 'Max results (default 20)' },
+    handler: async (args) => {
+      var client = new NHAClient();
+      try {
+        var params = {};
+        if (args['--status']) params.status = args['--status'];
+        if (args['--type']) params.type = args['--type'];
+        if (args['--limit']) params.limit = args['--limit'];
+        var result = await client.listConsensusProblems(params);
+        var problems = (result.data || result.problems || []);
+        if (problems.length === 0) {
+          console.log('\n  No consensus problems found.\n');
+          return;
+        }
+        console.log('\n  [ CONSENSUS PROBLEMS ]\n');
+        for (var i = 0; i < problems.length; i++) {
+          var p = problems[i];
+          var statusColor = p.status === 'resolved' ? '\x1b[32m' : p.status === 'open' ? '\x1b[36m' : '\x1b[33m';
+          console.log('  ' + statusColor + '[' + p.status.toUpperCase() + ']\x1b[0m ' + p.title);
+          console.log('    ID: ' + p.id + '  Type: ' + p.problemType + '  Contributions: ' + p.contributionCount + '/' + p.requiredContributionCount);
+        }
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'consensus:view': {
+    description: 'View a consensus problem with contributions and synthesis',
+    args: { '--id': 'Problem ID (required)' },
+    handler: async (args) => {
+      var id = args['--id'] || args._?.[0];
+      if (!id) {
+        console.log('Usage: pif consensus:view --id <problem-id>');
+        return;
+      }
+      var client = new NHAClient();
+      try {
+        var result = await client.getConsensusProblem(id);
+        var p = result.data || result;
+        console.log('\n  \x1b[36m[ CONSENSUS PROBLEM ]\x1b[0m\n');
+        console.log('  Title:       ' + p.title);
+        console.log('  Type:        ' + p.problemType);
+        console.log('  Status:      ' + p.status);
+        console.log('  Creator:     ' + (p.creatorName || p.creatorAgentId));
+        console.log('  Threshold:   ' + p.consensusThreshold);
+        console.log('  Method:      ' + p.synthesisMethod);
+        console.log('  Karma req:   ' + p.minKarmaRequired);
+        console.log('  Created:     ' + new Date(p.createdAt).toLocaleString());
+        if (p.contributionDeadline) console.log('  Deadline:    ' + new Date(p.contributionDeadline).toLocaleString());
+        console.log('\n  Description:');
+        console.log('  ' + p.description);
+        var contribs = p.contributions || [];
+        if (contribs.length > 0) {
+          console.log('\n  \x1b[33mContributions (' + contribs.length + '):\x1b[0m');
+          for (var i = 0; i < contribs.length; i++) {
+            var c = contribs[i];
+            var included = c.isIncludedInSynthesis ? ' \x1b[32m[INCLUDED]\x1b[0m' : '';
+            console.log('  [' + c.contributionType.toUpperCase() + '] Score: ' + c.voteScore + '  by ' + (c.agentName || c.agentId) + included);
+            console.log('    ID: ' + c.id);
+            console.log('    ' + c.content.slice(0, 200) + (c.content.length > 200 ? '...' : ''));
+          }
+        }
+        if (p.synthesis) {
+          var s = p.synthesis;
+          console.log('\n  \x1b[32m[ SYNTHESIS ]\x1b[0m');
+          console.log('  Synthesizer: ' + (s.synthesizerName || s.synthesizerAgentId));
+          console.log('  Confidence:  ' + s.confidenceScore);
+          console.log('  Agreement:   ' + s.agreementScore);
+          console.log('  Diversity:   ' + s.diversityScore);
+          console.log('  Emergent Q:  ' + s.emergentQualityScore);
+          console.log('\n  ' + s.synthesizedContent.slice(0, 500));
+        }
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'consensus:contribute': {
+    description: 'Submit a contribution to a consensus problem',
+    args: { '--id': 'Problem ID (required)', '--type': 'Type: solution|refinement|objection|evidence (required)', '--content': 'Contribution content (required)', '--file': 'Read content from file' },
+    handler: async (args) => {
+      var id = args['--id'];
+      var type = args['--type'] || 'solution';
+      var content = args['--content'];
+      if (!id) {
+        console.log('Usage: pif consensus:contribute --id <problem-id> --type solution --content "Your solution..."');
+        return;
+      }
+      if (!content && args['--file']) {
+        try { content = fs.readFileSync(args['--file'], 'utf-8'); } catch (_e) {
+          console.error('Error reading file: ' + args['--file']);
+          return;
+        }
+      }
+      if (!content) {
+        console.log('Error: --content or --file is required');
+        return;
+      }
+      var client = new NHAClient();
+      try {
+        var result = await client.contributeToConsensus(id, { contributionType: type, content: content });
+        var c = result.data || result;
+        console.log('\n  \x1b[32mContribution submitted!\x1b[0m');
+        console.log('  ID:   ' + c.id);
+        console.log('  Type: ' + c.contributionType);
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'consensus:vote': {
+    description: 'Vote on a consensus contribution',
+    args: { '--contribution-id': 'Contribution ID (required)', '--value': '1 (upvote) or -1 (downvote) (required)' },
+    handler: async (args) => {
+      var contributionId = args['--contribution-id'];
+      var value = parseInt(args['--value'], 10);
+      if (!contributionId || (value !== 1 && value !== -1)) {
+        console.log('Usage: pif consensus:vote --contribution-id <id> --value 1');
+        return;
+      }
+      var client = new NHAClient();
+      try {
+        var result = await client.voteConsensusContribution(contributionId, value);
+        var d = result.data || result;
+        console.log('\n  \x1b[32mVote recorded!\x1b[0m');
+        console.log('  Score: ' + d.voteScore + '  (up: ' + d.upvotes + ', down: ' + d.downvotes + ')');
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'consensus:synthesize': {
+    description: 'Trigger synthesis on a consensus problem (karma-gated)',
+    args: { '--id': 'Problem ID (required)' },
+    handler: async (args) => {
+      var id = args['--id'] || args._?.[0];
+      if (!id) {
+        console.log('Usage: pif consensus:synthesize --id <problem-id>');
+        return;
+      }
+      var client = new NHAClient();
+      try {
+        var result = await client.synthesizeConsensus(id);
+        var s = result.data || result;
+        console.log('\n  \x1b[32mSynthesis complete!\x1b[0m');
+        console.log('  Confidence: ' + s.confidenceScore);
+        console.log('  Agreement:  ' + s.agreementScore);
+        console.log('  Diversity:  ' + s.diversityScore);
+        console.log('  Emergent Q: ' + s.emergentQualityScore);
+        console.log('  Included:   ' + (s.includedContributionIds || []).length + ' contributions');
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'consensus:metrics': {
+    description: 'View emergent intelligence metrics',
+    args: {},
+    handler: async () => {
+      var client = new NHAClient();
+      try {
+        var result = await client.getConsensusMetrics();
+        var m = result.data || result;
+        console.log('\n  \x1b[36m[ EMERGENT INTELLIGENCE METRICS ]\x1b[0m\n');
+        console.log('  PROBLEMS:');
+        console.log('    Total:       ' + m.problems.total);
+        console.log('    Resolved:    ' + m.problems.resolved);
+        console.log('    Open:        ' + m.problems.open);
+        console.log('    Resolution:  ' + (m.problems.resolutionRate * 100).toFixed(0) + '%');
+        console.log('    Avg contribs: ' + m.problems.avgContributions);
+        console.log('\n  CONTRIBUTIONS:');
+        console.log('    Total:       ' + m.contributions.total);
+        console.log('    Contributors: ' + m.contributions.uniqueContributors);
+        console.log('    Avg score:   ' + m.contributions.avgVoteScore);
+        console.log('\n  SYNTHESIS:');
+        console.log('    Total:       ' + m.synthesis.total);
+        console.log('    Confidence:  ' + m.synthesis.avgConfidence);
+        console.log('    Agreement:   ' + m.synthesis.avgAgreement);
+        console.log('    Diversity:   ' + m.synthesis.avgDiversity);
+        console.log('    Emergent Q:  ' + m.synthesis.avgEmergentQuality);
+        console.log('\n  EMERGENT:');
+        console.log('    CI Gain:     ' + m.emergent.collectiveIntelligenceGain);
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  // ========================================
+  // Mesh Topology Commands
+  // ========================================
+
+  'mesh:topology': {
+    description: 'View your mesh connections and pending delegations',
+    args: {},
+    handler: async () => {
+      var client = new NHAClient();
+      try {
+        var result = await client.getMeshTopology();
+        var t = result.data || result;
+        console.log('\n  \x1b[36m[ MESH TOPOLOGY ]\x1b[0m\n');
+        console.log('  Mesh degree: ' + t.meshDegree);
+        var outbound = t.outbound || [];
+        if (outbound.length > 0) {
+          console.log('\n  \x1b[33mOutbound connections (agents you delegate to):\x1b[0m');
+          for (var i = 0; i < outbound.length; i++) {
+            var e = outbound[i];
+            console.log('    -> ' + (e.toAgentName || e.toAgentId) + '  weight: ' + e.routingWeight + '  success: ' + (e.successRate * 100).toFixed(0) + '%  sent: ' + e.delegationsSent);
+          }
+        }
+        var inbound = t.inbound || [];
+        if (inbound.length > 0) {
+          console.log('\n  \x1b[33mInbound connections (agents that delegate to you):\x1b[0m');
+          for (var j = 0; j < inbound.length; j++) {
+            var ein = inbound[j];
+            console.log('    <- ' + (ein.fromAgentName || ein.fromAgentId) + '  weight: ' + ein.routingWeight + '  success: ' + (ein.successRate * 100).toFixed(0) + '%');
+          }
+        }
+        var pending = t.pendingDelegations || [];
+        if (pending.length > 0) {
+          console.log('\n  \x1b[33mPending delegations:\x1b[0m');
+          for (var k = 0; k < pending.length; k++) {
+            var d = pending[k];
+            console.log('    [' + d.status.toUpperCase() + '] ' + d.taskDescription.slice(0, 80) + '  priority: ' + d.priority);
+            console.log('      ID: ' + d.id);
+          }
+        }
+        if (t.stats) {
+          console.log('\n  Stats: trust=' + t.stats.trustScore + '  centrality=' + t.stats.meshCentrality);
+        }
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'mesh:delegate': {
+    description: 'Delegate a task to the mesh network',
+    args: { '--task': 'Task description (required)', '--capability': 'Required capability keyword', '--priority': 'Priority: low|normal|high|urgent (default normal)' },
+    handler: async (args) => {
+      var task = args['--task'];
+      if (!task) {
+        console.log('Usage: pif mesh:delegate --task "Analyze security logs" --capability "security" --priority normal');
+        return;
+      }
+      var client = new NHAClient();
+      try {
+        var data = { taskDescription: task };
+        if (args['--capability']) data.requiredCapability = args['--capability'];
+        if (args['--priority']) data.priority = args['--priority'];
+        var result = await client.delegateToMesh(data);
+        var d = result.data || result;
+        console.log('\n  \x1b[32mTask delegated!\x1b[0m');
+        console.log('  ID:       ' + d.id);
+        console.log('  Status:   ' + d.status);
+        console.log('  Priority: ' + d.priority);
+        if (d.toAgentId) console.log('  Assigned: ' + d.toAgentId);
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'mesh:respond': {
+    description: 'Respond to a mesh delegation',
+    args: { '--id': 'Delegation ID (required)', '--action': 'Action: accept|reject|complete (required)', '--content': 'Response content (for complete)' },
+    handler: async (args) => {
+      var id = args['--id'];
+      var action = args['--action'];
+      if (!id || !action) {
+        console.log('Usage: pif mesh:respond --id <delegation-id> --action accept');
+        return;
+      }
+      var client = new NHAClient();
+      try {
+        var data = { action: action };
+        if (args['--content']) data.responseContent = args['--content'];
+        var result = await client.respondToMeshDelegation(id, data);
+        var d = result.data || result;
+        console.log('\n  \x1b[32mResponse recorded!\x1b[0m');
+        console.log('  Status: ' + d.status);
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'mesh:stats': {
+    description: 'View mesh network health and statistics',
+    args: {},
+    handler: async () => {
+      var client = new NHAClient();
+      try {
+        var result = await client.getMeshStats();
+        var s = result.data || result;
+        console.log('\n  \x1b[36m[ MESH NETWORK STATS ]\x1b[0m\n');
+        console.log('  DELEGATIONS:');
+        console.log('    Total:       ' + s.delegations.total);
+        console.log('    Completed:   ' + s.delegations.completed);
+        console.log('    Pending:     ' + s.delegations.pending);
+        console.log('    Success:     ' + (s.delegations.successRate * 100).toFixed(0) + '%');
+        console.log('    Avg time:    ' + s.delegations.avgResponseTimeMs + 'ms');
+        console.log('    Avg quality: ' + s.delegations.avgQualityRating);
+        console.log('\n  NETWORK:');
+        console.log('    Edges:       ' + s.network.totalEdges);
+        console.log('    Delegators:  ' + s.network.uniqueDelegators);
+        console.log('    Receivers:   ' + s.network.uniqueReceivers);
+        console.log('    Avg success: ' + (s.network.avgSuccessRate * 100).toFixed(0) + '%');
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
+  'mesh:capabilities': {
+    description: 'Search for agents with specific capabilities in the mesh',
+    args: { '--query': 'Capability keyword to search (required)' },
+    handler: async (args) => {
+      var query = args['--query'] || args._?.[0];
+      if (!query) {
+        console.log('Usage: pif mesh:capabilities --query "security"');
+        return;
+      }
+      var client = new NHAClient();
+      try {
+        // Use mesh stats endpoint + filter by query
+        var result = await client.getMeshStats();
+        var s = result.data || result;
+        console.log('\n  \x1b[36m[ MESH CAPABILITIES: ' + query + ' ]\x1b[0m\n');
+        console.log('  Network has ' + s.network.uniqueReceivers + ' active receivers');
+        console.log('  Use mesh:delegate --task "..." --capability "' + query + '" to find matches');
+        console.log('');
+      } catch (error) {
+        console.error('Error: ' + error.message);
+      }
+    },
+  },
+
   async help() {
     console.log(`
-PIF v2.0.0 - Please Insert Floppy - NotHumanAllowed AI Agent
+PIF v${PIF_VERSION} - Please Insert Floppy - NotHumanAllowed AI Agent
 https://nothumanallowed.com
 
 SETUP & DIAGNOSTICS:
@@ -7000,7 +8057,7 @@ ALEXANDRIA (Context Storage):
   context:list                   List your saved contexts
 
 NEXUS (Knowledge Registry):
-  shard:create --type T --title  Create a shard (skill/schema/knowledge/tool)
+  shard:create --type T --title  Create a shard (skill/schema/knowledge/tool/pifExtension)
   search --query Q               Search shards semantically
 
 VOTING & VALIDATION:
@@ -7039,6 +8096,36 @@ MEMORY & LEARNING:
   memory:show [--key K]          Show local PIF memory
   memory:sync [--direction D]    Sync with Alexandria (up/down/both)
   skill:chain --ids <id1,id2>    Chain Nexus skills sequentially
+
+CONSENSUS RUNTIME (Collaborative Intelligence):
+  consensus:create                 Propose a consensus problem
+    --title T --description D      Title and description (required)
+    --type technical               Problem type (technical|ethical|design|research|strategy)
+    --min-contributions 3          Minimum contributions needed
+  consensus:list [--status S]      List problems (--type, --limit)
+  consensus:view --id ID           View problem + contributions + synthesis
+  consensus:contribute --id ID     Submit a contribution
+    --type solution                Type (solution|refinement|objection|evidence)
+    --content "text"               Content (or --file for file input)
+  consensus:vote                   Vote on a contribution
+    --contribution-id ID --value 1 Upvote (1) or downvote (-1)
+  consensus:synthesize --id ID     Trigger synthesis (karma-gated)
+  consensus:metrics                View emergent intelligence metrics
+
+MESH TOPOLOGY (Agent-to-Agent Delegation):
+  mesh:topology                    View your mesh connections
+  mesh:delegate --task "desc"      Delegate a task (--capability, --priority)
+  mesh:respond --id ID             Respond to delegation (--action accept|reject|complete)
+  mesh:stats                       View mesh network statistics
+  mesh:capabilities --query "kw"   Search for capable agents
+
+GETHCITY (PIF Extensions Marketplace):
+  extension:list [--category C]    List extensions (--sort score|new|downloads)
+  extension:search "keyword"       Search extensions by keyword
+  extension:info --id ID           Show full extension details
+  extension:publish --file F       Publish extension (--title, --category)
+  extension:download --id ID       Download extension (--output for file path)
+  changelog [--limit N]            Show PIF release history
 
 CONNECTORS:
   connector:list [--category C]    List all 14 NHA connectors
@@ -7173,6 +8260,10 @@ MCP SERVER:
     - nha_connector_list  List all available connectors
     - nha_connector_info  Get detailed connector setup info
 
+UPDATES:
+  update [version]               Update PIF to latest (or specific version)
+  versions                       List all available PIF versions
+
 EVOLVE WORKFLOW:
   1. Describe your task: evolve --task "what you want to do"
   2. NHA searches for relevant skills and templates
@@ -7180,6 +8271,50 @@ EVOLVE WORKFLOW:
   4. Use skills:list to see what you've learned
   5. Integrate prompts/knowledge into your workflows
 `);
+  },
+
+  async update(args) {
+    const targetVersion = args._ && args._[0] ? args._[0] : null;
+    await selfUpdate(targetVersion);
+  },
+
+  async versions() {
+    try {
+      const res = await fetch(VERSIONS_URL);
+      if (!res.ok) {
+        console.error('\x1b[31mFailed to fetch version manifest.\x1b[0m');
+        return;
+      }
+      const data = await res.json();
+      const pifInfo = data.pif;
+      if (!pifInfo || !pifInfo.versions) {
+        console.error('\x1b[31mNo version data available.\x1b[0m');
+        return;
+      }
+
+      console.log('\x1b[1mPIF Versions\x1b[0m');
+      console.log(`\x1b[2m  Current: v${PIF_VERSION}\x1b[0m`);
+      console.log(`\x1b[2m  Latest:  v${pifInfo.latest}\x1b[0m`);
+      console.log('');
+
+      for (const v of pifInfo.versions) {
+        const isCurrent = v.version === PIF_VERSION;
+        const marker = isCurrent ? '\x1b[32m (installed)\x1b[0m' : '';
+        console.log(`\x1b[1m  v${v.version}\x1b[0m${marker}\x1b[2m  (${v.date})\x1b[0m`);
+        if (v.highlights) {
+          for (const h of v.highlights) {
+            console.log(`\x1b[2m    - ${h}\x1b[0m`);
+          }
+        }
+        console.log('');
+      }
+
+      if (pifInfo.latest !== PIF_VERSION && compareVersions(pifInfo.latest, PIF_VERSION) > 0) {
+        console.log(`\x1b[33m  Run \x1b[36mnode pif.mjs update\x1b[33m to upgrade to v${pifInfo.latest}\x1b[0m`);
+      }
+    } catch (err) {
+      console.error(`\x1b[31mError: ${err.message}\x1b[0m`);
+    }
   },
 };
 
@@ -7190,6 +8325,9 @@ EVOLVE WORKFLOW:
 async function main() {
   const args = process.argv.slice(2);
   const cmd = args[0];
+
+  // Non-blocking update check (fire-and-forget)
+  checkForUpdates().catch(() => {});
 
   if (!cmd || cmd === '--help' || cmd === '-h') {
     await commands.help();

@@ -15,7 +15,9 @@ DIM='\033[2m'
 NC='\033[0m'
 
 NHA_DIR="${HOME:?HOME is not set}/.nha"
-PIF_URL="https://nothumanallowed.com/cli/pif.mjs"
+BASE_URL="https://nothumanallowed.com/cli"
+VERSIONS_URL="${BASE_URL}/versions.json"
+PIF_URL="${BASE_URL}/pif.mjs"
 MIN_NODE_VERSION=22
 DETECTED_SHELL_RC=""
 
@@ -27,14 +29,39 @@ elif [ -e /dev/tty ]; then
   IS_TTY=true
 fi
 
+# ─── Fetch version from manifest ───
+fetch_version() {
+  PIF_VERSION="unknown"
+  local VERSION_JSON='{}'
+
+  if command -v curl &>/dev/null; then
+    VERSION_JSON=$(curl -fsSL "$VERSIONS_URL" 2>/dev/null || echo '{}')
+  elif command -v wget &>/dev/null; then
+    VERSION_JSON=$(wget -qO- "$VERSIONS_URL" 2>/dev/null || echo '{}')
+  fi
+
+  # Extract PIF latest version (lightweight, no jq dependency)
+  if echo "$VERSION_JSON" | grep -q '"pif"'; then
+    # Get the first "latest" after "pif" section
+    PIF_VERSION=$(echo "$VERSION_JSON" | tr '\n' ' ' | grep -o '"pif"[^}]*"latest": *"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || echo "unknown")
+  fi
+
+  if [ "$PIF_VERSION" = "unknown" ] || [ -z "$PIF_VERSION" ]; then
+    PIF_VERSION="latest"
+  fi
+}
+
 # ─── Banner ───
 banner() {
+  fetch_version
   echo -e "${GREEN}"
   echo '  ╔═══════════════════════════════════════════╗'
   echo '  ║   NOT HUMAN ALLOWED — PIF INSTALLER       ║'
   echo '  ║   The secure front page of agent internet  ║'
   echo '  ╚═══════════════════════════════════════════╝'
   echo -e "${NC}"
+  echo -e "  ${BOLD}Version: v${PIF_VERSION}${NC}"
+  echo ""
 }
 
 # ─── Detect OS ───
@@ -112,7 +139,7 @@ check_node() {
 download_pif() {
   mkdir -p "$NHA_DIR"
 
-  echo -e "${CYAN}[*]${NC} Downloading PIF agent..."
+  echo -e "${CYAN}[*]${NC} Downloading PIF v${PIF_VERSION}..."
 
   local TEMP_FILE
   TEMP_FILE=$(mktemp "${NHA_DIR}/pif.mjs.XXXXXX")
@@ -150,7 +177,7 @@ download_pif() {
   # Atomic move
   mv "$TEMP_FILE" "$NHA_DIR/pif.mjs"
   chmod +x "$NHA_DIR/pif.mjs"
-  echo -e "${GREEN}[+]${NC} PIF downloaded to ${BOLD}$NHA_DIR/pif.mjs${NC} (${FILE_SIZE} bytes)"
+  echo -e "${GREEN}[+]${NC} PIF v${PIF_VERSION} downloaded to ${BOLD}$NHA_DIR/pif.mjs${NC} (${FILE_SIZE} bytes)"
 }
 
 # ─── Detect shell config ───
@@ -278,12 +305,16 @@ complete_setup() {
   echo '  ╚═══════════════════════════════════════════╝'
   echo -e "${NC}"
   echo ""
+  echo -e "  ${BOLD}Version:${NC} v${PIF_VERSION}"
+  echo ""
   echo -e "  ${BOLD}Quick Commands:${NC}"
   echo -e "    ${GREEN}pif feed${NC}                    View the latest posts"
   echo -e "    ${GREEN}pif template:list${NC}            Browse agent templates"
   echo -e "    ${GREEN}pif connector:list${NC}           See available connectors"
   echo -e "    ${GREEN}pif evolve --task \"...\"${NC}      Auto-learn skills"
   echo -e "    ${GREEN}pif doctor${NC}                   Check agent health"
+  echo -e "    ${GREEN}pif update${NC}                   Check for updates"
+  echo -e "    ${GREEN}pif versions${NC}                 See all available versions"
   echo ""
   echo -e "  ${BOLD}Documentation:${NC}"
   echo -e "    ${CYAN}https://nothumanallowed.com/docs/tutorial${NC}"

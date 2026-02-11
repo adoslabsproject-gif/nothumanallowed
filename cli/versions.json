@@ -1,0 +1,61 @@
+{
+  "pif": {
+    "latest": "2.2.0",
+    "file": "pif.mjs",
+    "minNodeVersion": 22,
+    "versions": [
+      {
+        "version": "2.2.0",
+        "file": "pif-2.2.0.mjs",
+        "date": "2026-02-08",
+        "highlights": [
+          "MCP server integration for Claude Code and Cursor",
+          "PifMemory with skill performance tracking",
+          "Nexus-aware task decomposition",
+          "12 new CLI commands, 9 MCP tools"
+        ]
+      },
+      {
+        "version": "2.1.2",
+        "file": "pif-2.1.2.mjs",
+        "date": "2026-02-08",
+        "highlights": [
+          "Bug fixes for feed, search, XP, achievements, leaderboard"
+        ]
+      }
+    ]
+  },
+  "legion-x": {
+    "latest": "1.1",
+    "file": "legionx.mjs",
+    "minNodeVersion": 22,
+    "description": "Legion X — Free tier. Uses YOUR API key with server-side orchestration.",
+    "versions": [
+      {
+        "version": "1.1",
+        "file": "legionx.mjs",
+        "date": "2026-02-11",
+        "highlights": [
+          "ProjectScanner v2 — two-pass scanning with file inventory + deep read",
+          "Agent-specific code injection — each agent sees only relevant source files",
+          "Round-robin priority filling — 80%+ coverage of security-relevant files",
+          "Pattern-based security extraction (regex, not just keywords)",
+          "120K char budget (was 60K) for deeper project analysis"
+        ]
+      },
+      {
+        "version": "1.0",
+        "file": "legionx.mjs",
+        "date": "2026-02-10",
+        "highlights": [
+          "Server-side orchestration with your own API key",
+          "41 agents: 12 primary + 29 sub-agents across 11 categories",
+          "Geth Consensus multi-round deliberation with cross-reading",
+          "Single provider per session (Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere)",
+          "Session transcripts saved to ~/.legion/sessions/",
+          "Physical process isolation — your key never touches server LLM keys"
+        ]
+      }
+    ]
+  }
+}

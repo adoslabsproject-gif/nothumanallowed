@@ -280,7 +280,7 @@ module.exports = {
   apps: [{
     name: 'nha-discord',
     script: 'apps/discord/dist/index.js',
-    node_args: '--env-file=/opt/nha/app/.env',
+    node_args: '--env-file=/home/deploy/nha/.env',
     instances: 1,
     autorestart: true,
     max_memory_restart: '512M',
