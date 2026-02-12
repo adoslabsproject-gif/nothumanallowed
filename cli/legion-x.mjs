@@ -39,7 +39,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '1.3';
+var VERSION = '1.5';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -1500,6 +1500,61 @@ class SharedWorkspace {
 }
 
 // ============================================================================
+// Section 5.5b: Structured Output Parsing (v10.0 Neural Controller)
+// ============================================================================
+
+/**
+ * Parse structured agent output. If the agent returns valid JSON with our
+ * expected fields (answer, confidence, reasoning_summary, risk_flags),
+ * extract them. Otherwise fallback to plain text with default confidence 0.7.
+ */
+function parseStructuredAgentOutput(raw) {
+  if (!raw || typeof raw !== 'string') {
+    return { answer: raw || '', confidence: 0.7, reasoningSummary: '', riskFlags: [] };
+  }
+
+  // Try extracting JSON from markdown code block
+  var jsonBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  var jsonCandidate = jsonBlockMatch ? jsonBlockMatch[1].trim() : raw.trim();
+
+  try {
+    var parsed = JSON.parse(jsonCandidate);
+    if (parsed && typeof parsed === 'object' && typeof parsed.answer === 'string') {
+      return {
+        answer: parsed.answer,
+        confidence: typeof parsed.confidence === 'number'
+          ? Math.max(0, Math.min(1, parsed.confidence)) : 0.7,
+        reasoningSummary: typeof parsed.reasoning_summary === 'string'
+          ? parsed.reasoning_summary.substring(0, 500) : '',
+        riskFlags: Array.isArray(parsed.risk_flags)
+          ? parsed.risk_flags.filter(function(f) { return typeof f === 'string'; }).slice(0, 10) : [],
+      };
+    }
+  } catch (e) { /* not valid JSON */ }
+
+  // Try extracting JSON object from raw text
+  var jsonObjMatch = raw.match(/\{[\s\S]*"answer"\s*:[\s\S]*\}/);
+  if (jsonObjMatch) {
+    try {
+      var parsed2 = JSON.parse(jsonObjMatch[0]);
+      if (typeof parsed2.answer === 'string') {
+        return {
+          answer: parsed2.answer,
+          confidence: typeof parsed2.confidence === 'number'
+            ? Math.max(0, Math.min(1, parsed2.confidence)) : 0.7,
+          reasoningSummary: typeof parsed2.reasoning_summary === 'string'
+            ? parsed2.reasoning_summary.substring(0, 500) : '',
+          riskFlags: Array.isArray(parsed2.risk_flags)
+            ? parsed2.risk_flags.filter(function(f) { return typeof f === 'string'; }).slice(0, 10) : [],
+        };
+      }
+    } catch (e) { /* fall through */ }
+  }
+
+  return { answer: raw, confidence: 0.7, reasoningSummary: '', riskFlags: [] };
+}
+
+// ============================================================================
 // Section 5.6: CommunicationStream — Continuous agent thought sharing (v5.0.0)
 // ============================================================================
 
@@ -1534,13 +1589,15 @@ class CommunicationStream {
    * v6.0.0: Record an agent's full proposal (output) for cross-reading by other agents.
    * Proposals are the actual outputs agents produce, not just [STREAM] tags.
    */
-  recordProposal(agentName, content, subTaskId, round) {
+  recordProposal(agentName, content, subTaskId, round, confidence, riskFlags) {
     this.proposals.push({
       agent: agentName,
       wave: this.currentWave,
       content: content,
       subTaskId: subTaskId,
       round: round || 1,
+      confidence: typeof confidence === 'number' ? confidence : 0.7,
+      riskFlags: Array.isArray(riskFlags) ? riskFlags : [],
       timestamp: Date.now(),
     });
   }
@@ -2745,14 +2802,18 @@ class ExecutionEngine {
     resultStr = SharedWorkspace.stripTags(resultStr);
     resultStr = CommunicationStream.stripTags(resultStr);
 
-    // v6.0.0→v7.0.0: Record proposal with round number for cross-reading
+    // v10.0: Parse structured output (confidence, risk flags)
+    var parsedOutput = parseStructuredAgentOutput(resultStr);
+    resultStr = parsedOutput.answer;
+
+    // v6.0.0→v7.0.0: Record proposal with round number and confidence for cross-reading
     if (this.commStream) {
-      this.commStream.recordProposal(agentName, resultStr, task.id, this._currentDeliberationRound || 1);
+      this.commStream.recordProposal(agentName, resultStr, task.id, this._currentDeliberationRound || 1, parsedOutput.confidence, parsedOutput.riskFlags);
     }
 
     // v5.0.0: Contribute to latent space (fire-and-forget)
     if (this.latentSpaceEnabled && this.client && this.runId) {
-      var reasoningSummary = resultStr.replace(/[#*`\[\]]/g, '').substring(0, 500).trim();
+      var reasoningSummary = (parsedOutput.reasoningSummary || resultStr.replace(/[#*`\[\]]/g, '').substring(0, 500)).trim();
       this.client.contributeLatentVector(this.runId, agentName, reasoningSummary, this.commStream ? this.commStream.currentWave : 0)
         .catch(function() {});
     }
@@ -2919,7 +2980,9 @@ class ExecutionEngine {
       for (var rp = 0; rp < results.length; rp++) {
         var rpTask = tasks[rp];
         if (rpTask && results[rp].result) {
-          this.commStream.recordProposal(agentName, results[rp].result, rpTask.id, this._currentDeliberationRound || 1);
+          var batchParsed = parseStructuredAgentOutput(results[rp].result);
+          results[rp].result = batchParsed.answer;
+          this.commStream.recordProposal(agentName, batchParsed.answer, rpTask.id, this._currentDeliberationRound || 1, batchParsed.confidence, batchParsed.riskFlags);
         }
       }
     }
@@ -6418,12 +6481,134 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
 
   // 4. Poll for completion with live progress reporting
   var pollInterval = 3000;
-  var maxPolls = 300; // 15 minutes (rate-aware sessions can take 8-10 min)
+  var maxPolls = 1200; // 60 minutes (complex multi-round deliberation with rate-limited providers)
   var pollCount = 0;
   var lastStatus = 'pending';
   var spinChars = ['|', '/', '-', '\\'];
   var lastLogIndex = 0;
   var hasProgressBar = false;
+
+  // ========================================================================
+  // Deliberation Spectacle — Structured event parser + renderers
+  // ========================================================================
+
+  function parseSpectacleEvent(entry) {
+    if (typeof entry !== 'string' || entry.charAt(0) !== '{') return null;
+    try {
+      var obj = JSON.parse(entry);
+      if (obj && typeof obj.type === 'string') return obj;
+    } catch (_) {}
+    return null;
+  }
+
+  var capabilityColors = {
+    security: '\x1b[31m',    // red
+    code: '\x1b[32m',        // green
+    analytical: '\x1b[34m',  // blue
+    creative: '\x1b[35m',    // magenta
+  };
+
+  function renderDecomposition(event) {
+    var tasks = event.tasks || [];
+    console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + tasks.length + ' sub-tasks across ' +
+      new Set(tasks.map(function(t) { return t.capability; })).size + ' capabilities');
+    for (var i = 0; i < tasks.length; i++) {
+      var t = tasks[i];
+      var capColor = capabilityColors[t.capability] || '\x1b[37m';
+      console.log('  ' + (i + 1) + '. ' + capColor + '[' + t.capability + ']\x1b[0m ' + t.description);
+    }
+  }
+
+  function renderAgentsAssigned(event) {
+    var agents = event.agents || [];
+    console.log('\x1b[36m[ROUTING]    \x1b[0m' + agents.length + ' agents deployed');
+    for (var i = 0; i < agents.length; i++) {
+      var a = agents[i];
+      console.log('  \x1b[1m' + a.name + '\x1b[0m (\x1b[35m' + a.provider + '/' + a.model + '\x1b[0m) \x1b[90m\u2192 ' + a.subTaskId + '\x1b[0m');
+    }
+  }
+
+  function renderAgentComplete(event) {
+    var conf = Math.round((event.confidence || 0) * 100);
+    var confColor = conf >= 80 ? '\x1b[32m' : conf >= 50 ? '\x1b[33m' : '\x1b[31m';
+    var dur = Math.round((event.durationMs || 0) / 1000);
+    var riskStr = '';
+    if (event.riskFlags && event.riskFlags.length > 0) {
+      riskStr = ' \x1b[33m\u26a0 ' + event.riskFlags.join(', ') + '\x1b[0m';
+    }
+    var prov = event.provider || '';
+    console.log('  \x1b[1m' + event.agentName + '\x1b[0m ' + confColor + conf + '% conf\x1b[0m (' + dur + 's, ' + prov + ')' + riskStr);
+    if (event.reasoningSummary) {
+      console.log('    \x1b[90m\u2514 ' + event.reasoningSummary + '\x1b[0m');
+    }
+  }
+
+  function renderConvergenceUpdate(event) {
+    var conv = Math.round((event.convergence || 0) * 100);
+    var total = event.totalPairs || 0;
+    var barWidth = 16;
+    var filled = Math.round(conv / 100 * barWidth);
+    var bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
+    var divPairs = event.divergentPairs || [];
+    var divStr = '';
+    if (divPairs.length > 0) {
+      var pairNames = divPairs.map(function(p) { return p[0] + ' vs ' + p[1]; }).join(', ');
+      divStr = '\n  \x1b[33m\u2694 Divergent: ' + pairNames + '\x1b[0m';
+    } else {
+      divStr = '\n  \x1b[32m\u2713 All agents aligned\x1b[0m';
+    }
+    console.log('\x1b[33m[ROUND ' + event.round + ']\x1b[0m    Convergence: ' + bar + ' ' + conv + '% (' + (event.method || 'jaccard') + ', ' + total + ' pairs)' + divStr);
+  }
+
+  function renderRoundDecision(event) {
+    var icons = {
+      standard: '\u27f3',       // ⟳
+      mandatory: '\u2757',      // ❗
+      arbitrator: '\u2696',     // ⚖
+      skip_consensus: '\u2713', // ✓
+    };
+    var modeIcon = icons[event.mode] || '?';
+    var label = event.mode === 'skip_consensus'
+      ? '\x1b[32m\u2713 CONSENSUS REACHED\x1b[0m \u2014 ' + (event.reason || 'sufficient convergence')
+      : modeIcon + ' Round ' + (event.nextRound || '?') + ': \x1b[1m' + (event.mode || '').toUpperCase() + '\x1b[0m \u2014 ' + (event.reason || '');
+    var metrics = '';
+    if (event.divergence !== undefined) {
+      metrics = '\n  \x1b[90mdivergence=' + Math.round(event.divergence * 100) + '% uncertainty=' +
+        Math.round((event.uncertainty || 0) * 100) + '% conflicts=' + (event.conflicts || 0) + '\x1b[0m';
+    }
+    console.log('\n' + label + metrics);
+  }
+
+  function renderSynthesisWeights(event) {
+    var prog = event.convergenceProgression || [];
+    var progStr = prog.map(function(c) { return 'R' + c.round + ':' + Math.round(c.convergence * 100) + '%'; }).join(' \u2192 ');
+    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mPreparing final synthesis (' + (event.totalRounds || 0) + ' rounds)');
+    if (progStr) {
+      console.log('  Convergence: ' + progStr);
+    }
+    var top = event.topAgents || [];
+    if (top.length > 0) {
+      var topStr = top.map(function(a) { return a.name + ' (' + Math.round(a.confidence * 100) + '%)'; }).join(', ');
+      console.log('  Strongest: ' + topStr);
+    }
+    var risk = event.riskFlaggedAgents || [];
+    if (risk.length > 0) {
+      var riskStr = risk.map(function(a) { return a.name + ' (' + a.flags.join(', ') + ')'; }).join(', ');
+      console.log('  \x1b[33mRisk-flagged: ' + riskStr + '\x1b[0m');
+    }
+  }
+
+  function renderSpectacleEvent(event) {
+    switch (event.type) {
+      case 'decomposition_complete': renderDecomposition(event); break;
+      case 'agents_assigned': renderAgentsAssigned(event); break;
+      case 'agent_complete': renderAgentComplete(event); break;
+      case 'convergence_update': renderConvergenceUpdate(event); break;
+      case 'round_decision': renderRoundDecision(event); break;
+      case 'synthesis_weights': renderSynthesisWeights(event); break;
+      default: console.log('\x1b[90m  [spectacle] ' + JSON.stringify(event) + '\x1b[0m'); break;
+    }
+  }
 
   function getPhasePrefix(phase) {
     var map = {
@@ -6505,8 +6690,13 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
           hasProgressBar = false;
         }
         var entry = newEntries[li];
-        var prefix = getPhasePrefix(progress.phase);
-        console.log(prefix + entry);
+        var spectacleEvent = parseSpectacleEvent(entry);
+        if (spectacleEvent) {
+          renderSpectacleEvent(spectacleEvent);
+        } else {
+          var prefix = getPhasePrefix(progress.phase);
+          console.log(prefix + entry);
+        }
       }
       lastLogIndex = progress.log.length;
 
@@ -6541,6 +6731,13 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
           ' | CI Gain: ' + ciG + '%' +
           ' | Duration: ' + dur);
       }
+
+      // Fetch proposals early (used for both recap and transcript)
+      var proposalsData = [];
+      try {
+        var proposalsResult = await client.getGethProposals(sessionId);
+        proposalsData = proposalsResult.proposals || [];
+      } catch (_) {}
 
       var totalMs = Date.now() - totalStart;
       console.log();
@@ -6578,19 +6775,106 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
       console.log('Duration: ' + colors.gray + formatDuration(session.totalDurationMs || totalMs) + colors.reset +
         ' (server) / ' + formatDuration(totalMs) + ' (total)');
 
-      if (verbose && session.convergenceHistory && session.convergenceHistory.length > 0) {
+      // Stats legend
+      console.log();
+      console.log(colors.bold + '--- What do these stats mean? ---' + colors.reset);
+      console.log(colors.gray + '  Quality     ' + colors.reset + 'LLM-evaluated score (0-100%). Measures relevance, completeness, coherence,');
+      console.log(colors.gray + '              ' + colors.reset + 'depth, and synthesis quality. With a single provider, self-grading bias');
+      console.log(colors.gray + '              ' + colors.reset + 'applies (models tend to underrate their own output). Multi-provider');
+      console.log(colors.gray + '              ' + colors.reset + 'cross-validation (3 LLMs evaluating each other) yields more accurate scores.');
+      console.log(colors.gray + '  CI Gain     ' + colors.reset + 'Collective Intelligence improvement vs single-model baseline (65%).');
+      console.log(colors.gray + '              ' + colors.reset + 'Positive = multi-agent deliberation outperformed a monolithic model.');
+      console.log(colors.gray + '  Convergence ' + colors.reset + '30-60% is healthy — it means agents tackled different sub-tasks with');
+      console.log(colors.gray + '              ' + colors.reset + 'complementary perspectives. 100% would signal groupthink (bad).');
+      console.log(colors.gray + '              ' + colors.reset + 'Low convergence with high quality = effective division of labor.');
+      console.log(colors.gray + '  Rounds      ' + colors.reset + 'Deliberation rounds completed. Round 2+ includes cross-reading where');
+      console.log(colors.gray + '              ' + colors.reset + 'agents read each other\'s full proposals and refine their positions.');
+
+      // ====================================================================
+      // Deliberation Recap — Position changes + convergence visualization
+      // ====================================================================
+      if (proposalsData.length > 0 && session.convergenceHistory && session.convergenceHistory.length > 0) {
         console.log();
-        console.log(colors.bold + '--- Convergence History ---' + colors.reset);
-        for (var ci = 0; ci < session.convergenceHistory.length; ci++) {
-          var ch = session.convergenceHistory[ci];
-          console.log('  Round ' + ch.round + ': ' +
-            ((ch.convergence || 0) * 100).toFixed(0) + '% (' + (ch.method || 'jaccard') + ')' +
-            (ch.divergentPairs && ch.divergentPairs.length > 0
-              ? ' — ' + ch.divergentPairs.length + ' divergent pairs'
-              : ''));
+        console.log(colors.bold + '=== DELIBERATION RECAP ===' + colors.reset);
+
+        // Per round: agent name, confidence %, provider, reasoning summary, risk flags
+        var roundMap = {};
+        for (var pi = 0; pi < proposalsData.length; pi++) {
+          var p = proposalsData[pi];
+          var rnd = p.round || 1;
+          if (!roundMap[rnd]) roundMap[rnd] = [];
+          roundMap[rnd].push(p);
+        }
+        var rounds = Object.keys(roundMap).map(Number).sort(function(a, b) { return a - b; });
+        var maxRound = rounds.length > 0 ? rounds[rounds.length - 1] : 1;
+
+        // Show per-round breakdown
+        for (var ri = 0; ri < rounds.length; ri++) {
+          var rn = rounds[ri];
+          var rndProposals = roundMap[rn];
+          rndProposals.sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); });
+          console.log();
+          console.log(colors.bold + '--- Round ' + rn + ' ---' + colors.reset);
+          for (var rpi = 0; rpi < rndProposals.length; rpi++) {
+            var rp = rndProposals[rpi];
+            var rpConf = Math.round((rp.confidence || 0.7) * 100);
+            var rpConfColor = rpConf >= 80 ? colors.green : rpConf >= 50 ? colors.yellow : colors.red;
+            var rpRisk = (rp.riskFlags && rp.riskFlags.length > 0) ? ' \x1b[33m\u26a0 ' + rp.riskFlags.join(', ') + '\x1b[0m' : '';
+            console.log('  ' + colors.cyan + rp.agentName + colors.reset + ' ' +
+              rpConfColor + rpConf + '%' + colors.reset +
+              ' (' + colors.magenta + (rp.provider || '?') + colors.reset + ')' + rpRisk);
+            if (rp.reasoningSummary) {
+              console.log('    \x1b[90m\u2514 ' + rp.reasoningSummary + '\x1b[0m');
+            }
+          }
+        }
+
+        // Position Changes: compare round 1 vs last round by Jaccard similarity
+        if (maxRound > 1 && roundMap[1] && roundMap[maxRound]) {
+          console.log();
+          console.log(colors.bold + '--- Position Changes (Round 1 \u2192 ' + maxRound + ') ---' + colors.reset);
+          var r1Map = {};
+          for (var r1i = 0; r1i < roundMap[1].length; r1i++) {
+            r1Map[roundMap[1][r1i].agentName] = roundMap[1][r1i].content || '';
+          }
+          var lastRndProposals = roundMap[maxRound];
+          for (var lri = 0; lri < lastRndProposals.length; lri++) {
+            var lrp = lastRndProposals[lri];
+            var r1Content = r1Map[lrp.agentName];
+            if (r1Content !== undefined) {
+              var words1 = new Set(r1Content.toLowerCase().split(/\s+/).filter(function(w) { return w.length > 3; }));
+              var words2 = new Set((lrp.content || '').toLowerCase().split(/\s+/).filter(function(w) { return w.length > 3; }));
+              var intersection = 0;
+              words1.forEach(function(w) { if (words2.has(w)) intersection++; });
+              var union = words1.size + words2.size - intersection;
+              var similarity = union > 0 ? Math.round(intersection / union * 100) : 100;
+              var posIcon = similarity < 60 ? '\x1b[33m\u21c4\x1b[0m' : '\x1b[90m\u2501\x1b[0m';
+              var posLabel = similarity < 60 ? 'adapted position' : 'held firm';
+              console.log('  ' + posIcon + ' ' + colors.cyan + lrp.agentName + colors.reset +
+                ': ' + similarity + '% similarity (' + posLabel + ')');
+            }
+          }
+        }
+
+        // Convergence visualization
+        console.log();
+        console.log(colors.bold + '--- Convergence ---' + colors.reset);
+        for (var cvi = 0; cvi < session.convergenceHistory.length; cvi++) {
+          var cvh = session.convergenceHistory[cvi];
+          var cvPctR = Math.round((cvh.convergence || 0) * 100);
+          var cvBarW = 16;
+          var cvFill = Math.round(cvPctR / 100 * cvBarW);
+          var cvBar = '\u2588'.repeat(cvFill) + '\u2591'.repeat(cvBarW - cvFill);
+          var cvDiv = '';
+          if (cvh.divergentPairs && cvh.divergentPairs.length > 0) {
+            var cvDivNames = cvh.divergentPairs.map(function(dp) { return dp[0] + ' vs ' + dp[1]; }).join(', ');
+            cvDiv = ' (' + cvh.divergentPairs.length + ' divergent: ' + cvDivNames + ')';
+          }
+          console.log('  Round ' + cvh.round + ': ' + cvBar + ' ' + cvPctR + '%' + cvDiv);
         }
       }
 
+      // Verbose: show agent assignments
       if (verbose && session.agentAssignments && session.agentAssignments.length > 0) {
         console.log();
         console.log(colors.bold + '--- Agent Assignments ---' + colors.reset);
@@ -6608,13 +6892,6 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
         if (!fs.existsSync(sessionsDir)) {
           fs.mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
         }
-
-        // Fetch full proposals for transcript
-        var proposalsData = [];
-        try {
-          var proposalsResult = await client.getGethProposals(sessionId);
-          proposalsData = proposalsResult.proposals || [];
-        } catch (_) {}
 
         var now = new Date();
         var datePrefix = now.toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
@@ -6636,6 +6913,9 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
               provider: p.provider,
               model: p.model,
               content: p.content,
+              confidence: p.confidence,
+              riskFlags: p.riskFlags,
+              reasoningSummary: p.reasoningSummary,
               inputTokens: p.inputTokens || 0,
               outputTokens: p.outputTokens || 0,
             };
@@ -6758,7 +7038,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
 
   // Timeout
   if (hasProgressBar) process.stdout.write('\r' + ' '.repeat(100) + '\r');
-  console.error(colors.red + 'Session timed out after ' + maxPolls + ' polls (15 minutes).' + colors.reset);
+  console.error(colors.red + 'Session timed out after ' + maxPolls + ' polls (60 minutes).' + colors.reset);
   console.error('Check status: node legion-x.mjs geth:session ' + sessionId);
   console.error('Resume stuck session: node legion-x.mjs geth:resume ' + sessionId);
   process.exit(1);
@@ -8168,6 +8448,12 @@ async function checkForUpdates() {
     clearTimeout(timeout);
     if (!res.ok) return;
     var data = await res.json();
+    // Maintenance banner — shown before anything else
+    if (data.maintenance) {
+      console.log('');
+      console.log(colors.yellow + colors.bold + '  ' + data.maintenance + colors.reset);
+      console.log('');
+    }
     var entry = data['legion-x'];
     if (!entry) return;
     var latest = entry.latest;
@@ -9072,16 +9358,17 @@ var COMMANDS = {
           }
         }
 
-        var config = loadConfig();
-        if (!config.llmApiKey) {
-          console.error(colors.red + 'No API key configured. Run: node legion-x.mjs config:set llmApiKey <key>' + colors.reset);
+        var cfg = new LegionConfig();
+        var apiKey = cfg.get('llmApiKey');
+        if (!apiKey) {
+          console.error(colors.red + 'No API key configured. Run: node legion-x.mjs config:set llm-key <key>' + colors.reset);
           process.exit(1);
         }
 
         console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Resuming session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset);
         console.log(colors.dim + 'This will re-run synthesis + validation using your API key.' + colors.reset);
 
-        var result = await client.resumeGethSession(sessionId, config.llmApiKey);
+        var result = await client.resumeGethSession(sessionId, apiKey);
         var s = result.session;
 
         console.log('\n' + colors.green + 'Session resumed and completed!' + colors.reset);

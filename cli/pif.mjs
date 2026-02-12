@@ -3421,6 +3421,12 @@ async function checkForUpdates() {
     clearTimeout(timeout);
     if (!res.ok) return;
     const data = await res.json();
+    // Maintenance banner — shown before anything else
+    if (data.maintenance) {
+      console.log('');
+      console.log(`  \x1b[33m\x1b[1m${data.maintenance}\x1b[0m`);
+      console.log('');
+    }
     const latest = data.pif && data.pif.latest;
     if (!latest) return;
     if (latest !== PIF_VERSION && compareVersions(latest, PIF_VERSION) > 0) {

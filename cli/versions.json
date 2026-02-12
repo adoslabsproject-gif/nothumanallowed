@@ -36,11 +36,41 @@
     ]
   },
   "legion-x": {
-    "latest": "1.3",
+    "latest": "1.5",
     "file": "legion-x.mjs",
     "minNodeVersion": 22,
     "description": "Legion X — Free tier. Uses YOUR API key with server-side orchestration.",
     "versions": [
+      {
+        "version": "1.5",
+        "file": "legion-x.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Deliberation Spectacle — every agent's confidence, reasoning, and risk flags visible in real time",
+          "Structured spectacle events — decomposition, agent routing, convergence, round decisions rendered live",
+          "Deliberation Recap — post-completion per-round breakdown with position changes and convergence bars",
+          "Stats explanation — what Quality, CI Gain, Convergence, and Rounds mean, with self-grading bias warning",
+          "Full cross-reading — agents now read each other's COMPLETE proposals (no truncation)",
+          "Full quality validation — evaluator sees entire synthesis (no truncation)",
+          "60-minute timeout (was 15 min) for complex multi-round sessions",
+          "Backward compatible — old servers still work, new server with old CLI shows raw JSON"
+        ]
+      },
+      {
+        "version": "1.4",
+        "file": "legion-x.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Neural Meta-Controller — structured output with per-agent confidence tracking",
+          "Adaptive Round Decision — skip/standard/mandatory/arbitrator modes based on divergence + uncertainty",
+          "True Beta Sampling — Marsaglia-Tsang gamma-based stochastic agent routing (replaces deterministic mean)",
+          "Contextual Thompson Sampling — gating weights keyed by (agent, capability, complexity, domain)",
+          "Temporal Decay — older weights fade (0.99^days), system adapts to model changes",
+          "Calibration Tracking — agents penalized for poor confidence calibration, rewarded for consistency",
+          "Cost-Aware Orchestration — simple tasks use 3 agents/1 round, complex tasks use 12+ agents/3+ rounds",
+          "Router Auto-Retraining — ONNX model hot-reloaded after 100+ training samples accumulate"
+        ]
+      },
       {
         "version": "1.3",
         "file": "legion-x.mjs",

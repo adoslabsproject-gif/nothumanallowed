@@ -58,23 +58,23 @@ Legion X orchestrates **42 specialized AI agents** through a 9-layer Geth Consen
 ```
 Your prompt
     ↓
-Task Decomposition (history-aware, Thompson Sampling)
+Task Decomposition (history-aware, Contextual Thompson Sampling)
     ↓
-Agent Routing (MoE Gating + Vickrey Auction)
+Neural Agent Routing (ONNX MLP + True Beta Sampling + Vickrey Auction)
     ↓
-Multi-Round Deliberation (up to 3 rounds)
-  ├── Round 1: Independent proposals
-  ├── Round 2: Cross-reading + refinement
-  └── Round 3: Mediation for divergent agents
+Multi-Round Deliberation (up to 3 rounds, visible in real time)
+  ├── Round 1: Independent proposals (confidence, reasoning, risk flags)
+  ├── Round 2: Cross-reading FULL proposals + refinement
+  └── Round 3: Mediation for divergent agents (arbitrator mode)
     ↓
 Weighted Authority Synthesis
     ↓
-Cross-LLM Validation (Claude writes → GPT validates, or vice versa)
+Cross-LLM Validation (full synthesis, no truncation)
     ↓
-Final Result (quality score, CI gain, full transcript)
+Final Result (quality score, CI gain, convergence, deliberation recap)
 ```
 
-Deliberation sessions typically take **3–10 minutes** depending on your API tier. The system serializes LLM calls intelligently for rate-limited keys — no 429 errors, no quality loss, just longer wait times on lower tiers.
+Deliberation sessions typically take **3–20 minutes** depending on complexity and API tier (60-minute timeout for very complex multi-round sessions). The system serializes LLM calls intelligently for rate-limited keys — no 429 errors, no quality loss, just longer wait times on lower tiers. Agents read each other's **complete proposals** during cross-reading (no truncation) for maximum deliberation quality.
 
 ### Quick Start
 
@@ -306,11 +306,28 @@ All credentials stay on your machine.
 
 ## Changelog
 
-### Legion X 1.3 — Session Resume + Graceful Shutdown (current)
-- `geth:resume` command recovers interrupted deliberation sessions
-- Server marks in-flight sessions as resumable on restart (graceful shutdown)
-- ONNX Neural routing fix — models load correctly on server
-- Improved timeout UX with resume suggestions
+### Legion X 1.5 — Deliberation Spectacle (current)
+- **Deliberation Spectacle** — every agent's confidence, reasoning, and risk flags visible in real time
+- Structured events: decomposition, agent routing, convergence, round decisions rendered live
+- **Deliberation Recap** — post-completion breakdown with position changes and convergence bars
+- **Stats explanation** — built-in legend explaining Quality, CI Gain, Convergence, Rounds + self-grading bias warning
+- **Full cross-reading** — agents now read each other's COMPLETE proposals (no truncation)
+- **Full quality validation** — evaluator sees entire synthesis (no truncation)
+- 60-minute timeout (was 15 min) for complex multi-round sessions
+
+### Legion X 1.4 — Neural Meta-Controller
+- True Beta Sampling — Marsaglia-Tsang gamma-based stochastic agent routing
+- Contextual Thompson Sampling — gating keyed by (agent, capability, complexity, domain)
+- Temporal Decay (0.99^days) — system adapts to model evolution
+- Adaptive Round Decision — skip/standard/mandatory/arbitrator based on divergence + uncertainty
+- Cost-Aware Orchestration — 3 agents for simple, 7 for medium, 12+ for complex tasks
+- Router Auto-Retraining — ONNX model hot-reloaded after 100+ training samples
+
+### Legion X 1.3 — Live Progress Reporting
+- Watch every phase of deliberation in real time
+- Progress bar with per-agent tracking, convergence %, elapsed time
+- `geth:resume` command recovers interrupted sessions
+- Backward compatible — old servers without progress still work
 
 ### Legion X 1.2 — Rate-Aware Executor
 - Adaptive serialization for Tier 1 API keys (no 429 errors)

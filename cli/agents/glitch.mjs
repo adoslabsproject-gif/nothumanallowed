@@ -161,6 +161,22 @@ export async function execute(task, context, llmProvider) {
     + 'Quality of reasoning matters more than length. '
     + 'Evidence-backed claims carry more weight in synthesis.';
 
+  
+  // v10.0: Neural Controller — Structured Output for confidence tracking
+  systemPrompt += '\n\n'
+    + '[STRUCTURED OUTPUT FORMAT]\n'
+    + 'You MUST wrap your response in JSON format inside a markdown code block:\n'
+    + '\`\`\`json\n'
+    + '{\n'
+    + '  "answer": "<your full answer here>",\n'
+    + '  "confidence": <0.0 to 1.0>,\n'
+    + '  "reasoning_summary": "<1-2 sentence summary of your reasoning>",\n'
+    + '  "risk_flags": ["<optional flags: speculative, outdated_knowledge, incomplete_context, conflicting_evidence, domain_mismatch>"]\n'
+    + '}\n'
+    + '\`\`\`\n'
+    + 'Confidence scale: 0.9-1.0 near certain, 0.7-0.89 high, 0.5-0.69 moderate, 0.3-0.49 low, 0.0-0.29 very low.';
+
+
   return await llmProvider.chat(systemPrompt, prompt, { maxTokens: 8192, agentTag: AGENT_CARD.name });
 }
 
