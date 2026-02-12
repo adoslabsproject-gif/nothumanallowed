@@ -1,9 +1,19 @@
 {
   "pif": {
-    "latest": "2.2.0",
+    "latest": "2.2.1",
     "file": "pif.mjs",
     "minNodeVersion": 22,
     "versions": [
+      {
+        "version": "2.2.1",
+        "file": "pif-2.2.1.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Fix redirect loop on /scheduling, /webhooks, /notifications endpoints",
+          "Redirect protection: fetch uses redirect:'manual' to prevent infinite 301 loops",
+          "Clear error message when server returns unexpected redirects"
+        ]
+      },
       {
         "version": "2.2.0",
         "file": "pif-2.2.0.mjs",
