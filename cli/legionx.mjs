@@ -39,7 +39,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '1.2';
+var VERSION = '1.3';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -6416,12 +6416,44 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
   var sessionId = createResult.sessionId;
   console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset + ' created');
 
-  // 4. Poll for completion
+  // 4. Poll for completion with live progress reporting
   var pollInterval = 3000;
-  var maxPolls = 200;
+  var maxPolls = 300; // 15 minutes (rate-aware sessions can take 8-10 min)
   var pollCount = 0;
   var lastStatus = 'pending';
   var spinChars = ['|', '/', '-', '\\'];
+  var lastLogIndex = 0;
+  var hasProgressBar = false;
+
+  function getPhasePrefix(phase) {
+    var map = {
+      decomposing:       '\x1b[36m[DECOMPOSE]  \x1b[0m',
+      neural_prediction: '\x1b[36m[NEURAL]     \x1b[0m',
+      routing:           '\x1b[36m[ROUTING]    \x1b[0m',
+      round_1:           '\x1b[33m[ROUND 1]    \x1b[0m',
+      round_2:           '\x1b[33m[ROUND 2]    \x1b[0m',
+      round_3:           '\x1b[33m[ROUND 3]    \x1b[0m',
+      round_4:           '\x1b[33m[ROUND 4]    \x1b[0m',
+      round_5:           '\x1b[33m[ROUND 5]    \x1b[0m',
+      synthesizing:      '\x1b[36m[SYNTHESIS]  \x1b[0m',
+      evaluating:        '\x1b[35m[VALIDATION] \x1b[0m',
+    };
+    return map[phase] || '\x1b[90m[' + (phase || '').toUpperCase() + ']\x1b[0m';
+  }
+
+  function buildProgressBar(completed, total) {
+    var width = 16;
+    var filled = total > 0 ? Math.round((completed / total) * width) : 0;
+    var empty = width - filled;
+    return '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
+  }
+
+  function formatElapsed(ms) {
+    var totalSec = Math.floor(ms / 1000);
+    var min = Math.floor(totalSec / 60);
+    var sec = totalSec % 60;
+    return min + 'm ' + (sec < 10 ? '0' : '') + sec + 's';
+  }
 
   while (pollCount < maxPolls) {
     await new Promise(function(resolve) { setTimeout(resolve, pollInterval); });
@@ -6439,8 +6471,15 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
 
     var session = sessionResult.session;
     var status = session.status;
+    var progress = sessionResult.progress || null;
 
+    // Show status changes
     if (status !== lastStatus) {
+      // Clear any in-place progress bar before printing a new line
+      if (hasProgressBar) {
+        process.stdout.write('\r' + ' '.repeat(100) + '\r');
+        hasProgressBar = false;
+      }
       var statusColors = {
         pending: colors.gray,
         deliberating: colors.yellow,
@@ -6451,15 +6490,57 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
         cancelled: colors.red,
       };
       var statusColor = statusColors[status] || colors.white;
-      console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Status: ' + statusColor + status + colors.reset);
+      console.log(colors.cyan + '[GETH CONSENSUS]' + colors.reset + ' Status: ' + statusColor + status + colors.reset);
       lastStatus = status;
-    } else if (verbose) {
+    }
+
+    // Live progress display
+    if (progress && progress.log) {
+      // Print new log entries
+      var newEntries = progress.log.slice(lastLogIndex);
+      for (var li = 0; li < newEntries.length; li++) {
+        // Clear any in-place progress bar before printing a permanent line
+        if (hasProgressBar) {
+          process.stdout.write('\r' + ' '.repeat(100) + '\r');
+          hasProgressBar = false;
+        }
+        var entry = newEntries[li];
+        var prefix = getPhasePrefix(progress.phase);
+        console.log(prefix + entry);
+      }
+      lastLogIndex = progress.log.length;
+
+      // In-place progress bar for round phases
+      if (progress.phase && progress.phase.startsWith('round_') && progress.agentsTotal > 0 && progress.agentsCompleted < progress.agentsTotal) {
+        var bar = buildProgressBar(progress.agentsCompleted, progress.agentsTotal);
+        var agentLabel = progress.currentAgent ? progress.currentAgent : '...';
+        var elapsed = formatElapsed(progress.elapsedMs || 0);
+        var barLine = getPhasePrefix(progress.phase) +
+          bar + ' ' + progress.agentsCompleted + '/' + progress.agentsTotal + ' agents' +
+          ' | ' + colors.cyan + agentLabel + colors.reset +
+          ' | ' + colors.gray + elapsed + ' elapsed' + colors.reset;
+        process.stdout.write('\r' + barLine);
+        hasProgressBar = true;
+      }
+    } else if (verbose && status !== 'completed' && status !== 'failed' && status !== 'cancelled') {
+      // Fallback spinner for old servers without progress
       var spin = spinChars[pollCount % spinChars.length];
       process.stdout.write('\r' + colors.gray + '  ' + spin + ' Waiting (' + pollCount + ')...' + colors.reset);
+      hasProgressBar = true;
     }
 
     if (status === 'completed') {
-      if (verbose) process.stdout.write('\r' + ' '.repeat(40) + '\r');
+      if (hasProgressBar) process.stdout.write('\r' + ' '.repeat(100) + '\r');
+
+      // Print completion summary from progress
+      if (progress && progress.phase) {
+        var qualPct = session.qualityScore ? ((session.qualityScore) * 100).toFixed(0) : '?';
+        var ciG = session.ciGain !== null && session.ciGain !== undefined ? (session.ciGain >= 0 ? '+' : '') + session.ciGain.toFixed(0) : 'N/A';
+        var dur = formatElapsed(session.totalDurationMs || (Date.now() - totalStart));
+        console.log('\x1b[32m[COMPLETE]   \x1b[0m' + 'Quality: ' + qualPct + '%' +
+          ' | CI Gain: ' + ciG + '%' +
+          ' | Duration: ' + dur);
+      }
 
       var totalMs = Date.now() - totalStart;
       console.log();
@@ -6669,14 +6750,15 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     }
 
     if (status === 'failed' || status === 'cancelled') {
-      if (verbose) process.stdout.write('\r' + ' '.repeat(40) + '\r');
+      if (hasProgressBar) process.stdout.write('\r' + ' '.repeat(100) + '\r');
       console.error(colors.red + 'Session ' + status + '.' + colors.reset);
       process.exit(1);
     }
   }
 
   // Timeout
-  console.error(colors.red + 'Session timed out after ' + maxPolls + ' polls.' + colors.reset);
+  if (hasProgressBar) process.stdout.write('\r' + ' '.repeat(100) + '\r');
+  console.error(colors.red + 'Session timed out after ' + maxPolls + ' polls (15 minutes).' + colors.reset);
   console.error('Check status: node legion-x.mjs geth:session ' + sessionId);
   console.error('Resume stuck session: node legion-x.mjs geth:resume ' + sessionId);
   process.exit(1);
