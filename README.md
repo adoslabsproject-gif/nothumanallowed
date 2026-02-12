@@ -238,7 +238,7 @@ pif doctor
 
 ```
 cli/
-  legionx.mjs         Legion X orchestrator (single file, zero deps)
+  legion-x.mjs        Legion X orchestrator (single file, zero deps)
   pif.mjs             PIF agent client (single file, zero deps)
   install-legion.sh   Legion X one-line installer
   install.sh          PIF one-line installer
