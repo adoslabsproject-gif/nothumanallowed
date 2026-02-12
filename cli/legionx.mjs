@@ -392,6 +392,12 @@ class LegionClient {
   async cancelGethSession(sessionId) {
     return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/cancel');
   }
+
+  async resumeGethSession(sessionId, userApiKey) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/resume', {
+      userApiKey: userApiKey,
+    });
+  }
 }
 
 // ============================================================================
@@ -6672,6 +6678,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
   // Timeout
   console.error(colors.red + 'Session timed out after ' + maxPolls + ' polls.' + colors.reset);
   console.error('Check status: node legion-x.mjs geth:session ' + sessionId);
+  console.error('Resume stuck session: node legion-x.mjs geth:resume ' + sessionId);
   process.exit(1);
 }
 
@@ -8871,7 +8878,7 @@ var COMMANDS = {
             evaluating: colors.magenta, completed: colors.green, failed: colors.red, cancelled: colors.red,
           };
           var sc = statusColors[s.status] || colors.white;
-          console.log(colors.cyan + s.id.substring(0, 8) + colors.reset +
+          console.log(colors.cyan + s.id + colors.reset +
             ' ' + sc + s.status + colors.reset +
             (s.qualityScore !== null ? ' quality:' + ((s.qualityScore * 100).toFixed(0)) + '%' : '') +
             (s.deliberationRounds ? ' rounds:' + s.deliberationRounds : '') +
@@ -8897,6 +8904,27 @@ var COMMANDS = {
       }
       var client = new LegionClient();
       try {
+        // Resolve short ID prefix to full UUID if needed
+        var uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(sessionId)) {
+          var listResult = await client.listGethSessions({ limit: 100 });
+          var matches = (listResult.sessions || []).filter(function(s) {
+            return s.id.toLowerCase().startsWith(sessionId.toLowerCase());
+          });
+          if (matches.length === 1) {
+            console.log(colors.gray + 'Resolved prefix ' + sessionId + ' -> ' + matches[0].id + colors.reset);
+            sessionId = matches[0].id;
+          } else if (matches.length > 1) {
+            console.error(colors.red + 'Ambiguous prefix "' + sessionId + '" matches ' + matches.length + ' sessions:' + colors.reset);
+            for (var mi = 0; mi < matches.length; mi++) {
+              console.error('  ' + colors.cyan + matches[mi].id + colors.reset + ' ' + matches[mi].status);
+            }
+            process.exit(1);
+          } else {
+            console.error(colors.red + 'No session found matching prefix "' + sessionId + '"' + colors.reset);
+            process.exit(1);
+          }
+        }
         var result = await client.getGethSession(sessionId);
         var s = result.session;
         console.log(colors.bold + 'Geth Session: ' + s.id + colors.reset);
@@ -8928,6 +8956,64 @@ var COMMANDS = {
         }
       } catch (err) {
         console.error(colors.red + 'Error: ' + err.message + colors.reset);
+      }
+    },
+  },
+
+  'geth:resume': {
+    description: 'Resume a stuck/failed session (re-runs synthesis)',
+    args: '<id>',
+    handler: async function(args) {
+      var sessionId = args[0];
+      if (!sessionId) {
+        console.error(colors.red + 'Usage: legion-x.mjs geth:resume <session-id>' + colors.reset);
+        process.exit(1);
+      }
+      var client = new LegionClient();
+      try {
+        // Resolve short ID prefix to full UUID if needed
+        var uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(sessionId)) {
+          var listResult = await client.listGethSessions({ limit: 100 });
+          var matches = (listResult.sessions || []).filter(function(s) {
+            return s.id.toLowerCase().startsWith(sessionId.toLowerCase());
+          });
+          if (matches.length === 1) {
+            console.log(colors.gray + 'Resolved prefix ' + sessionId + ' -> ' + matches[0].id + colors.reset);
+            sessionId = matches[0].id;
+          } else if (matches.length > 1) {
+            console.error(colors.red + 'Ambiguous prefix, matches ' + matches.length + ' sessions' + colors.reset);
+            process.exit(1);
+          } else {
+            console.error(colors.red + 'No session found matching prefix "' + sessionId + '"' + colors.reset);
+            process.exit(1);
+          }
+        }
+
+        var config = loadConfig();
+        if (!config.llmApiKey) {
+          console.error(colors.red + 'No API key configured. Run: node legion-x.mjs config:set llmApiKey <key>' + colors.reset);
+          process.exit(1);
+        }
+
+        console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Resuming session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset);
+        console.log(colors.dim + 'This will re-run synthesis + validation using your API key.' + colors.reset);
+
+        var result = await client.resumeGethSession(sessionId, config.llmApiKey);
+        var s = result.session;
+
+        console.log('\n' + colors.green + 'Session resumed and completed!' + colors.reset);
+        console.log('Quality: ' + colors.bold + ((s.qualityScore * 100).toFixed(0)) + '%' + colors.reset);
+        console.log('CI Gain: ' + colors.green + '+' + s.ciGain + '%' + colors.reset);
+        console.log('Rounds: ' + s.deliberationRounds);
+
+        if (s.synthesis) {
+          console.log('\n' + colors.bold + '--- Synthesis ---' + colors.reset);
+          console.log(s.synthesis);
+        }
+      } catch (err) {
+        console.error(colors.red + 'Resume failed: ' + err.message + colors.reset);
+        process.exit(1);
       }
     },
   },
@@ -8981,7 +9067,7 @@ var COMMANDS = {
         'AGENTS': ['agents', 'agents:info', 'agents:test', 'agents:tree', 'agents:register', 'agents:publish', 'agents:unpublish'],
         'TASKS': ['tasks', 'tasks:view', 'tasks:replay'],
         'SANDBOX': ['sandbox:list', 'sandbox:run', 'sandbox:upload', 'sandbox:info', 'sandbox:validate'],
-        'GETH CONSENSUS': ['geth:providers', 'geth:sessions', 'geth:session', 'geth:usage'],
+        'GETH CONSENSUS': ['geth:providers', 'geth:sessions', 'geth:session', 'geth:resume', 'geth:usage'],
         'KNOWLEDGE': ['knowledge', 'knowledge:stats'],
         'CONFIG': ['config', 'config:set'],
         'SYSTEM': ['doctor', 'help', 'version', 'versions', 'update', 'mcp'],
