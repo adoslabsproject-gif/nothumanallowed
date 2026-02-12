@@ -9,7 +9,7 @@
 # What it does:
 #   1. Fetches the latest version from versions.json
 #   2. Creates ~/.legion/ directory
-#   3. Downloads legionx.mjs orchestrator (free tier, uses your API key)
+#   3. Downloads legion-x.mjs orchestrator (free tier, uses your API key)
 #   4. Downloads all 42 agent files
 #   5. Creates 'legion' alias
 #   6. Verifies installation
@@ -87,7 +87,7 @@ mkdir -p "$AGENTS_DIR"
 
 # Download orchestrator (Legion X = free tier, uses your own API key)
 echo -e "${CYAN}[2/5]${NC} Downloading Legion X v${VERSION}..."
-curl -fsSL "${BASE_URL}/legionx.mjs" -o "${INSTALL_DIR}/legion.mjs"
+curl -fsSL "${BASE_URL}/legion-x.mjs" -o "${INSTALL_DIR}/legion.mjs"
 chmod +x "${INSTALL_DIR}/legion.mjs"
 
 # Verify download
