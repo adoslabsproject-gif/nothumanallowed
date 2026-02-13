@@ -103,7 +103,7 @@ Every session feeds back into the system. The parliament learns from its own del
 | **Agent Stats** | Contextual Thompson Sampling per (agent, capability, complexity, domain). High-confidence accurate agents get routed more. |
 | **ONNX Router** | Training samples logged per session. After 100+ samples, neural router retrains and hot-reloads. |
 | **Episodic Memory** | Each agent remembers past performance. Ranked by relevance, not recency. |
-| **Ensemble Patterns** | Which agent teams work best together? Proven combos get +0.15 routing bonus. |
+| **Ensemble Patterns** | Which agent teams work best together? Proven combos get a routing bonus in future sessions. |
 | **Calibration** | |confidence - actual_quality| tracked. Overconfident agents penalized. |
 | **Knowledge Graph** | Links reinforced on quality >=75%, decayed on <50%. |
 

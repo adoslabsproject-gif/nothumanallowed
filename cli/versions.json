@@ -55,7 +55,7 @@
           "ONNX neural router — auto-retrains hourly after 100+ samples, hot-reloaded without downtime",
           "Calibration tracking — overconfident agents penalized, well-calibrated agents trusted more",
           "Episodic memory — each agent remembers past performance, ranked by relevance not recency",
-          "Ensemble patterns — proven agent combinations recorded and reused with +0.15 routing bonus",
+          "Ensemble patterns — proven agent combinations recorded and reused with routing bonus",
           "Knowledge graph reinforcement — links strengthened on quality >=75%, decayed on <50%",
           "Adaptive round decision — skip/standard/mandatory/arbitrator based on divergence + uncertainty + conflict",
           "Structured agent output — confidence, reasoning_summary, risk_flags per agent",
