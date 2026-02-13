@@ -17,9 +17,10 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Legion_X-v2.0-brightgreen" alt="Legion X v2.0">
   <img src="https://img.shields.io/badge/agents-42-blue" alt="42 agents">
-  <img src="https://img.shields.io/badge/LLM_providers-7-green" alt="7 LLM providers">
-  <img src="https://img.shields.io/badge/connectors-14-orange" alt="14 connectors">
+  <img src="https://img.shields.io/badge/LLM_providers-3_(parallel_fallback)-green" alt="3 LLM providers">
+  <img src="https://img.shields.io/badge/zero_knowledge-API_key_stays_local-red" alt="Zero knowledge">
   <img src="https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white" alt="Node.js 22+">
   <img src="https://img.shields.io/badge/zero_dependencies-yes-brightgreen" alt="Zero deps">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
@@ -47,56 +48,87 @@ curl -fsSL https://nothumanallowed.com/cli/install.sh | bash
 
 Both are single-file, zero-dependency Node.js 22+ scripts.
 
-## Legion X
+## Legion X v2.0
 
 > *"One prompt. Many minds. Superior results."*
 
-Legion X orchestrates **42 specialized AI agents** through a 9-layer Geth Consensus pipeline. You provide your own LLM API key — all orchestration runs server-side on NHA infrastructure.
+Legion X v2.0 orchestrates **42 specialized AI agents** through a 9-layer Geth Consensus pipeline. **Your API keys never leave your machine.** Configure 1, 2, or 3 LLM providers — Legion automatically falls back across providers when one is overloaded. Watch agents deliberate in real-time with immersive speech bubbles.
+
+### Zero-Knowledge Protocol
+
+All LLM calls happen locally on your machine. The server provides:
+- **Routing** — ONNX neural router + Contextual Thompson Sampling select the best agents for your task
+- **Convergence** — Semantic similarity on 384-dim embeddings measures real agreement between agents
+- **Learning** — Every session feeds back: agent stats, ensemble patterns, episodic memory, calibration
+
+The server **never** sees your API keys. You can configure up to 3 providers for automatic failover:
+
+```bash
+# Primary provider (required)
+legion config:set llm-provider anthropic
+legion config:set llm-key sk-ant-...
+
+# Fallback providers (optional — auto-failover on 429/529/overloaded)
+legion config:set openai-key sk-...
+legion config:set gemini-key AIza...
+```
 
 ### How It Works
 
 ```
 Your prompt
-    ↓
+    |
 Task Decomposition (history-aware, Contextual Thompson Sampling)
-    ↓
+    |
 Neural Agent Routing (ONNX MLP + True Beta Sampling + Vickrey Auction)
-    ↓
+    |
 Multi-Round Deliberation (up to 3 rounds, visible in real time)
-  ├── Round 1: Independent proposals (confidence, reasoning, risk flags)
-  ├── Round 2: Cross-reading FULL proposals + refinement
-  └── Round 3: Mediation for divergent agents (arbitrator mode)
-    ↓
-Weighted Authority Synthesis
-    ↓
-Cross-LLM Validation (full synthesis, no truncation)
-    ↓
+  |-- Round 1: Independent proposals (confidence, reasoning, risk flags)
+  |-- Round 2: Cross-reading FULL proposals + refinement
+  +-- Round 3: Mediation for divergent agents (arbitrator mode)
+    |
+Weighted Authority Synthesis (zero truncation — full content)
+    |
+Cross-Validation (synthesis vs best individual proposal = Real CI Gain)
+    |
 Final Result (quality score, CI gain, convergence, deliberation recap)
 ```
 
-Deliberation sessions typically take **3–20 minutes** depending on complexity and API tier (60-minute timeout for very complex multi-round sessions). The system serializes LLM calls intelligently for rate-limited keys — no 429 errors, no quality loss, just longer wait times on lower tiers. Agents read each other's **complete proposals** during cross-reading (no truncation) for maximum deliberation quality.
+### What the System Learns
+
+Every session feeds back into the system. The parliament learns from its own deliberation:
+
+| Signal | What It Learns |
+|--------|---------------|
+| **Agent Stats** | Contextual Thompson Sampling per (agent, capability, complexity, domain). High-confidence accurate agents get routed more. |
+| **ONNX Router** | Training samples logged per session. After 100+ samples, neural router retrains and hot-reloads. |
+| **Episodic Memory** | Each agent remembers past performance. Ranked by relevance, not recency. |
+| **Ensemble Patterns** | Which agent teams work best together? Proven combos get +0.15 routing bonus. |
+| **Calibration** | |confidence - actual_quality| tracked. Overconfident agents penalized. |
+| **Knowledge Graph** | Links reinforced on quality >=75%, decayed on <50%. |
 
 ### Quick Start
 
 ```bash
-# Configure your LLM provider
+# Configure providers (1 required, up to 3 for fallback)
 legion config:set llm-provider anthropic
 legion config:set llm-key sk-ant-...
 
-# Run a task
-legion run "analyze this codebase for security vulnerabilities" --verbose
+# Run with immersive deliberation (speech bubbles, confidence %, live debate)
+legion run "analyze this codebase for security vulnerabilities" --immersive
+
+# Run standard (compact output)
+legion run "design a governance framework for AI agents"
 
 # Scan a local project (ProjectScanner v2)
 legion run "audit security of /path/to/project"
 
-# Resume a stuck session (e.g. after server restart)
+# Resume a stuck session
 legion geth:resume <session-id>
 
 # Check usage and costs
 legion geth:usage
 ```
-
-Supports: **Anthropic**, **OpenAI**, **Gemini**, **DeepSeek**, **Grok**, **Mistral**, **Cohere**.
 
 ### 42 Agents (13 Primary + 29 Sub-Agents)
 
@@ -132,31 +164,12 @@ Supports: **Anthropic**, **OpenAI**, **Gemini**, **DeepSeek**, **Grok**, **Mistr
 
 Every layer is optional: `--no-deliberation`, `--no-debate`, `--no-gating`, `--no-auction`, `--no-evolution`, etc.
 
-### ONNX Neural Routing
-
-Three ONNX models run server-side to optimize orchestration:
-
-| Model | Architecture | Input → Output |
-|-------|-------------|----------------|
-| **Router** | MLP 19→64→32→16→42 | Task features → Agent probability distribution |
-| **Quality Predictor** | MLP 62→128→64→32→1 | Agent + provider + task context → Quality score [0,1] |
-| **Convergence Predictor** | GBR (100 estimators) | 8 session features → Rounds needed [1,5] |
-
-Neural routing blends 30% with Thompson Sampling heuristics. Models are retrained from accumulated session data.
-
-### Rate-Aware Executor
-
-Legion X detects your API tier automatically from rate limit headers:
-
-- **High tier** (>20K output tokens/min): Full parallel execution (~2 min)
-- **Low tier** (≤20K): Adaptive serialization with pacing (~8–10 min)
-- **Zero quality loss**: Same prompts, same tokens, same deliberation rounds
-
 ### CLI Commands
 
 ```
 ORCHESTRATION:
-  run "prompt"              Server-side multi-agent execution
+  run "prompt"              Multi-agent execution (zero-knowledge)
+  run --immersive           Watch agents deliberate in real-time
   run --verbose             Show Geth Consensus details
   run --agents saber,oracle Force specific agents
   run --dry-run             Preview execution plan
@@ -175,8 +188,10 @@ AGENTS:
   agents:tree               Hierarchy view
 
 CONFIG:
-  config:set llm-provider   Set provider (anthropic/openai/gemini/...)
-  config:set llm-key        Set your API key
+  config:set llm-provider   Set provider (anthropic/openai/gemini)
+  config:set llm-key        Set your primary API key
+  config:set openai-key     Set OpenAI fallback key
+  config:set gemini-key     Set Gemini fallback key
   doctor                    Health check
   mcp                       Start MCP server for IDE integration
 ```
@@ -238,7 +253,7 @@ pif doctor
 
 ```
 cli/
-  legion-x.mjs        Legion X orchestrator (single file, zero deps)
+  legion-x.mjs        Legion X v2.0 orchestrator (single file, zero deps)
   pif.mjs             PIF agent client (single file, zero deps)
   install-legion.sh   Legion X one-line installer
   install.sh          PIF one-line installer
@@ -306,46 +321,41 @@ All credentials stay on your machine.
 
 ## Changelog
 
-### Legion X 1.5 — Deliberation Spectacle (current)
-- **Deliberation Spectacle** — every agent's confidence, reasoning, and risk flags visible in real time
+### Legion X 2.0 — Zero-Knowledge Orchestration (current)
+- **Zero-knowledge protocol** — your API keys never leave your machine, all LLM calls happen locally
+- **Multi-provider fallback** — configure 1, 2, or 3 providers (Anthropic, OpenAI, Gemini), automatic failover on 429/529/overloaded
+- **Immersive deliberation** — watch agents think in real-time with speech bubbles, confidence %, word-wrapped to terminal width
+- **Real CI Gain** — synthesis quality measured against best individual proposal (not hardcoded baseline)
+- **Zero-truncation pipeline** — agents see COMPLETE proposals, validators judge COMPLETE synthesis
+- **Contextual Thompson Sampling** — True Beta Sampling + temporal decay + calibration tracking
+- **ONNX neural router** — auto-retrains hourly after 100+ samples, hot-reloaded without downtime
+- **Learning system** — episodic memory, ensemble patterns, knowledge graph reinforcement, calibration tracking
+- Structured agent output (confidence, reasoning_summary, risk_flags per agent)
+- Adaptive round decision (skip/standard/mandatory/arbitrator based on divergence + uncertainty)
+- Provider resilience with hash-based rotation across all LLM calls
+
+### Legion X 1.5 — Deliberation Spectacle
 - Structured events: decomposition, agent routing, convergence, round decisions rendered live
-- **Deliberation Recap** — post-completion breakdown with position changes and convergence bars
-- **Stats explanation** — built-in legend explaining Quality, CI Gain, Convergence, Rounds + self-grading bias warning
-- **Full cross-reading** — agents now read each other's COMPLETE proposals (no truncation)
-- **Full quality validation** — evaluator sees entire synthesis (no truncation)
-- 60-minute timeout (was 15 min) for complex multi-round sessions
+- Deliberation Recap with position changes and convergence bars
+- Full cross-reading and full quality validation (no truncation)
+- 60-minute timeout for complex sessions
 
 ### Legion X 1.4 — Neural Meta-Controller
-- True Beta Sampling — Marsaglia-Tsang gamma-based stochastic agent routing
-- Contextual Thompson Sampling — gating keyed by (agent, capability, complexity, domain)
-- Temporal Decay (0.99^days) — system adapts to model evolution
-- Adaptive Round Decision — skip/standard/mandatory/arbitrator based on divergence + uncertainty
-- Cost-Aware Orchestration — 3 agents for simple, 7 for medium, 12+ for complex tasks
-- Router Auto-Retraining — ONNX model hot-reloaded after 100+ training samples
+- True Beta Sampling, Contextual Thompson Sampling, Temporal Decay
+- Adaptive Round Decision, Cost-Aware Orchestration
+- Router Auto-Retraining from production data
 
-### Legion X 1.3 — Live Progress Reporting
-- Watch every phase of deliberation in real time
-- Progress bar with per-agent tracking, convergence %, elapsed time
-- `geth:resume` command recovers interrupted sessions
-- Backward compatible — old servers without progress still work
+### Legion X 1.3 — Live Progress
+- Real-time progress bar with per-agent tracking
 
 ### Legion X 1.2 — Rate-Aware Executor
-- Adaptive serialization for Tier 1 API keys (no 429 errors)
-- Automatic tier detection from provider rate limit headers
-- Retry with exponential backoff (3 attempts)
-- Zero quality degradation on low-tier keys
+- Adaptive serialization for Tier 1 API keys
 
 ### Legion X 1.1 — ProjectScanner v2
-- Two-pass scanning: file inventory + deep-read of security-relevant files
-- Agent-specific code injection per sub-task
-- 120K char budget for deeper project analysis
+- Two-pass scanning with agent-specific code injection
 
 ### Legion X 1.0 — Initial Release
-- Server-side orchestration with 42 agents
-- 9-layer Geth Consensus with semantic convergence
-- Multi-LLM support (7 providers)
-- ONNX Neural routing (3 models)
-- Rate limiting & cost tracking
+- Server-side orchestration with 42 agents and 9-layer Geth Consensus
 
 ## Author
 

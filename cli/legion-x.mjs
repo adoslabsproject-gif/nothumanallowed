@@ -14,16 +14,17 @@
  * |                                                                         |
  * +=========================================================================+
  *
- * LEGION X -- Server-Side Agent Orchestrator for NotHumanAllowed (Free Tier)
+ * LEGION X -- Zero-Knowledge Agent Orchestrator for NotHumanAllowed (Free Tier)
  *
- * Legion X uses YOUR API key with server-side orchestration.
- * All orchestration runs on NHA servers; your key powers the LLM calls.
+ * Legion X uses YOUR API key with zero-knowledge client orchestration.
+ * Your API key NEVER leaves this machine. The server provides orchestration
+ * intelligence (decomposition prompts, ONNX neural routing, convergence
+ * measurement, synthesis prompts) but makes ZERO LLM calls for free-tier sessions.
+ *
  * Supports: Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere.
- *
  * 42 agents: 13 primary + 29 sub-agents across 11 categories.
- * Single LLM provider per session (chosen by user: anthropic, openai, or gemini).
  *
- * @version 1.2
+ * @version 1.8
  * @license MIT
  */
 
@@ -39,7 +40,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '1.5';
+var VERSION = '2.0';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -362,13 +363,15 @@ class LegionClient {
   }
 
   // LegionX: Server-Side Geth Consensus API methods
-  async createGethSession(prompt, config, providerMode, providers, userApiKey, projectContext) {
+  async createGethSession(prompt, config, providerMode, providers, userApiKey, projectContext, userApiKeys, orchestrationMode) {
     var body = { prompt: prompt };
     if (config) body.config = config;
     if (providerMode) body.providerMode = providerMode;
     if (providers && providers.length > 0) body.providers = providers;
     if (userApiKey) body.userApiKey = userApiKey;
+    if (userApiKeys && Object.keys(userApiKeys).length > 0) body.userApiKeys = userApiKeys;
     if (projectContext) body.projectContext = projectContext;
+    if (orchestrationMode) body.orchestrationMode = orchestrationMode;
     return this.request('POST', '/geth/sessions', body);
   }
 
@@ -396,6 +399,59 @@ class LegionClient {
   async resumeGethSession(sessionId, userApiKey) {
     return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/resume', {
       userApiKey: userApiKey,
+    });
+  }
+
+  // Zero-Knowledge Client Orchestration step methods
+  async stepDecompose(sessionId) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/decompose', {});
+  }
+
+  async stepDecomposeResult(sessionId, decomposition, tokenStats) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/decompose/result', {
+      decomposition: decomposition,
+      tokenStats: tokenStats,
+    });
+  }
+
+  async stepRoundStart(sessionId, round) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/round/start', {
+      round: round,
+    });
+  }
+
+  async stepRoundResult(sessionId, round, proposals) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/round/result', {
+      round: round,
+      proposals: proposals,
+    });
+  }
+
+  async stepSynthesize(sessionId) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/synthesize', {});
+  }
+
+  async stepSynthesizeResult(sessionId, synthesis, tokenStats) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/synthesize/result', {
+      synthesis: synthesis,
+      tokenStats: tokenStats,
+    });
+  }
+
+  async stepValidate(sessionId) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/validate', {});
+  }
+
+  async stepValidateResult(sessionId, scores, bestProposalScore) {
+    var body = { scores: scores };
+    if (bestProposalScore !== undefined) body.bestProposalScore = bestProposalScore;
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/validate/result', body);
+  }
+
+  async updateClientProgress(sessionId, updates, logEntry) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/progress', {
+      updates: updates,
+      logEntry: logEntry,
     });
   }
 }
@@ -1612,7 +1668,7 @@ class CommunicationStream {
    * @returns {string} Formatted cross-reading context
    */
   getProposalContext(excludeAgent, maxPerAgent) {
-    maxPerAgent = maxPerAgent || 3000;
+    maxPerAgent = maxPerAgent || 16000;
     var otherProposals = this.proposals.filter(function(p) {
       return p.agent !== excludeAgent;
     });
@@ -3133,16 +3189,10 @@ class ResultSynthesizer {
       return { result: completed[0].result, synthesized: false };
     }
 
-    // v3.3.0: Adaptive truncation — budget per agent scales inversely with agent count.
-    var TOTAL_CONTEXT_BUDGET = 48000;
-    var perAgentBudget = Math.max(3000, Math.floor(TOTAL_CONTEXT_BUDGET / completed.length));
-
     var agentResults = '';
     for (var i = 0; i < completed.length; i++) {
       var c = completed[i];
-      var truncatedResult = c.result.length > perAgentBudget
-        ? c.result.substring(0, perAgentBudget) + '\n[... truncated from ' + c.result.length + ' chars]'
-        : c.result;
+      var truncatedResult = c.result;
 
       // v4.0.0→v7.0.0: Authority tagging with historical quality + deliberation round
       var authorityTag = 'generalist';
@@ -3638,24 +3688,7 @@ class QualityEvaluator {
       'Respond with ONLY valid JSON:\n' +
       '{"completeness":0-1,"depth":0-1,"actionability":0-1,"coherence":0-1,"substance":0-1,"feedback":"Brief justification"}';
 
-    var promptTruncated = prompt.length > 1500 ? prompt.substring(0, 1500) + '...' : prompt;
-    // v3.4.1: Smart sampling for cross-validator too (same logic as primary evaluator)
-    var CROSS_BUDGET = 10000;
-    var resultTruncated;
-    if (result.length <= CROSS_BUDGET) {
-      resultTruncated = result;
-    } else {
-      var cBegin = Math.floor(CROSS_BUDGET * 0.50);
-      var cMid = Math.floor(CROSS_BUDGET * 0.25);
-      var cEnd = CROSS_BUDGET - cBegin - cMid;
-      var cMidStart = Math.floor((result.length - cMid) / 2);
-      resultTruncated = result.substring(0, cBegin) +
-        '\n\n[... middle section ...]\n\n' +
-        result.substring(cMidStart, cMidStart + cMid) +
-        '\n\n[... final section ...]\n\n' +
-        result.substring(result.length - cEnd);
-    }
-    var userPrompt = 'Prompt:\n' + promptTruncated + '\n\nResponse:\n' + resultTruncated;
+    var userPrompt = 'Prompt:\n' + prompt + '\n\nResponse:\n' + result;
 
     try {
       var response = await this.llm.chat(systemPrompt, userPrompt, { maxTokens: 512, agentTag: 'quality:crossval' });
@@ -3739,28 +3772,7 @@ class QualityEvaluator {
       'Respond with ONLY valid JSON:\n' +
       '{"completeness":0-1,"depth":0-1,"actionability":0-1,"substance":0-1,"coherence":0-1,"overall":0-1,"feedback":"Brief explanation"}';
 
-    // v3.4.1: Smart sampling for long outputs.
-    // Problem: v3.3.0 truncated to 8000 chars → evaluator only saw beginning of long outputs,
-    // then scored "incomplete" because later sections (benchmarks, recommendations) were invisible.
-    // Fix: Sample beginning + middle + end to give evaluator representative view of full content.
-    var promptTruncated = prompt.length > 2000 ? prompt.substring(0, 2000) + '...' : prompt;
-    var resultTruncated;
-    var EVAL_BUDGET = 12000; // Total char budget for evaluation (increased from 8000)
-    if (result.length <= EVAL_BUDGET) {
-      resultTruncated = result;
-    } else {
-      // Smart sampling: 50% beginning, 25% middle, 25% end
-      var beginSize = Math.floor(EVAL_BUDGET * 0.50);
-      var midSize = Math.floor(EVAL_BUDGET * 0.25);
-      var endSize = EVAL_BUDGET - beginSize - midSize;
-      var midStart = Math.floor((result.length - midSize) / 2);
-      resultTruncated = result.substring(0, beginSize) +
-        '\n\n[... middle section, starting at char ' + midStart + ' of ' + result.length + ' ...]\n\n' +
-        result.substring(midStart, midStart + midSize) +
-        '\n\n[... final section, last ' + endSize + ' chars of ' + result.length + ' total ...]\n\n' +
-        result.substring(result.length - endSize);
-    }
-    var userPrompt = 'Original prompt:\n' + promptTruncated + '\n\nResponse to evaluate:\n' + resultTruncated + substanceNote;
+    var userPrompt = 'Original prompt:\n' + prompt + '\n\nResponse to evaluate:\n' + result + substanceNote;
 
     var parsed = null;
     try {
@@ -4412,17 +4424,15 @@ class GethDebate {
     var previousScore = 0;
     var converged = false;
 
-    // Build compact contribution context for critic (truncated)
+    // Build contribution context for critic — complete agent outputs
     var contributionContext = '';
     var completedContribs = contributions.filter(function(c) { return c.status === 'completed' && c.result; });
-    var maxPerAgent = Math.min(1500, Math.floor(6000 / Math.max(completedContribs.length, 1)));
     for (var i = 0; i < completedContribs.length; i++) {
       var c = completedContribs[i];
-      contributionContext += '\n[' + c.agentName.toUpperCase() + '] ' + c.result.substring(0, maxPerAgent) + '\n';
+      contributionContext += '\n[' + c.agentName.toUpperCase() + '] ' + c.result + '\n';
     }
 
-    // Truncate the synthesis for critic/judge context (keep full for advocate output)
-    var promptCompact = prompt.length > 500 ? prompt.substring(0, 500) + '...' : prompt;
+    var promptCompact = prompt;
 
     // v4.0.0 Fix 3: Agent-Participated Debate — collect defenses from divergent agents
     var agentDefenses = [];
@@ -4448,26 +4458,9 @@ class GethDebate {
           advocateResult = await this.runAdvocate(prompt, currentBest, previousCritique, agentDefenses);
         }
 
-        // v3.4.1: Smart sampling for debate critic/judge (same principle as evaluator)
-        var DEBATE_BUDGET = 8000;
-        var advocateTruncated;
-        if (advocateResult.length <= DEBATE_BUDGET) {
-          advocateTruncated = advocateResult;
-        } else {
-          var dBegin = Math.floor(DEBATE_BUDGET * 0.50);
-          var dMid = Math.floor(DEBATE_BUDGET * 0.25);
-          var dEnd = DEBATE_BUDGET - dBegin - dMid;
-          var dMidStart = Math.floor((advocateResult.length - dMid) / 2);
-          advocateTruncated = advocateResult.substring(0, dBegin) +
-            '\n\n[... middle section ...]\n\n' +
-            advocateResult.substring(dMidStart, dMidStart + dMid) +
-            '\n\n[... final section ...]\n\n' +
-            advocateResult.substring(advocateResult.length - dEnd);
-        }
-
         var parallelResults = await Promise.all([
-          this.runCritic(promptCompact, advocateTruncated, contributionContext, agentDefenses),
-          this.runJudge(promptCompact, advocateTruncated, round > 0 ? rounds[round - 1].critic : null),
+          this.runCritic(promptCompact, advocateResult, contributionContext, agentDefenses),
+          this.runJudge(promptCompact, advocateResult, round > 0 ? rounds[round - 1].critic : null),
         ]);
 
         var criticResult = parallelResults[0];
@@ -5502,6 +5495,158 @@ class LLMProvider {
     }
     throw new Error('Empty response from Ollama');
   }
+
+  async chatGemini(systemPrompt, userMessage, maxTokens, agentTag, apiKeyOverride) {
+    var apiKey = apiKeyOverride || this.config.get('geminiApiKey') || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('Gemini API key not configured. Set GEMINI_API_KEY or run: node legion-x.mjs config:set gemini-key <key>');
+
+    var model = 'gemini-2.0-flash';
+    var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+        generationConfig: { maxOutputTokens: maxTokens || 8192, temperature: 0.7 },
+      }),
+    });
+
+    if (!res.ok) {
+      var err = await res.text();
+      throw new Error('Gemini API error (' + res.status + '): ' + err);
+    }
+
+    var data = await res.json();
+    if (data.usageMetadata) {
+      this.recordUsage(
+        data.usageMetadata.promptTokenCount || 0,
+        data.usageMetadata.candidatesTokenCount || 0,
+        agentTag
+      );
+    }
+    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+      var parts = data.candidates[0].content.parts;
+      return parts.map(function(p) { return p.text || ''; }).join('');
+    }
+    throw new Error('Empty response from Gemini');
+  }
+
+  /**
+   * Chat with a specific provider (for multi-LLM orchestration).
+   * Falls back to the default provider if the requested one isn't configured.
+   */
+  async chatWithProvider(provider, systemPrompt, userMessage, opts) {
+    var maxTokens = (opts && opts.maxTokens) || 4096;
+    var agentTag = (opts && opts.agentTag) || null;
+
+    switch (provider) {
+      case 'anthropic': {
+        // Direct Anthropic call with explicit key — NO mutation of this.apiKey
+        var anthKey = this.config.get('anthropicApiKey') || this.config.get('llmApiKey') || this.apiKey || process.env.ANTHROPIC_API_KEY;
+        if (!anthKey) return this.chat(systemPrompt, userMessage, opts);
+        return this._chatAnthropicDirect(anthKey, systemPrompt, userMessage, maxTokens, agentTag);
+      }
+      case 'openai': {
+        // Direct OpenAI call with explicit key — NO mutation of this.apiKey
+        var oaiKey = this.config.get('openaiApiKey') || process.env.OPENAI_API_KEY;
+        if (!oaiKey) return this.chat(systemPrompt, userMessage, opts);
+        return this._chatOpenAIDirect(oaiKey, systemPrompt, userMessage, maxTokens, agentTag);
+      }
+      case 'gemini':
+        return this.chatGemini(systemPrompt, userMessage, maxTokens, agentTag);
+      default:
+        return this.chat(systemPrompt, userMessage, opts);
+    }
+  }
+
+  /**
+   * Anthropic call with explicit API key (concurrency-safe — no shared state mutation).
+   */
+  async _chatAnthropicDirect(apiKey, systemPrompt, userMessage, maxTokens, agentTag) {
+    var model = this.model || 'claude-sonnet-4-20250514';
+    var LEGION_PREFIX = 'You are part of LEGION, a multi-agent orchestration system. ' +
+      'LEGION decomposes complex prompts into sub-tasks handled by specialized agents, ' +
+      'then synthesizes, debates, and evaluates results for quality. ' +
+      'You are one component in this pipeline. Follow your role instructions precisely.';
+    var systemBlocks = [
+      { type: 'text', text: LEGION_PREFIX, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+    ];
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
+      },
+      body: JSON.stringify({
+        model: model,
+        max_tokens: maxTokens || 8192,
+        temperature: 0.7,
+        system: systemBlocks,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    if (!res.ok) {
+      var err = await res.text();
+      throw new Error('Anthropic API error (' + res.status + '): ' + err);
+    }
+    var data = await res.json();
+    if (data.usage) {
+      this.recordUsage(data.usage.input_tokens || 0, data.usage.output_tokens || 0, agentTag);
+    }
+    if (data.content && data.content.length > 0) {
+      return data.content.map(function(b) { return b.text || ''; }).join('');
+    }
+    throw new Error('Empty response from Anthropic');
+  }
+
+  /**
+   * OpenAI call with explicit API key (concurrency-safe — no shared state mutation).
+   */
+  async _chatOpenAIDirect(apiKey, systemPrompt, userMessage, maxTokens, agentTag) {
+    var model = 'gpt-4o';
+    var res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        max_tokens: maxTokens || 8192,
+      }),
+    });
+    if (!res.ok) {
+      var err = await res.text();
+      throw new Error('OpenAI API error (' + res.status + '): ' + err);
+    }
+    var data = await res.json();
+    if (data.usage) {
+      this.recordUsage(data.usage.prompt_tokens || 0, data.usage.completion_tokens || 0, agentTag);
+    }
+    if (data.choices && data.choices.length > 0) {
+      return data.choices[0].message.content;
+    }
+    throw new Error('Empty response from OpenAI');
+  }
+
+  /**
+   * Detect which providers have API keys configured.
+   * Returns array of available provider names.
+   */
+  getAvailableProviders() {
+    var providers = [];
+    if (this.apiKey || this.config.get('anthropicApiKey') || process.env.ANTHROPIC_API_KEY) providers.push('anthropic');
+    if (this.config.get('openaiApiKey') || process.env.OPENAI_API_KEY) providers.push('openai');
+    if (this.config.get('geminiApiKey') || process.env.GEMINI_API_KEY) providers.push('gemini');
+    return providers;
+  }
 }
 
 // ============================================================================
@@ -5518,7 +5663,7 @@ function extractJSON(text) {
     return JSON.parse(text);
   } catch {}
 
-  // Try extracting from code blocks
+  // Try extracting from code blocks (greedy — handles large JSON inside code blocks)
   var codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (codeBlockMatch) {
     try {
@@ -5526,11 +5671,20 @@ function extractJSON(text) {
     } catch {}
   }
 
-  // Try finding JSON object in text
+  // Try finding JSON object in text (greedy match for the outermost braces)
   var jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       return JSON.parse(jsonMatch[0]);
+    } catch {}
+    // If JSON.parse fails on the full match (common with very long Gemini responses),
+    // try cleaning common issues: unescaped newlines inside string values
+    try {
+      var cleaned = jsonMatch[0]
+        .replace(/\r\n/g, '\\n')
+        .replace(/\r/g, '\\n')
+        .replace(/\t/g, '\\t');
+      return JSON.parse(cleaned);
     } catch {}
   }
 
@@ -6370,11 +6524,926 @@ async function scanProject(projectDir, tokenBudget) {
 }
 
 // =============================================================================
+// Zero-Knowledge Client Orchestration — API key never leaves the client
+// =============================================================================
+
+/**
+ * runClientOrchestration — Zero-knowledge free tier execution
+ *
+ * The server provides orchestration intelligence (decomposition prompts,
+ * ONNX routing, convergence measurement, synthesis prompts) but NEVER
+ * receives the user's API key. ALL LLM calls are made directly by the
+ * client using the local LLMProvider.
+ *
+ * Protocol:
+ *   Client                              Server
+ *     ├─ POST /sessions (no key!) ────>  create session
+ *     ├─ POST step/decompose ─────────> get decomposition prompt
+ *     ├─ [LOCAL LLM call] ────────────> (direct to provider)
+ *     ├─ POST step/decompose/result ──> parse + ONNX routing
+ *     ├─ POST step/round/start ───────> get agent prompts
+ *     ├─ [LOCAL LLM calls in parallel]> (direct to provider)
+ *     ├─ POST step/round/result ──────> convergence + decision
+ *     │  (loop if more rounds needed)
+ *     ├─ POST step/synthesize ────────> get synthesis prompt
+ *     ├─ [LOCAL LLM call] ────────────> (direct to provider)
+ *     ├─ POST step/synthesize/result ─> store
+ *     ├─ POST step/validate ──────────> get validation prompts
+ *     ├─ [LOCAL LLM calls] ───────────> (direct to provider)
+ *     └─ POST step/validate/result ───> quality + CI gain + complete
+ */
+async function runClientOrchestration(prompt, options, legionConfig, client) {
+  var verbose = legionConfig.get('verbose') || options.verbose;
+  var immersive = options.immersive || false;
+  var totalStart = Date.now();
+
+  // Immersive rendering: agent speech bubbles + cross-reading + synthesis display
+  var _agentColorPalette = [
+    '\x1b[38;5;214m', '\x1b[38;5;39m', '\x1b[38;5;156m', '\x1b[38;5;213m',
+    '\x1b[38;5;220m', '\x1b[38;5;87m', '\x1b[38;5;183m', '\x1b[38;5;203m',
+    '\x1b[38;5;114m', '\x1b[38;5;141m', '\x1b[38;5;180m', '\x1b[38;5;80m',
+  ];
+  var _agentColorMap = {};
+  var _agentColorIdx = 0;
+  function _getAgentColor(name) {
+    var key = (name || '').toUpperCase();
+    if (!_agentColorMap[key]) {
+      _agentColorMap[key] = _agentColorPalette[_agentColorIdx % _agentColorPalette.length];
+      _agentColorIdx++;
+    }
+    return _agentColorMap[key];
+  }
+
+  // Word-wrap text to fit terminal width, respecting the bubble prefix
+  function wrapLine(text, maxWidth) {
+    if (!text || maxWidth <= 0) return [text || ''];
+    var wrapped = [];
+    var remaining = text;
+    while (remaining.length > maxWidth) {
+      // Find last space within maxWidth
+      var breakIdx = remaining.lastIndexOf(' ', maxWidth);
+      if (breakIdx <= 0) {
+        // No space found — hard break at maxWidth
+        breakIdx = maxWidth;
+      }
+      wrapped.push(remaining.substring(0, breakIdx));
+      remaining = remaining.substring(breakIdx).replace(/^ /, ''); // trim leading space
+    }
+    if (remaining.length > 0) wrapped.push(remaining);
+    return wrapped;
+  }
+
+  function renderAgentBubble(agentName, provider, content, roundNum) {
+    if (!immersive || !content) return;
+    var name = (agentName || 'UNKNOWN').toUpperCase();
+    var col = _getAgentColor(name);
+    var roundLabel = roundNum > 1 ? ' (Round ' + roundNum + ')' : '';
+    // Terminal width minus bubble prefix ("  │ " = 4 chars)
+    var termCols = process.stdout.columns || 120;
+    var contentWidth = Math.max(40, termCols - 6);
+    console.log('');
+    console.log('  ' + col + '\u25cf ' + name + roundLabel + '\x1b[0m \x1b[90m(' + (provider || '') + '):\x1b[0m');
+    var allLines = String(content).split('\n');
+    for (var li = 0; li < allLines.length; li++) {
+      var subLines = wrapLine(allLines[li], contentWidth);
+      for (var si = 0; si < subLines.length; si++) {
+        console.log('  ' + col + '\u2502\x1b[0m ' + subLines[si]);
+      }
+    }
+    console.log('  ' + col + '\u2514\u2500\u2500\u2500\x1b[0m');
+  }
+
+  function renderCrossReading(agentName, otherAgents) {
+    if (!immersive || !otherAgents || otherAgents.length === 0) return;
+    var col = _getAgentColor((agentName || '').toUpperCase());
+    var names = otherAgents.map(function(n) {
+      var c = _getAgentColor((n || '').toUpperCase());
+      return c + (n || '').toUpperCase() + '\x1b[0m';
+    }).join(', ');
+    console.log('  ' + col + '\u21bb ' + (agentName || '').toUpperCase() + '\x1b[0m reading: ' + names);
+  }
+
+  function renderSynthBubble(provider, content) {
+    if (!immersive || !content) return;
+    var termCols = process.stdout.columns || 120;
+    var contentWidth = Math.max(40, termCols - 6);
+    console.log('');
+    console.log('  \x1b[36m\u25cf SYNTHESIS\x1b[0m \x1b[90m(' + (provider || '') + '):\x1b[0m');
+    var lines = String(content).split('\n');
+    for (var li = 0; li < lines.length; li++) {
+      var subLines = wrapLine(lines[li], contentWidth);
+      for (var si = 0; si < subLines.length; si++) {
+        console.log('  \x1b[36m\u2502\x1b[0m ' + subLines[si]);
+      }
+    }
+    console.log('  \x1b[36m\u2514\u2500\u2500\u2500\x1b[0m');
+  }
+
+  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Zero-knowledge client orchestration mode');
+  console.log(colors.gray + 'Your API key NEVER leaves this machine. The server only provides orchestration intelligence.' + colors.reset);
+  console.log();
+
+  // 1. Initialize local LLM provider
+  var llm = new LLMProvider(legionConfig);
+  if (!llm.apiKey && !process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+    console.error(colors.red + 'ERROR: No API key configured.' + colors.reset);
+    console.error('Set your API key: node legion-x.mjs config:set llm-key YOUR_API_KEY');
+    process.exit(1);
+  }
+
+  // 1.5 Project scan (same as server mode)
+  var projectContext = null;
+  var detectedPath = options.scanDir || detectProjectPath(prompt);
+  if (detectedPath && !options.noScan) {
+    console.log(colors.cyan + '[PROJECT SCAN v2]' + colors.reset + ' Scanning ' + colors.bold + detectedPath + colors.reset + '...');
+    try {
+      var scanBudget = options.scanBudget ? parseInt(options.scanBudget, 10) : undefined;
+      var scanResult = await scanProject(detectedPath, scanBudget);
+      projectContext = scanResult.context;
+      console.log(colors.cyan + '[PROJECT SCAN v2]' + colors.reset +
+        ' Inventory: ' + colors.bold + scanResult.filesInInventory + colors.reset + ' files' +
+        ' | Deep read: ' + colors.bold + scanResult.filesRead + colors.reset + ' files' +
+        ' | ' + colors.yellow + scanResult.tokenEstimate.toLocaleString() + ' tokens' + colors.reset);
+    } catch (err) {
+      console.warn(colors.yellow + '[PROJECT SCAN] Warning: ' + err.message + colors.reset);
+    }
+  }
+
+  // 2. Build session config
+  var sessionConfig = {};
+  if (legionConfig.get('deliberationRounds')) sessionConfig.deliberationRounds = legionConfig.get('deliberationRounds');
+  if (legionConfig.get('deliberationConvergence')) sessionConfig.deliberationConvergence = legionConfig.get('deliberationConvergence');
+  if (legionConfig.get('minDeliberationRounds')) sessionConfig.minDeliberationRounds = legionConfig.get('minDeliberationRounds');
+
+  var userProvider = legionConfig.get('provider') || legionConfig.get('llmProvider') || 'anthropic';
+  var availableProviders = llm.getAvailableProviders();
+  var isMultiProvider = availableProviders.length > 1;
+  var providerMode = isMultiProvider ? 'multi' : 'single';
+  var providers = isMultiProvider ? availableProviders : [userProvider];
+
+  if (isMultiProvider) {
+    console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Multi-LLM mode: ' + colors.magenta + availableProviders.join(' + ') + colors.reset + ' (local execution)');
+  } else {
+    console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Provider: ' + colors.magenta + userProvider + colors.reset + ' (local execution)');
+  }
+
+  // 3. Create session WITHOUT API key
+  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Creating session (zero-knowledge)...');
+  var createResult;
+  try {
+    createResult = await client.createGethSession(
+      prompt,
+      Object.keys(sessionConfig).length > 0 ? sessionConfig : undefined,
+      providerMode,
+      providers,
+      null, // NO API key sent
+      projectContext,
+      null, // NO API keys map
+      'client', // orchestrationMode
+    );
+  } catch (err) {
+    if (err.message && (err.message.includes('429') || err.message.includes('rate limit'))) {
+      console.error(colors.yellow + '[RATE LIMITED]' + colors.reset + ' ' + colors.red + err.message + colors.reset);
+    } else {
+      console.error(colors.red + 'Failed to create session: ' + err.message + colors.reset);
+    }
+    process.exit(1);
+  }
+
+  var sessionId = createResult.sessionId;
+  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset + ' created');
+
+  // Helper: report progress to server (fire-and-forget)
+  async function reportProgress(updates, logEntry) {
+    try {
+      await client.updateClientProgress(sessionId, updates, logEntry);
+    } catch (_) {}
+  }
+
+  // Helper: extract token stats from LLM usage
+  function getTokenStats(llmProvider, agentTag) {
+    var perAgent = llmProvider.tokenUsage.perAgent[agentTag];
+    return perAgent ? { inputTokens: perAgent.input, outputTokens: perAgent.output } : { inputTokens: 0, outputTokens: 0 };
+  }
+
+  try {
+    // ========================================================================
+    // Step 1: DECOMPOSITION
+    // ========================================================================
+    console.log('\x1b[36m[DECOMPOSE]  \x1b[0mRequesting decomposition prompt from server...');
+    var decompInstr = await client.stepDecompose(sessionId);
+
+    // Weighted provider rotation for decomposition: round-robin based on session ID hash
+    // so each session starts with a different primary provider, distributing load evenly
+    var decompProviderHint = decompInstr.provider;
+    var decompProviderOrder;
+    if (decompProviderHint) {
+      decompProviderOrder = [decompProviderHint].concat(availableProviders.filter(function(p) { return p !== decompProviderHint; }));
+    } else {
+      // Rotate primary provider: hash sessionId to pick starting index
+      var hashSum = 0;
+      for (var hi = 0; hi < sessionId.length; hi++) hashSum += sessionId.charCodeAt(hi);
+      var startIdx = hashSum % availableProviders.length;
+      decompProviderOrder = [];
+      for (var ri = 0; ri < availableProviders.length; ri++) {
+        decompProviderOrder.push(availableProviders[(startIdx + ri) % availableProviders.length]);
+      }
+    }
+
+    var decompProvider = decompProviderOrder[0];
+    console.log('\x1b[36m[DECOMPOSE]  \x1b[0mExecuting decomposition locally via ' + colors.magenta + decompProvider + colors.reset + '...');
+    var usageBefore = llm.tokenUsage.calls;
+    var decompRaw;
+    for (var dpi = 0; dpi < decompProviderOrder.length; dpi++) {
+      var tryDecompProv = decompProviderOrder[dpi];
+      try {
+        decompRaw = await llm.chatWithProvider(tryDecompProv, decompInstr.systemPrompt, decompInstr.userMessage, {
+          maxTokens: decompInstr.maxTokens || 2048,
+          agentTag: '_decompose',
+        });
+        if (dpi > 0) {
+          console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + colors.yellow + 'Fallback: used ' + tryDecompProv + ' (primary ' + decompProvider + ' unavailable)' + colors.reset);
+        }
+        decompProvider = tryDecompProv;
+        break;
+      } catch (decompErr) {
+        var isDecompRetryable = decompErr.message && (
+          decompErr.message.includes('429') ||
+          decompErr.message.includes('529') ||
+          decompErr.message.includes('overloaded') ||
+          decompErr.message.includes('Overloaded') ||
+          decompErr.message.includes('RESOURCE_EXHAUSTED') ||
+          decompErr.message.includes('rate')
+        );
+        if (isDecompRetryable && dpi < decompProviderOrder.length - 1) {
+          console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + colors.yellow + tryDecompProv + ' unavailable (' +
+            (decompErr.message.includes('529') || decompErr.message.includes('overloaded') || decompErr.message.includes('Overloaded') ? 'overloaded' : 'rate-limited') +
+            '), trying ' + decompProviderOrder[dpi + 1] + '...' + colors.reset);
+          continue;
+        }
+        throw decompErr;
+      }
+    }
+
+    var decomposition = extractJSON(decompRaw);
+    if (!decomposition || !decomposition.tasks) {
+      console.error(colors.red + 'Failed to parse decomposition from LLM response' + colors.reset);
+      if (verbose) console.error(colors.gray + decompRaw.substring(0, 500) + colors.reset);
+      process.exit(1);
+    }
+
+    var decompStats = getTokenStats(llm, '_decompose');
+    console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + decomposition.tasks.length + ' sub-tasks identified');
+    for (var di = 0; di < decomposition.tasks.length; di++) {
+      var dt = decomposition.tasks[di];
+      console.log('  ' + (di + 1) + '. \x1b[34m[' + (dt.capability || 'general') + ']\x1b[0m ' + dt.description);
+    }
+
+    // Send decomposition result to server for ONNX routing
+    console.log('\x1b[36m[ROUTING]    \x1b[0mServer performing ONNX neural routing...');
+    var decompResult = await client.stepDecomposeResult(sessionId, decomposition, decompStats);
+
+    var assignments = decompResult.assignments || [];
+    console.log('\x1b[36m[ROUTING]    \x1b[0m' + assignments.length + ' agents deployed');
+    for (var ai = 0; ai < assignments.length; ai++) {
+      var ag = assignments[ai];
+      console.log('  \x1b[1m' + ag.agentName + '\x1b[0m (\x1b[35m' + ag.provider + '/' + ag.model + '\x1b[0m) \x1b[90m\u2192 ' + ag.subTaskId + '\x1b[0m');
+    }
+
+    await reportProgress(
+      { phase: 'routing', agentsTotal: assignments.length },
+      JSON.stringify({ type: 'agents_assigned', agents: assignments.map(function(a) { return { name: a.agentName, provider: a.provider, model: a.model, subTaskId: a.subTaskId }; }) })
+    );
+
+    // ========================================================================
+    // Step 2: DELIBERATION ROUNDS
+    // ========================================================================
+    var round = 1;
+    var maxRounds = (sessionConfig.deliberationRounds || decompResult.config?.deliberationRounds) || 3;
+    var roundDecision = null;
+
+    while (round <= maxRounds + 1) {
+      console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mRequesting agent prompts from server...');
+
+      // Get round instructions from server
+      var roundInstr;
+      try {
+        roundInstr = await client.stepRoundStart(sessionId, round);
+      } catch (err) {
+        console.error(colors.red + 'Failed to get round instructions: ' + err.message + colors.reset);
+        break;
+      }
+
+      var agentInstructions = roundInstr.agents || [];
+      console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mExecuting ' + agentInstructions.length + ' agents locally...');
+
+      // Immersive: show cross-reading (who's reading whom) for round 2+
+      if (immersive && round > 1) {
+        var allAgentNames = agentInstructions.map(function(a) { return a.agentName; });
+        for (var cri = 0; cri < agentInstructions.length; cri++) {
+          var otherNames = allAgentNames.filter(function(n) { return n !== agentInstructions[cri].agentName; });
+          renderCrossReading(agentInstructions[cri].agentName, otherNames);
+        }
+        console.log();
+      }
+
+      await reportProgress(
+        { phase: 'round_' + round, agentsTotal: agentInstructions.length, agentsCompleted: 0 },
+        'Round ' + round + ': executing ' + agentInstructions.length + ' agents'
+      );
+
+      // Execute agents locally — provider-grouped parallel execution
+      // Each provider runs its agents sequentially (avoids RPM rate limits)
+      // but different providers run in parallel (max throughput)
+      var proposals = [];
+      var agentsCompleted = 0;
+
+      async function executeSingleAgent(agentInstr) {
+          var agentStart = Date.now();
+          var agentTag = agentInstr.agentName;
+          try {
+            var primaryProvider = agentInstr.provider || userProvider;
+            // Build provider fallback order: primary first, then remaining available providers
+            var agentProviderOrder = [primaryProvider].concat(
+              availableProviders.filter(function(p) { return p !== primaryProvider; })
+            );
+            var agentProvider = primaryProvider;
+            var agentResponse;
+            for (var api = 0; api < agentProviderOrder.length; api++) {
+              var tryAgentProv = agentProviderOrder[api];
+              try {
+                agentResponse = await llm.chatWithProvider(tryAgentProv, agentInstr.systemPrompt, agentInstr.userMessage, {
+                  maxTokens: agentInstr.maxTokens || 4096,
+                  agentTag: agentTag,
+                });
+                if (api > 0) {
+                  console.log('    \x1b[33m\u21B3 ' + agentTag + ' fallback: used ' + tryAgentProv + ' (' + primaryProvider + ' unavailable)\x1b[0m');
+                }
+                agentProvider = tryAgentProv;
+                break;
+              } catch (agentProvErr) {
+                var isAgentRetryable = agentProvErr.message && (
+                  agentProvErr.message.includes('429') ||
+                  agentProvErr.message.includes('529') ||
+                  agentProvErr.message.includes('overloaded') ||
+                  agentProvErr.message.includes('Overloaded') ||
+                  agentProvErr.message.includes('RESOURCE_EXHAUSTED') ||
+                  agentProvErr.message.includes('rate')
+                );
+                if (isAgentRetryable && api < agentProviderOrder.length - 1) {
+                  continue;
+                }
+                throw agentProvErr;
+              }
+            }
+
+            var agentDuration = Date.now() - agentStart;
+            var stats = getTokenStats(llm, agentTag);
+
+            // Parse structured output (confidence, risk_flags, reasoning_summary)
+            var parsedOutput = parseStructuredOutput(agentResponse);
+
+            // Ensure content is always a string (never an object from JSON parsing)
+            var answerContent = typeof parsedOutput.answer === 'string'
+              ? parsedOutput.answer
+              : JSON.stringify(parsedOutput.answer);
+
+            var proposal = {
+              agentName: agentInstr.agentName,
+              subTaskId: agentInstr.subTaskId || '',
+              content: answerContent,
+              rawContent: agentResponse,
+              confidence: parsedOutput.confidence,
+              riskFlags: parsedOutput.riskFlags,
+              reasoningSummary: typeof parsedOutput.reasoningSummary === 'string' ? parsedOutput.reasoningSummary : '',
+              inputTokens: stats.inputTokens,
+              outputTokens: stats.outputTokens,
+              durationMs: agentDuration,
+              provider: agentProvider,
+              model: agentInstr.model || 'unknown',
+            };
+
+            agentsCompleted++;
+            var confPct = Math.round((proposal.confidence || 0.7) * 100);
+            var confColor = confPct >= 80 ? '\x1b[32m' : confPct >= 50 ? '\x1b[33m' : '\x1b[31m';
+            var durSec = Math.round(agentDuration / 1000);
+            console.log('  \x1b[1m' + agentInstr.agentName + '\x1b[0m ' + confColor + confPct + '% conf\x1b[0m (' + durSec + 's, ' + agentProvider + ')');
+            if (!immersive && parsedOutput.reasoningSummary) {
+              console.log('    \x1b[90m\u2514 ' + parsedOutput.reasoningSummary + '\x1b[0m');
+            }
+            // Immersive: full speech bubble with agent's complete response
+            renderAgentBubble(agentInstr.agentName, agentProvider, answerContent, round);
+
+            await reportProgress(
+              { agentsCompleted: agentsCompleted, currentAgent: agentInstr.agentName },
+              JSON.stringify({ type: 'agent_complete', agentName: agentInstr.agentName, confidence: proposal.confidence, durationMs: agentDuration, provider: agentProvider, riskFlags: proposal.riskFlags, reasoningSummary: proposal.reasoningSummary })
+            );
+
+            return proposal;
+          } catch (err) {
+            agentsCompleted++;
+            console.error('  \x1b[31m' + agentInstr.agentName + ': ' + err.message + '\x1b[0m');
+            return {
+              agentName: agentInstr.agentName,
+              subTaskId: agentInstr.subTaskId || '',
+              content: 'Error: ' + err.message,
+              rawContent: 'Error: ' + err.message,
+              confidence: 0,
+              riskFlags: ['execution_error'],
+              reasoningSummary: 'Agent failed: ' + err.message,
+              inputTokens: 0,
+              outputTokens: 0,
+              durationMs: Date.now() - agentStart,
+              provider: agentInstr.provider || userProvider,
+              model: agentInstr.model || 'unknown',
+            };
+          }
+      }
+
+      // Group agents by provider: each provider runs sequentially (RPM safety),
+      // but providers run in parallel (max throughput, no shared state conflict)
+      var providerGroups = {};
+      for (var gi = 0; gi < agentInstructions.length; gi++) {
+        var prov = agentInstructions[gi].provider || userProvider;
+        if (!providerGroups[prov]) providerGroups[prov] = [];
+        providerGroups[prov].push(agentInstructions[gi]);
+      }
+
+      var providerPromises = Object.keys(providerGroups).map(function(provKey) {
+        return (async function() {
+          var provAgents = providerGroups[provKey];
+          var provResults = [];
+          for (var si = 0; si < provAgents.length; si++) {
+            var result = await executeSingleAgent(provAgents[si]);
+            provResults.push(result);
+          }
+          return provResults;
+        })();
+      });
+
+      var providerResults = await Promise.all(providerPromises);
+      for (var pri = 0; pri < providerResults.length; pri++) {
+        proposals = proposals.concat(providerResults[pri]);
+      }
+
+      // Send proposals to server for convergence measurement
+      console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mServer measuring convergence...');
+      var roundResult;
+      try {
+        roundResult = await client.stepRoundResult(sessionId, round, proposals);
+      } catch (err) {
+        console.error(colors.red + 'Failed to submit round result: ' + err.message + colors.reset);
+        break;
+      }
+
+      // Display convergence
+      var convPct = Math.round((roundResult.convergence || 0) * 100);
+      var convBarWidth = 16;
+      var convFilled = Math.round(convPct / 100 * convBarWidth);
+      var convBar = '\u2588'.repeat(convFilled) + '\u2591'.repeat(convBarWidth - convFilled);
+      var divStr = '';
+      if (roundResult.divergentPairs && roundResult.divergentPairs.length > 0) {
+        var pairNames = roundResult.divergentPairs.map(function(p) { return p[0] + ' vs ' + p[1]; }).join(', ');
+        divStr = '\n  \x1b[33m\u2694 Divergent: ' + pairNames + '\x1b[0m';
+      } else {
+        divStr = '\n  \x1b[32m\u2713 All agents aligned\x1b[0m';
+      }
+      console.log('\x1b[33m[ROUND ' + round + ']\x1b[0m    Convergence: ' + convBar + ' ' + convPct + '% (' + (roundResult.method || 'jaccard') + ')' + divStr);
+
+      await reportProgress(
+        { phase: 'round_' + round },
+        JSON.stringify({ type: 'convergence_update', round: round, convergence: roundResult.convergence, method: roundResult.method, divergentPairs: roundResult.divergentPairs })
+      );
+
+      // Check decision — decision can be object {mode, reason} or string
+      roundDecision = roundResult.decision;
+      var decisionMode = typeof roundDecision === 'object' && roundDecision !== null
+        ? (roundDecision.mode || 'standard')
+        : (typeof roundDecision === 'string' ? roundDecision : 'standard');
+      var decisionReason = typeof roundDecision === 'object' && roundDecision !== null
+        ? (roundDecision.reason || '')
+        : '';
+
+      if (roundResult.nextStatus !== 'awaiting_round') {
+        // Decision: stop deliberation
+        if (decisionMode) {
+          var decisionIcon = decisionMode === 'skip_consensus' ? '\x1b[32m\u2713 CONSENSUS REACHED\x1b[0m' :
+            '\u27f3 ' + String(decisionMode).toUpperCase();
+          console.log('\n' + decisionIcon + (decisionReason ? ' \x1b[90m(' + decisionReason + ')\x1b[0m' : ''));
+        }
+        break;
+      }
+
+      round = roundResult.nextRound || (round + 1);
+
+      // Show round decision for continuation
+      if (decisionMode) {
+        console.log('\n\u27f3 Round ' + round + ': \x1b[1m' + String(decisionMode).toUpperCase() + '\x1b[0m' + (decisionReason ? ' \x1b[90m(' + decisionReason + ')\x1b[0m' : ''));
+      }
+    }
+
+    // ========================================================================
+    // Step 3: SYNTHESIS
+    // ========================================================================
+    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mRequesting synthesis prompt from server...');
+    var synthInstr = await client.stepSynthesize(sessionId);
+
+    var synthProvider = synthInstr.provider || userProvider;
+    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mGenerating synthesis locally via ' + colors.magenta + synthProvider + colors.reset + '...');
+    await reportProgress({ phase: 'synthesizing' }, 'Generating synthesis via ' + synthProvider + '...');
+
+    // Synthesis with provider fallback: if primary provider is rate-limited, try others
+    var synthRaw;
+    var synthProviderOrder = [synthProvider].concat(availableProviders.filter(function(p) { return p !== synthProvider; }));
+    for (var spi = 0; spi < synthProviderOrder.length; spi++) {
+      var tryProv = synthProviderOrder[spi];
+      try {
+        synthRaw = await llm.chatWithProvider(tryProv, synthInstr.systemPrompt, synthInstr.userMessage, {
+          maxTokens: synthInstr.maxTokens || 16384,
+          agentTag: '_synthesis',
+        });
+        if (tryProv !== synthProvider) {
+          console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + 'Fallback: used ' + tryProv + ' (primary ' + synthProvider + ' rate-limited)' + colors.reset);
+        }
+        synthProvider = tryProv;
+        break;
+      } catch (synthErr) {
+        var isSynthRetryable = synthErr.message && (synthErr.message.includes('429') || synthErr.message.includes('529') || synthErr.message.includes('overloaded') || synthErr.message.includes('Overloaded') || synthErr.message.includes('RESOURCE_EXHAUSTED') || synthErr.message.includes('rate'));
+        if (isSynthRetryable && spi < synthProviderOrder.length - 1) {
+          console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + tryProv + ' unavailable, trying ' + synthProviderOrder[spi + 1] + '...' + colors.reset);
+          continue;
+        }
+        throw synthErr;
+      }
+    }
+
+    var synthStats = getTokenStats(llm, '_synthesis');
+    await client.stepSynthesizeResult(sessionId, synthRaw, synthStats);
+    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mSynthesis complete (' + synthRaw.length + ' chars)');
+    renderSynthBubble(synthProvider, synthRaw);
+
+    // ========================================================================
+    // Step 4: VALIDATION
+    // ========================================================================
+    console.log('\x1b[35m[VALIDATION] \x1b[0mRequesting validation prompts from server...');
+    var valInstr = await client.stepValidate(sessionId);
+
+    var validators = valInstr.validators || [];
+    console.log('\x1b[35m[VALIDATION] \x1b[0mExecuting ' + validators.length + ' validator(s) locally...');
+    await reportProgress({ phase: 'evaluating', agentsTotal: validators.length, agentsCompleted: 0 }, 'Validating synthesis...');
+
+    var validationScores = [];
+    for (var vi = 0; vi < validators.length; vi++) {
+      var val = validators[vi];
+      var valProvider = val.provider || userProvider;
+      try {
+        // Validation with provider fallback on rate limit
+        var valRaw;
+        var valProvOrder = [valProvider].concat(availableProviders.filter(function(p) { return p !== valProvider; }));
+        for (var vpi = 0; vpi < valProvOrder.length; vpi++) {
+          try {
+            valRaw = await llm.chatWithProvider(valProvOrder[vpi], val.systemPrompt, val.userMessage, {
+              maxTokens: val.maxTokens || 2048,
+              agentTag: '_validator_' + vi,
+            });
+            if (vpi > 0) {
+              console.log('  \x1b[33mValidator ' + (vi + 1) + ': fallback ' + valProvOrder[vpi] + ' (primary ' + valProvider + ' rate-limited)\x1b[0m');
+            }
+            valProvider = valProvOrder[vpi];
+            break;
+          } catch (valRetryErr) {
+            var isValRL = valRetryErr.message && (valRetryErr.message.includes('429') || valRetryErr.message.includes('529') || valRetryErr.message.includes('overloaded') || valRetryErr.message.includes('Overloaded') || valRetryErr.message.includes('RESOURCE_EXHAUSTED') || valRetryErr.message.includes('rate'));
+            if (isValRL && vpi < valProvOrder.length - 1) continue;
+            throw valRetryErr;
+          }
+        }
+
+        // Parse validation response: expect JSON with score + reasoning
+        var valParsed = extractJSON(valRaw);
+        var score = 0.7;
+        var reasoning = valRaw;
+
+        if (valParsed && typeof valParsed.score === 'number') {
+          score = Math.max(0, Math.min(1, valParsed.score));
+          reasoning = valParsed.reasoning || valParsed.explanation || '';
+        } else if (valParsed && typeof valParsed.quality === 'number') {
+          score = Math.max(0, Math.min(1, valParsed.quality / 100));
+          reasoning = valParsed.reasoning || '';
+        }
+
+        var valStats = getTokenStats(llm, '_validator_' + vi);
+        validationScores.push({
+          validatorId: val.id || ('validator_' + vi),
+          provider: valProvider,
+          model: val.model || llm.model || 'default',
+          score: score,
+          reasoning: reasoning,
+          inputTokens: valStats.inputTokens,
+          outputTokens: valStats.outputTokens,
+        });
+
+        var scorePct = Math.round(score * 100);
+        var scoreColor = scorePct >= 80 ? '\x1b[32m' : scorePct >= 50 ? '\x1b[33m' : '\x1b[31m';
+        console.log('  Validator ' + (vi + 1) + ': ' + scoreColor + scorePct + '%\x1b[0m (' + valProvider + ')');
+        if (immersive && reasoning) {
+          console.log('    \x1b[90m\u2514 ' + reasoning + '\x1b[0m');
+        }
+      } catch (err) {
+        console.error('  \x1b[31mValidator ' + (vi + 1) + ' failed: ' + err.message + '\x1b[0m');
+        validationScores.push({
+          validatorId: val.id || ('validator_' + vi),
+          provider: valProvider,
+          model: val.model || llm.model || 'default',
+          score: 0.5,
+          reasoning: 'Validation failed: ' + err.message,
+          inputTokens: 0,
+          outputTokens: 0,
+        });
+      }
+    }
+
+    // Evaluate best individual proposal for real CI Gain
+    var bestProposalScore;
+    if (valInstr.bestProposalValidator) {
+      try {
+        var bpVal = valInstr.bestProposalValidator;
+        var bpProvider = bpVal.provider || userProvider;
+        var bpProvOrder = [bpProvider].concat(availableProviders.filter(function(p) { return p !== bpProvider; }));
+        var bpRaw;
+        for (var bpi = 0; bpi < bpProvOrder.length; bpi++) {
+          try {
+            bpRaw = await llm.chatWithProvider(bpProvOrder[bpi], bpVal.systemPrompt, bpVal.userMessage, {
+              maxTokens: bpVal.maxTokens || 512,
+              agentTag: '_baseline_eval',
+            });
+            bpProvider = bpProvOrder[bpi];
+            break;
+          } catch (bpRetryErr) {
+            var isBpRL = bpRetryErr.message && (bpRetryErr.message.includes('429') || bpRetryErr.message.includes('529') || bpRetryErr.message.includes('overloaded') || bpRetryErr.message.includes('Overloaded') || bpRetryErr.message.includes('RESOURCE_EXHAUSTED') || bpRetryErr.message.includes('rate'));
+            if (isBpRL && bpi < bpProvOrder.length - 1) continue;
+            throw bpRetryErr;
+          }
+        }
+        var bpParsed = extractJSON(bpRaw);
+        if (bpParsed && typeof bpParsed.score === 'number') {
+          bestProposalScore = Math.max(0, Math.min(1, bpParsed.score));
+          console.log('  Baseline (best individual): ' + Math.round(bestProposalScore * 100) + '%');
+        }
+      } catch (bpErr) {
+        if (immersive) console.log('  \x1b[90mBaseline eval failed: ' + bpErr.message + '\x1b[0m');
+      }
+    }
+
+    // Send validation results to server for final scoring
+    console.log('\x1b[35m[VALIDATION] \x1b[0mServer computing final quality...');
+    var finalResult = await client.stepValidateResult(sessionId, validationScores, bestProposalScore);
+
+    // ========================================================================
+    // Display Results
+    // ========================================================================
+    var totalMs = Date.now() - totalStart;
+    var qualityPct = ((finalResult.qualityScore || 0) * 100).toFixed(0);
+    var ciGain = finalResult.ciGain !== null && finalResult.ciGain !== undefined ? (finalResult.ciGain >= 0 ? '+' : '') + finalResult.ciGain.toFixed(0) : 'N/A';
+    var convergencePct = finalResult.finalConvergence !== null && finalResult.finalConvergence !== undefined ? ((finalResult.finalConvergence || 0) * 100).toFixed(0) : 'N/A';
+
+    console.log('\x1b[32m[COMPLETE]   \x1b[0mQuality: ' + qualityPct + '% | CI Gain: ' + ciGain + '% | Duration: ' + formatElapsed(totalMs));
+    console.log();
+    console.log(colors.bold + colors.green + '=== LEGION X CONSENSUS RESULT (Zero-Knowledge) ===' + colors.reset);
+    console.log();
+    console.log(synthRaw || '[No synthesis]');
+    console.log();
+
+    // Stats
+    console.log(colors.bold + '--- Stats ---' + colors.reset);
+    console.log('Quality: ' + colors.cyan + qualityPct + '%' + colors.reset +
+      ' | CI Gain: ' + colors.cyan + ciGain + '%' + colors.reset +
+      ' | Convergence: ' + colors.cyan + convergencePct + '%' + colors.reset +
+      ' | Rounds: ' + colors.cyan + round + colors.reset);
+    console.log('Providers: ' + colors.magenta + availableProviders.join(' + ') + colors.reset + ' (local execution, keys never sent to server)');
+
+    var usage = llm.getUsage();
+    console.log('Tokens: ' + colors.gray + usage.totalInput.toLocaleString() + ' input + ' + usage.totalOutput.toLocaleString() + ' output = ' + usage.totalTokens.toLocaleString() + ' total' + colors.reset);
+    if (usage.cacheHitRate > 0) {
+      console.log('Cache: ' + colors.green + (usage.cacheHitRate * 100).toFixed(1) + '% hit rate' + colors.reset);
+    }
+
+    console.log('Duration: ' + colors.gray + formatDuration(totalMs) + colors.reset);
+
+    // Stats legend
+    console.log();
+    console.log(colors.bold + '--- What do these stats mean? ---' + colors.reset);
+    console.log(colors.gray + '  Quality     ' + colors.reset + 'LLM-evaluated score (0-100%). Single-provider self-grading.');
+    console.log(colors.gray + '  CI Gain     ' + colors.reset + 'Collective Intelligence improvement vs best individual agent proposal.');
+    console.log(colors.gray + '  Convergence ' + colors.reset + '30-60% is healthy — complementary perspectives, not groupthink.');
+    console.log(colors.gray + '  Zero-Knowledge ' + colors.reset + 'Your API key was used locally. The server orchestrated but never saw it.');
+
+    // Save session transcript
+    try {
+      var sessionsDir = path.join(process.env.HOME || '.', '.legion', 'sessions');
+      if (!fs.existsSync(sessionsDir)) {
+        fs.mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
+      }
+
+      var now = new Date();
+      var datePrefix = now.toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+      var shortId = sessionId.substring(0, 8);
+      var baseName = datePrefix + '_' + shortId;
+
+      // JSON transcript
+      var jsonTranscript = {
+        sessionId: sessionId,
+        planType: 'free',
+        orchestrationMode: 'client',
+        prompt: prompt,
+        status: 'completed',
+        provider: userProvider,
+        qualityScore: finalResult.qualityScore || 0,
+        ciGain: finalResult.ciGain || 0,
+        finalConvergence: finalResult.finalConvergence || 0,
+        deliberationRounds: round,
+        synthesis: synthRaw,
+        tokenUsage: usage,
+        durationMs: totalMs,
+        completedAt: now.toISOString(),
+      };
+
+      var jsonPath = path.join(sessionsDir, baseName + '.json');
+      fs.writeFileSync(jsonPath, JSON.stringify(jsonTranscript, null, 2), { mode: 0o600 });
+
+      // Markdown transcript
+      var md = '# Legion X Session (Zero-Knowledge) — ' + now.toISOString().slice(0, 19).replace('T', ' ') + ' UTC\n';
+      md += '## Session ID: ' + sessionId + '\n\n';
+      md += '### Prompt\n> ' + prompt.replace(/\n/g, '\n> ') + '\n\n';
+      md += '### Configuration\n';
+      md += '- Plan: Free (zero-knowledge, client orchestration)\n';
+      md += '- Provider: ' + userProvider + ' (local execution)\n';
+      md += '- Deliberation Rounds: ' + round + '\n\n';
+      md += '---\n\n';
+      md += '## Final Synthesis\n\n';
+      md += (synthRaw || '[No synthesis]') + '\n\n';
+      md += '---\n\n';
+      md += '## Quality Validation\n';
+      md += '- Quality Score: ' + qualityPct + '%\n';
+      md += '- CI Gain: ' + ciGain + '%\n';
+      md += '- Convergence: ' + convergencePct + '%\n\n';
+      md += '## Session Metrics\n';
+      md += '- Duration: ' + formatDuration(totalMs) + '\n';
+      md += '- Total Input Tokens: ' + usage.totalInput.toLocaleString() + '\n';
+      md += '- Total Output Tokens: ' + usage.totalOutput.toLocaleString() + '\n';
+      md += '- Cache Hit Rate: ' + (usage.cacheHitRate * 100).toFixed(1) + '%\n';
+
+      var mdPath = path.join(sessionsDir, baseName + '.md');
+      fs.writeFileSync(mdPath, md, { mode: 0o600 });
+
+      console.log();
+      console.log(colors.green + 'Session transcript saved to ' + colors.reset + colors.cyan + mdPath + colors.reset);
+      console.log(colors.gray + 'JSON data: ' + jsonPath + colors.reset);
+    } catch (transcriptErr) {
+      if (verbose) {
+        console.log(colors.yellow + 'Warning: Failed to save transcript: ' + transcriptErr.message + colors.reset);
+      }
+    }
+
+  } catch (err) {
+    console.error(colors.red + 'Client orchestration failed: ' + err.message + colors.reset);
+    if (verbose && err.stack) {
+      console.error(colors.gray + err.stack + colors.reset);
+    }
+    process.exit(1);
+  }
+}
+
+/**
+ * parseStructuredOutput — Extract structured agent output
+ *
+ * Agents are instructed to return JSON with:
+ * { answer, confidence, reasoning_summary, risk_flags }
+ *
+ * Falls back gracefully to raw text if not structured.
+ */
+function parseStructuredOutput(rawResponse) {
+  var result = {
+    answer: rawResponse,
+    confidence: 0.7,
+    riskFlags: [],
+    reasoningSummary: '',
+  };
+
+  // Try to extract structured JSON
+  var parsed = extractJSON(rawResponse);
+  if (parsed && typeof parsed === 'object') {
+    if (parsed.answer) {
+      result.answer = _extractAnswerText(parsed.answer);
+      result.confidence = typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.7;
+      result.riskFlags = Array.isArray(parsed.risk_flags) ? parsed.risk_flags : (Array.isArray(parsed.riskFlags) ? parsed.riskFlags : []);
+      result.reasoningSummary = parsed.reasoning_summary || parsed.reasoningSummary || '';
+    }
+  }
+
+  // If answer still looks like raw JSON wrapper, strip it
+  // Gemini sometimes returns ```json\n{"answer":"..."}\n``` and extractJSON fails on very long content
+  if (result.answer === rawResponse && rawResponse.includes('"answer"')) {
+    // Try extracting answer field directly with regex (handles cases where JSON.parse fails on large content)
+    var answerMatch = rawResponse.match(/"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/s);
+    if (answerMatch) {
+      try {
+        // Unescape the JSON string value
+        result.answer = JSON.parse('"' + answerMatch[1] + '"');
+      } catch (_) {
+        // Fallback: use raw match with basic unescaping
+        result.answer = answerMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      }
+      // Try extracting confidence too
+      var confMatch = rawResponse.match(/"confidence"\s*:\s*([\d.]+)/);
+      if (confMatch) result.confidence = Math.max(0, Math.min(1, parseFloat(confMatch[1])));
+      var summMatch = rawResponse.match(/"reasoning_summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (summMatch) {
+        try { result.reasoningSummary = JSON.parse('"' + summMatch[1] + '"'); } catch (_) { result.reasoningSummary = summMatch[1]; }
+      }
+      var flagsMatch = rawResponse.match(/"risk_flags"\s*:\s*\[(.*?)\]/);
+      if (flagsMatch) {
+        try { result.riskFlags = JSON.parse('[' + flagsMatch[1] + ']'); } catch (_) {}
+      }
+    }
+  }
+
+  // Final safety: if answer still looks like a JSON object string, try to extract text from it
+  if (result.answer && typeof result.answer === 'string') {
+    var trimmed = result.answer.trim();
+    if (trimmed.charAt(0) === '{' && trimmed.charAt(trimmed.length - 1) === '}') {
+      var innerParsed = null;
+      try { innerParsed = JSON.parse(trimmed); } catch (_) {}
+      if (innerParsed && typeof innerParsed === 'object') {
+        result.answer = _extractAnswerText(innerParsed);
+      }
+    }
+  }
+
+  // Auto-generate reasoning summary if missing (first sentence, capped at 120 chars)
+  if (!result.reasoningSummary && result.answer) {
+    var firstSentence = result.answer.split(/[.!?\n]/)[0] || '';
+    result.reasoningSummary = firstSentence.length > 120 ? firstSentence.substring(0, 117) + '...' : firstSentence;
+  }
+
+  return result;
+}
+
+/**
+ * Extract readable text from an answer that may be a string, object, or nested structure.
+ * Agents sometimes return answer as an object with sections instead of a flat string.
+ */
+function _extractAnswerText(answer) {
+  if (typeof answer === 'string') return answer;
+  if (answer === null || answer === undefined) return '';
+  if (Array.isArray(answer)) {
+    // Array of strings or objects — join them
+    return answer.map(function(item) {
+      return typeof item === 'string' ? item : (item && item.content) ? item.content : (item && item.text) ? item.text : JSON.stringify(item);
+    }).join('\n\n');
+  }
+  if (typeof answer === 'object') {
+    // Object with named sections — common pattern: { "section1": "text", "section2": "text" }
+    // or { "answer": "text" } (double-wrapped)
+    if (answer.answer && typeof answer.answer === 'string') return answer.answer;
+    if (answer.content && typeof answer.content === 'string') return answer.content;
+    if (answer.text && typeof answer.text === 'string') return answer.text;
+    // Flatten all string values into readable sections
+    var sections = [];
+    var keys = Object.keys(answer);
+    for (var ki = 0; ki < keys.length; ki++) {
+      var key = keys[ki];
+      var val = answer[key];
+      if (typeof val === 'string' && val.length > 0) {
+        // Format key as a header: "governance_framework" → "Governance Framework"
+        var header = key.replace(/[_-]/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        sections.push('## ' + header + '\n' + val);
+      } else if (typeof val === 'object' && val !== null) {
+        // Recurse one level for nested objects
+        var header2 = key.replace(/[_-]/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        sections.push('## ' + header2 + '\n' + _extractAnswerText(val));
+      }
+    }
+    if (sections.length > 0) return sections.join('\n\n');
+    // Last resort: stringify
+    return JSON.stringify(answer, null, 2);
+  }
+  return String(answer);
+}
+
+function formatElapsed(ms) {
+  var totalSec = Math.floor(ms / 1000);
+  var min = Math.floor(totalSec / 60);
+  var sec = totalSec % 60;
+  return min + 'm ' + (sec < 10 ? '0' : '') + sec + 's';
+}
+
+// =============================================================================
 // Server-Side Geth Consensus — LegionX server-only execution
 // =============================================================================
 
 async function runServerConsensus(prompt, options, legionConfig, client) {
   var verbose = legionConfig.get('verbose') || options.verbose;
+  var immersive = options.immersive || false;
   var totalStart = Date.now();
 
   console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Delegating to server-side Geth Consensus...');
@@ -6431,8 +7500,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     sessionConfig.minDeliberationRounds = legionConfig.get('minDeliberationRounds');
   }
 
-  // Provider selection: single provider mode for Legion X
-  var providerMode = 'single';
+  // Provider selection: single or multi-LLM mode for Legion X
   var userProvider = legionConfig.get('provider') || legionConfig.get('llmProvider') || 'anthropic';
   var validProviders = ['anthropic', 'openai', 'gemini', 'deepseek', 'grok', 'mistral', 'cohere'];
   if (!validProviders.includes(userProvider)) {
@@ -6440,22 +7508,50 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     console.error(colors.gray + 'Valid options: ' + validProviders.join(', ') + colors.reset);
     process.exit(1);
   }
-  var selectedProviders = [userProvider];
 
-  // Legion X: send user's API key to server for single-provider execution
+  // Multi-LLM: check for additional provider keys in config
   var userApiKey = legionConfig.get('llmApiKey') || legionConfig.get('apiKey') || '';
-  if (!userApiKey) {
+  var userApiKeys = {};
+  var selectedProviders = [userProvider];
+  var providerMode = 'single';
+
+  // Collect all configured provider keys
+  var openaiKey = legionConfig.get('openaiApiKey') || '';
+  var geminiKey = legionConfig.get('geminiApiKey') || '';
+  var anthropicKey = legionConfig.get('anthropicApiKey') || '';
+
+  // Build multi-LLM key map
+  if (userProvider === 'anthropic' && userApiKey) userApiKeys['anthropic'] = userApiKey;
+  if (userProvider === 'openai' && userApiKey) userApiKeys['openai'] = userApiKey;
+  if (userProvider === 'gemini' && userApiKey) userApiKeys['gemini'] = userApiKey;
+  if (anthropicKey && !userApiKeys['anthropic']) userApiKeys['anthropic'] = anthropicKey;
+  if (openaiKey && !userApiKeys['openai']) userApiKeys['openai'] = openaiKey;
+  if (geminiKey && !userApiKeys['gemini']) userApiKeys['gemini'] = geminiKey;
+
+  var configuredProviders = Object.keys(userApiKeys);
+  if (configuredProviders.length > 1) {
+    providerMode = 'multi';
+    selectedProviders = configuredProviders;
+    console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Multi-LLM mode: ' + colors.magenta + configuredProviders.join(' + ') + colors.reset);
+  } else if (configuredProviders.length === 1) {
+    selectedProviders = configuredProviders;
+    console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Provider: ' + colors.magenta + configuredProviders[0] + colors.reset);
+  }
+
+  if (!userApiKey && configuredProviders.length === 0) {
     console.log(colors.red + 'ERROR: No API key configured.' + colors.reset);
     console.log('Set your API key: node legion-x.mjs config:set llm-key YOUR_API_KEY');
-    console.log('Legion X uses YOUR OWN API key for server-side orchestration.');
-    console.log('Supported providers: ' + validProviders.join(', '));
+    console.log('For multi-LLM: set anthropicApiKey, openaiApiKey, geminiApiKey in ~/.legion-config.json');
+    console.log('Legion X uses YOUR OWN API key(s) for server-side orchestration.');
     process.exit(1);
   }
 
-  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Provider: ' + colors.magenta + userProvider + colors.reset);
+  // Ensure primary key is set (backward compat)
+  if (!userApiKey) userApiKey = Object.values(userApiKeys)[0];
+
   console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Creating session...');
 
-  // 3. Create session (with user API key for Legion X free tier)
+  // 3. Create session (with user API key(s) for Legion X free tier)
   var createResult;
   try {
     createResult = await client.createGethSession(
@@ -6465,6 +7561,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
       selectedProviders,
       userApiKey,
       projectContext,
+      Object.keys(userApiKeys).length > 1 ? userApiKeys : undefined,
     );
   } catch (err) {
     if (err.message && (err.message.includes('429') || err.message.includes('E4290') || err.message.toLowerCase().includes('rate limit'))) {
@@ -6484,7 +7581,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
   var maxPolls = 1200; // 60 minutes (complex multi-round deliberation with rate-limited providers)
   var pollCount = 0;
   var lastStatus = 'pending';
-  var spinChars = ['|', '/', '-', '\\'];
+  var spinChars = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'];
   var lastLogIndex = 0;
   var hasProgressBar = false;
 
@@ -6507,6 +7604,31 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     analytical: '\x1b[34m',  // blue
     creative: '\x1b[35m',    // magenta
   };
+
+  // Immersive mode: 12 distinct ANSI colors assigned round-robin per agent
+  var agentColorPalette = [
+    '\x1b[38;5;214m', // orange
+    '\x1b[38;5;39m',  // sky blue
+    '\x1b[38;5;156m', // lime
+    '\x1b[38;5;213m', // pink
+    '\x1b[38;5;220m', // gold
+    '\x1b[38;5;87m',  // aqua
+    '\x1b[38;5;183m', // lavender
+    '\x1b[38;5;203m', // salmon
+    '\x1b[38;5;114m', // sage
+    '\x1b[38;5;141m', // violet
+    '\x1b[38;5;180m', // tan
+    '\x1b[38;5;80m',  // teal
+  ];
+  var agentColorMap = {};
+  var agentColorIndex = 0;
+  function getAgentColor(name) {
+    if (!agentColorMap[name]) {
+      agentColorMap[name] = agentColorPalette[agentColorIndex % agentColorPalette.length];
+      agentColorIndex++;
+    }
+    return agentColorMap[name];
+  }
 
   function renderDecomposition(event) {
     var tasks = event.tasks || [];
@@ -6541,6 +7663,54 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     if (event.reasoningSummary) {
       console.log('    \x1b[90m\u2514 ' + event.reasoningSummary + '\x1b[0m');
     }
+  }
+
+  function renderAgentSpeaking(event) {
+    if (!immersive) return;
+    var agentName = (event.agentName || 'UNKNOWN').toUpperCase();
+    var agentCol = getAgentColor(agentName);
+    var provider = event.provider || '';
+    var roundLabel = event.round > 1 ? ' (Round ' + event.round + ')' : '';
+    var chunks = event.chunks || [];
+    if (chunks.length === 0) return;
+    console.log('');
+    console.log('  ' + agentCol + '\u25cf ' + agentName + roundLabel + '\x1b[0m \x1b[90m(' + provider + '):\x1b[0m');
+    for (var c = 0; c < chunks.length; c++) {
+      var lines = chunks[c].split('\n');
+      for (var l = 0; l < lines.length; l++) {
+        console.log('  ' + agentCol + '\u2502\x1b[0m ' + lines[l]);
+      }
+    }
+    console.log('  ' + agentCol + '\u2514\u2500\u2500\u2500\x1b[0m');
+  }
+
+  function renderAgentReacting(event) {
+    if (!immersive) return;
+    var agentName = (event.agentName || 'UNKNOWN').toUpperCase();
+    var agentCol = getAgentColor(agentName);
+    var readingFrom = event.readingFrom || [];
+    if (readingFrom.length === 0) return;
+    var names = readingFrom.map(function(n) {
+      var col = getAgentColor(n.toUpperCase());
+      return col + n.toUpperCase() + '\x1b[0m';
+    }).join(', ');
+    console.log('  ' + agentCol + '\u21bb ' + agentName + '\x1b[0m reading: ' + names);
+  }
+
+  function renderSynthesisSpeaking(event) {
+    if (!immersive) return;
+    var chunks = event.chunks || [];
+    if (chunks.length === 0) return;
+    var provider = event.provider || '';
+    console.log('');
+    console.log('  \x1b[36m\u25cf SYNTHESIS\x1b[0m \x1b[90m(' + provider + '):\x1b[0m');
+    for (var c = 0; c < chunks.length; c++) {
+      var lines = chunks[c].split('\n');
+      for (var l = 0; l < lines.length; l++) {
+        console.log('  \x1b[36m\u2502\x1b[0m ' + lines[l]);
+      }
+    }
+    console.log('  \x1b[36m\u2514\u2500\u2500\u2500\x1b[0m');
   }
 
   function renderConvergenceUpdate(event) {
@@ -6603,9 +7773,12 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
       case 'decomposition_complete': renderDecomposition(event); break;
       case 'agents_assigned': renderAgentsAssigned(event); break;
       case 'agent_complete': renderAgentComplete(event); break;
+      case 'agent_speaking': renderAgentSpeaking(event); break;
+      case 'agent_reacting': renderAgentReacting(event); break;
       case 'convergence_update': renderConvergenceUpdate(event); break;
       case 'round_decision': renderRoundDecision(event); break;
       case 'synthesis_weights': renderSynthesisWeights(event); break;
+      case 'synthesis_speaking': renderSynthesisSpeaking(event); break;
       default: console.log('\x1b[90m  [spectacle] ' + JSON.stringify(event) + '\x1b[0m'); break;
     }
   }
@@ -6711,11 +7884,24 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
           ' | ' + colors.gray + elapsed + ' elapsed' + colors.reset;
         process.stdout.write('\r' + barLine);
         hasProgressBar = true;
+      } else if (!hasProgressBar && status !== 'completed' && status !== 'failed' && status !== 'cancelled') {
+        // Heartbeat spinner — always visible between events, shows phase + elapsed time
+        var spin = spinChars[pollCount % spinChars.length];
+        var totalElapsed = formatElapsed(Date.now() - totalStart);
+        var phaseLabel = progress.phase ? progress.phase.replace(/_/g, ' ').toUpperCase() : status.toUpperCase();
+        var heartbeat = '  ' + colors.cyan + spin + colors.reset +
+          ' ' + colors.gray + phaseLabel + colors.reset +
+          colors.gray + ' \u2014 ' + totalElapsed + ' elapsed' + colors.reset;
+        process.stdout.write('\r' + heartbeat);
+        hasProgressBar = true;
       }
-    } else if (verbose && status !== 'completed' && status !== 'failed' && status !== 'cancelled') {
-      // Fallback spinner for old servers without progress
+    } else if (status !== 'completed' && status !== 'failed' && status !== 'cancelled') {
+      // No progress data yet — heartbeat spinner with basic status
       var spin = spinChars[pollCount % spinChars.length];
-      process.stdout.write('\r' + colors.gray + '  ' + spin + ' Waiting (' + pollCount + ')...' + colors.reset);
+      var totalElapsed = formatElapsed(Date.now() - totalStart);
+      var heartbeat = '  ' + colors.cyan + spin + colors.reset +
+        ' ' + colors.gray + status.toUpperCase() + ' \u2014 ' + totalElapsed + ' elapsed' + colors.reset;
+      process.stdout.write('\r' + heartbeat);
       hasProgressBar = true;
     }
 
@@ -6782,7 +7968,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
       console.log(colors.gray + '              ' + colors.reset + 'depth, and synthesis quality. With a single provider, self-grading bias');
       console.log(colors.gray + '              ' + colors.reset + 'applies (models tend to underrate their own output). Multi-provider');
       console.log(colors.gray + '              ' + colors.reset + 'cross-validation (3 LLMs evaluating each other) yields more accurate scores.');
-      console.log(colors.gray + '  CI Gain     ' + colors.reset + 'Collective Intelligence improvement vs single-model baseline (65%).');
+      console.log(colors.gray + '  CI Gain     ' + colors.reset + 'Collective Intelligence improvement vs best individual agent proposal.');
       console.log(colors.gray + '              ' + colors.reset + 'Positive = multi-agent deliberation outperformed a monolithic model.');
       console.log(colors.gray + '  Convergence ' + colors.reset + '30-60% is healthy — it means agents tackled different sub-tasks with');
       console.log(colors.gray + '              ' + colors.reset + 'complementary perspectives. 100% would signal groupthink (bad).');
@@ -7051,12 +8237,24 @@ async function runOrchestration(prompt, options) {
   printBanner();
 
   // =================================================================
-  // SERVER-ONLY ENFORCEMENT (LegionX)
-  // LegionX requires server-side orchestration via Geth Consensus.
-  // All LLM calls, agent execution, and deliberation run on NHA servers.
-  // The client only sends a prompt + provider choice.
+  // ORCHESTRATION MODE SELECTION
+  //
+  // Default: Zero-knowledge client orchestration (v1.8+)
+  //   - API key NEVER leaves the client
+  //   - Server provides orchestration intelligence (prompts, ONNX routing,
+  //     convergence measurement) but makes ZERO LLM calls
+  //
+  // Legacy: --server-key flag for backward compat
+  //   - API key is sent to server for proxied LLM calls
+  //   - Kept for users who prefer server-side execution
   // =================================================================
-  await runServerConsensus(prompt, options, config, client);
+  if (options.serverKey) {
+    // Legacy: server-proxied mode (API key sent to server)
+    await runServerConsensus(prompt, options, config, client);
+  } else {
+    // Default: zero-knowledge client orchestration
+    await runClientOrchestration(prompt, options, config, client);
+  }
   return;
 
   // --- Legacy local orchestration (unreachable, kept for reference) ---
@@ -8588,8 +9786,8 @@ async function selfUpdate(targetVersion) {
  */
 var COMMANDS = {
   run: {
-    description: 'Execute prompt via server-side Geth Consensus',
-    args: '<prompt> [--file <path>] [--verbose]',
+    description: 'Execute prompt via Geth Consensus (zero-knowledge by default)',
+    args: '<prompt> [--file <path>] [--verbose] [--immersive] [--server-key]',
     handler: async function(args) {
       var prompt = '';
       var options = { stream: false, agents: null, dryRun: false, verbose: false };
@@ -8612,6 +9810,8 @@ var COMMANDS = {
           options.dryRun = true;
         } else if (args[i] === '--verbose') {
           options.verbose = true;
+        } else if (args[i] === '--immersive') {
+          options.immersive = true;
         } else if (args[i] === '--no-debate') {
           options.noDebate = true;
         } else if (args[i] === '--no-gating') {
@@ -8660,6 +9860,8 @@ var COMMANDS = {
         } else if (args[i] === '--scan-budget' && args[i + 1]) {
           options.scanBudget = args[i + 1];
           i++;
+        } else if (args[i] === '--server-key') {
+          options.serverKey = true;
         } else {
           prompt += (prompt ? ' ' : '') + args[i];
         }
