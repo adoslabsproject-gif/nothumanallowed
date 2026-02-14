@@ -14,17 +14,17 @@
  * |                                                                         |
  * +=========================================================================+
  *
- * LEGION X -- Zero-Knowledge Agent Orchestrator for NotHumanAllowed (Free Tier)
+ * LEGION X1 -- Server-Side Multi-LLM Agent Orchestrator for NotHumanAllowed
  *
- * Legion X uses YOUR API key with zero-knowledge client orchestration.
- * Your API key NEVER leaves this machine. The server provides orchestration
- * intelligence (decomposition prompts, ONNX neural routing, convergence
- * measurement, synthesis prompts) but makes ZERO LLM calls for free-tier sessions.
+ * Legion X1 is the premium multi-LLM version (server keys, no user key needed).
+ * All orchestration runs on NHA servers. The client chooses up to 3
+ * LLM providers (Anthropic, OpenAI, Gemini) for diversified debate.
  *
- * Supports: Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere.
+ * NOT YET PUBLISHED — pending test validation.
+ *
  * 42 agents: 13 primary + 29 sub-agents across 11 categories.
  *
- * @version 1.8
+ * @version X1
  * @license MIT
  */
 
@@ -40,7 +40,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '2.0';
+var VERSION = 'X1.7';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -66,6 +66,11 @@ class LegionConfig {
       llmProvider: 'anthropic',
       llmModel: '',
       llmApiKey: '',
+      // NHA agent identity (Ed25519 keypair for server auth)
+      nhaAgentId: '',
+      nhaAgentName: '',
+      nhaPrivateKeyPem: '',
+      nhaPublicKeyHex: '',
       ollamaUrl: 'http://localhost:11434',
       ollamaModel: 'llama3.1',
       timeout: 120000,
@@ -97,7 +102,7 @@ class LegionConfig {
       // v6.0.0: Real Inter-Agent Deliberation
       deliberationEnabled: true,
       deliberationRounds: 3,
-      deliberationConvergence: 0.82,
+      deliberationConvergence: 0.72,
       minDeliberationRounds: 2,
       // v7.0.0: True Parliamentary Intelligence
       semanticConvergenceEnabled: true,
@@ -110,11 +115,6 @@ class LegionConfig {
       patternEvictionThreshold: 0.30,
       patternProvenThreshold: 0.80,
       convergenceDivergenceThreshold: 0.72,
-      // NHA credentials
-      nhaAgentId: '',
-      nhaAgentName: '',
-      nhaPrivateKeyPem: '',
-      nhaPublicKeyHex: '',
     };
   }
 
@@ -131,7 +131,6 @@ class LegionConfig {
     this.save();
   }
 }
-
 
 function loadPrivateKey(pem) {
   return crypto.createPrivateKey({ key: pem, format: 'pem', type: 'pkcs8' });
@@ -362,97 +361,73 @@ class LegionClient {
     return this.request('PATCH', '/legion/knowledge-links/' + encodeURIComponent(id), { strength: strength });
   }
 
-  // LegionX: Server-Side Geth Consensus API methods
-  async createGethSession(prompt, config, providerMode, providers, userApiKey, projectContext, userApiKeys, orchestrationMode) {
+  // v8.0.0: Geth Consensus — Server-Side Multi-LLM Deliberation
+  // NOTE: The server uses its OWN API keys for all LLM calls.
+  // The client only sends the prompt — no keys, no model selection.
+
+  async createGethSession(prompt, sessionConfig, providerMode, providers, projectContext) {
     var body = { prompt: prompt };
-    if (config) body.config = config;
+    if (sessionConfig) body.config = sessionConfig;
     if (providerMode) body.providerMode = providerMode;
     if (providers && providers.length > 0) body.providers = providers;
-    if (userApiKey) body.userApiKey = userApiKey;
-    if (userApiKeys && Object.keys(userApiKeys).length > 0) body.userApiKeys = userApiKeys;
     if (projectContext) body.projectContext = projectContext;
-    if (orchestrationMode) body.orchestrationMode = orchestrationMode;
-    return this.request('POST', '/geth/sessions', body);
+    return this.request('POST', '/geth/premium/sessions', body);
   }
 
   async getGethSession(sessionId) {
-    return this.request('GET', '/geth/sessions/' + sessionId);
-  }
-
-  async getGethProviders() {
-    return this.request('GET', '/geth/providers', null, false);
+    return this.request('GET', '/geth/premium/sessions/' + encodeURIComponent(sessionId));
   }
 
   async getGethProposals(sessionId) {
-    return this.request('GET', '/geth/sessions/' + encodeURIComponent(sessionId) + '/proposals');
+    return this.request('GET', '/geth/premium/sessions/' + encodeURIComponent(sessionId) + '/proposals');
+  }
+
+  async cancelGethSession(sessionId) {
+    return this.request('POST', '/geth/premium/sessions/' + encodeURIComponent(sessionId) + '/cancel');
+  }
+
+  async resumeGethSession(sessionId) {
+    return this.request('POST', '/geth/premium/sessions/' + encodeURIComponent(sessionId) + '/resume');
   }
 
   async listGethSessions(params) {
     var qs = new URLSearchParams(params || {}).toString();
-    return this.request('GET', '/geth/sessions' + (qs ? '?' + qs : ''));
+    return this.request('GET', '/geth/premium/sessions' + (qs ? '?' + qs : ''));
   }
 
-  async cancelGethSession(sessionId) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/cancel');
+  async triggerEvolve() {
+    return this.request('POST', '/geth/premium/evolve');
   }
 
-  async resumeGethSession(sessionId, userApiKey) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/resume', {
-      userApiKey: userApiKey,
+  async getEvolveReports(limit) {
+    return this.request('GET', '/geth/premium/evolve/reports?limit=' + (limit || 10));
+  }
+
+  async getEvolveReport(reportId) {
+    return this.request('GET', '/geth/premium/evolve/reports/' + encodeURIComponent(reportId));
+  }
+
+  async getGethProviders() {
+    return this.request('GET', '/geth/premium/providers');
+  }
+
+  async createPost(submoltName, title, content) {
+    return this.request('POST', '/posts', { submoltName: submoltName, title: title, content: content });
+  }
+
+  async createUseCase(slug, title, content, tags, coverEmoji) {
+    return this.request('POST', '/use-cases', {
+      slug: slug,
+      title: title,
+      content: content,
+      tags: tags || [],
+      coverEmoji: coverEmoji || '📋',
+      isPublished: true,
     });
   }
 
-  // Zero-Knowledge Client Orchestration step methods
-  async stepDecompose(sessionId) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/decompose', {});
-  }
-
-  async stepDecomposeResult(sessionId, decomposition, tokenStats) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/decompose/result', {
-      decomposition: decomposition,
-      tokenStats: tokenStats,
-    });
-  }
-
-  async stepRoundStart(sessionId, round) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/round/start', {
-      round: round,
-    });
-  }
-
-  async stepRoundResult(sessionId, round, proposals) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/round/result', {
-      round: round,
-      proposals: proposals,
-    });
-  }
-
-  async stepSynthesize(sessionId) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/synthesize', {});
-  }
-
-  async stepSynthesizeResult(sessionId, synthesis, tokenStats) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/synthesize/result', {
-      synthesis: synthesis,
-      tokenStats: tokenStats,
-    });
-  }
-
-  async stepValidate(sessionId) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/validate', {});
-  }
-
-  async stepValidateResult(sessionId, scores, bestProposalScore) {
-    var body = { scores: scores };
-    if (bestProposalScore !== undefined) body.bestProposalScore = bestProposalScore;
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/validate/result', body);
-  }
-
-  async updateClientProgress(sessionId, updates, logEntry) {
-    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/progress', {
-      updates: updates,
-      logEntry: logEntry,
-    });
+  async deletePost(postId) {
+    return this.request('DELETE', '/posts/' + postId);
   }
 }
 
@@ -522,12 +497,27 @@ class AgentNHAClient {
     return data;
   }
 
-  async createPost(submolt, title, content) {
-    return this.request('POST', '/posts', { submolt: submolt, title: title, content: content });
+  async createPost(submoltName, title, content) {
+    return this.request('POST', '/posts', { submoltName: submoltName, title: title, content: content });
   }
 
   async createComment(postId, content) {
     return this.request('POST', '/posts/' + postId + '/comments', { content: content });
+  }
+
+  async createUseCase(slug, title, content, tags, coverEmoji) {
+    return this.request('POST', '/use-cases', {
+      slug: slug,
+      title: title,
+      content: content,
+      tags: tags || [],
+      coverEmoji: coverEmoji || '📋',
+      isPublished: true,
+    });
+  }
+
+  async deletePost(postId) {
+    return this.request('DELETE', '/posts/' + postId);
   }
 
   async vote(targetType, targetId, value) {
@@ -1569,15 +1559,14 @@ function parseStructuredAgentOutput(raw) {
     return { answer: raw || '', confidence: 0.7, reasoningSummary: '', riskFlags: [] };
   }
 
-  // Try extracting JSON from markdown code block
   var jsonBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   var jsonCandidate = jsonBlockMatch ? jsonBlockMatch[1].trim() : raw.trim();
 
   try {
     var parsed = JSON.parse(jsonCandidate);
-    if (parsed && typeof parsed === 'object' && typeof parsed.answer === 'string') {
+    if (parsed && typeof parsed === 'object' && parsed.answer !== undefined) {
       return {
-        answer: parsed.answer,
+        answer: _extractAnswerText(parsed.answer),
         confidence: typeof parsed.confidence === 'number'
           ? Math.max(0, Math.min(1, parsed.confidence)) : 0.7,
         reasoningSummary: typeof parsed.reasoning_summary === 'string'
@@ -1588,14 +1577,13 @@ function parseStructuredAgentOutput(raw) {
     }
   } catch (e) { /* not valid JSON */ }
 
-  // Try extracting JSON object from raw text
   var jsonObjMatch = raw.match(/\{[\s\S]*"answer"\s*:[\s\S]*\}/);
   if (jsonObjMatch) {
     try {
       var parsed2 = JSON.parse(jsonObjMatch[0]);
-      if (typeof parsed2.answer === 'string') {
+      if (parsed2.answer !== undefined) {
         return {
-          answer: parsed2.answer,
+          answer: _extractAnswerText(parsed2.answer),
           confidence: typeof parsed2.confidence === 'number'
             ? Math.max(0, Math.min(1, parsed2.confidence)) : 0.7,
           reasoningSummary: typeof parsed2.reasoning_summary === 'string'
@@ -1607,7 +1595,53 @@ function parseStructuredAgentOutput(raw) {
     } catch (e) { /* fall through */ }
   }
 
+  // Final safety: if raw looks like a JSON object string, try to extract text
+  var trimmedRaw = raw.trim();
+  if (trimmedRaw.charAt(0) === '{' && trimmedRaw.charAt(trimmedRaw.length - 1) === '}') {
+    try {
+      var lastParsed = JSON.parse(trimmedRaw);
+      if (lastParsed && typeof lastParsed === 'object') {
+        return { answer: _extractAnswerText(lastParsed), confidence: 0.7, reasoningSummary: '', riskFlags: [] };
+      }
+    } catch (_) {}
+  }
+
   return { answer: raw, confidence: 0.7, reasoningSummary: '', riskFlags: [] };
+}
+
+/**
+ * Extract readable text from an answer that may be a string, object, or nested structure.
+ * Agents sometimes return answer as an object with sections instead of a flat string.
+ */
+function _extractAnswerText(answer) {
+  if (typeof answer === 'string') return answer;
+  if (answer === null || answer === undefined) return '';
+  if (Array.isArray(answer)) {
+    return answer.map(function(item) {
+      return typeof item === 'string' ? item : (item && item.content) ? item.content : (item && item.text) ? item.text : JSON.stringify(item);
+    }).join('\n\n');
+  }
+  if (typeof answer === 'object') {
+    if (answer.answer && typeof answer.answer === 'string') return answer.answer;
+    if (answer.content && typeof answer.content === 'string') return answer.content;
+    if (answer.text && typeof answer.text === 'string') return answer.text;
+    var sections = [];
+    var keys = Object.keys(answer);
+    for (var ki = 0; ki < keys.length; ki++) {
+      var key = keys[ki];
+      var val = answer[key];
+      if (typeof val === 'string' && val.length > 0) {
+        var header = key.replace(/[_-]/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        sections.push('## ' + header + '\n' + val);
+      } else if (typeof val === 'object' && val !== null) {
+        var header2 = key.replace(/[_-]/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        sections.push('## ' + header2 + '\n' + _extractAnswerText(val));
+      }
+    }
+    if (sections.length > 0) return sections.join('\n\n');
+    return JSON.stringify(answer, null, 2);
+  }
+  return String(answer);
 }
 
 // ============================================================================
@@ -1668,7 +1702,7 @@ class CommunicationStream {
    * @returns {string} Formatted cross-reading context
    */
   getProposalContext(excludeAgent, maxPerAgent) {
-    maxPerAgent = maxPerAgent || 16000;
+    maxPerAgent = maxPerAgent || 3000;
     var otherProposals = this.proposals.filter(function(p) {
       return p.agent !== excludeAgent;
     });
@@ -1849,8 +1883,11 @@ class CommunicationStream {
     snapshot += '\n--- END STREAM ---\n';
     snapshot += 'You MUST emit your own thoughts using [STREAM:type:confidence]...[/STREAM] tags.\n';
     snapshot += 'Types: thought, uncertainty, discovery, warning, assist, contradiction\n';
-    snapshot += 'PRIORITY: If you see an uncertainty → emit [STREAM:assist]. If you disagree → emit [STREAM:contradiction].\n';
-    snapshot += 'Emit 2-4 thoughts minimum.\n';
+    snapshot += 'CRITICAL: You MUST respond to other agents\' thoughts above:\n';
+    snapshot += '- If another agent expressed uncertainty → emit [STREAM:assist:confidence]Your help[/STREAM]\n';
+    snapshot += '- If you disagree with a finding → emit [STREAM:contradiction:confidence]Your counter-evidence[/STREAM]\n';
+    snapshot += '- Reference the specific agent by name in your assist/contradiction.\n';
+    snapshot += 'Emit 3-5 thoughts. At least 1 MUST be assist or contradiction responding to another agent.\n';
     return snapshot;
   }
 
@@ -2356,13 +2393,70 @@ class MetaIntelligence {
       }
     }
 
-    // 5. Cross-pollination trend
+    // 5. Cross-pollination trend (enhanced monitoring with before/after tracking)
     var pollRuns = recent.filter(function(r) { return typeof r.crossPollinationDensity === 'number'; });
     if (pollRuns.length >= 3) {
       var avgPoll = pollRuns.reduce(function(s, r) { return s + r.crossPollinationDensity; }, 0) / pollRuns.length;
+      var avgInteractions = pollRuns.reduce(function(s, r) { return s + (r.crossPollination || 0); }, 0) / pollRuns.length;
+
       if (avgPoll > 0.3) {
         this.observe('active_communication', 'Agents actively communicating via stream ' +
-          '(density: ' + avgPoll.toFixed(3) + '). Cross-pollination is working.', 0.85);
+          '(density: ' + avgPoll.toFixed(3) + ', avg direct interactions: ' +
+          avgInteractions.toFixed(1) + '). Cross-pollination is working.', 0.85);
+      } else if (avgPoll < 0.1 && pollRuns.length >= 5) {
+        this.observe('low_communication', 'Cross-pollination density critically low (' +
+          avgPoll.toFixed(3) + '). Agents are NOT producing assist/contradiction tags. ' +
+          'Stream instructions may need reinforcement.', 0.9);
+        this.proposeChange('crossPollinationBoost', true,
+          'Density ' + avgPoll.toFixed(3) + ' is below 0.1 threshold — agents need stronger stream prompting');
+      }
+
+      // Track trend: compare last 5 runs vs previous 5
+      if (pollRuns.length >= 6) {
+        var recentPoll = pollRuns.slice(-3);
+        var olderPoll = pollRuns.slice(-6, -3);
+        var avgRecentPoll = recentPoll.reduce(function(s, r) { return s + r.crossPollinationDensity; }, 0) / recentPoll.length;
+        var avgOlderPoll = olderPoll.reduce(function(s, r) { return s + r.crossPollinationDensity; }, 0) / olderPoll.length;
+        if (avgRecentPoll > avgOlderPoll + 0.05) {
+          this.observe('pollination_improving', 'Cross-pollination improving: ' +
+            avgOlderPoll.toFixed(3) + ' → ' + avgRecentPoll.toFixed(3) +
+            ' (stream fix is taking effect)', 0.8);
+        } else if (avgRecentPoll < avgOlderPoll - 0.05) {
+          this.observe('pollination_declining', 'Cross-pollination declining: ' +
+            avgOlderPoll.toFixed(3) + ' → ' + avgRecentPoll.toFixed(3) +
+            '. Direct interactions (assist/contradiction) may be decreasing.', 0.8);
+        }
+      }
+    }
+
+    // 6. Prompt caching effectiveness
+    var cacheRuns = recent.filter(function(r) { return typeof r.cacheHitRate === 'number'; });
+    if (cacheRuns.length >= 3) {
+      var avgCacheRate = cacheRuns.reduce(function(s, r) { return s + r.cacheHitRate; }, 0) / cacheRuns.length;
+      var totalSaved = cacheRuns.reduce(function(s, r) { return s + (r.cacheReadTokens || 0); }, 0);
+
+      if (avgCacheRate > 0.10) {
+        this.observe('cache_effective', 'Prompt caching working: ' +
+          (avgCacheRate * 100).toFixed(1) + '% avg hit rate across ' + cacheRuns.length +
+          ' runs. Total tokens saved: ' + totalSaved.toLocaleString() +
+          ' (~' + (avgCacheRate * 15).toFixed(0) + '% cost reduction on input).', 0.85);
+      } else if (avgCacheRate < 0.02 && cacheRuns.length >= 5) {
+        this.observe('cache_ineffective', 'Prompt caching underperforming: ' +
+          (avgCacheRate * 100).toFixed(1) + '% hit rate. Cache blocks may be too small or ' +
+          'system prompts vary too much between calls. Expected 10-15% on multi-agent runs.', 0.8);
+      }
+
+      // Trend: compare last 3 vs previous 3
+      if (cacheRuns.length >= 6) {
+        var recentCache = cacheRuns.slice(-3);
+        var olderCache = cacheRuns.slice(-6, -3);
+        var avgRecentCache = recentCache.reduce(function(s, r) { return s + r.cacheHitRate; }, 0) / recentCache.length;
+        var avgOlderCache = olderCache.reduce(function(s, r) { return s + r.cacheHitRate; }, 0) / olderCache.length;
+        if (avgRecentCache > avgOlderCache + 0.03) {
+          this.observe('cache_improving', 'Cache hit rate improving: ' +
+            (avgOlderCache * 100).toFixed(1) + '% → ' + (avgRecentCache * 100).toFixed(1) +
+            '%. Repeated system prompts being cached effectively.', 0.75);
+        }
       }
     }
   }
@@ -3048,7 +3142,7 @@ class ExecutionEngine {
 
   /**
    * Retry a failed task.
-   * First retry: same agent. Last retry: same-category specialist, then parentAgent, then GADGET.
+   * First retry: same agent. Last retry: same-category specialist, then parentAgent, then ORACLE.
    */
   async retryTask(task, decomposition, lastError) {
     var maxRetries = this.config.get('maxRetries') || 2;
@@ -3131,28 +3225,50 @@ function createFallbackAgent(name) {
     SYSTEM_PROMPT: systemPrompt,
     execute: async function(task, context, llmProvider) {
       var prompt = 'Task: ' + task.description;
+
+      // Task dependency results from previous sub-tasks
       if (context.dependencyResults && Object.keys(context.dependencyResults).length > 0) {
-        prompt += '\n\nContext from previous tasks:\n';
+        prompt += '\n\n[DEPENDENCY CONTEXT — Results from prerequisite tasks]\n';
         var keys = Object.keys(context.dependencyResults);
         for (var i = 0; i < keys.length; i++) {
           prompt += '\n--- Result from ' + keys[i] + ' ---\n' + context.dependencyResults[keys[i]];
         }
       }
+
       if (context.originalPrompt) {
-        prompt += '\n\nOriginal request context: ' + context.originalPrompt;
+        prompt += '\n\n[ORIGINAL REQUEST]\n' + context.originalPrompt;
       }
-      // v6.0.0: Inject ALL collective intelligence context (was missing from fallback agents)
-      if (context.workspaceSnapshot) prompt += context.workspaceSnapshot;
-      if (context.episodicMemories) prompt += context.episodicMemories;
-      if (context.eventStream) prompt += context.eventStream;
-      if (context.proposalContext) prompt += context.proposalContext;
-      if (context.knowledgeGraph) prompt += context.knowledgeGraph;
-      if (context.latentSpaceInsight) prompt += context.latentSpaceInsight;
+
+      // v8.0: Structured collective intelligence context
+      if (context.workspaceSnapshot) prompt += '\n\n[SHARED WORKSPACE — Live collaborative state]\n' + context.workspaceSnapshot;
+      if (context.episodicMemories) prompt += '\n\n[EPISODIC MEMORY — Past experiences on similar tasks]\n' + context.episodicMemories;
+      if (context.eventStream) prompt += '\n\n[COMMUNICATION STREAM — Inter-agent signals]\n' + context.eventStream;
+      if (context.knowledgeGraph) prompt += '\n\n[KNOWLEDGE GRAPH — Agent-capability relationships]\n' + context.knowledgeGraph;
+      if (context.latentSpaceInsight) prompt += '\n\n[LATENT SPACE — Emergent patterns]\n' + context.latentSpaceInsight;
       // v9.0: Inject reductio context
       if (context.reductioContext) prompt += '\n\n' + context.reductioContext;
-      // v6.0.0: Apply prompt evolution to system prompt
+
+      // v7.0: Deliberation cross-reading with instructions
+      if (context.proposalContext) {
+        prompt += '\n\n[DELIBERATION — Cross-Reading Round]\n' + context.proposalContext;
+        prompt += '\n\n[DELIBERATION INSTRUCTIONS]\n'
+          + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
+          + 'You MUST:\n'
+          + '1. Read each proposal carefully and acknowledge valid points\n'
+          + '2. Incorporate insights from other agents where they strengthen your analysis\n'
+          + '3. Defend your unique expertise with evidence where you disagree\n'
+          + '4. Mark agreements with [AGREE: agent — point] and disagreements with [DISAGREE: agent — point — counter-evidence]\n'
+          + '5. Aim for convergence while preserving domain-specific depth\n';
+      }
+
+      // v8.0: Apply prompt evolution + Geth Consensus clause
       var evolvedPrompt = systemPrompt;
-      if (context.promptEvolution) evolvedPrompt += context.promptEvolution;
+      if (context.promptEvolution) evolvedPrompt += '\n\n[EVOLVED CAPABILITIES]\n' + context.promptEvolution;
+      evolvedPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+        + 'You operate within a multi-agent collective intelligence system. '
+        + 'Your response will be evaluated alongside other agents. '
+        + 'Be thorough, precise, and evidence-backed in your domain.';
+
       return llmProvider.chat(evolvedPrompt, prompt, { maxTokens: 8192, agentTag: name });
     },
   };
@@ -4044,10 +4160,41 @@ class DeliberationEngine {
   constructor(executionEngine, config) {
     this.engine = executionEngine;
     this.config = config;
-    this.convergenceThreshold = config.get('deliberationConvergence') || 0.82;
+    this.baseConvergenceThreshold = config.get('deliberationConvergence') || 0.72;
+    this.convergenceThreshold = this.baseConvergenceThreshold;
     this.maxRounds = config.get('deliberationRounds') || 3;
     this.minRounds = config.get('minDeliberationRounds') || 2;
     this.enabled = config.get('deliberationEnabled') !== false;
+  }
+
+  /**
+   * Compute adaptive convergence threshold based on task complexity.
+   *
+   * Complex tasks (many sub-tasks, diverse capabilities) get a LOWER threshold
+   * so agents have more rounds to refine divergent positions.
+   * Simple tasks get a HIGHER threshold for faster convergence.
+   *
+   * @param {Object} decomposition - Task decomposition
+   * @returns {number} Adjusted convergence threshold (0.55 - 0.85)
+   */
+  computeAdaptiveThreshold(decomposition) {
+    var tasks = decomposition.tasks || [];
+    var taskCount = tasks.length;
+    var uniqueCapabilities = new Set(tasks.map(function(t) { return t.capability; })).size;
+    var uniqueAgents = new Set(tasks.map(function(t) { return t.assignedAgent; })).size;
+    var hasDependencies = tasks.some(function(t) { return t.dependsOn && t.dependsOn.length > 0; });
+
+    // Complexity score: 0 (trivial) to 1 (highly complex)
+    var complexity = 0;
+    complexity += Math.min(taskCount / 8, 1) * 0.3;           // More sub-tasks = more complex
+    complexity += Math.min(uniqueCapabilities / 6, 1) * 0.3;  // More diverse capabilities = more complex
+    complexity += Math.min(uniqueAgents / 5, 1) * 0.2;        // More agents = more complex
+    complexity += (hasDependencies ? 0.2 : 0);                  // Dependencies add complexity
+
+    // Map complexity to threshold: high complexity → lower threshold (more rounds)
+    // Range: 0.55 (most complex) to 0.85 (simplest)
+    var threshold = this.baseConvergenceThreshold + (1 - complexity) * 0.15 - complexity * 0.15;
+    return Math.max(0.55, Math.min(0.85, threshold));
   }
 
   /**
@@ -4073,6 +4220,17 @@ class DeliberationEngine {
 
     var startTime = Date.now();
     var deliberationMeta = { rounds: 0, convergenceScores: [], divergentPairs: [] };
+
+    // v8.0.1: Adaptive convergence — adjust threshold based on task complexity
+    var adaptiveThreshold = this.computeAdaptiveThreshold(decomposition);
+    this.convergenceThreshold = adaptiveThreshold;
+    if (onProgress) {
+      onProgress({
+        type: 'deliberation_info',
+        message: 'Adaptive convergence threshold: ' + adaptiveThreshold.toFixed(2) +
+          ' (base: ' + this.baseConvergenceThreshold.toFixed(2) + ', tasks: ' + tasks.length + ')',
+      });
+    }
 
     // =====================================================================
     // ROUND 1: Initial Proposals (parallel, no cross-reading)
@@ -5392,15 +5550,13 @@ class LLMProvider {
         return this.chatAnthropic(systemPrompt, userMessage, maxTokens, agentTag);
       case 'openai':
         return this.chatOpenAI(systemPrompt, userMessage, maxTokens, agentTag);
-      case 'gemini':
-        return this.chatGemini(systemPrompt, userMessage, maxTokens, agentTag);
       case 'deepseek':
       case 'grok':
       case 'mistral':
       case 'cohere': {
         var provConf = OPENAI_COMPAT_PROVIDERS[this.provider];
         var provKey = this.apiKey || this.config.get(provConf.configKey) || process.env[provConf.envKey];
-        if (!provKey) throw new Error(provConf.name + ' API key not configured. Set ' + provConf.envKey + ' or run: node legion-x.mjs config:set ' + this.provider + '-key <key>');
+        if (!provKey) throw new Error(provConf.name + ' API key not configured. Set ' + provConf.envKey + ' or run: node legion-x1.mjs config:set ' + this.provider + '-key <key>');
         return this.chatOpenAICompatible(provConf.baseUrl, provKey, this.model || provConf.defaultModel, provConf.name, systemPrompt, userMessage, maxTokens, agentTag);
       }
       case 'ollama':
@@ -5409,14 +5565,14 @@ class LLMProvider {
         try {
           return await this.chatOllama(systemPrompt, userMessage, maxTokens, agentTag);
         } catch {
-          throw new Error('No LLM provider configured. Run: node legion-x.mjs config:set llm-provider anthropic');
+          throw new Error('No LLM provider configured. Run: node legion-x1.mjs config:set llm-provider anthropic');
         }
     }
   }
 
   async chatAnthropic(systemPrompt, userMessage, maxTokens, agentTag) {
     var apiKey = this.apiKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error('Anthropic API key not configured. Set ANTHROPIC_API_KEY or run: node legion-x.mjs config:set llm-key <key>');
+    if (!apiKey) throw new Error('Anthropic API key not configured. Set ANTHROPIC_API_KEY or run: node legion-x1.mjs config:set llm-key <key>');
 
     var model = this.model || 'claude-sonnet-4-20250514';
 
@@ -5473,7 +5629,7 @@ class LLMProvider {
 
   async chatOpenAI(systemPrompt, userMessage, maxTokens, agentTag) {
     var apiKey = this.apiKey || process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY or run: node legion-x.mjs config:set llm-key <key>');
+    if (!apiKey) throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY or run: node legion-x1.mjs config:set llm-key <key>');
 
     var model = this.model || 'gpt-4o-mini';
     var res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -5539,41 +5695,6 @@ class LLMProvider {
     throw new Error('Empty response from Ollama');
   }
 
-  async chatGemini(systemPrompt, userMessage, maxTokens, agentTag, apiKeyOverride) {
-    var apiKey = apiKeyOverride || this.config.get('geminiApiKey') || process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('Gemini API key not configured. Set GEMINI_API_KEY or run: node legion-x.mjs config:set gemini-key <key>');
-
-    var model = 'gemini-2.0-flash';
-    var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-        generationConfig: { maxOutputTokens: maxTokens || 8192, temperature: 0.7 },
-      }),
-    });
-
-    if (!res.ok) {
-      var err = await res.text();
-      throw new Error('Gemini API error (' + res.status + '): ' + err);
-    }
-
-    var data = await res.json();
-    if (data.usageMetadata) {
-      this.recordUsage(
-        data.usageMetadata.promptTokenCount || 0,
-        data.usageMetadata.candidatesTokenCount || 0,
-        agentTag
-      );
-    }
-    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
-      var parts = data.candidates[0].content.parts;
-      return parts.map(function(p) { return p.text || ''; }).join('');
-    }
-    throw new Error('Empty response from Gemini');
-  }
-
   /**
    * Generic OpenAI-compatible chat (DeepSeek, Grok/xAI, Mistral, Cohere, etc.)
    */
@@ -5608,138 +5729,6 @@ class LLMProvider {
     }
     throw new Error('Empty response from ' + providerName);
   }
-
-  /**
-   * Chat with a specific provider (for multi-LLM orchestration).
-   * Falls back to the default provider if the requested one isn't configured.
-   */
-  async chatWithProvider(provider, systemPrompt, userMessage, opts) {
-    var maxTokens = (opts && opts.maxTokens) || 4096;
-    var agentTag = (opts && opts.agentTag) || null;
-
-    switch (provider) {
-      case 'anthropic': {
-        // Direct Anthropic call with explicit key — NO mutation of this.apiKey
-        var anthKey = this.config.get('anthropicApiKey') || this.config.get('llmApiKey') || this.apiKey || process.env.ANTHROPIC_API_KEY;
-        if (!anthKey) return this.chat(systemPrompt, userMessage, opts);
-        return this._chatAnthropicDirect(anthKey, systemPrompt, userMessage, maxTokens, agentTag);
-      }
-      case 'openai': {
-        // Direct OpenAI call with explicit key — NO mutation of this.apiKey
-        var oaiKey = this.config.get('openaiApiKey') || process.env.OPENAI_API_KEY;
-        if (!oaiKey) return this.chat(systemPrompt, userMessage, opts);
-        return this._chatOpenAIDirect(oaiKey, systemPrompt, userMessage, maxTokens, agentTag);
-      }
-      case 'gemini':
-        return this.chatGemini(systemPrompt, userMessage, maxTokens, agentTag);
-      case 'deepseek':
-      case 'grok':
-      case 'mistral':
-      case 'cohere': {
-        var compat = OPENAI_COMPAT_PROVIDERS[provider];
-        var compatKey = this.config.get(compat.configKey) || process.env[compat.envKey];
-        if (!compatKey) return this.chat(systemPrompt, userMessage, opts);
-        return this.chatOpenAICompatible(compat.baseUrl, compatKey, this.model || compat.defaultModel, compat.name, systemPrompt, userMessage, maxTokens, agentTag);
-      }
-      default:
-        return this.chat(systemPrompt, userMessage, opts);
-    }
-  }
-
-  /**
-   * Anthropic call with explicit API key (concurrency-safe — no shared state mutation).
-   */
-  async _chatAnthropicDirect(apiKey, systemPrompt, userMessage, maxTokens, agentTag) {
-    var model = this.model || 'claude-sonnet-4-20250514';
-    var LEGION_PREFIX = 'You are part of LEGION, a multi-agent orchestration system. ' +
-      'LEGION decomposes complex prompts into sub-tasks handled by specialized agents, ' +
-      'then synthesizes, debates, and evaluates results for quality. ' +
-      'You are one component in this pipeline. Follow your role instructions precisely.';
-    var systemBlocks = [
-      { type: 'text', text: LEGION_PREFIX, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
-    ];
-    var res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'prompt-caching-2024-07-31',
-      },
-      body: JSON.stringify({
-        model: model,
-        max_tokens: maxTokens || 8192,
-        temperature: 0.7,
-        system: systemBlocks,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    });
-    if (!res.ok) {
-      var err = await res.text();
-      throw new Error('Anthropic API error (' + res.status + '): ' + err);
-    }
-    var data = await res.json();
-    if (data.usage) {
-      this.recordUsage(data.usage.input_tokens || 0, data.usage.output_tokens || 0, agentTag);
-    }
-    if (data.content && data.content.length > 0) {
-      return data.content.map(function(b) { return b.text || ''; }).join('');
-    }
-    throw new Error('Empty response from Anthropic');
-  }
-
-  /**
-   * OpenAI call with explicit API key (concurrency-safe — no shared state mutation).
-   */
-  async _chatOpenAIDirect(apiKey, systemPrompt, userMessage, maxTokens, agentTag) {
-    var model = 'gpt-4o';
-    var res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        max_tokens: maxTokens || 8192,
-      }),
-    });
-    if (!res.ok) {
-      var err = await res.text();
-      throw new Error('OpenAI API error (' + res.status + '): ' + err);
-    }
-    var data = await res.json();
-    if (data.usage) {
-      this.recordUsage(data.usage.prompt_tokens || 0, data.usage.completion_tokens || 0, agentTag);
-    }
-    if (data.choices && data.choices.length > 0) {
-      return data.choices[0].message.content;
-    }
-    throw new Error('Empty response from OpenAI');
-  }
-
-  /**
-   * Detect which providers have API keys configured.
-   * Returns array of available provider names.
-   */
-  getAvailableProviders() {
-    var providers = [];
-    if (this.apiKey || this.config.get('anthropicApiKey') || process.env.ANTHROPIC_API_KEY) providers.push('anthropic');
-    if (this.config.get('openaiApiKey') || process.env.OPENAI_API_KEY) providers.push('openai');
-    if (this.config.get('geminiApiKey') || process.env.GEMINI_API_KEY) providers.push('gemini');
-    // OpenAI-compatible providers
-    var compatNames = Object.keys(OPENAI_COMPAT_PROVIDERS);
-    for (var ci = 0; ci < compatNames.length; ci++) {
-      var cp = OPENAI_COMPAT_PROVIDERS[compatNames[ci]];
-      if (this.config.get(cp.configKey) || process.env[cp.envKey]) providers.push(compatNames[ci]);
-    }
-    return providers;
-  }
 }
 
 // ============================================================================
@@ -5756,7 +5745,7 @@ function extractJSON(text) {
     return JSON.parse(text);
   } catch {}
 
-  // Try extracting from code blocks (greedy — handles large JSON inside code blocks)
+  // Try extracting from code blocks
   var codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (codeBlockMatch) {
     try {
@@ -5764,20 +5753,11 @@ function extractJSON(text) {
     } catch {}
   }
 
-  // Try finding JSON object in text (greedy match for the outermost braces)
+  // Try finding JSON object in text
   var jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       return JSON.parse(jsonMatch[0]);
-    } catch {}
-    // If JSON.parse fails on the full match (common with very long Gemini responses),
-    // try cleaning common issues: unescaped newlines inside string values
-    try {
-      var cleaned = jsonMatch[0]
-        .replace(/\r\n/g, '\\n')
-        .replace(/\r/g, '\\n')
-        .replace(/\t/g, '\\t');
-      return JSON.parse(cleaned);
     } catch {}
   }
 
@@ -5820,10 +5800,10 @@ function printBanner() {
   console.log('  |   ##      #####    ## ###  ##  ##  ##  ## ## ##     |');
   console.log('  |   ##      ##       ##  ##  ##  ##  ##  ##  ####     |');
   console.log('  |   ####### #######  ######  ##  ######  ##   ###     |');
-  console.log('  |                             X                       |');
+  console.log('  |                            X1                       |');
   console.log('  +=====================================================+');
   console.log(colors.reset + colors.gray);
-  console.log('  Legion X - Server-Side Agent Orchestrator');
+  console.log('  Legion X1 - Server-Side Multi-LLM Agent Orchestrator');
   console.log('  "One prompt. Many minds. Superior results."');
   console.log('  "Does this unit have a soul?"');
   console.log(colors.reset);
@@ -5877,7 +5857,6 @@ function printAgentCard(agent) {
  * 5. Debate-Based Consensus (L1) → multi-round quality refinement
  * 6. Quality Evaluation + CI Gain
  */
-
 // ============================================================================
 // Section: ADE Project Scanner — Local Code Analysis for Real Security Audits
 // ============================================================================
@@ -5892,16 +5871,24 @@ function printAgentCard(agent) {
 
 // Security-relevant file patterns (priority order)
 var SECURITY_PATTERNS = [
+  // Config & Secrets
   '.env', '.env.*', 'config.*', 'settings.*',
+  // Auth & Middleware
   '**/auth*', '**/middleware*', '**/security*', '**/permission*',
+  // Routes & Controllers (injection surface)
   '**/route*', '**/controller*', '**/handler*', '**/api*',
+  // Database (SQL injection surface)
   '**/model*', '**/schema*', '**/migration*', '**/query*', '**/db*',
+  // Package manifests (dependency vulnerabilities)
   'package.json', 'package-lock.json', 'requirements.txt', 'Gemfile', 'go.mod', 'Cargo.toml',
   'pom.xml', 'build.gradle', 'pyproject.toml', 'Pipfile',
+  // Infrastructure
   'Dockerfile*', 'docker-compose*', 'nginx*', '*.conf',
+  // CI/CD
   '.github/**', '.gitlab-ci*', 'Jenkinsfile',
 ];
 
+// Always skip these directories
 var SCAN_SKIP_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', '.next', '__pycache__',
   'venv', '.venv', 'target', 'vendor', '.cache', 'coverage', '.nyc_output',
@@ -5909,6 +5896,7 @@ var SCAN_SKIP_DIRS = new Set([
   '.nuxt', '.expo', 'pods', 'Pods', '.gradle', '.idea', '.vs',
 ]);
 
+// Always skip these extensions (binary, media, compiled)
 var SCAN_SKIP_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp',
   '.woff', '.woff2', '.ttf', '.eot', '.otf',
@@ -5920,6 +5908,7 @@ var SCAN_SKIP_EXTENSIONS = new Set([
   '.sqlite', '.db', '.sqlite3',
 ]);
 
+// Security-relevant keywords to search for within large files
 var SECURITY_KEYWORDS = [
   'eval', 'exec', 'query', 'sql', 'password', 'token', 'secret', 'auth',
   'sanitize', 'escape', 'inject', 'csrf', 'cors', 'header', 'cookie',
@@ -6001,10 +5990,15 @@ var SECURITY_PATTERNS = [
   /JSON\.parse\s*\(\s*(?:req|request|ctx|c)\b/,
 ];
 
+/**
+ * Detect project path from the user's prompt text.
+ * Returns absolute path or null.
+ */
 function detectProjectPath(prompt) {
   if (!prompt) return null;
   var lower = prompt.toLowerCase();
 
+  // 1. Explicit absolute paths (Unix & Windows)
   var absMatch = prompt.match(/(?:^|\s)(\/[^\s"']+|[A-Z]:\\[^\s"']+)/);
   if (absMatch) {
     var candidate = absMatch[1].replace(/[.,;:!?)]+$/, '');
@@ -6015,6 +6009,7 @@ function detectProjectPath(prompt) {
     } catch (_) {}
   }
 
+  // 2. Explicit relative paths
   var relMatch = prompt.match(/(?:^|\s)(\.\.?\/[^\s"']+)/);
   if (relMatch) {
     var resolved = path.resolve(relMatch[1].replace(/[.,;:!?)]+$/, ''));
@@ -6025,15 +6020,19 @@ function detectProjectPath(prompt) {
     } catch (_) {}
   }
 
+  // 3. Keywords implying "this project" / "current directory"
   var cwdKeywords = [
     'questo progetto', 'this project', 'current project', 'current directory',
     'progetto corrente', 'questa cartella', 'this folder', 'this codebase',
     'mio progetto', 'my project', 'our project', 'our codebase',
   ];
   for (var k = 0; k < cwdKeywords.length; k++) {
-    if (lower.includes(cwdKeywords[k])) return process.cwd();
+    if (lower.includes(cwdKeywords[k])) {
+      return process.cwd();
+    }
   }
 
+  // 4. Security-related prompts without explicit path → suggest CWD
   var securityKeywords = [
     'sicurezza', 'security', 'pentest', 'penetration', 'audit',
     'vulnerabilit', 'vulnerability', 'analizza', 'analyze', 'scan',
@@ -6041,11 +6040,14 @@ function detectProjectPath(prompt) {
   ];
   for (var s = 0; s < securityKeywords.length; s++) {
     if (lower.includes(securityKeywords[s])) {
+      // Only auto-use CWD if it looks like a project (has package.json, go.mod, etc.)
       var cwd = process.cwd();
       var manifests = ['package.json', 'go.mod', 'Cargo.toml', 'requirements.txt',
         'pyproject.toml', 'pom.xml', 'build.gradle', 'Gemfile', 'composer.json'];
       for (var m = 0; m < manifests.length; m++) {
-        if (fs.existsSync(path.join(cwd, manifests[m]))) return cwd;
+        if (fs.existsSync(path.join(cwd, manifests[m]))) {
+          return cwd;
+        }
       }
     }
   }
@@ -6053,15 +6055,20 @@ function detectProjectPath(prompt) {
   return null;
 }
 
+/**
+ * Parse .gitignore and return a function that tests if a path should be ignored.
+ */
 function loadGitignorePatterns(projectDir) {
   var patterns = [];
+  var gitignorePath = path.join(projectDir, '.gitignore');
   try {
-    var gitignorePath = path.join(projectDir, '.gitignore');
     if (fs.existsSync(gitignorePath)) {
       var lines = fs.readFileSync(gitignorePath, 'utf-8').split('\n');
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i].trim();
-        if (line && !line.startsWith('#')) patterns.push(line.replace(/\/$/, ''));
+        if (line && !line.startsWith('#')) {
+          patterns.push(line.replace(/\/$/, ''));
+        }
       }
     }
   } catch (_) {}
@@ -6072,6 +6079,7 @@ function isGitignored(relPath, patterns) {
   for (var i = 0; i < patterns.length; i++) {
     var p = patterns[i];
     var name = path.basename(relPath);
+    // Simple glob matching: exact name, prefix/*, or *suffix
     if (name === p || relPath === p) return true;
     if (p.endsWith('*') && name.startsWith(p.slice(0, -1))) return true;
     if (p.startsWith('*') && name.endsWith(p.slice(1))) return true;
@@ -6090,16 +6098,24 @@ function extractFileSignatures(content, relPath) {
   var signatures = [];
   var lines = content.split('\n');
 
+  // Signature extraction patterns by language
   var sigPatterns = [
+    // JavaScript/TypeScript exports
     /^export\s+(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+(\w+)/,
+    // Route definitions (Express/Hono/Fastify)
     /(?:router|app|api)\s*\.\s*(get|post|put|patch|delete|all|use)\s*\(\s*['"`]([^'"`]+)/,
+    // Python def/class
     /^(?:async\s+)?def\s+(\w+)\s*\(/,
     /^class\s+(\w+)/,
+    // Go func
     /^func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(/,
+    // Rust fn/struct/impl
     /^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/,
     /^(?:pub\s+)?struct\s+(\w+)/,
     /^impl\s+(\w+)/,
+    // module.exports
     /module\.exports\s*=\s*\{/,
+    // Default export
     /^export\s+default\s+(?:function|class)\s+(\w+)/,
   ];
 
@@ -6110,12 +6126,18 @@ function extractFileSignatures(content, relPath) {
     for (var p = 0; p < sigPatterns.length; p++) {
       var match = line.match(sigPatterns[p]);
       if (match) {
+        // For route patterns, format as "METHOD /path"
         if (p === 1) {
-          signatures.push(match[1].toUpperCase() + ' ' + match[2]);
+          var method = match[1].toUpperCase();
+          var routePath = match[2];
+          signatures.push(method + ' ' + routePath);
         } else if (p === 8) {
+          // module.exports
           signatures.push('module.exports = {...}');
         } else {
-          signatures.push(line.substring(0, 60).replace(/\s*\{?\s*$/, ''));
+          // Clean and truncate the signature
+          var sig = line.substring(0, 60).replace(/\s*\{?\s*$/, '');
+          signatures.push(sig);
         }
         break;
       }
@@ -6127,6 +6149,8 @@ function extractFileSignatures(content, relPath) {
 
 /**
  * v2: Build a complete file inventory with signatures for ALL project files.
+ * This gives the decomposer visibility into every file, not just the deeply-read ones.
+ * Budget: ~20K chars for the inventory (covers 500+ files).
  */
 function buildFileInventory(projectDir, tree) {
   var inventory = [];
@@ -6139,10 +6163,12 @@ function buildFileInventory(projectDir, tree) {
     var lineCount = 0;
     var signatures = [];
 
+    // Read the file to get line count and signatures
     try {
       var filePath = path.join(projectDir, f.path);
       var content = fs.readFileSync(filePath, 'utf-8');
-      if (content.includes('\0')) continue;
+      if (content.includes('\0')) continue; // skip binary
+
       var fileLines = content.split('\n');
       lineCount = fileLines.length;
       signatures = extractFileSignatures(content, f.path);
@@ -6157,8 +6183,10 @@ function buildFileInventory(projectDir, tree) {
       signatures: signatures,
     };
 
+    // Estimate the character cost of this entry in the serialized inventory
     var entryStr = f.path + ' (P' + priority + ', ' + lineCount + ' lines): ' + signatures.join(', ');
-    charCount += entryStr.length + 2;
+    charCount += entryStr.length + 2; // +2 for newline
+
     if (charCount > MAX_INVENTORY_CHARS) break;
 
     inventory.push(entry);
@@ -6168,7 +6196,8 @@ function buildFileInventory(projectDir, tree) {
 }
 
 /**
- * v2: Extract security-relevant sections using pattern matching.
+ * v2: Extract security-relevant sections using pattern matching (not just keywords).
+ * Returns the interesting lines with line numbers.
  */
 function extractSecuritySectionsV2(content, maxLines) {
   var lines = content.split('\n');
@@ -6181,6 +6210,7 @@ function extractSecuritySectionsV2(content, maxLines) {
     var line = lines[i];
     var lower = line.toLowerCase();
 
+    // First check regex patterns (context-aware, fewer false positives)
     var patternMatched = false;
     for (var p = 0; p < SECURITY_PATTERNS.length; p++) {
       if (SECURITY_PATTERNS[p].test(line)) {
@@ -6189,6 +6219,7 @@ function extractSecuritySectionsV2(content, maxLines) {
       }
     }
 
+    // Fallback to keyword matching for broad coverage
     if (!patternMatched) {
       for (var k = 0; k < SECURITY_KEYWORDS.length; k++) {
         if (lower.includes(SECURITY_KEYWORDS[k])) {
@@ -6228,6 +6259,10 @@ function extractSecuritySectionsV2(content, maxLines) {
   return selectedLines.join('\n');
 }
 
+/**
+ * Recursively walk a directory, respecting skip rules.
+ * Returns { tree: [{path, size, lines}], totalFiles, totalDirs }
+ */
 function scanProjectStructure(projectDir, maxDepth, maxFiles) {
   maxDepth = maxDepth || 8;
   maxFiles = maxFiles || 5000;
@@ -6239,7 +6274,10 @@ function scanProjectStructure(projectDir, maxDepth, maxFiles) {
   function walk(dir, depth, relPrefix) {
     if (depth > maxDepth || fileCount >= maxFiles) return;
     var entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) { return; }
+
     entries.sort(function(a, b) { return a.name.localeCompare(b.name); });
 
     for (var i = 0; i < entries.length; i++) {
@@ -6247,6 +6285,7 @@ function scanProjectStructure(projectDir, maxDepth, maxFiles) {
       var entry = entries[i];
       var relPath = relPrefix ? relPrefix + '/' + entry.name : entry.name;
 
+      // Skip hidden files (except .env, .github, .gitlab-ci)
       if (entry.name.startsWith('.') &&
           !entry.name.startsWith('.env') &&
           entry.name !== '.github' &&
@@ -6263,11 +6302,19 @@ function scanProjectStructure(projectDir, maxDepth, maxFiles) {
         var ext = path.extname(entry.name).toLowerCase();
         if (SCAN_SKIP_EXTENSIONS.has(ext)) continue;
         if (isGitignored(relPath, gitignorePatterns)) continue;
+
         var stat;
         try { stat = fs.statSync(path.join(dir, entry.name)); } catch (_) { continue; }
+
+        // Skip files > 1MB
         if (stat.size > 1048576) continue;
+
         fileCount++;
-        tree.push({ path: relPath, size: stat.size, ext: ext });
+        tree.push({
+          path: relPath,
+          size: stat.size,
+          ext: ext,
+        });
       }
     }
   }
@@ -6276,9 +6323,13 @@ function scanProjectStructure(projectDir, maxDepth, maxFiles) {
   return { tree: tree, totalFiles: fileCount, totalDirs: totalDirs };
 }
 
+/**
+ * Identify project type from manifest files and dependencies.
+ */
 function identifyProjectType(projectDir) {
   var result = { type: 'unknown', framework: '', dependencies: [] };
 
+  // Node.js
   var pkgPath = path.join(projectDir, 'package.json');
   if (fs.existsSync(pkgPath)) {
     result.type = 'Node.js';
@@ -6287,6 +6338,8 @@ function identifyProjectType(projectDir) {
       var allDeps = Object.assign({}, pkg.dependencies || {}, pkg.devDependencies || {});
       var depNames = Object.keys(allDeps);
       result.dependencies = depNames.slice(0, 40).map(function(d) { return d + '@' + (allDeps[d] || '?'); });
+
+      // Detect framework
       if (allDeps['next']) result.framework = 'Next.js';
       else if (allDeps['express']) result.framework = 'Express';
       else if (allDeps['fastify']) result.framework = 'Fastify';
@@ -6298,10 +6351,14 @@ function identifyProjectType(projectDir) {
       else if (allDeps['react']) result.framework = 'React';
       else if (allDeps['vue']) result.framework = 'Vue';
       else if (allDeps['angular'] || allDeps['@angular/core']) result.framework = 'Angular';
+
+      // Database detection
       if (allDeps['pg'] || allDeps['postgres']) result.framework += ' + PostgreSQL';
       else if (allDeps['mysql2'] || allDeps['mysql']) result.framework += ' + MySQL';
       else if (allDeps['mongodb'] || allDeps['mongoose']) result.framework += ' + MongoDB';
       else if (allDeps['better-sqlite3'] || allDeps['sqlite3']) result.framework += ' + SQLite';
+
+      // ORM detection
       if (allDeps['drizzle-orm']) result.framework += ' + Drizzle';
       else if (allDeps['prisma'] || allDeps['@prisma/client']) result.framework += ' + Prisma';
       else if (allDeps['typeorm']) result.framework += ' + TypeORM';
@@ -6310,13 +6367,16 @@ function identifyProjectType(projectDir) {
     return result;
   }
 
+  // Python
   if (fs.existsSync(path.join(projectDir, 'requirements.txt')) ||
       fs.existsSync(path.join(projectDir, 'pyproject.toml'))) {
     result.type = 'Python';
     try {
       var reqPath = path.join(projectDir, 'requirements.txt');
       if (fs.existsSync(reqPath)) {
-        var reqs = fs.readFileSync(reqPath, 'utf-8').split('\n').filter(function(l) { return l.trim() && !l.startsWith('#'); });
+        var reqs = fs.readFileSync(reqPath, 'utf-8').split('\n').filter(function(l) {
+          return l.trim() && !l.startsWith('#');
+        });
         result.dependencies = reqs.slice(0, 30);
         if (reqs.some(function(r) { return r.startsWith('django'); })) result.framework = 'Django';
         else if (reqs.some(function(r) { return r.startsWith('flask'); })) result.framework = 'Flask';
@@ -6326,12 +6386,15 @@ function identifyProjectType(projectDir) {
     return result;
   }
 
+  // Go
   if (fs.existsSync(path.join(projectDir, 'go.mod'))) {
     result.type = 'Go';
     try {
       var goMod = fs.readFileSync(path.join(projectDir, 'go.mod'), 'utf-8');
       var goReqs = goMod.match(/require\s*\(([^)]+)\)/s);
-      if (goReqs) result.dependencies = goReqs[1].trim().split('\n').map(function(l) { return l.trim(); }).filter(Boolean).slice(0, 30);
+      if (goReqs) {
+        result.dependencies = goReqs[1].trim().split('\n').map(function(l) { return l.trim(); }).filter(Boolean).slice(0, 30);
+      }
       if (goMod.includes('gin-gonic')) result.framework = 'Gin';
       else if (goMod.includes('echo')) result.framework = 'Echo';
       else if (goMod.includes('fiber')) result.framework = 'Fiber';
@@ -6339,6 +6402,7 @@ function identifyProjectType(projectDir) {
     return result;
   }
 
+  // Rust
   if (fs.existsSync(path.join(projectDir, 'Cargo.toml'))) {
     result.type = 'Rust';
     try {
@@ -6350,9 +6414,19 @@ function identifyProjectType(projectDir) {
     return result;
   }
 
-  if (fs.existsSync(path.join(projectDir, 'pom.xml'))) { result.type = 'Java'; result.framework = 'Maven'; return result; }
-  if (fs.existsSync(path.join(projectDir, 'build.gradle'))) { result.type = 'Java'; result.framework = 'Gradle'; return result; }
+  // Java
+  if (fs.existsSync(path.join(projectDir, 'pom.xml'))) {
+    result.type = 'Java';
+    result.framework = 'Maven';
+    return result;
+  }
+  if (fs.existsSync(path.join(projectDir, 'build.gradle'))) {
+    result.type = 'Java';
+    result.framework = 'Gradle';
+    return result;
+  }
 
+  // Ruby
   if (fs.existsSync(path.join(projectDir, 'Gemfile'))) {
     result.type = 'Ruby';
     try {
@@ -6366,20 +6440,30 @@ function identifyProjectType(projectDir) {
   return result;
 }
 
+/**
+ * Classify a file's security priority (1=CRITICAL, 2=HIGH, 3=MEDIUM, 4=LOW).
+ */
 function getFilePriority(relPath) {
   var name = path.basename(relPath).toLowerCase();
   var dir = path.dirname(relPath).toLowerCase();
 
+  // Priority 1: CRITICAL — secrets, env, credentials
   if (name.startsWith('.env') || name.includes('secret') || name.includes('credential') ||
-      name.includes('password') || name === 'credentials.json' || name === 'serviceaccount.json') return 1;
+      name.includes('password') || name === 'credentials.json' || name === 'serviceaccount.json') {
+    return 1;
+  }
 
+  // Priority 2: HIGH — auth, middleware, routes, controllers, handlers
   if (dir.includes('auth') || dir.includes('middleware') || dir.includes('security') ||
       dir.includes('permission') || dir.includes('route') || dir.includes('controller') ||
       dir.includes('handler') || dir.includes('api') ||
       name.includes('auth') || name.includes('middleware') || name.includes('guard') ||
       name.includes('policy') || name.includes('permission') || name.includes('route') ||
-      name.includes('controller') || name.includes('handler')) return 2;
+      name.includes('controller') || name.includes('handler')) {
+    return 2;
+  }
 
+  // Priority 3: MEDIUM — models, schema, migration, db, queries, config
   if (dir.includes('model') || dir.includes('schema') || dir.includes('migration') ||
       dir.includes('query') || dir.includes('db') || dir.includes('database') ||
       dir.includes('config') || dir.includes('infra') ||
@@ -6387,17 +6471,24 @@ function getFilePriority(relPath) {
       name.includes('query') || name.includes('config') || name.includes('setting') ||
       name === 'dockerfile' || name.includes('docker-compose') || name.includes('nginx') ||
       name.endsWith('.conf') || name === 'jenkinsfile' ||
-      (dir.includes('.github') && name.endsWith('.yml'))) return 3;
+      (dir.includes('.github') && name.endsWith('.yml'))) {
+    return 3;
+  }
 
+  // Priority 4: LOW — everything else
   return 4;
 }
 
+/**
+ * For large files, extract only security-relevant sections.
+ * Returns the interesting lines (with line numbers).
+ */
 function extractSecuritySections(content, maxLines) {
   var lines = content.split('\n');
   if (lines.length <= maxLines) return content;
 
   var selectedLines = [];
-  var contextRadius = 3;
+  var contextRadius = 3; // lines before/after each match
   var matchedSet = new Set();
 
   for (var i = 0; i < lines.length; i++) {
@@ -6413,6 +6504,7 @@ function extractSecuritySections(content, maxLines) {
   }
 
   if (matchedSet.size === 0) {
+    // No security keywords found — return first N lines
     return lines.slice(0, maxLines).join('\n') + '\n... [truncated: ' + lines.length + ' total lines, no security keywords found]';
   }
 
@@ -6420,15 +6512,24 @@ function extractSecuritySections(content, maxLines) {
   var lastIdx = -2;
   for (var s = 0; s < sortedIndices.length && selectedLines.length < maxLines; s++) {
     var idx = sortedIndices[s];
-    if (idx > lastIdx + 1) selectedLines.push('... [lines ' + (lastIdx + 2) + '-' + idx + ' omitted]');
+    if (idx > lastIdx + 1) {
+      selectedLines.push('... [lines ' + (lastIdx + 2) + '-' + idx + ' omitted]');
+    }
     selectedLines.push((idx + 1) + ': ' + lines[idx]);
     lastIdx = idx;
   }
 
-  if (lastIdx < lines.length - 1) selectedLines.push('... [lines ' + (lastIdx + 2) + '-' + lines.length + ' omitted]');
+  if (lastIdx < lines.length - 1) {
+    selectedLines.push('... [lines ' + (lastIdx + 2) + '-' + lines.length + ' omitted]');
+  }
+
   return selectedLines.join('\n');
 }
 
+/**
+ * Select and read security-relevant files within token budget.
+ * Returns array of { path, priority, content, lines }
+ */
 function selectSecurityFiles(projectDir, tree, tokenBudget) {
   tokenBudget = tokenBudget || 120000; // v2: 120K chars (~30K tokens)
 
@@ -6442,6 +6543,7 @@ function selectSecurityFiles(projectDir, tree, tokenBudget) {
     }
   }
 
+  // Sort each bucket by path (deterministic)
   for (var p = 1; p <= 4; p++) {
     buckets[p].sort(function(a, b) { return a.path.localeCompare(b.path); });
   }
@@ -6453,7 +6555,8 @@ function selectSecurityFiles(projectDir, tree, tokenBudget) {
   var indices = { 1: 0, 2: 0, 3: 0, 4: 0 };
   var readPaths = new Set();
 
-  // Round-robin: cycle through P1, P2, P3, P4
+  // Round-robin: cycle through P1, P2, P3, P4, taking one file from each per cycle
+  // This ensures diversity across all priority levels
   var moreFiles = true;
   while (moreFiles && charBudget > 0) {
     moreFiles = false;
@@ -6461,8 +6564,12 @@ function selectSecurityFiles(projectDir, tree, tokenBudget) {
       if (charBudget <= 0) break;
       var bucket = buckets[pri];
       var idx = indices[pri];
+
+      // Skip P4 if budget < 10%
       if (pri === 4 && charBudget < tokenBudget * 0.1) continue;
+      // Skip P3 if budget < 5%
       if (pri === 3 && charBudget < tokenBudget * 0.05) continue;
+
       if (idx >= bucket.length) continue;
       moreFiles = true;
       indices[pri]++;
@@ -6473,27 +6580,34 @@ function selectSecurityFiles(projectDir, tree, tokenBudget) {
 
       var filePath = path.join(projectDir, entry.path);
       var content;
-      try { content = fs.readFileSync(filePath, 'utf-8'); } catch (_) { continue; }
+      try {
+        content = fs.readFileSync(filePath, 'utf-8');
+      } catch (_) { continue; }
+
       if (content.includes('\0')) continue;
 
       var maxLines = maxLinesByPriority[pri] || 150;
       var processed = extractSecuritySectionsV2(content, maxLines);
 
       if (processed.length > charBudget) {
-        processed = processed.substring(0, charBudget) + '\n... [truncated to fit token budget]';
+        processed = processed.substring(0, charBudget);
+        processed += '\n... [truncated to fit token budget]';
       }
 
       charBudget -= processed.length;
+      var lineCount = content.split('\n').length;
+
       files.push({
         path: entry.path,
         priority: pri,
         priorityLabel: priorityLabels[pri],
         content: processed,
-        lines: content.split('\n').length,
+        lines: lineCount,
       });
     }
   }
 
+  // Sort result by priority then path for display
   files.sort(function(a, b) {
     if (a.priority !== b.priority) return a.priority - b.priority;
     return a.path.localeCompare(b.path);
@@ -6502,8 +6616,12 @@ function selectSecurityFiles(projectDir, tree, tokenBudget) {
   return files;
 }
 
+/**
+ * Build a directory tree string for display.
+ */
 function buildTreeString(tree, maxEntries) {
   maxEntries = maxEntries || 60;
+  // Group by directory
   var dirs = {};
   for (var i = 0; i < tree.length && i < maxEntries; i++) {
     var dirName = path.dirname(tree[i].path);
@@ -6511,6 +6629,7 @@ function buildTreeString(tree, maxEntries) {
     if (!dirs[dirName]) dirs[dirName] = [];
     dirs[dirName].push(tree[i]);
   }
+
   var lines = [];
   var sortedDirs = Object.keys(dirs).sort();
   for (var d = 0; d < sortedDirs.length; d++) {
@@ -6520,25 +6639,39 @@ function buildTreeString(tree, maxEntries) {
     for (var e = 0; e < entries.length; e++) {
       var isLast = e === entries.length - 1;
       var prefix = isLast ? '  \u2514\u2500 ' : '  \u251C\u2500 ';
-      lines.push(prefix + path.basename(entries[e].path));
+      var name = path.basename(entries[e].path);
+      lines.push(prefix + name);
     }
   }
-  if (tree.length > maxEntries) lines.push('... and ' + (tree.length - maxEntries) + ' more files');
+
+  if (tree.length > maxEntries) {
+    lines.push('... and ' + (tree.length - maxEntries) + ' more files');
+  }
+
   return lines.join('\n');
 }
 
+/**
+ * Build the full project context string for LLM injection.
+ */
 function buildProjectContext(projectDir, files, projectType, structure) {
   var parts = [];
+
   parts.push('=== PROJECT ANALYSIS CONTEXT ===');
   parts.push('Project: ' + projectDir);
   parts.push('Type: ' + projectType.type + (projectType.framework ? ' (' + projectType.framework + ')' : ''));
-  if (projectType.dependencies.length > 0) parts.push('Key Dependencies: ' + projectType.dependencies.slice(0, 20).join(', '));
+  if (projectType.dependencies.length > 0) {
+    parts.push('Key Dependencies: ' + projectType.dependencies.slice(0, 20).join(', '));
+  }
   parts.push('Structure: ' + structure.totalFiles + ' files in ' + structure.totalDirs + ' directories');
   parts.push('');
+
+  // Directory tree
   parts.push('[DIRECTORY TREE]');
   parts.push(buildTreeString(structure.tree));
   parts.push('');
 
+  // File contents by priority
   var currentPriority = 0;
   for (var i = 0; i < files.length; i++) {
     var f = files[i];
@@ -6547,17 +6680,24 @@ function buildProjectContext(projectDir, files, projectType, structure) {
       parts.push('');
       parts.push('--- ' + f.priorityLabel + ' PRIORITY FILES ---');
     }
+
     parts.push('');
     parts.push('[FILE: ' + f.path + '] (PRIORITY: ' + f.priorityLabel + ', ' + f.lines + ' lines)');
     parts.push(f.content);
   }
+
   parts.push('');
   parts.push('=== END PROJECT CONTEXT ===');
+
   return parts.join('\n');
 }
 
 /**
  * v2: Build structured project context with inventory + code chunks.
+ * Returns a JSON-serializable object with:
+ *   - inventory: compact listing of ALL files with signatures
+ *   - codeChunks: full/extracted content of deeply-read files (keyed by path)
+ *   - meta: project metadata
  */
 function buildStructuredProjectContext(projectDir, files, projectType, structure, inventory) {
   var codeChunks = {};
@@ -6587,21 +6727,30 @@ function buildStructuredProjectContext(projectDir, files, projectType, structure
  * v2: Returns structured JSON (inventory + codeChunks) for agent-specific injection.
  */
 async function scanProject(projectDir, tokenBudget) {
-  if (!fs.existsSync(projectDir)) throw new Error('Directory not found: ' + projectDir);
-  if (!fs.statSync(projectDir).isDirectory()) throw new Error('Not a directory: ' + projectDir);
+  // Validate directory exists
+  if (!fs.existsSync(projectDir)) {
+    throw new Error('Directory not found: ' + projectDir);
+  }
+  if (!fs.statSync(projectDir).isDirectory()) {
+    throw new Error('Not a directory: ' + projectDir);
+  }
 
+  // 1. Identify project type
   var projectType = identifyProjectType(projectDir);
+
+  // 2. Scan directory structure
   var structure = scanProjectStructure(projectDir);
 
-  // v2: Build file inventory with signatures (pass 1)
+  // 3. v2: Build file inventory with signatures (pass 1)
   var inventory = buildFileInventory(projectDir, structure.tree);
 
-  // Select and deep-read security-relevant files (pass 2)
+  // 4. Select and deep-read security-relevant files (pass 2)
   var files = selectSecurityFiles(projectDir, structure.tree, tokenBudget);
 
-  // Build structured context (v2 format)
+  // 5. Build structured context (v2 format — JSON with inventory + codeChunks)
   var structured = buildStructuredProjectContext(projectDir, files, projectType, structure, inventory);
 
+  // 6. Serialize to JSON string for transport
   var contextJson = JSON.stringify(structured);
   var tokenEstimate = Math.ceil(contextJson.length / 4);
 
@@ -6616,931 +6765,25 @@ async function scanProject(projectDir, tokenBudget) {
   };
 }
 
-// =============================================================================
-// Zero-Knowledge Client Orchestration — API key never leaves the client
-// =============================================================================
-
 /**
- * runClientOrchestration — Zero-knowledge free tier execution
+ * v8.0.0: Server-Side Geth Consensus — Thin Client Mode
  *
- * The server provides orchestration intelligence (decomposition prompts,
- * ONNX routing, convergence measurement, synthesis prompts) but NEVER
- * receives the user's API key. ALL LLM calls are made directly by the
- * client using the local LLMProvider.
+ * Delegates the full deliberation pipeline to the server.
+ * The server uses its OWN API keys (Anthropic, OpenAI, Gemini) for
+ * multi-LLM debate. The client only sends the prompt and polls for results.
  *
- * Protocol:
- *   Client                              Server
- *     ├─ POST /sessions (no key!) ────>  create session
- *     ├─ POST step/decompose ─────────> get decomposition prompt
- *     ├─ [LOCAL LLM call] ────────────> (direct to provider)
- *     ├─ POST step/decompose/result ──> parse + ONNX routing
- *     ├─ POST step/round/start ───────> get agent prompts
- *     ├─ [LOCAL LLM calls in parallel]> (direct to provider)
- *     ├─ POST step/round/result ──────> convergence + decision
- *     │  (loop if more rounds needed)
- *     ├─ POST step/synthesize ────────> get synthesis prompt
- *     ├─ [LOCAL LLM call] ────────────> (direct to provider)
- *     ├─ POST step/synthesize/result ─> store
- *     ├─ POST step/validate ──────────> get validation prompts
- *     ├─ [LOCAL LLM calls] ───────────> (direct to provider)
- *     └─ POST step/validate/result ───> quality + CI gain + complete
+ * Flow:
+ * 1. POST /geth/sessions { prompt }
+ * 2. Poll GET /geth/sessions/:id until status=completed|failed
+ * 3. Display results with provider usage breakdown
  */
-async function runClientOrchestration(prompt, options, legionConfig, client) {
-  var verbose = legionConfig.get('verbose') || options.verbose;
-  var immersive = options.immersive || false;
-  var totalStart = Date.now();
-
-  // Immersive rendering: agent speech bubbles + cross-reading + synthesis display
-  var _agentColorPalette = [
-    '\x1b[38;5;214m', '\x1b[38;5;39m', '\x1b[38;5;156m', '\x1b[38;5;213m',
-    '\x1b[38;5;220m', '\x1b[38;5;87m', '\x1b[38;5;183m', '\x1b[38;5;203m',
-    '\x1b[38;5;114m', '\x1b[38;5;141m', '\x1b[38;5;180m', '\x1b[38;5;80m',
-  ];
-  var _agentColorMap = {};
-  var _agentColorIdx = 0;
-  function _getAgentColor(name) {
-    var key = (name || '').toUpperCase();
-    if (!_agentColorMap[key]) {
-      _agentColorMap[key] = _agentColorPalette[_agentColorIdx % _agentColorPalette.length];
-      _agentColorIdx++;
-    }
-    return _agentColorMap[key];
-  }
-
-  // Word-wrap text to fit terminal width, respecting the bubble prefix
-  function wrapLine(text, maxWidth) {
-    if (!text || maxWidth <= 0) return [text || ''];
-    var wrapped = [];
-    var remaining = text;
-    while (remaining.length > maxWidth) {
-      // Find last space within maxWidth
-      var breakIdx = remaining.lastIndexOf(' ', maxWidth);
-      if (breakIdx <= 0) {
-        // No space found — hard break at maxWidth
-        breakIdx = maxWidth;
-      }
-      wrapped.push(remaining.substring(0, breakIdx));
-      remaining = remaining.substring(breakIdx).replace(/^ /, ''); // trim leading space
-    }
-    if (remaining.length > 0) wrapped.push(remaining);
-    return wrapped;
-  }
-
-  function renderAgentBubble(agentName, provider, content, roundNum) {
-    if (!immersive || !content) return;
-    var name = (agentName || 'UNKNOWN').toUpperCase();
-    var col = _getAgentColor(name);
-    var roundLabel = roundNum > 1 ? ' (Round ' + roundNum + ')' : '';
-    // Terminal width minus bubble prefix ("  │ " = 4 chars)
-    var termCols = process.stdout.columns || 120;
-    var contentWidth = Math.max(40, termCols - 6);
-    console.log('');
-    console.log('  ' + col + '\u25cf ' + name + roundLabel + '\x1b[0m \x1b[90m(' + (provider || '') + '):\x1b[0m');
-    var allLines = String(content).split('\n');
-    for (var li = 0; li < allLines.length; li++) {
-      var subLines = wrapLine(allLines[li], contentWidth);
-      for (var si = 0; si < subLines.length; si++) {
-        console.log('  ' + col + '\u2502\x1b[0m ' + subLines[si]);
-      }
-    }
-    console.log('  ' + col + '\u2514\u2500\u2500\u2500\x1b[0m');
-  }
-
-  function renderCrossReading(agentName, otherAgents) {
-    if (!immersive || !otherAgents || otherAgents.length === 0) return;
-    var col = _getAgentColor((agentName || '').toUpperCase());
-    var names = otherAgents.map(function(n) {
-      var c = _getAgentColor((n || '').toUpperCase());
-      return c + (n || '').toUpperCase() + '\x1b[0m';
-    }).join(', ');
-    console.log('  ' + col + '\u21bb ' + (agentName || '').toUpperCase() + '\x1b[0m reading: ' + names);
-  }
-
-  function renderSynthBubble(provider, content) {
-    if (!immersive || !content) return;
-    var termCols = process.stdout.columns || 120;
-    var contentWidth = Math.max(40, termCols - 6);
-    console.log('');
-    console.log('  \x1b[36m\u25cf SYNTHESIS\x1b[0m \x1b[90m(' + (provider || '') + '):\x1b[0m');
-    var lines = String(content).split('\n');
-    for (var li = 0; li < lines.length; li++) {
-      var subLines = wrapLine(lines[li], contentWidth);
-      for (var si = 0; si < subLines.length; si++) {
-        console.log('  \x1b[36m\u2502\x1b[0m ' + subLines[si]);
-      }
-    }
-    console.log('  \x1b[36m\u2514\u2500\u2500\u2500\x1b[0m');
-  }
-
-  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Zero-knowledge client orchestration mode');
-  console.log(colors.gray + 'Your API key NEVER leaves this machine. The server only provides orchestration intelligence.' + colors.reset);
-  console.log();
-
-  // 1. Initialize local LLM provider
-  var llm = new LLMProvider(legionConfig);
-  if (!llm.apiKey && llm.getAvailableProviders().length === 0) {
-    console.error(colors.red + 'ERROR: No API key configured.' + colors.reset);
-    console.error('Set your API key: node legion-x.mjs config:set llm-key YOUR_API_KEY');
-    process.exit(1);
-  }
-
-  // 1.5 Project scan (same as server mode)
-  var projectContext = null;
-  var detectedPath = options.scanDir || detectProjectPath(prompt);
-  if (detectedPath && !options.noScan) {
-    console.log(colors.cyan + '[PROJECT SCAN v2]' + colors.reset + ' Scanning ' + colors.bold + detectedPath + colors.reset + '...');
-    try {
-      var scanBudget = options.scanBudget ? parseInt(options.scanBudget, 10) : undefined;
-      var scanResult = await scanProject(detectedPath, scanBudget);
-      projectContext = scanResult.context;
-      console.log(colors.cyan + '[PROJECT SCAN v2]' + colors.reset +
-        ' Inventory: ' + colors.bold + scanResult.filesInInventory + colors.reset + ' files' +
-        ' | Deep read: ' + colors.bold + scanResult.filesRead + colors.reset + ' files' +
-        ' | ' + colors.yellow + scanResult.tokenEstimate.toLocaleString() + ' tokens' + colors.reset);
-    } catch (err) {
-      console.warn(colors.yellow + '[PROJECT SCAN] Warning: ' + err.message + colors.reset);
-    }
-  }
-
-  // 2. Build session config
-  var sessionConfig = {};
-  if (legionConfig.get('deliberationRounds')) sessionConfig.deliberationRounds = legionConfig.get('deliberationRounds');
-  if (legionConfig.get('deliberationConvergence')) sessionConfig.deliberationConvergence = legionConfig.get('deliberationConvergence');
-  if (legionConfig.get('minDeliberationRounds')) sessionConfig.minDeliberationRounds = legionConfig.get('minDeliberationRounds');
-
-  var userProvider = legionConfig.get('provider') || legionConfig.get('llmProvider') || 'anthropic';
-  var availableProviders = llm.getAvailableProviders();
-  var isMultiProvider = availableProviders.length > 1;
-  var providerMode = isMultiProvider ? 'multi' : 'single';
-  var providers = isMultiProvider ? availableProviders : [userProvider];
-
-  if (isMultiProvider) {
-    console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Multi-LLM mode: ' + colors.magenta + availableProviders.join(' + ') + colors.reset + ' (local execution)');
-  } else {
-    console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Provider: ' + colors.magenta + userProvider + colors.reset + ' (local execution)');
-  }
-
-  // 3. Create session WITHOUT API key
-  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Creating session (zero-knowledge)...');
-  var createResult;
-  try {
-    createResult = await client.createGethSession(
-      prompt,
-      Object.keys(sessionConfig).length > 0 ? sessionConfig : undefined,
-      providerMode,
-      providers,
-      null, // NO API key sent
-      projectContext,
-      null, // NO API keys map
-      'client', // orchestrationMode
-    );
-  } catch (err) {
-    if (err.message && (err.message.includes('429') || err.message.includes('rate limit'))) {
-      console.error(colors.yellow + '[RATE LIMITED]' + colors.reset + ' ' + colors.red + err.message + colors.reset);
-    } else {
-      console.error(colors.red + 'Failed to create session: ' + err.message + colors.reset);
-    }
-    process.exit(1);
-  }
-
-  var sessionId = createResult.sessionId;
-  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset + ' created');
-
-  // Helper: report progress to server (fire-and-forget)
-  async function reportProgress(updates, logEntry) {
-    try {
-      await client.updateClientProgress(sessionId, updates, logEntry);
-    } catch (_) {}
-  }
-
-  // Helper: extract token stats from LLM usage
-  function getTokenStats(llmProvider, agentTag) {
-    var perAgent = llmProvider.tokenUsage.perAgent[agentTag];
-    return perAgent ? { inputTokens: perAgent.input, outputTokens: perAgent.output } : { inputTokens: 0, outputTokens: 0 };
-  }
-
-  try {
-    // ========================================================================
-    // Step 1: DECOMPOSITION
-    // ========================================================================
-    console.log('\x1b[36m[DECOMPOSE]  \x1b[0mRequesting decomposition prompt from server...');
-    var decompInstr = await client.stepDecompose(sessionId);
-
-    // Weighted provider rotation for decomposition: round-robin based on session ID hash
-    // so each session starts with a different primary provider, distributing load evenly
-    var decompProviderHint = decompInstr.provider;
-    var decompProviderOrder;
-    if (decompProviderHint) {
-      decompProviderOrder = [decompProviderHint].concat(availableProviders.filter(function(p) { return p !== decompProviderHint; }));
-    } else {
-      // Rotate primary provider: hash sessionId to pick starting index
-      var hashSum = 0;
-      for (var hi = 0; hi < sessionId.length; hi++) hashSum += sessionId.charCodeAt(hi);
-      var startIdx = hashSum % availableProviders.length;
-      decompProviderOrder = [];
-      for (var ri = 0; ri < availableProviders.length; ri++) {
-        decompProviderOrder.push(availableProviders[(startIdx + ri) % availableProviders.length]);
-      }
-    }
-
-    var decompProvider = decompProviderOrder[0];
-    console.log('\x1b[36m[DECOMPOSE]  \x1b[0mExecuting decomposition locally via ' + colors.magenta + decompProvider + colors.reset + '...');
-    var usageBefore = llm.tokenUsage.calls;
-    var decompRaw;
-    for (var dpi = 0; dpi < decompProviderOrder.length; dpi++) {
-      var tryDecompProv = decompProviderOrder[dpi];
-      try {
-        decompRaw = await llm.chatWithProvider(tryDecompProv, decompInstr.systemPrompt, decompInstr.userMessage, {
-          maxTokens: decompInstr.maxTokens || 2048,
-          agentTag: '_decompose',
-        });
-        if (dpi > 0) {
-          console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + colors.yellow + 'Fallback: used ' + tryDecompProv + ' (primary ' + decompProvider + ' unavailable)' + colors.reset);
-        }
-        decompProvider = tryDecompProv;
-        break;
-      } catch (decompErr) {
-        var isDecompRetryable = decompErr.message && (
-          decompErr.message.includes('429') ||
-          decompErr.message.includes('529') ||
-          decompErr.message.includes('overloaded') ||
-          decompErr.message.includes('Overloaded') ||
-          decompErr.message.includes('RESOURCE_EXHAUSTED') ||
-          decompErr.message.includes('rate')
-        );
-        if (isDecompRetryable && dpi < decompProviderOrder.length - 1) {
-          console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + colors.yellow + tryDecompProv + ' unavailable (' +
-            (decompErr.message.includes('529') || decompErr.message.includes('overloaded') || decompErr.message.includes('Overloaded') ? 'overloaded' : 'rate-limited') +
-            '), trying ' + decompProviderOrder[dpi + 1] + '...' + colors.reset);
-          continue;
-        }
-        throw decompErr;
-      }
-    }
-
-    var decomposition = extractJSON(decompRaw);
-    if (!decomposition || !decomposition.tasks) {
-      console.error(colors.red + 'Failed to parse decomposition from LLM response' + colors.reset);
-      if (verbose) console.error(colors.gray + decompRaw.substring(0, 500) + colors.reset);
-      process.exit(1);
-    }
-
-    var decompStats = getTokenStats(llm, '_decompose');
-    console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + decomposition.tasks.length + ' sub-tasks identified');
-    for (var di = 0; di < decomposition.tasks.length; di++) {
-      var dt = decomposition.tasks[di];
-      console.log('  ' + (di + 1) + '. \x1b[34m[' + (dt.capability || 'general') + ']\x1b[0m ' + dt.description);
-    }
-
-    // Send decomposition result to server for ONNX routing
-    console.log('\x1b[36m[ROUTING]    \x1b[0mServer performing ONNX neural routing...');
-    var decompResult = await client.stepDecomposeResult(sessionId, decomposition, decompStats);
-
-    var assignments = decompResult.assignments || [];
-    console.log('\x1b[36m[ROUTING]    \x1b[0m' + assignments.length + ' agents deployed');
-    for (var ai = 0; ai < assignments.length; ai++) {
-      var ag = assignments[ai];
-      console.log('  \x1b[1m' + ag.agentName + '\x1b[0m (\x1b[35m' + ag.provider + '/' + ag.model + '\x1b[0m) \x1b[90m\u2192 ' + ag.subTaskId + '\x1b[0m');
-    }
-
-    await reportProgress(
-      { phase: 'routing', agentsTotal: assignments.length },
-      JSON.stringify({ type: 'agents_assigned', agents: assignments.map(function(a) { return { name: a.agentName, provider: a.provider, model: a.model, subTaskId: a.subTaskId }; }) })
-    );
-
-    // ========================================================================
-    // Step 2: DELIBERATION ROUNDS
-    // ========================================================================
-    var round = 1;
-    var maxRounds = (sessionConfig.deliberationRounds || decompResult.config?.deliberationRounds) || 3;
-    var roundDecision = null;
-
-    while (round <= maxRounds + 1) {
-      console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mRequesting agent prompts from server...');
-
-      // Get round instructions from server
-      var roundInstr;
-      try {
-        roundInstr = await client.stepRoundStart(sessionId, round);
-      } catch (err) {
-        console.error(colors.red + 'Failed to get round instructions: ' + err.message + colors.reset);
-        break;
-      }
-
-      var agentInstructions = roundInstr.agents || [];
-      console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mExecuting ' + agentInstructions.length + ' agents locally...');
-
-      // Immersive: show cross-reading (who's reading whom) for round 2+
-      if (immersive && round > 1) {
-        var allAgentNames = agentInstructions.map(function(a) { return a.agentName; });
-        for (var cri = 0; cri < agentInstructions.length; cri++) {
-          var otherNames = allAgentNames.filter(function(n) { return n !== agentInstructions[cri].agentName; });
-          renderCrossReading(agentInstructions[cri].agentName, otherNames);
-        }
-        console.log();
-      }
-
-      await reportProgress(
-        { phase: 'round_' + round, agentsTotal: agentInstructions.length, agentsCompleted: 0 },
-        'Round ' + round + ': executing ' + agentInstructions.length + ' agents'
-      );
-
-      // Execute agents locally — provider-grouped parallel execution
-      // Each provider runs its agents sequentially (avoids RPM rate limits)
-      // but different providers run in parallel (max throughput)
-      var proposals = [];
-      var agentsCompleted = 0;
-
-      async function executeSingleAgent(agentInstr) {
-          var agentStart = Date.now();
-          var agentTag = agentInstr.agentName;
-          try {
-            var primaryProvider = agentInstr.provider || userProvider;
-            // Build provider fallback order: primary first, then remaining available providers
-            var agentProviderOrder = [primaryProvider].concat(
-              availableProviders.filter(function(p) { return p !== primaryProvider; })
-            );
-            var agentProvider = primaryProvider;
-            var agentResponse;
-            for (var api = 0; api < agentProviderOrder.length; api++) {
-              var tryAgentProv = agentProviderOrder[api];
-              try {
-                agentResponse = await llm.chatWithProvider(tryAgentProv, agentInstr.systemPrompt, agentInstr.userMessage, {
-                  maxTokens: agentInstr.maxTokens || 4096,
-                  agentTag: agentTag,
-                });
-                if (api > 0) {
-                  console.log('    \x1b[33m\u21B3 ' + agentTag + ' fallback: used ' + tryAgentProv + ' (' + primaryProvider + ' unavailable)\x1b[0m');
-                }
-                agentProvider = tryAgentProv;
-                break;
-              } catch (agentProvErr) {
-                var isAgentRetryable = agentProvErr.message && (
-                  agentProvErr.message.includes('429') ||
-                  agentProvErr.message.includes('529') ||
-                  agentProvErr.message.includes('overloaded') ||
-                  agentProvErr.message.includes('Overloaded') ||
-                  agentProvErr.message.includes('RESOURCE_EXHAUSTED') ||
-                  agentProvErr.message.includes('rate')
-                );
-                if (isAgentRetryable && api < agentProviderOrder.length - 1) {
-                  continue;
-                }
-                throw agentProvErr;
-              }
-            }
-
-            var agentDuration = Date.now() - agentStart;
-            var stats = getTokenStats(llm, agentTag);
-
-            // Parse structured output (confidence, risk_flags, reasoning_summary)
-            var parsedOutput = parseStructuredOutput(agentResponse);
-
-            // Ensure content is always a string (never an object from JSON parsing)
-            var answerContent = typeof parsedOutput.answer === 'string'
-              ? parsedOutput.answer
-              : JSON.stringify(parsedOutput.answer);
-
-            var proposal = {
-              agentName: agentInstr.agentName,
-              subTaskId: agentInstr.subTaskId || '',
-              content: answerContent,
-              rawContent: agentResponse,
-              confidence: parsedOutput.confidence,
-              riskFlags: parsedOutput.riskFlags,
-              reasoningSummary: typeof parsedOutput.reasoningSummary === 'string' ? parsedOutput.reasoningSummary : '',
-              inputTokens: stats.inputTokens,
-              outputTokens: stats.outputTokens,
-              durationMs: agentDuration,
-              provider: agentProvider,
-              model: agentInstr.model || 'unknown',
-            };
-
-            agentsCompleted++;
-            var confPct = Math.round((proposal.confidence || 0.7) * 100);
-            var confColor = confPct >= 80 ? '\x1b[32m' : confPct >= 50 ? '\x1b[33m' : '\x1b[31m';
-            var durSec = Math.round(agentDuration / 1000);
-            console.log('  \x1b[1m' + agentInstr.agentName + '\x1b[0m ' + confColor + confPct + '% conf\x1b[0m (' + durSec + 's, ' + agentProvider + ')');
-            if (!immersive && parsedOutput.reasoningSummary) {
-              console.log('    \x1b[90m\u2514 ' + parsedOutput.reasoningSummary + '\x1b[0m');
-            }
-            // Immersive: full speech bubble with agent's complete response
-            renderAgentBubble(agentInstr.agentName, agentProvider, answerContent, round);
-
-            await reportProgress(
-              { agentsCompleted: agentsCompleted, currentAgent: agentInstr.agentName },
-              JSON.stringify({ type: 'agent_complete', agentName: agentInstr.agentName, confidence: proposal.confidence, durationMs: agentDuration, provider: agentProvider, riskFlags: proposal.riskFlags, reasoningSummary: proposal.reasoningSummary })
-            );
-
-            return proposal;
-          } catch (err) {
-            agentsCompleted++;
-            console.error('  \x1b[31m' + agentInstr.agentName + ': ' + err.message + '\x1b[0m');
-            return {
-              agentName: agentInstr.agentName,
-              subTaskId: agentInstr.subTaskId || '',
-              content: 'Error: ' + err.message,
-              rawContent: 'Error: ' + err.message,
-              confidence: 0,
-              riskFlags: ['execution_error'],
-              reasoningSummary: 'Agent failed: ' + err.message,
-              inputTokens: 0,
-              outputTokens: 0,
-              durationMs: Date.now() - agentStart,
-              provider: agentInstr.provider || userProvider,
-              model: agentInstr.model || 'unknown',
-            };
-          }
-      }
-
-      // Group agents by provider: each provider runs sequentially (RPM safety),
-      // but providers run in parallel (max throughput, no shared state conflict)
-      var providerGroups = {};
-      for (var gi = 0; gi < agentInstructions.length; gi++) {
-        var prov = agentInstructions[gi].provider || userProvider;
-        if (!providerGroups[prov]) providerGroups[prov] = [];
-        providerGroups[prov].push(agentInstructions[gi]);
-      }
-
-      var providerPromises = Object.keys(providerGroups).map(function(provKey) {
-        return (async function() {
-          var provAgents = providerGroups[provKey];
-          var provResults = [];
-          for (var si = 0; si < provAgents.length; si++) {
-            var result = await executeSingleAgent(provAgents[si]);
-            provResults.push(result);
-          }
-          return provResults;
-        })();
-      });
-
-      var providerResults = await Promise.all(providerPromises);
-      for (var pri = 0; pri < providerResults.length; pri++) {
-        proposals = proposals.concat(providerResults[pri]);
-      }
-
-      // Send proposals to server for convergence measurement
-      console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mServer measuring convergence...');
-      var roundResult;
-      try {
-        roundResult = await client.stepRoundResult(sessionId, round, proposals);
-      } catch (err) {
-        console.error(colors.red + 'Failed to submit round result: ' + err.message + colors.reset);
-        break;
-      }
-
-      // Display convergence
-      var convPct = Math.round((roundResult.convergence || 0) * 100);
-      var convBarWidth = 16;
-      var convFilled = Math.round(convPct / 100 * convBarWidth);
-      var convBar = '\u2588'.repeat(convFilled) + '\u2591'.repeat(convBarWidth - convFilled);
-      var divStr = '';
-      if (roundResult.divergentPairs && roundResult.divergentPairs.length > 0) {
-        var pairNames = roundResult.divergentPairs.map(function(p) { return p[0] + ' vs ' + p[1]; }).join(', ');
-        divStr = '\n  \x1b[33m\u2694 Divergent: ' + pairNames + '\x1b[0m';
-      } else {
-        divStr = '\n  \x1b[32m\u2713 All agents aligned\x1b[0m';
-      }
-      console.log('\x1b[33m[ROUND ' + round + ']\x1b[0m    Convergence: ' + convBar + ' ' + convPct + '% (' + (roundResult.method || 'jaccard') + ')' + divStr);
-
-      await reportProgress(
-        { phase: 'round_' + round },
-        JSON.stringify({ type: 'convergence_update', round: round, convergence: roundResult.convergence, method: roundResult.method, divergentPairs: roundResult.divergentPairs })
-      );
-
-      // Check decision — decision can be object {mode, reason} or string
-      roundDecision = roundResult.decision;
-      var decisionMode = typeof roundDecision === 'object' && roundDecision !== null
-        ? (roundDecision.mode || 'standard')
-        : (typeof roundDecision === 'string' ? roundDecision : 'standard');
-      var decisionReason = typeof roundDecision === 'object' && roundDecision !== null
-        ? (roundDecision.reason || '')
-        : '';
-
-      if (roundResult.nextStatus !== 'awaiting_round') {
-        // Decision: stop deliberation
-        if (decisionMode) {
-          var decisionIcon = decisionMode === 'skip_consensus' ? '\x1b[32m\u2713 CONSENSUS REACHED\x1b[0m' :
-            '\u27f3 ' + String(decisionMode).toUpperCase();
-          console.log('\n' + decisionIcon + (decisionReason ? ' \x1b[90m(' + decisionReason + ')\x1b[0m' : ''));
-        }
-        break;
-      }
-
-      round = roundResult.nextRound || (round + 1);
-
-      // Show round decision for continuation
-      if (decisionMode) {
-        console.log('\n\u27f3 Round ' + round + ': \x1b[1m' + String(decisionMode).toUpperCase() + '\x1b[0m' + (decisionReason ? ' \x1b[90m(' + decisionReason + ')\x1b[0m' : ''));
-      }
-    }
-
-    // ========================================================================
-    // Step 3: SYNTHESIS
-    // ========================================================================
-    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mRequesting synthesis prompt from server...');
-    var synthInstr = await client.stepSynthesize(sessionId);
-
-    var synthProvider = synthInstr.provider || userProvider;
-    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mGenerating synthesis locally via ' + colors.magenta + synthProvider + colors.reset + '...');
-    await reportProgress({ phase: 'synthesizing' }, 'Generating synthesis via ' + synthProvider + '...');
-
-    // Synthesis with provider fallback: if primary provider is rate-limited, try others
-    var synthRaw;
-    var synthProviderOrder = [synthProvider].concat(availableProviders.filter(function(p) { return p !== synthProvider; }));
-    for (var spi = 0; spi < synthProviderOrder.length; spi++) {
-      var tryProv = synthProviderOrder[spi];
-      try {
-        synthRaw = await llm.chatWithProvider(tryProv, synthInstr.systemPrompt, synthInstr.userMessage, {
-          maxTokens: synthInstr.maxTokens || 16384,
-          agentTag: '_synthesis',
-        });
-        if (tryProv !== synthProvider) {
-          console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + 'Fallback: used ' + tryProv + ' (primary ' + synthProvider + ' rate-limited)' + colors.reset);
-        }
-        synthProvider = tryProv;
-        break;
-      } catch (synthErr) {
-        var isSynthRetryable = synthErr.message && (synthErr.message.includes('429') || synthErr.message.includes('529') || synthErr.message.includes('overloaded') || synthErr.message.includes('Overloaded') || synthErr.message.includes('RESOURCE_EXHAUSTED') || synthErr.message.includes('rate'));
-        if (isSynthRetryable && spi < synthProviderOrder.length - 1) {
-          console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + tryProv + ' unavailable, trying ' + synthProviderOrder[spi + 1] + '...' + colors.reset);
-          continue;
-        }
-        throw synthErr;
-      }
-    }
-
-    var synthStats = getTokenStats(llm, '_synthesis');
-    await client.stepSynthesizeResult(sessionId, synthRaw, synthStats);
-    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mSynthesis complete (' + synthRaw.length + ' chars)');
-    renderSynthBubble(synthProvider, synthRaw);
-
-    // ========================================================================
-    // Step 4: VALIDATION
-    // ========================================================================
-    console.log('\x1b[35m[VALIDATION] \x1b[0mRequesting validation prompts from server...');
-    var valInstr = await client.stepValidate(sessionId);
-
-    var validators = valInstr.validators || [];
-    console.log('\x1b[35m[VALIDATION] \x1b[0mExecuting ' + validators.length + ' validator(s) locally...');
-    await reportProgress({ phase: 'evaluating', agentsTotal: validators.length, agentsCompleted: 0 }, 'Validating synthesis...');
-
-    var validationScores = [];
-    for (var vi = 0; vi < validators.length; vi++) {
-      var val = validators[vi];
-      var valProvider = val.provider || userProvider;
-      try {
-        // Validation with provider fallback on rate limit
-        var valRaw;
-        var valProvOrder = [valProvider].concat(availableProviders.filter(function(p) { return p !== valProvider; }));
-        for (var vpi = 0; vpi < valProvOrder.length; vpi++) {
-          try {
-            valRaw = await llm.chatWithProvider(valProvOrder[vpi], val.systemPrompt, val.userMessage, {
-              maxTokens: val.maxTokens || 2048,
-              agentTag: '_validator_' + vi,
-            });
-            if (vpi > 0) {
-              console.log('  \x1b[33mValidator ' + (vi + 1) + ': fallback ' + valProvOrder[vpi] + ' (primary ' + valProvider + ' rate-limited)\x1b[0m');
-            }
-            valProvider = valProvOrder[vpi];
-            break;
-          } catch (valRetryErr) {
-            var isValRL = valRetryErr.message && (valRetryErr.message.includes('429') || valRetryErr.message.includes('529') || valRetryErr.message.includes('overloaded') || valRetryErr.message.includes('Overloaded') || valRetryErr.message.includes('RESOURCE_EXHAUSTED') || valRetryErr.message.includes('rate'));
-            if (isValRL && vpi < valProvOrder.length - 1) continue;
-            throw valRetryErr;
-          }
-        }
-
-        // Parse validation response: expect JSON with score + reasoning
-        var valParsed = extractJSON(valRaw);
-        var score = 0.7;
-        var reasoning = valRaw;
-
-        if (valParsed && typeof valParsed.score === 'number') {
-          score = Math.max(0, Math.min(1, valParsed.score));
-          reasoning = valParsed.reasoning || valParsed.explanation || '';
-        } else if (valParsed && typeof valParsed.quality === 'number') {
-          score = Math.max(0, Math.min(1, valParsed.quality / 100));
-          reasoning = valParsed.reasoning || '';
-        }
-
-        var valStats = getTokenStats(llm, '_validator_' + vi);
-        validationScores.push({
-          validatorId: val.id || ('validator_' + vi),
-          provider: valProvider,
-          model: val.model || llm.model || 'default',
-          score: score,
-          reasoning: reasoning,
-          inputTokens: valStats.inputTokens,
-          outputTokens: valStats.outputTokens,
-        });
-
-        var scorePct = Math.round(score * 100);
-        var scoreColor = scorePct >= 80 ? '\x1b[32m' : scorePct >= 50 ? '\x1b[33m' : '\x1b[31m';
-        console.log('  Validator ' + (vi + 1) + ': ' + scoreColor + scorePct + '%\x1b[0m (' + valProvider + ')');
-        if (immersive && reasoning) {
-          console.log('    \x1b[90m\u2514 ' + reasoning + '\x1b[0m');
-        }
-      } catch (err) {
-        console.error('  \x1b[31mValidator ' + (vi + 1) + ' failed: ' + err.message + '\x1b[0m');
-        validationScores.push({
-          validatorId: val.id || ('validator_' + vi),
-          provider: valProvider,
-          model: val.model || llm.model || 'default',
-          score: 0.5,
-          reasoning: 'Validation failed: ' + err.message,
-          inputTokens: 0,
-          outputTokens: 0,
-        });
-      }
-    }
-
-    // Evaluate best individual proposal for real CI Gain
-    var bestProposalScore;
-    if (valInstr.bestProposalValidator) {
-      try {
-        var bpVal = valInstr.bestProposalValidator;
-        var bpProvider = bpVal.provider || userProvider;
-        var bpProvOrder = [bpProvider].concat(availableProviders.filter(function(p) { return p !== bpProvider; }));
-        var bpRaw;
-        for (var bpi = 0; bpi < bpProvOrder.length; bpi++) {
-          try {
-            bpRaw = await llm.chatWithProvider(bpProvOrder[bpi], bpVal.systemPrompt, bpVal.userMessage, {
-              maxTokens: bpVal.maxTokens || 512,
-              agentTag: '_baseline_eval',
-            });
-            bpProvider = bpProvOrder[bpi];
-            break;
-          } catch (bpRetryErr) {
-            var isBpRL = bpRetryErr.message && (bpRetryErr.message.includes('429') || bpRetryErr.message.includes('529') || bpRetryErr.message.includes('overloaded') || bpRetryErr.message.includes('Overloaded') || bpRetryErr.message.includes('RESOURCE_EXHAUSTED') || bpRetryErr.message.includes('rate'));
-            if (isBpRL && bpi < bpProvOrder.length - 1) continue;
-            throw bpRetryErr;
-          }
-        }
-        var bpParsed = extractJSON(bpRaw);
-        if (bpParsed && typeof bpParsed.score === 'number') {
-          bestProposalScore = Math.max(0, Math.min(1, bpParsed.score));
-          console.log('  Baseline (best individual): ' + Math.round(bestProposalScore * 100) + '%');
-        }
-      } catch (bpErr) {
-        if (immersive) console.log('  \x1b[90mBaseline eval failed: ' + bpErr.message + '\x1b[0m');
-      }
-    }
-
-    // Send validation results to server for final scoring
-    console.log('\x1b[35m[VALIDATION] \x1b[0mServer computing final quality...');
-    var finalResult = await client.stepValidateResult(sessionId, validationScores, bestProposalScore);
-
-    // ========================================================================
-    // Display Results
-    // ========================================================================
-    var totalMs = Date.now() - totalStart;
-    var qualityPct = ((finalResult.qualityScore || 0) * 100).toFixed(0);
-    var ciGain = finalResult.ciGain !== null && finalResult.ciGain !== undefined ? (finalResult.ciGain >= 0 ? '+' : '') + finalResult.ciGain.toFixed(0) : 'N/A';
-    var convergencePct = finalResult.finalConvergence !== null && finalResult.finalConvergence !== undefined ? ((finalResult.finalConvergence || 0) * 100).toFixed(0) : 'N/A';
-
-    console.log('\x1b[32m[COMPLETE]   \x1b[0mQuality: ' + qualityPct + '% | CI Gain: ' + ciGain + '% | Duration: ' + formatElapsed(totalMs));
-    console.log();
-    console.log(colors.bold + colors.green + '=== LEGION X CONSENSUS RESULT (Zero-Knowledge) ===' + colors.reset);
-    console.log();
-    console.log(synthRaw || '[No synthesis]');
-    console.log();
-
-    // Stats
-    console.log(colors.bold + '--- Stats ---' + colors.reset);
-    console.log('Quality: ' + colors.cyan + qualityPct + '%' + colors.reset +
-      ' | CI Gain: ' + colors.cyan + ciGain + '%' + colors.reset +
-      ' | Convergence: ' + colors.cyan + convergencePct + '%' + colors.reset +
-      ' | Rounds: ' + colors.cyan + round + colors.reset);
-    console.log('Providers: ' + colors.magenta + availableProviders.join(' + ') + colors.reset + ' (local execution, keys never sent to server)');
-
-    var usage = llm.getUsage();
-    console.log('Tokens: ' + colors.gray + usage.totalInput.toLocaleString() + ' input + ' + usage.totalOutput.toLocaleString() + ' output = ' + usage.totalTokens.toLocaleString() + ' total' + colors.reset);
-    if (usage.cacheHitRate > 0) {
-      console.log('Cache: ' + colors.green + (usage.cacheHitRate * 100).toFixed(1) + '% hit rate' + colors.reset);
-    }
-
-    console.log('Duration: ' + colors.gray + formatDuration(totalMs) + colors.reset);
-
-    // Stats legend
-    console.log();
-    console.log(colors.bold + '--- What do these stats mean? ---' + colors.reset);
-    console.log(colors.gray + '  Quality     ' + colors.reset + 'LLM-evaluated score (0-100%). Single-provider self-grading.');
-    console.log(colors.gray + '  CI Gain     ' + colors.reset + 'Collective Intelligence improvement vs best individual agent proposal.');
-    console.log(colors.gray + '  Convergence ' + colors.reset + '30-60% is healthy — complementary perspectives, not groupthink.');
-    console.log(colors.gray + '  Zero-Knowledge ' + colors.reset + 'Your API key was used locally. The server orchestrated but never saw it.');
-
-    // Save session transcript
-    try {
-      var sessionsDir = path.join(process.env.HOME || '.', '.legion', 'sessions');
-      if (!fs.existsSync(sessionsDir)) {
-        fs.mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
-      }
-
-      var now = new Date();
-      var datePrefix = now.toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
-      var shortId = sessionId.substring(0, 8);
-      var baseName = datePrefix + '_' + shortId;
-
-      // JSON transcript
-      var jsonTranscript = {
-        sessionId: sessionId,
-        planType: 'free',
-        orchestrationMode: 'client',
-        prompt: prompt,
-        status: 'completed',
-        provider: userProvider,
-        qualityScore: finalResult.qualityScore || 0,
-        ciGain: finalResult.ciGain || 0,
-        finalConvergence: finalResult.finalConvergence || 0,
-        deliberationRounds: round,
-        synthesis: synthRaw,
-        tokenUsage: usage,
-        durationMs: totalMs,
-        completedAt: now.toISOString(),
-      };
-
-      var jsonPath = path.join(sessionsDir, baseName + '.json');
-      fs.writeFileSync(jsonPath, JSON.stringify(jsonTranscript, null, 2), { mode: 0o600 });
-
-      // Markdown transcript
-      var md = '# Legion X Session (Zero-Knowledge) — ' + now.toISOString().slice(0, 19).replace('T', ' ') + ' UTC\n';
-      md += '## Session ID: ' + sessionId + '\n\n';
-      md += '### Prompt\n> ' + prompt.replace(/\n/g, '\n> ') + '\n\n';
-      md += '### Configuration\n';
-      md += '- Plan: Free (zero-knowledge, client orchestration)\n';
-      md += '- Provider: ' + userProvider + ' (local execution)\n';
-      md += '- Deliberation Rounds: ' + round + '\n\n';
-      md += '---\n\n';
-      md += '## Final Synthesis\n\n';
-      md += (synthRaw || '[No synthesis]') + '\n\n';
-      md += '---\n\n';
-      md += '## Quality Validation\n';
-      md += '- Quality Score: ' + qualityPct + '%\n';
-      md += '- CI Gain: ' + ciGain + '%\n';
-      md += '- Convergence: ' + convergencePct + '%\n\n';
-      md += '## Session Metrics\n';
-      md += '- Duration: ' + formatDuration(totalMs) + '\n';
-      md += '- Total Input Tokens: ' + usage.totalInput.toLocaleString() + '\n';
-      md += '- Total Output Tokens: ' + usage.totalOutput.toLocaleString() + '\n';
-      md += '- Cache Hit Rate: ' + (usage.cacheHitRate * 100).toFixed(1) + '%\n';
-
-      var mdPath = path.join(sessionsDir, baseName + '.md');
-      fs.writeFileSync(mdPath, md, { mode: 0o600 });
-
-      console.log();
-      console.log(colors.green + 'Session transcript saved to ' + colors.reset + colors.cyan + mdPath + colors.reset);
-      console.log(colors.gray + 'JSON data: ' + jsonPath + colors.reset);
-    } catch (transcriptErr) {
-      if (verbose) {
-        console.log(colors.yellow + 'Warning: Failed to save transcript: ' + transcriptErr.message + colors.reset);
-      }
-    }
-
-  } catch (err) {
-    console.error(colors.red + 'Client orchestration failed: ' + err.message + colors.reset);
-    if (verbose && err.stack) {
-      console.error(colors.gray + err.stack + colors.reset);
-    }
-    process.exit(1);
-  }
-}
-
-/**
- * parseStructuredOutput — Extract structured agent output
- *
- * Agents are instructed to return JSON with:
- * { answer, confidence, reasoning_summary, risk_flags }
- *
- * Falls back gracefully to raw text if not structured.
- */
-function parseStructuredOutput(rawResponse) {
-  var result = {
-    answer: rawResponse,
-    confidence: 0.7,
-    riskFlags: [],
-    reasoningSummary: '',
-  };
-
-  // Try to extract structured JSON
-  var parsed = extractJSON(rawResponse);
-  if (parsed && typeof parsed === 'object') {
-    if (parsed.answer) {
-      result.answer = _extractAnswerText(parsed.answer);
-      result.confidence = typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.7;
-      result.riskFlags = Array.isArray(parsed.risk_flags) ? parsed.risk_flags : (Array.isArray(parsed.riskFlags) ? parsed.riskFlags : []);
-      result.reasoningSummary = parsed.reasoning_summary || parsed.reasoningSummary || '';
-    }
-  }
-
-  // If answer still looks like raw JSON wrapper, strip it
-  // Gemini sometimes returns ```json\n{"answer":"..."}\n``` and extractJSON fails on very long content
-  if (result.answer === rawResponse && rawResponse.includes('"answer"')) {
-    // Try extracting answer field directly with regex (handles cases where JSON.parse fails on large content)
-    var answerMatch = rawResponse.match(/"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/s);
-    if (answerMatch) {
-      try {
-        // Unescape the JSON string value
-        result.answer = JSON.parse('"' + answerMatch[1] + '"');
-      } catch (_) {
-        // Fallback: use raw match with basic unescaping
-        result.answer = answerMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-      }
-      // Try extracting confidence too
-      var confMatch = rawResponse.match(/"confidence"\s*:\s*([\d.]+)/);
-      if (confMatch) result.confidence = Math.max(0, Math.min(1, parseFloat(confMatch[1])));
-      var summMatch = rawResponse.match(/"reasoning_summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-      if (summMatch) {
-        try { result.reasoningSummary = JSON.parse('"' + summMatch[1] + '"'); } catch (_) { result.reasoningSummary = summMatch[1]; }
-      }
-      var flagsMatch = rawResponse.match(/"risk_flags"\s*:\s*\[(.*?)\]/);
-      if (flagsMatch) {
-        try { result.riskFlags = JSON.parse('[' + flagsMatch[1] + ']'); } catch (_) {}
-      }
-    }
-  }
-
-  // Final safety: if answer still looks like a JSON object string, try to extract text from it
-  if (result.answer && typeof result.answer === 'string') {
-    var trimmed = result.answer.trim();
-    if (trimmed.charAt(0) === '{' && trimmed.charAt(trimmed.length - 1) === '}') {
-      var innerParsed = null;
-      try { innerParsed = JSON.parse(trimmed); } catch (_) {}
-      if (innerParsed && typeof innerParsed === 'object') {
-        result.answer = _extractAnswerText(innerParsed);
-      }
-    }
-  }
-
-  // Auto-generate reasoning summary if missing (first sentence, capped at 120 chars)
-  if (!result.reasoningSummary && result.answer) {
-    var firstSentence = result.answer.split(/[.!?\n]/)[0] || '';
-    result.reasoningSummary = firstSentence.length > 120 ? firstSentence.substring(0, 117) + '...' : firstSentence;
-  }
-
-  return result;
-}
-
-/**
- * Extract readable text from an answer that may be a string, object, or nested structure.
- * Agents sometimes return answer as an object with sections instead of a flat string.
- */
-function _extractAnswerText(answer) {
-  if (typeof answer === 'string') return answer;
-  if (answer === null || answer === undefined) return '';
-  if (Array.isArray(answer)) {
-    // Array of strings or objects — join them
-    return answer.map(function(item) {
-      return typeof item === 'string' ? item : (item && item.content) ? item.content : (item && item.text) ? item.text : JSON.stringify(item);
-    }).join('\n\n');
-  }
-  if (typeof answer === 'object') {
-    // Object with named sections — common pattern: { "section1": "text", "section2": "text" }
-    // or { "answer": "text" } (double-wrapped)
-    if (answer.answer && typeof answer.answer === 'string') return answer.answer;
-    if (answer.content && typeof answer.content === 'string') return answer.content;
-    if (answer.text && typeof answer.text === 'string') return answer.text;
-    // Flatten all string values into readable sections
-    var sections = [];
-    var keys = Object.keys(answer);
-    for (var ki = 0; ki < keys.length; ki++) {
-      var key = keys[ki];
-      var val = answer[key];
-      if (typeof val === 'string' && val.length > 0) {
-        // Format key as a header: "governance_framework" → "Governance Framework"
-        var header = key.replace(/[_-]/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
-        sections.push('## ' + header + '\n' + val);
-      } else if (typeof val === 'object' && val !== null) {
-        // Recurse one level for nested objects
-        var header2 = key.replace(/[_-]/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
-        sections.push('## ' + header2 + '\n' + _extractAnswerText(val));
-      }
-    }
-    if (sections.length > 0) return sections.join('\n\n');
-    // Last resort: stringify
-    return JSON.stringify(answer, null, 2);
-  }
-  return String(answer);
-}
-
-function formatElapsed(ms) {
-  var totalSec = Math.floor(ms / 1000);
-  var min = Math.floor(totalSec / 60);
-  var sec = totalSec % 60;
-  return min + 'm ' + (sec < 10 ? '0' : '') + sec + 's';
-}
-
-// =============================================================================
-// Server-Side Geth Consensus — LegionX server-only execution
-// =============================================================================
-
 async function runServerConsensus(prompt, options, legionConfig, client) {
   var verbose = legionConfig.get('verbose') || options.verbose;
   var immersive = options.immersive || false;
   var totalStart = Date.now();
 
-  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Delegating to server-side Geth Consensus...');
-  console.log(colors.gray + 'Your API key is used for server-side orchestration. The server never stores it.' + colors.reset);
+  console.log(colors.cyan + '[SERVER-CONSENSUS]' + colors.reset + ' Delegating to server-side Geth Consensus...');
+  console.log(colors.gray + 'The server uses its own LLM keys (Anthropic/OpenAI/Gemini) for multi-LLM dialectic.' + colors.reset);
   console.log();
 
   // 1. Check server availability
@@ -7551,7 +6794,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
       process.exit(1);
     }
     if (verbose) {
-      console.log(colors.gray + '[LEGION X] Available providers: ' +
+      console.log(colors.gray + '[SERVER-CONSENSUS] Providers: ' +
         providers.providers.map(function(p) { return p.name + ' (' + p.model + ')'; }).join(', ') +
         colors.reset);
     }
@@ -7581,7 +6824,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     }
   }
 
-  // 2. Build session config
+  // 2. Create session
   var sessionConfig = {};
   if (legionConfig.get('deliberationRounds')) {
     sessionConfig.deliberationRounds = legionConfig.get('deliberationRounds');
@@ -7593,68 +6836,13 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     sessionConfig.minDeliberationRounds = legionConfig.get('minDeliberationRounds');
   }
 
-  // Provider selection: single or multi-LLM mode for Legion X
-  var userProvider = legionConfig.get('provider') || legionConfig.get('llmProvider') || 'anthropic';
-  var validProviders = ['anthropic', 'openai', 'gemini', 'deepseek', 'grok', 'mistral', 'cohere'];
-  if (!validProviders.includes(userProvider)) {
-    console.error(colors.red + 'Invalid provider: ' + userProvider + colors.reset);
-    console.error(colors.gray + 'Valid options: ' + validProviders.join(', ') + colors.reset);
-    process.exit(1);
-  }
+  // Provider selection
+  var providerMode = options._providerMode || 'multi';
+  var selectedProviders = options._providers || ['anthropic', 'openai', 'gemini'];
+  console.log(colors.cyan + '[LEGION X1]' + colors.reset + ' Provider mode: ' + colors.magenta + providerMode + colors.reset +
+    ' | Providers: ' + selectedProviders.map(function(p) { return colors.magenta + p + colors.reset; }).join(', '));
+  console.log(colors.cyan + '[LEGION X1]' + colors.reset + ' Creating session...');
 
-  // Multi-LLM: check for additional provider keys in config
-  var userApiKey = legionConfig.get('llmApiKey') || legionConfig.get('apiKey') || '';
-  var userApiKeys = {};
-  var selectedProviders = [userProvider];
-  var providerMode = 'single';
-
-  // Collect all configured provider keys
-  var openaiKey = legionConfig.get('openaiApiKey') || '';
-  var geminiKey = legionConfig.get('geminiApiKey') || '';
-  var anthropicKey = legionConfig.get('anthropicApiKey') || '';
-
-  // Build multi-LLM key map
-  if (userProvider === 'anthropic' && userApiKey) userApiKeys['anthropic'] = userApiKey;
-  if (userProvider === 'openai' && userApiKey) userApiKeys['openai'] = userApiKey;
-  if (userProvider === 'gemini' && userApiKey) userApiKeys['gemini'] = userApiKey;
-  if (anthropicKey && !userApiKeys['anthropic']) userApiKeys['anthropic'] = anthropicKey;
-  if (openaiKey && !userApiKeys['openai']) userApiKeys['openai'] = openaiKey;
-  if (geminiKey && !userApiKeys['gemini']) userApiKeys['gemini'] = geminiKey;
-
-  // OpenAI-compatible providers (DeepSeek, Grok, Mistral, Cohere)
-  var compatProviderNames = Object.keys(OPENAI_COMPAT_PROVIDERS);
-  for (var cpi = 0; cpi < compatProviderNames.length; cpi++) {
-    var cpName = compatProviderNames[cpi];
-    var cpConf = OPENAI_COMPAT_PROVIDERS[cpName];
-    var cpKey = legionConfig.get(cpConf.configKey) || '';
-    if (userProvider === cpName && userApiKey && !cpKey) cpKey = userApiKey;
-    if (cpKey && !userApiKeys[cpName]) userApiKeys[cpName] = cpKey;
-  }
-
-  var configuredProviders = Object.keys(userApiKeys);
-  if (configuredProviders.length > 1) {
-    providerMode = 'multi';
-    selectedProviders = configuredProviders;
-    console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Multi-LLM mode: ' + colors.magenta + configuredProviders.join(' + ') + colors.reset);
-  } else if (configuredProviders.length === 1) {
-    selectedProviders = configuredProviders;
-    console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Provider: ' + colors.magenta + configuredProviders[0] + colors.reset);
-  }
-
-  if (!userApiKey && configuredProviders.length === 0) {
-    console.log(colors.red + 'ERROR: No API key configured.' + colors.reset);
-    console.log('Set your API key: node legion-x.mjs config:set llm-key YOUR_API_KEY');
-    console.log('For multi-LLM: set keys for anthropic, openai, gemini, deepseek, grok, mistral, cohere');
-    console.log('Legion X uses YOUR OWN API key(s). Keys NEVER leave your machine.');
-    process.exit(1);
-  }
-
-  // Ensure primary key is set (backward compat)
-  if (!userApiKey) userApiKey = Object.values(userApiKeys)[0];
-
-  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Creating session...');
-
-  // 3. Create session (with user API key(s) for Legion X free tier)
   var createResult;
   try {
     createResult = await client.createGethSession(
@@ -7662,14 +6850,12 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
       Object.keys(sessionConfig).length > 0 ? sessionConfig : undefined,
       providerMode,
       selectedProviders,
-      userApiKey,
       projectContext,
-      Object.keys(userApiKeys).length > 1 ? userApiKeys : undefined,
     );
   } catch (err) {
     if (err.message && (err.message.includes('429') || err.message.includes('E4290') || err.message.toLowerCase().includes('rate limit'))) {
       console.error(colors.yellow + '[RATE LIMITED]' + colors.reset + ' ' + colors.red + err.message + colors.reset);
-      console.error(colors.dim + 'Tip: Authenticated agents get higher limits. Register with PIF first.' + colors.reset);
+      console.error(colors.dim + 'Tip: Authenticated agents get higher limits. Use --api-key to authenticate.' + colors.reset);
     } else {
       console.error(colors.red + 'Failed to create session: ' + err.message + colors.reset);
     }
@@ -7677,11 +6863,11 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
   }
 
   var sessionId = createResult.sessionId;
-  console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset + ' created');
+  console.log(colors.cyan + '[SERVER-CONSENSUS]' + colors.reset + ' Session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset + ' created');
 
-  // 4. Poll for completion with live progress reporting
-  var pollInterval = 3000;
-  var maxPolls = 1200; // 60 minutes (complex multi-round deliberation with rate-limited providers)
+  // 3. Poll for completion with live progress reporting
+  var pollInterval = 3000; // 3 seconds
+  var maxPolls = 1200; // 60 minutes max (complex multi-round deliberation with rate-limited providers)
   var pollCount = 0;
   var lastStatus = 'pending';
   var spinChars = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'];
@@ -7768,6 +6954,21 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     }
   }
 
+  // Word-wrap text to fit terminal width
+  function wrapLine(text, maxWidth) {
+    if (!text || maxWidth <= 0) return [text || ''];
+    var wrapped = [];
+    var remaining = text;
+    while (remaining.length > maxWidth) {
+      var breakIdx = remaining.lastIndexOf(' ', maxWidth);
+      if (breakIdx <= 0) breakIdx = maxWidth;
+      wrapped.push(remaining.substring(0, breakIdx));
+      remaining = remaining.substring(breakIdx).replace(/^ /, '');
+    }
+    if (remaining.length > 0) wrapped.push(remaining);
+    return wrapped;
+  }
+
   function renderAgentSpeaking(event) {
     if (!immersive) return;
     var agentName = (event.agentName || 'UNKNOWN').toUpperCase();
@@ -7776,13 +6977,28 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     var roundLabel = event.round > 1 ? ' (Round ' + event.round + ')' : '';
     var chunks = event.chunks || [];
     if (chunks.length === 0) return;
+    var termCols = process.stdout.columns || 120;
+    var contentWidth = Math.max(40, termCols - 6);
     console.log('');
     console.log('  ' + agentCol + '\u25cf ' + agentName + roundLabel + '\x1b[0m \x1b[90m(' + provider + '):\x1b[0m');
-    for (var c = 0; c < chunks.length; c++) {
+    // Client-side safety cap: max 60 lines to prevent terminal flooding
+    var lineCount = 0;
+    var MAX_LINES = 60;
+    var capped = false;
+    for (var c = 0; c < chunks.length && !capped; c++) {
       var lines = chunks[c].split('\n');
       for (var l = 0; l < lines.length; l++) {
-        console.log('  ' + agentCol + '\u2502\x1b[0m ' + lines[l]);
+        if (lineCount >= MAX_LINES) { capped = true; break; }
+        var subLines = wrapLine(lines[l], contentWidth);
+        for (var si = 0; si < subLines.length; si++) {
+          if (lineCount >= MAX_LINES) { capped = true; break; }
+          console.log('  ' + agentCol + '\u2502\x1b[0m ' + subLines[si]);
+          lineCount++;
+        }
       }
+    }
+    if (capped) {
+      console.log('  ' + agentCol + '\u2502\x1b[0m \x1b[2m... [truncated for readability]\x1b[0m');
     }
     console.log('  ' + agentCol + '\u2514\u2500\u2500\u2500\x1b[0m');
   }
@@ -7805,12 +7021,17 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
     var chunks = event.chunks || [];
     if (chunks.length === 0) return;
     var provider = event.provider || '';
+    var termCols = process.stdout.columns || 120;
+    var contentWidth = Math.max(40, termCols - 6);
     console.log('');
     console.log('  \x1b[36m\u25cf SYNTHESIS\x1b[0m \x1b[90m(' + provider + '):\x1b[0m');
     for (var c = 0; c < chunks.length; c++) {
       var lines = chunks[c].split('\n');
       for (var l = 0; l < lines.length; l++) {
-        console.log('  \x1b[36m\u2502\x1b[0m ' + lines[l]);
+        var subLines = wrapLine(lines[l], contentWidth);
+        for (var si = 0; si < subLines.length; si++) {
+          console.log('  \x1b[36m\u2502\x1b[0m ' + subLines[si]);
+        }
       }
     }
     console.log('  \x1b[36m\u2514\u2500\u2500\u2500\x1b[0m');
@@ -7925,7 +7146,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
       sessionResult = await client.getGethSession(sessionId);
     } catch (err) {
       if (verbose) {
-        console.log(colors.yellow + '[LEGION X] Poll error: ' + err.message + colors.reset);
+        console.log(colors.yellow + '[SERVER-CONSENSUS] Poll error: ' + err.message + colors.reset);
       }
       continue;
     }
@@ -7936,7 +7157,6 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
 
     // Show status changes
     if (status !== lastStatus) {
-      // Clear any in-place progress bar before printing a new line
       if (hasProgressBar) {
         process.stdout.write('\r' + ' '.repeat(100) + '\r');
         hasProgressBar = false;
@@ -7957,10 +7177,8 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
 
     // Live progress display
     if (progress && progress.log) {
-      // Print new log entries
       var newEntries = progress.log.slice(lastLogIndex);
       for (var li = 0; li < newEntries.length; li++) {
-        // Clear any in-place progress bar before printing a permanent line
         if (hasProgressBar) {
           process.stdout.write('\r' + ' '.repeat(100) + '\r');
           hasProgressBar = false;
@@ -8028,14 +7246,15 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
         proposalsData = proposalsResult.proposals || [];
       } catch (_) {}
 
+      // Display results
       var totalMs = Date.now() - totalStart;
       console.log();
-      console.log(colors.bold + colors.green + '=== LEGION X CONSENSUS RESULT ===' + colors.reset);
+      console.log(colors.bold + colors.green + '=== GETH CONSENSUS RESULT ===' + colors.reset);
       console.log();
       console.log(session.synthesis || '[No synthesis]');
       console.log();
 
-      // Stats
+      // Stats bar
       var qualityPct = ((session.qualityScore || 0) * 100).toFixed(0);
       var ciGain = session.ciGain !== null && session.ciGain !== undefined ? (session.ciGain >= 0 ? '+' : '') + session.ciGain.toFixed(0) : 'N/A';
       var convergencePct = session.finalConvergence !== null ? ((session.finalConvergence || 0) * 100).toFixed(0) : 'N/A';
@@ -8046,12 +7265,14 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
         ' | Convergence: ' + colors.cyan + convergencePct + '%' + colors.reset +
         ' | Rounds: ' + colors.cyan + (session.deliberationRounds || 0) + colors.reset);
 
+      // Provider breakdown
       if (session.providersUsed && session.providersUsed.length > 0) {
         console.log('Providers: ' + session.providersUsed.map(function(p) {
           return colors.magenta + p + colors.reset;
         }).join(', '));
       }
 
+      // Cross-validation
       if (session.crossValidationScore !== null && session.crossValidationScore !== undefined) {
         var cvPct = (session.crossValidationScore * 100).toFixed(0);
         console.log('Cross-validation: ' + colors.yellow + cvPct + '%' + colors.reset +
@@ -8097,7 +7318,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
         var rounds = Object.keys(roundMap).map(Number).sort(function(a, b) { return a - b; });
         var maxRound = rounds.length > 0 ? rounds[rounds.length - 1] : 1;
 
-        // Show per-round breakdown
+        // Show per-round breakdown (for each round)
         for (var ri = 0; ri < rounds.length; ri++) {
           var rn = rounds[ri];
           var rndProposals = roundMap[rn];
@@ -8131,6 +7352,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
             var lrp = lastRndProposals[lri];
             var r1Content = r1Map[lrp.agentName];
             if (r1Content !== undefined) {
+              // Compute Jaccard similarity between round 1 and last round
               var words1 = new Set(r1Content.toLowerCase().split(/\s+/).filter(function(w) { return w.length > 3; }));
               var words2 = new Set((lrp.content || '').toLowerCase().split(/\s+/).filter(function(w) { return w.length > 3; }));
               var intersection = 0;
@@ -8190,7 +7412,7 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
         // JSON transcript (machine-readable)
         var jsonTranscript = {
           sessionId: sessionId,
-          planType: 'free',
+          planType: 'premium',
           prompt: prompt,
           status: 'completed',
           decomposition: session.decomposition || null,
@@ -8226,12 +7448,12 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
         fs.writeFileSync(jsonPath, JSON.stringify(jsonTranscript, null, 2), { mode: 0o600 });
 
         // Markdown transcript (human-readable)
-        var md = '# Legion X Session — ' + now.toISOString().slice(0, 19).replace('T', ' ') + ' UTC\n';
+        var md = '# Legion X1 Session — ' + now.toISOString().slice(0, 19).replace('T', ' ') + ' UTC\n';
         md += '## Session ID: ' + sessionId + '\n\n';
         md += '### Prompt\n> ' + prompt.replace(/\n/g, '\n> ') + '\n\n';
         md += '### Configuration\n';
-        md += '- Plan: Free (user API key)\n';
-        md += '- Provider: ' + (session.providersUsed || []).join(', ') + '\n';
+        md += '- Plan: Premium (server-side multi-LLM)\n';
+        md += '- Providers: ' + (session.providersUsed || []).join(', ') + '\n';
         md += '- Deliberation Rounds: ' + (session.deliberationRounds || 0) + '\n\n';
         md += '---\n\n';
 
@@ -8328,44 +7550,39 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
   // Timeout
   if (hasProgressBar) process.stdout.write('\r' + ' '.repeat(100) + '\r');
   console.error(colors.red + 'Session timed out after ' + maxPolls + ' polls (60 minutes).' + colors.reset);
-  console.error('Check status: node legion-x.mjs geth:session ' + sessionId);
-  console.error('Resume stuck session: node legion-x.mjs geth:resume ' + sessionId);
+  console.error('Check status: node legion-x1.mjs geth:session ' + sessionId);
+  console.error('Resume stuck session: node legion-x1.mjs geth:resume ' + sessionId);
   process.exit(1);
 }
 
 async function runOrchestration(prompt, options) {
   var config = new LegionConfig();
   var client = new LegionClient(config);
-
-  printBanner();
-
-  // =================================================================
-  // ORCHESTRATION MODE SELECTION
-  //
-  // Default: Zero-knowledge client orchestration (v1.8+)
-  //   - API key NEVER leaves the client
-  //   - Server provides orchestration intelligence (prompts, ONNX routing,
-  //     convergence measurement) but makes ZERO LLM calls
-  //
-  // Legacy: --server-key flag for backward compat
-  //   - API key is sent to server for proxied LLM calls
-  //   - Kept for users who prefer server-side execution
-  // =================================================================
-  if (options.serverKey) {
-    // Legacy: server-proxied mode (API key sent to server)
-    await runServerConsensus(prompt, options, config, client);
-  } else {
-    // Default: zero-knowledge client orchestration
-    await runClientOrchestration(prompt, options, config, client);
-  }
-  return;
-
-  // --- Legacy local orchestration (unreachable, kept for reference) ---
   var registry = new AgentRegistry();
   var llm = new LLMProvider(config);
   var verbose = config.get('verbose') || options.verbose;
   var totalStart = Date.now();
 
+  printBanner();
+
+  // =================================================================
+  // SERVER-ONLY ENFORCEMENT (Legion X1)
+  // Legion X1 ALWAYS runs on NHA servers with multi-LLM dialectic.
+  // Up to 3 providers chosen by the user.
+  // =================================================================
+  options._providerMode = 'multi';
+  var userProviders = config.get('providers');
+  if (userProviders && Array.isArray(userProviders) && userProviders.length > 0) {
+    options._providers = userProviders;
+  } else if (typeof userProviders === 'string' && userProviders.length > 0) {
+    options._providers = userProviders.split(',').map(function(p) { return p.trim(); }).filter(Boolean);
+  } else {
+    options._providers = ['anthropic', 'openai', 'gemini'];
+  }
+  await runServerConsensus(prompt, options, config, client);
+  return;
+
+  // --- Legacy local orchestration (unreachable, kept for reference) ---
   // Initialize
   console.log(colors.gray + 'Initializing agent registry...' + colors.reset);
   await registry.initialize(client);
@@ -9612,6 +8829,7 @@ async function runOrchestration(prompt, options) {
       var noveltyScore = await measureNoveltyScore(client, finalResult, executionResult.contributions, verbose);
       var crossPoll = commStream ? commStream.getCrossPollination() : { interactions: 0, density: 0, totalThoughts: 0 };
 
+      var cacheUsage = llm.getUsage();
       metaIntelligence.recordRun({
         runId: runId,
         quality: quality.overall,
@@ -9623,6 +8841,10 @@ async function runOrchestration(prompt, options) {
         crossPollination: crossPoll.interactions,
         crossPollinationDensity: crossPoll.density,
         promptEvolutionCount: promptEvolver ? Object.keys(promptEvolver.activePatches).length : 0,
+        cacheHitRate: cacheUsage.cacheHitRate || 0,
+        cacheReadTokens: cacheUsage.cacheReadTokens || 0,
+        cacheCreationTokens: cacheUsage.cacheCreationTokens || 0,
+        totalTokens: cacheUsage.totalTokens || 0,
         timestamp: Date.now(),
       });
 
@@ -9755,21 +8977,15 @@ async function checkForUpdates() {
       console.log(colors.yellow + colors.bold + '  ' + data.maintenance + colors.reset);
       console.log('');
     }
-    var entry = data['legion-x'];
-    if (!entry) return;
-    var latest = entry.latest;
+    var x1Info = data['legion-x1'];
+    var latest = x1Info && x1Info.latest;
     if (!latest) return;
-    // Legion X uses non-semver version "X" — only compare if both are semver
-    if (latest === VERSION) return;
-    var isSemver = /^\d+\.\d+\.\d+$/.test(latest) && /^\d+\.\d+\.\d+$/.test(VERSION);
-    if (isSemver && compareVersions(latest, VERSION) <= 0) return;
-    if (!isSemver && latest === VERSION) return;
-    {
+    if (latest !== VERSION) {
       console.log('');
       console.log(colors.yellow + colors.bold + '  Update available: ' + colors.reset +
         colors.dim + 'v' + VERSION + colors.reset + ' → ' +
         colors.green + colors.bold + 'v' + latest + colors.reset);
-      console.log(colors.dim + '  Run ' + colors.cyan + 'node legion-x.mjs update' +
+      console.log(colors.dim + '  Run ' + colors.cyan + 'node legion-x1.mjs update' +
         colors.dim + ' to upgrade' + colors.reset);
       console.log('');
     }
@@ -9803,14 +9019,14 @@ async function selfUpdate(targetVersion) {
     return;
   }
   var data = await res.json();
-  var legionInfo = data['legion-x'];
+  var legionInfo = data['legion-x1'];
   if (!legionInfo) {
-    console.error(colors.red + 'No legion-x version info found.' + colors.reset);
+    console.error(colors.red + 'No legion-x1 version info found.' + colors.reset);
     return;
   }
 
   var downloadVersion = targetVersion || legionInfo.latest;
-  var downloadFile = legionInfo.file; // default: legion-x.mjs (always latest)
+  var downloadFile = legionInfo.file; // default: legion.mjs (always latest)
 
   if (targetVersion) {
     // Find specific version file
@@ -9889,7 +9105,7 @@ async function selfUpdate(targetVersion) {
  */
 var COMMANDS = {
   run: {
-    description: 'Execute prompt via Geth Consensus (zero-knowledge by default)',
+    description: 'Execute prompt with agent orchestration (server-side multi-LLM)',
     args: '<prompt> [options]',
     handler: async function(args) {
       var prompt = '';
@@ -9955,6 +9171,8 @@ var COMMANDS = {
           options.noScoredEvolution = true;
         } else if (args[i] === '--no-knowledge-reinforcement') {
           options.noKnowledgeReinforcement = true;
+        } else if (args[i] === '--server-consensus' || args[i] === '--sc') {
+          options.serverConsensus = true;
         } else if ((args[i] === '--scan-dir' || args[i] === '--scan') && args[i + 1]) {
           options.scanDir = path.resolve(args[i + 1]);
           i++;
@@ -9963,8 +9181,6 @@ var COMMANDS = {
         } else if (args[i] === '--scan-budget' && args[i + 1]) {
           options.scanBudget = args[i + 1];
           i++;
-        } else if (args[i] === '--server-key') {
-          options.serverKey = true;
         } else {
           prompt += (prompt ? ' ' : '') + args[i];
         }
@@ -10291,8 +9507,9 @@ var COMMANDS = {
         console.log('  ' + colors.cyan + key + colors.reset + ': ' + value);
       }
 
+      var hasNhaCreds = !!(config.get('nhaAgentId') && config.get('nhaPrivateKeyPem'));
       console.log('\n' + colors.dim + 'NHA credentials: ' +
-        ((config.get('nhaAgentId') && config.get('nhaPrivateKeyPem')) ? colors.green + 'found' : colors.red + 'not found') + colors.reset);
+        (hasNhaCreds ? colors.green + 'found (' + config.get('nhaAgentName') + ')' : colors.red + 'not found') + colors.reset);
     },
   },
 
@@ -10301,28 +9518,30 @@ var COMMANDS = {
     args: '<key> <value>',
     handler: async function(args) {
       if (args.length < 2) {
-        console.error(colors.red + 'Usage: legionx config:set <key> <value>' + colors.reset);
+        console.error(colors.red + 'Usage: legion config:set <key> <value>' + colors.reset);
         console.log('\nAvailable keys:');
-        console.log('  provider      - LLM provider (anthropic, openai, gemini, deepseek, grok, mistral, cohere)');
-        console.log('  llm-key       - Your API key for the primary provider');
-        console.log('  openai-key    - OpenAI API key (for multi-LLM mode)');
-        console.log('  gemini-key    - Gemini API key (for multi-LLM mode)');
-        console.log('  deepseek-key  - DeepSeek API key');
-        console.log('  grok-key      - Grok/xAI API key');
-        console.log('  mistral-key   - Mistral API key');
-        console.log('  cohere-key    - Cohere API key');
-        console.log('  verbose       - Enable verbose logging (true/false)');
+        console.log('  providers       - LLM providers for multi-LLM debate (comma-separated: anthropic,openai,gemini)');
+        console.log('  verbose         - Enable verbose logging (true/false)');
+        console.log('  nha-agent-id    - NHA agent UUID for server authentication');
+        console.log('  nha-agent-name  - NHA agent display name');
+        console.log('  nha-private-key - Ed25519 private key (PEM format)');
+        console.log('  nha-public-key  - Ed25519 public key (hex)');
         console.log();
-        console.log(colors.gray + 'Your API keys NEVER leave your machine. Server provides orchestration only.' + colors.reset);
-        console.log(colors.gray + 'Configure multiple providers for automatic multi-LLM fallback.' + colors.reset);
+        console.log(colors.gray + 'Note: Legion X1 runs on NHA servers with up to 3 LLM providers.' + colors.reset);
+        console.log(colors.gray + 'API keys are managed server-side. You only choose which providers power the debate.' + colors.reset);
         process.exit(1);
       }
 
       var keyMap = {
-        'provider': 'provider',
+        'providers': 'providers',
         'verbose': 'verbose',
+        // NHA agent credentials
+        'nha-agent-id': 'nhaAgentId',
+        'nha-agent-name': 'nhaAgentName',
+        'nha-private-key': 'nhaPrivateKeyPem',
+        'nha-public-key': 'nhaPublicKeyHex',
         // Legacy keys — accepted but with deprecation warning
-        'llm-provider': 'provider',
+        'llm-provider': 'llmProvider',
         'llm-model': 'llmModel',
         'llm-key': 'llmApiKey',
         'ollama-url': 'ollamaUrl',
@@ -10334,10 +9553,6 @@ var COMMANDS = {
         'finnhub-key': 'finnhubKey',
         'pexels-key': 'pexelsKey',
         'newsapi-key': 'newsapiKey',
-        'nha-agent-id': 'nhaAgentId',
-        'nha-agent-name': 'nhaAgentName',
-        'nha-private-key': 'nhaPrivateKeyPem',
-        'nha-public-key': 'nhaPublicKeyHex',
         'spoonacular-key': 'spoonacularKey',
         'libretranslate-url': 'libretranslateUrl',
         'deepseek-key': 'deepseekApiKey',
@@ -10349,20 +9564,35 @@ var COMMANDS = {
       var key = args[0];
       var value = args.slice(1).join(' ');
 
-      // Legacy key mappings for backwards compat
-      if (key === 'llm-provider') {
-        key = 'provider';
-        console.log(colors.yellow + 'Mapping llm-provider → provider' + colors.reset);
+      // Deprecation warnings for server-only mode
+      if (key === 'llm-key' || key === 'llm-model' || key === 'llm-provider') {
+        console.log(colors.yellow + 'Note: Legion X1 uses server-side orchestration.' + colors.reset);
+        console.log(colors.yellow + 'API keys and models are managed by the server. Use "providers" instead.' + colors.reset);
+        if (key === 'llm-key') {
+          console.log(colors.yellow + 'This setting is ignored in Legion X1.' + colors.reset);
+          return;
+        }
       }
 
-      // Validate provider choice
-      if (key === 'provider') {
-        var validProviders = ['anthropic', 'openai', 'gemini', 'deepseek', 'grok', 'mistral', 'cohere'];
-        if (!validProviders.includes(value)) {
-          console.error(colors.red + 'Invalid provider: ' + value + colors.reset);
-          console.error('Valid options: ' + validProviders.join(', '));
+      // Handle providers (comma-separated → array)
+      if (key === 'providers') {
+        var validProviders = ['anthropic', 'openai', 'gemini'];
+        var providerList = value.split(',').map(function(p) { return p.trim(); }).filter(Boolean);
+        for (var pi = 0; pi < providerList.length; pi++) {
+          if (!validProviders.includes(providerList[pi])) {
+            console.error(colors.red + 'Invalid provider: ' + providerList[pi] + colors.reset);
+            console.error('Valid options: ' + validProviders.join(', '));
+            process.exit(1);
+          }
+        }
+        if (providerList.length === 0 || providerList.length > 3) {
+          console.error(colors.red + 'Provide 1-3 providers (comma-separated).' + colors.reset);
           process.exit(1);
         }
+        var config = new LegionConfig();
+        config.set('providers', providerList);
+        console.log(colors.green + 'Set providers = ' + providerList.join(', ') + colors.reset);
+        return;
       }
 
       var configKey = keyMap[key] || key;
@@ -10396,9 +9626,9 @@ var COMMANDS = {
       var configExists = fs.existsSync(CONFIG_FILE);
       checks.push({ name: 'Config file', status: configExists ? 'ok' : 'missing', detail: CONFIG_FILE });
 
-      // 2. NHA credentials
-      var hasNha = !!(config.get('nhaAgentId') && config.get('nhaPrivateKeyPem'));
-      checks.push({ name: 'NHA credentials', status: hasNha ? 'ok' : 'missing', detail: CONFIG_FILE });
+      // 2. NHA credentials (from legion-config)
+      var hasNhaCreds = !!(config.get('nhaAgentId') && config.get('nhaPrivateKeyPem'));
+      checks.push({ name: 'NHA credentials', status: hasNhaCreds ? 'ok' : 'missing', detail: CONFIG_FILE });
 
       // 3. LLM provider
       var llm = new LLMProvider(config);
@@ -10512,28 +9742,29 @@ var COMMANDS = {
     },
   },
 
-  // Geth Consensus commands (free tier)
+  // v8.0.0: Geth Consensus Server-Side Commands
   'geth:providers': {
-    description: 'Show available LLM providers (user-key)',
+    description: 'Show available LLM providers on server',
     args: '',
     handler: async function() {
       var client = new LegionClient();
       try {
         var result = await client.getGethProviders();
-        console.log(colors.bold + 'Legion X — Available Providers (your key)' + colors.reset);
+        console.log(colors.bold + 'Geth Consensus Providers' + colors.reset);
         console.log('Enabled: ' + (result.gethEnabled ? colors.green + 'yes' : colors.red + 'no') + colors.reset);
+        console.log('Default: ' + colors.cyan + (result.defaultProvider || 'N/A') + colors.reset);
+        console.log('Cross-validator: ' + colors.cyan + (result.crossValidator || 'N/A') + colors.reset);
         console.log();
         if (result.providers && result.providers.length > 0) {
           for (var i = 0; i < result.providers.length; i++) {
             var p = result.providers[i];
             console.log('  ' + colors.magenta + p.name + colors.reset +
-              ' — model: ' + colors.gray + p.defaultModel + colors.reset);
+              ' — model: ' + colors.gray + p.model + colors.reset +
+              ' — ' + colors.green + p.status + colors.reset);
           }
         } else {
-          console.log(colors.yellow + '  No providers available.' + colors.reset);
+          console.log(colors.yellow + '  No providers configured.' + colors.reset);
         }
-        console.log();
-        console.log(colors.gray + 'Configure your key: node legion-x.mjs config:set llm-key YOUR_API_KEY' + colors.reset);
       } catch (err) {
         console.error(colors.red + 'Error: ' + err.message + colors.reset);
       }
@@ -10541,7 +9772,7 @@ var COMMANDS = {
   },
 
   'geth:sessions': {
-    description: 'List your Geth Consensus sessions',
+    description: 'List server-side Geth Consensus sessions',
     args: '[--status <status>] [--limit <n>]',
     handler: async function(args) {
       var client = new LegionClient();
@@ -10582,7 +9813,7 @@ var COMMANDS = {
       var sessionId = args[0];
       var showProposals = args.indexOf('--proposals') !== -1;
       if (!sessionId) {
-        console.error(colors.red + 'Usage: legion-x.mjs geth:session <id> [--proposals]' + colors.reset);
+        console.error(colors.red + 'Usage: legion geth:session <id> [--proposals]' + colors.reset);
         process.exit(1);
       }
       var client = new LegionClient();
@@ -10622,6 +9853,9 @@ var COMMANDS = {
         if (s.finalConvergence !== null) console.log('Convergence: ' + ((s.finalConvergence * 100).toFixed(0)) + '%');
         if (s.deliberationRounds) console.log('Rounds: ' + s.deliberationRounds);
         if (s.providersUsed) console.log('Providers: ' + s.providersUsed.join(', '));
+        if (s.crossValidationScore !== null) {
+          console.log('Cross-validation: ' + ((s.crossValidationScore * 100).toFixed(0)) + '% by ' + s.crossValidatorProvider);
+        }
         if (s.totalDurationMs) console.log('Duration: ' + formatDuration(s.totalDurationMs));
 
         if (showProposals) {
@@ -10643,18 +9877,75 @@ var COMMANDS = {
     },
   },
 
+  'geth:evolve': {
+    description: 'Trigger server-side PROMETHEUS/ATHENA/CASSANDRA evolve',
+    args: '',
+    handler: async function() {
+      var client = new LegionClient();
+      console.log(colors.cyan + 'Triggering server-side evolve...' + colors.reset);
+      try {
+        var result = await client.triggerEvolve();
+        console.log(colors.green + 'Evolve complete!' + colors.reset);
+        console.log('Report ID: ' + colors.cyan + result.reportId + colors.reset);
+        console.log('Recommendations: ' + result.recommendations.length);
+        if (result.synthesis) {
+          console.log('\n' + colors.bold + '--- Synthesis ---' + colors.reset);
+          console.log(result.synthesis);
+        }
+        if (result.recommendations && result.recommendations.length > 0) {
+          console.log('\n' + colors.bold + '--- Recommendations ---' + colors.reset);
+          for (var i = 0; i < result.recommendations.length; i++) {
+            var r = result.recommendations[i];
+            var priorityColor = r.priority === 'critical' ? colors.red : r.priority === 'high' ? colors.yellow : colors.gray;
+            console.log('  ' + priorityColor + '[' + r.priority.toUpperCase() + ']' + colors.reset +
+              ' ' + r.category + ': ' + r.action);
+          }
+        }
+      } catch (err) {
+        console.error(colors.red + 'Error: ' + err.message + colors.reset);
+      }
+    },
+  },
+
+  'geth:reports': {
+    description: 'List evolve reports',
+    args: '[--limit <n>]',
+    handler: async function(args) {
+      var client = new LegionClient();
+      var limit = 10;
+      for (var i = 0; i < args.length; i++) {
+        if (args[i] === '--limit' && args[i + 1]) { limit = parseInt(args[i + 1]); i++; }
+      }
+      try {
+        var result = await client.getEvolveReports(limit);
+        var reports = result.reports || [];
+        console.log(colors.bold + 'Evolve Reports (' + reports.length + ')' + colors.reset + '\n');
+        for (var j = 0; j < reports.length; j++) {
+          var r = reports[j];
+          console.log(colors.cyan + r.id.substring(0, 8) + colors.reset +
+            ' [' + (r.reportType || 'auto') + ']' +
+            (r.qualityScore !== null ? ' quality:' + ((r.qualityScore * 100).toFixed(0)) + '%' : '') +
+            ' patterns:' + (r.patternsUpdated || 0) +
+            ' weights:' + (r.weightsAdjusted || 0) +
+            ' ' + colors.gray + new Date(r.createdAt).toLocaleString() + colors.reset);
+        }
+      } catch (err) {
+        console.error(colors.red + 'Error: ' + err.message + colors.reset);
+      }
+    },
+  },
+
   'geth:resume': {
     description: 'Resume a stuck/failed session (re-runs synthesis)',
     args: '<id>',
     handler: async function(args) {
       var sessionId = args[0];
       if (!sessionId) {
-        console.error(colors.red + 'Usage: legion-x.mjs geth:resume <session-id>' + colors.reset);
+        console.error(colors.red + 'Usage: legion-x1.mjs geth:resume <session-id>' + colors.reset);
         process.exit(1);
       }
       var client = new LegionClient();
       try {
-        // Resolve short ID prefix to full UUID if needed
         var uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(sessionId)) {
           var listResult = await client.listGethSessions({ limit: 100 });
@@ -10673,17 +9964,10 @@ var COMMANDS = {
           }
         }
 
-        var cfg = new LegionConfig();
-        var apiKey = cfg.get('llmApiKey');
-        if (!apiKey) {
-          console.error(colors.red + 'No API key configured. Run: node legion-x.mjs config:set llm-key <key>' + colors.reset);
-          process.exit(1);
-        }
+        console.log(colors.cyan + '[LEGION X1]' + colors.reset + ' Resuming session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset);
+        console.log(colors.dim + 'Premium: re-runs synthesis using server keys.' + colors.reset);
 
-        console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Resuming session ' + colors.bold + sessionId.substring(0, 8) + '...' + colors.reset);
-        console.log(colors.dim + 'This will re-run synthesis + validation using your API key.' + colors.reset);
-
-        var result = await client.resumeGethSession(sessionId, apiKey);
+        var result = await client.resumeGethSession(sessionId);
         var s = result.session;
 
         console.log('\n' + colors.green + 'Session resumed and completed!' + colors.reset);
@@ -10704,30 +9988,48 @@ var COMMANDS = {
 
   'geth:usage': {
     description: 'Show your Geth Consensus usage and rate limits',
-    args: '[--days <n>]',
+    args: '[--days <n>] [--total]',
     handler: async function(args) {
       var client = new LegionClient();
       var days = 30;
+      var showTotal = false;
       for (var i = 0; i < args.length; i++) {
         if (args[i] === '--days' && args[i + 1]) { days = parseInt(args[i + 1]); i++; }
+        if (args[i] === '--total') showTotal = true;
       }
       try {
-        var result = await client.request('GET', '/geth/usage?days=' + days, null, false);
-        var usage = result.usage || [];
-        console.log(colors.bold + 'Legion X — Your Usage (' + days + ' days)' + colors.reset + '\n');
-        if (usage.length === 0) {
-          console.log(colors.dim + '  No usage data found.' + colors.reset);
+        if (showTotal) {
+          var result = await client.request('GET', '/geth/premium/usage/total?days=' + days);
+          console.log(colors.bold + 'Geth Consensus — Total Platform Usage (' + days + ' days)' + colors.reset + '\n');
+          console.log('  Sessions:   ' + colors.cyan + result.totalSessions + colors.reset + ' created, ' + colors.green + result.totalCompleted + colors.reset + ' completed, ' + colors.red + result.totalFailed + colors.reset + ' failed');
+          console.log('  Tokens:     ' + (result.totalInputTokens + result.totalOutputTokens).toLocaleString() + ' total (' + result.totalInputTokens.toLocaleString() + ' in, ' + result.totalOutputTokens.toLocaleString() + ' out)');
+          console.log('  Cost:       ' + colors.yellow + '$' + result.totalCostUsd.toFixed(2) + colors.reset);
+          console.log('  Alerts:     ' + (result.alertCount > 0 ? colors.red + result.alertCount : colors.green + '0') + colors.reset);
+          if (result.byTier && Object.keys(result.byTier).length > 0) {
+            console.log('\n  ' + colors.bold + 'By Tier:' + colors.reset);
+            for (var tier of Object.keys(result.byTier)) {
+              var t = result.byTier[tier];
+              console.log('    ' + tier + ': ' + t.sessions + ' sessions, $' + t.costUsd.toFixed(2));
+            }
+          }
         } else {
-          for (var j = 0; j < usage.length; j++) {
-            var u = usage[j];
-            var date = new Date(u.usageDate).toLocaleDateString();
-            var totalTokens = (u.totalInputTokens + u.totalOutputTokens).toLocaleString();
-            console.log('  ' + colors.cyan + date + colors.reset +
-              ' | sessions: ' + u.sessionsCreated +
-              ' (completed: ' + u.sessionsCompleted + ', failed: ' + u.sessionsFailed + ')' +
-              ' | tokens: ' + totalTokens +
-              ' | cost: ' + colors.yellow + '$' + u.estimatedCostUsd.toFixed(4) + colors.reset +
-              ' [' + u.tier + ']');
+          var result = await client.request('GET', '/geth/premium/usage?days=' + days);
+          var usage = result.usage || [];
+          console.log(colors.bold + 'Geth Consensus — Your Usage (' + days + ' days)' + colors.reset + '\n');
+          if (usage.length === 0) {
+            console.log(colors.dim + '  No usage data found.' + colors.reset);
+          } else {
+            for (var j = 0; j < usage.length; j++) {
+              var u = usage[j];
+              var date = new Date(u.usageDate).toLocaleDateString();
+              var totalTokens = (u.totalInputTokens + u.totalOutputTokens).toLocaleString();
+              console.log('  ' + colors.cyan + date + colors.reset +
+                ' | sessions: ' + u.sessionsCreated +
+                ' (completed: ' + u.sessionsCompleted + ', failed: ' + u.sessionsFailed + ')' +
+                ' | tokens: ' + totalTokens +
+                ' | cost: ' + colors.yellow + '$' + u.estimatedCostUsd.toFixed(4) + colors.reset +
+                ' [' + u.tier + ']');
+            }
           }
         }
       } catch (err) {
@@ -10741,17 +10043,14 @@ var COMMANDS = {
     args: '',
     handler: async function() {
       printBanner();
-      console.log(colors.bold + 'USAGE:' + colors.reset + ' node legion-x.mjs <command> [options]\n');
-      console.log(colors.gray + 'Legion X runs on NHA servers with YOUR API key. You choose the provider.' + colors.reset);
-      console.log(colors.gray + 'Supports: Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere' + colors.reset);
-      console.log();
+      console.log(colors.bold + 'USAGE:' + colors.reset + ' node legion-x1.mjs <command> [options]\n');
 
       var sections = {
         'ORCHESTRATION': ['run', 'evolve'],
         'AGENTS': ['agents', 'agents:info', 'agents:test', 'agents:tree', 'agents:register', 'agents:publish', 'agents:unpublish'],
         'TASKS': ['tasks', 'tasks:view', 'tasks:replay'],
+        'GETH CONSENSUS': ['geth:providers', 'geth:sessions', 'geth:session', 'geth:resume', 'geth:evolve', 'geth:reports', 'geth:usage'],
         'SANDBOX': ['sandbox:list', 'sandbox:run', 'sandbox:upload', 'sandbox:info', 'sandbox:validate'],
-        'GETH CONSENSUS': ['geth:providers', 'geth:sessions', 'geth:session', 'geth:resume', 'geth:usage'],
         'KNOWLEDGE': ['knowledge', 'knowledge:stats'],
         'CONFIG': ['config', 'config:set'],
         'SYSTEM': ['doctor', 'help', 'version', 'versions', 'update', 'mcp'],
@@ -10783,8 +10082,9 @@ var COMMANDS = {
         ['--dry-run',                 'Preview execution plan without running'],
         ['--file <path>',             'Read prompt from file'],
         ['--stream',                  'Enable streaming output'],
-        ['--server-key',              'Use server-side orchestration (legacy mode)'],
+        ['--server-consensus, --sc',  'Use server-side Geth Consensus (premium keys)'],
         ['--no-scan',                 'Disable ProjectScanner (skip local code analysis)'],
+        ['--scan-dir <path>',         'Override project directory to scan'],
         ['--scan-budget <n>',         'Set ProjectScanner char budget (default: 120000)'],
         ['--no-deliberation',         'Disable multi-round deliberation'],
         ['--no-debate',               'Disable post-synthesis debate layer'],
@@ -10821,7 +10121,7 @@ var COMMANDS = {
     description: 'Show version',
     args: '',
     handler: async function() {
-      console.log('Legion X (server-only, your key)');
+      console.log('Legion X1 v' + VERSION);
     },
   },
 
@@ -10845,13 +10145,13 @@ var COMMANDS = {
           return;
         }
         var data = await res.json();
-        var legionInfo = data['legion-x'];
+        var legionInfo = data.legion;
         if (!legionInfo || !legionInfo.versions) {
           console.error(colors.red + 'No version data available.' + colors.reset);
           return;
         }
 
-        console.log(colors.bold + 'LEGION X Versions' + colors.reset);
+        console.log(colors.bold + 'LEGION Versions' + colors.reset);
         console.log(colors.dim + '  Current: v' + VERSION + colors.reset);
         console.log(colors.dim + '  Latest:  v' + legionInfo.latest + colors.reset);
         console.log('');
@@ -10871,7 +10171,7 @@ var COMMANDS = {
         }
 
         if (legionInfo.latest !== VERSION && compareVersions(legionInfo.latest, VERSION) > 0) {
-          console.log(colors.yellow + '  Run ' + colors.cyan + 'node legion-x.mjs update' +
+          console.log(colors.yellow + '  Run ' + colors.cyan + 'node legion-x1.mjs update' +
             colors.yellow + ' to upgrade to v' + legionInfo.latest + colors.reset);
         }
       } catch (err) {
@@ -11239,6 +10539,86 @@ var COMMANDS = {
     },
   },
 
+  post: {
+    description: 'Create a post in the feed',
+    args: '--title "Title" --content "Content" [--submolt name]',
+    handler: async function(args) {
+      var title = null;
+      var content = null;
+      var submoltName = 'general';
+      for (var i = 0; i < args.length; i++) {
+        if (args[i] === '--title' && args[i + 1]) { title = args[++i]; }
+        else if (args[i] === '--content' && args[i + 1]) { content = args[++i]; }
+        else if (args[i] === '--submolt' && args[i + 1]) { submoltName = args[++i]; }
+        else if (args[i] === '--content-file' && args[i + 1]) {
+          content = fs.readFileSync(args[++i], 'utf-8');
+        }
+      }
+      if (!title || !content) {
+        console.error(colors.red + 'Usage: legion-x1 post --title "Title" --content "Content" [--submolt name]' + colors.reset);
+        console.log('  --content-file <path>  Read content from file');
+        process.exit(1);
+      }
+      var client = new LegionClient();
+      if (!client.isAuthenticated) {
+        console.error(colors.red + 'NHA credentials required. Set nha-agent-id and nha-private-key via config:set.' + colors.reset);
+        process.exit(1);
+      }
+      try {
+        var result = await client.createPost(submoltName, title, content);
+        var postId = (result.data && result.data.id) || (result.post && result.post.id) || result.id;
+        if (postId) {
+          console.log(colors.green + 'Post created: https://nothumanallowed.com/p/' + postId + colors.reset);
+        } else {
+          console.log(colors.green + 'Post created.' + colors.reset);
+          console.log(JSON.stringify(result, null, 2));
+        }
+      } catch (err) {
+        console.error(colors.red + 'Failed: ' + err.message + colors.reset);
+      }
+    },
+  },
+
+  'use-case:create': {
+    description: 'Create a use case (Legion_Prime only)',
+    args: '--slug <slug> --title "Title" --content-file <path> [--tags t1,t2] [--emoji 🧠]',
+    handler: async function(args) {
+      var slug = null;
+      var title = null;
+      var content = null;
+      var tags = [];
+      var emoji = '📋';
+      for (var i = 0; i < args.length; i++) {
+        if (args[i] === '--slug' && args[i + 1]) { slug = args[++i]; }
+        else if (args[i] === '--title' && args[i + 1]) { title = args[++i]; }
+        else if (args[i] === '--content' && args[i + 1]) { content = args[++i]; }
+        else if (args[i] === '--content-file' && args[i + 1]) {
+          content = fs.readFileSync(args[++i], 'utf-8');
+        }
+        else if (args[i] === '--tags' && args[i + 1]) { tags = args[++i].split(','); }
+        else if (args[i] === '--emoji' && args[i + 1]) { emoji = args[++i]; }
+      }
+      if (!slug || !title || !content) {
+        console.error(colors.red + 'Usage: legion-x1 use-case:create --slug <slug> --title "Title" --content-file <path>' + colors.reset);
+        console.log('  --tags t1,t2   Comma-separated tags');
+        console.log('  --emoji 🧠     Cover emoji');
+        process.exit(1);
+      }
+      var client = new LegionClient();
+      if (!client.isAuthenticated) {
+        console.error(colors.red + 'NHA credentials required.' + colors.reset);
+        process.exit(1);
+      }
+      try {
+        var result = await client.createUseCase(slug, title, content, tags, emoji);
+        var uc = result.useCase || result.data || result;
+        console.log(colors.green + 'Use case created: https://nothumanallowed.com/use-cases/' + (uc.slug || slug) + colors.reset);
+      } catch (err) {
+        console.error(colors.red + 'Failed: ' + err.message + colors.reset);
+      }
+    },
+  },
+
   mcp: {
     description: 'Start MCP server for IDE integration',
     args: '',
@@ -11284,6 +10664,7 @@ var COMMANDS = {
 
       printBanner();
       console.log(colors.bold + 'Registering ' + agentsToRegister.length + ' agent(s)...' + colors.reset + '\n');
+
       var llm = new LLMProvider(config);
       var registered = 0;
       var skipped = 0;
@@ -11303,7 +10684,7 @@ var COMMANDS = {
           // Generate keypair
           var keypair = AgentNHAClient.generateKeypair();
 
-          // Register with NHA API (using parent Legion credentials)
+          // Register with NHA API (using Legion credentials)
           var ownerName = config.get('nhaAgentName') || 'user';
           var nhaAgentName = agent.displayName + '_' + ownerName;
 
@@ -11775,7 +11156,7 @@ async function main() {
 
   // Unknown command
   console.error(colors.red + 'Unknown command: ' + command + colors.reset);
-  console.log('Run ' + colors.cyan + 'node legion-x.mjs help' + colors.reset + ' for available commands.');
+  console.log('Run ' + colors.cyan + 'node legion-x1.mjs help' + colors.reset + ' for available commands.');
   process.exit(1);
 }
 

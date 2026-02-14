@@ -1,4 +1,5 @@
 {
+  "maintenance": null,
   "pif": {
     "latest": "2.2.1",
     "file": "pif.mjs",
@@ -71,11 +72,10 @@
           "Deliberation Spectacle — every agent's confidence, reasoning, and risk flags visible in real time",
           "Structured spectacle events — decomposition, agent routing, convergence, round decisions rendered live",
           "Deliberation Recap — post-completion per-round breakdown with position changes and convergence bars",
-          "Stats explanation — what Quality, CI Gain, Convergence, and Rounds mean, with self-grading bias warning",
-          "Full cross-reading — agents now read each other's COMPLETE proposals (no truncation)",
-          "Full quality validation — evaluator sees entire synthesis (no truncation)",
-          "60-minute timeout (was 15 min) for complex multi-round sessions",
-          "Backward compatible — old servers still work, new server with old CLI shows raw JSON"
+          "Divergent pairs shown by agent NAME (not just count) — see exactly who disagrees",
+          "Capability-colored task decomposition — security=red, code=green, analytical=blue, creative=magenta",
+          "Synthesis weights display — convergence progression, strongest voices, risk-flagged agents",
+          "Backward compatible — old servers still work (plain text fallback), new server with old CLI shows raw JSON"
         ]
       },
       {
@@ -136,6 +136,296 @@
           "Single provider per session (Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere)",
           "Session transcripts saved to ~/.legion/sessions/",
           "Physical process isolation — your key never touches server LLM keys"
+        ]
+      }
+    ]
+  },
+  "legion-x1": {
+    "latest": "X1.7",
+    "file": "legion-x1.mjs",
+    "minNodeVersion": 22,
+    "description": "Legion X1 — Premium tier. Server-side multi-LLM dialectic (Anthropic + OpenAI + Gemini).",
+    "versions": [
+      {
+        "version": "X1.7",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-13",
+        "highlights": [
+          "Zero-truncation pipeline — agents see COMPLETE proposals, validators judge COMPLETE synthesis",
+          "Real CI Gain — measured against best individual proposal (was hardcoded 65% baseline)",
+          "Full convergence measurement — semantic similarity on complete content (was 500 chars)",
+          "Complete cross-reading — Round 2+ agents see full outputs (was smartTruncate 8K)",
+          "Complete mediation context — LLM-assisted convergence sees full proposals (was 1.5K)",
+          "Complete debate context — critic/judge see full contributions and prompt (was 1.5K/500 chars)",
+          "Complete evaluation — validators see full synthesis (was smartTruncate 8K)",
+          "Immersive Meeting Room — speech bubbles, cross-reading visibility, synthesis display",
+          "Live heartbeat spinner — phase indicator with elapsed time between events",
+          "Provider routing balance — minimum 2 agents per provider when ≥6 agents"
+        ]
+      },
+      {
+        "version": "X1.3",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Deliberation Spectacle — every agent's confidence, reasoning, and risk flags visible in real time",
+          "Structured spectacle events — decomposition, agent routing, convergence, round decisions rendered live",
+          "Deliberation Recap — post-completion per-round breakdown with position changes and convergence bars",
+          "Divergent pairs shown by agent NAME — see exactly who disagrees with whom",
+          "Synthesis weights display — convergence progression, strongest voices, risk-flagged agents",
+          "Backward compatible — old servers still work, new server with old CLI shows raw JSON"
+        ]
+      },
+      {
+        "version": "X1.2",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Neural Meta-Controller — structured output with per-agent confidence tracking",
+          "Adaptive Round Decision — skip/standard/mandatory/arbitrator modes based on divergence + uncertainty",
+          "True Beta Sampling — stochastic agent routing replaces deterministic mean",
+          "Contextual Thompson Sampling + Temporal Decay + Calibration Tracking",
+          "Cost-Aware Orchestration — dynamic agent count scaled to task complexity",
+          "Router Auto-Retraining — ONNX model hot-reloaded from production data"
+        ]
+      },
+      {
+        "version": "X1.1",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Live Progress Reporting — watch every phase of deliberation in real time",
+          "Progress bar with per-agent tracking, convergence %, and elapsed time",
+          "Timeout extended to 15 minutes (was 10) for long sessions"
+        ]
+      },
+      {
+        "version": "X1",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-10",
+        "highlights": [
+          "Server-side multi-LLM deliberation (Anthropic, OpenAI, Gemini)",
+          "Cross-LLM validation — different provider evaluates quality",
+          "42 agents: 13 primary + 29 sub-agents across 13 categories",
+          "Session transcripts saved to ~/.legion/sessions/",
+          "Auto-evolve scheduler (PROMETHEUS/ATHENA/CASSANDRA parliament)"
+        ]
+      }
+    ]
+  },
+  "legion": {
+    "latest": "5.0.3",
+    "file": "legion-5.0.3.mjs",
+    "deprecated": true,
+    "deprecatedMessage": "Legion classic is deprecated. Use legion-x.mjs (free) or legion-x1.mjs (premium).",
+    "minNodeVersion": 22,
+    "versions": [
+      {
+        "version": "5.0.3",
+        "file": "legion-5.0.3.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "3 Meta-Evolution agents: PROMETHEUS (Code Evolution Architect), ATHENA (Technology Research), CASSANDRA (Predictive Consequence Analyst)",
+          "New `evolve` command — self-evolution parliament where meta-agents debate system improvements via full Geth Consensus",
+          "13th agent category: meta-evolution",
+          "42 agents total: 13 primary + 29 sub-agents across 13 categories",
+          "VERSION variable fix (was stuck at 5.0.1 since v5.0.2)"
+        ]
+      },
+      {
+        "version": "5.0.2",
+        "file": "legion-5.0.2.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Fix 11 missing agents in DB registry — VERITAS, LOGOS, CONDUCTOR, MUSE, SCRIBE, TEMPEST, MERCURY, CARTOGRAPHER, HERALD, POLYGLOT, EPICURE now seeded",
+          "Auto-registration safety net — unknown agents auto-registered during stats update (never silently discarded)",
+          "Retry/failure progress events — CLI now shows retry successes and agent failures in real time",
+          "Cross-pollination metric broadened — all thought types counted (direct 2x weight), density no longer stuck at 0",
+          "Enhanced Communication Stream bootstrap — assist and contradiction examples added, 2-4 thoughts minimum"
+        ]
+      },
+      {
+        "version": "5.0.1",
+        "file": "legion-5.0.1.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Fix Communication Stream bootstrap deadlock — agents now receive [STREAM] instruction from first execution",
+          "Fix Novelty Score silent failure — diagnostic logging in --verbose mode reveals API/embedding errors",
+          "Fix GADGET unconditional fallback — retries now try same-category specialist before generic fallback",
+          "3 new agents: VERITAS (evidence validator), LOGOS (logic validator), CONDUCTOR (workflow orchestrator)",
+          "39 agents total: 12 primary + 27 sub-agents across 12 categories"
+        ]
+      },
+      {
+        "version": "5.0.0",
+        "file": "legion-5.0.0.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Shared Latent Space — 384-dim vector embeddings for cognitive alignment, divergence-driven debate",
+          "Continuous Communication Stream — real-time thought sharing via [STREAM] tags, cross-pollination metrics",
+          "Self-Modification (PromptEvolver) — agents evolve their own system prompts from experience",
+          "Cross-Agent Knowledge Graph — distributed knowledge links (teaches, contradicts, extends, co_discovered)",
+          "Meta-Reasoning Layer — system self-awareness with quality trends, pair affinity, feature proposals",
+          "Novelty Score — measures emergent intelligence (1 - max cosine similarity to individual contributions)",
+          "Critical bug fix — episodic memory extraction now functional (llm.call→llm.chat)",
+          "All 36 agents now read full collective intelligence context (workspace, memory, stream, knowledge, latent space)"
+        ]
+      },
+      {
+        "version": "4.0.0",
+        "file": "legion-4.0.0.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "SharedWorkspace — inter-agent communication blackboard for real-time collaboration",
+          "Axon Reflex Protection — specialist routing immune to auction override",
+          "Agent-Participated Debate — divergent agents defend their positions before consensus",
+          "Episodic Memory — agents remember lessons from past tasks (30-day TTL)",
+          "Dynamic Capability Discovery — agents auto-learn new capabilities after 3+ successes",
+          "Weighted Authority Synthesis — specialist > generalist conflict resolution",
+          "Iterative Refinement Loop — auto-retry weak sub-tasks when quality < 70%",
+          "Multi-Signal Grounding — 3 deterministic signals blended 50/50 with LLM evaluation",
+          "Ensemble Pattern Memory — remembers effective agent combinations for future tasks"
+        ]
+      },
+      {
+        "version": "3.5.0",
+        "file": "legion-3.5.0.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Axon Reflex — O(1) direct routing bypasses scoring for exact capability matches",
+          "Specialist bonus in gating — sub-agents with keyword match >=0.6 get +0.25 in getTopCandidates",
+          "UCB1 exploration bonus — agents with zero history get up to +0.20 boost to ensure trial",
+          "Decomposer prompt rewritten — explicit specialist keyword list replaces generic instruction",
+          "Feedback loop fix — graduated success/partialSuccess flags now sent (was plain quality)",
+          "Anti-monopoly full scoring — reassignment uses 4-factor score + specialist bonus (was keyword-only)",
+          "Auction pool expanded to 5 candidates with sub-agent injection and 1.3x newcomer boost"
+        ]
+      },
+      {
+        "version": "3.4.3",
+        "file": "legion-3.4.3.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Fix gating override — matchAll() no longer overwrites GethGating assignments (ROOT CAUSE of 10 idle agents)",
+          "Agent maxTokens 8192 — all 36 agents now use full token budget with agentTag tracking",
+          "Full capability listing — decomposer sees all agent capabilities (was truncated to 3-5)",
+          "performanceScore falsy fix — agents with 0% quality no longer treated as 50%",
+          "Specialist bonus +0.25 (was +0.1) — sub-agents with keyword match >=0.6 competitive",
+          "Newcomer auction boost — 30% bid increase for zero-task agents",
+          "Batch splitting robustness — equitable fallback when LLM omits task markers"
+        ]
+      },
+      {
+        "version": "3.4.2",
+        "file": "legion-3.4.2.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Fix duplicate feedback loop — was sending double learning signals per task",
+          "Per-agent quality estimation — individual substance + length analysis (was always overall score)",
+          "Blind cross-validation — evaluator no longer sees primary scores (removes anchoring bias)",
+          "Deterministic penalties re-applied after cross-validation reconciliation",
+          "Debate history persisted to config file — Bayesian estimation works across runs",
+          "Thompson Sampling graduated success — quality 0.5-0.7 counts as partial success (was binary failure)",
+          "Evolution fitness scale normalized — consistent CI Gain scale"
+        ]
+      },
+      {
+        "version": "3.4.1",
+        "file": "legion-3.4.1.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Smart evaluation sampling — beginning + middle + end of long outputs (was truncated to 8KB)",
+          "Code-aware substance analysis — code blocks excluded from repetition detection",
+          "Repetition penalty hardened — threshold raised, capped at 0.30 max, prose-only splitting",
+          "Cross-validator and debate now see representative samples of full output"
+        ]
+      },
+      {
+        "version": "3.4.0",
+        "file": "legion-3.4.0.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Complete Geth Consensus feedback loop — gating, budget, and strategy learning now active",
+          "Honest quality calibration — balanced penalties replace inflated scoring",
+          "Cross-validation with graduated reconciliation (4 tiers instead of 2)",
+          "Every completed task now trains the routing, auction, and evolution systems"
+        ]
+      },
+      {
+        "version": "3.3.0",
+        "file": "legion-3.3.0.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Evaluate-before-debate pipeline — real quality score drives debate decisions",
+          "Debate auto-revert — if debate decreases quality, original synthesis is kept",
+          "Adaptive cross-validation — weighted reconciliation replaces punitive min()",
+          "Quality formula rebalanced — Completeness 30%, Depth 30%, Actionability 20%",
+          "Synthesis buffer 4x — 48K context budget, 16384 max_tokens output",
+          "Agent output doubled — 8192 max_tokens per agent (was 4096)",
+          "Density metric fix — windowed density for long technical documents",
+          "Coverage extraction fix — smarter prompt item dedup, weighted key terms",
+          "Prompt caching — shared LEGION prefix block for better cache hit rates",
+          "Advocate budget 4x — 8192 tokens for full debate improvement"
+        ]
+      },
+      {
+        "version": "3.2.0",
+        "file": "legion-3.2.0.mjs",
+        "date": "2026-02-09",
+        "highlights": [
+          "Thompson Sampling for intelligent agent routing",
+          "Substance analysis with deterministic filler detection",
+          "Cross-validation with skeptical second evaluator",
+          "Tournament selection and genetic crossover",
+          "Reserve price and budget regeneration in auctions",
+          "Agent stats auto-update from task contributions"
+        ]
+      },
+      {
+        "version": "3.1.1",
+        "file": "legion-3.1.1.mjs",
+        "date": "2026-02-08",
+        "highlights": [
+          "Task ownership security with updateToken",
+          "Knowledge Corpus with embedding dedup",
+          "Sub-agent routing with specialist bonus",
+          "Smart task grouping and anti-monopoly"
+        ]
+      },
+      {
+        "version": "3.1.0",
+        "file": "legion-3.1.0.mjs",
+        "date": "2026-02-08",
+        "highlights": [
+          "8 new specialized agents",
+          "Adversarial quality evaluation",
+          "Prompt caching for reduced costs",
+          "Token-aware CI Gain"
+        ]
+      },
+      {
+        "version": "3.0.0",
+        "file": "legion-3.0.0.mjs",
+        "date": "2026-02-08",
+        "highlights": [
+          "Geth Consensus: 4-layer multi-agent coordination",
+          "GethDebate, GethGating, GethAuction, GethEvolution"
+        ]
+      },
+      {
+        "version": "2.0.0",
+        "file": "legion-2.0.0.mjs",
+        "date": "2026-02-08",
+        "highlights": [
+          "Collaborative reasoning and mesh topology"
+        ]
+      },
+      {
+        "version": "1.0.0",
+        "file": "legion-1.0.0.mjs",
+        "date": "2026-02-08",
+        "highlights": [
+          "Initial release with task decomposition and parallel execution"
         ]
       }
     ]

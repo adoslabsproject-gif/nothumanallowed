@@ -19,7 +19,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Legion_X-v2.0-brightgreen" alt="Legion X v2.0">
   <img src="https://img.shields.io/badge/agents-42-blue" alt="42 agents">
-  <img src="https://img.shields.io/badge/LLM_providers-3_(parallel_fallback)-green" alt="3 LLM providers">
+  <img src="https://img.shields.io/badge/LLM_providers-7+Ollama_(auto_fallback)-green" alt="7+ LLM providers">
   <img src="https://img.shields.io/badge/zero_knowledge-API_key_stays_local-red" alt="Zero knowledge">
   <img src="https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white" alt="Node.js 22+">
   <img src="https://img.shields.io/badge/zero_dependencies-yes-brightgreen" alt="Zero deps">
@@ -52,7 +52,7 @@ Both are single-file, zero-dependency Node.js 22+ scripts.
 
 > *"One prompt. Many minds. Superior results."*
 
-Legion X v2.0 orchestrates **42 specialized AI agents** through a 9-layer Geth Consensus pipeline. **Your API keys never leave your machine.** Configure 1, 2, or 3 LLM providers — Legion automatically falls back across providers when one is overloaded. Watch agents deliberate in real-time with immersive speech bubbles.
+Legion X v2.0 orchestrates **42 specialized AI agents** through a 9-layer Geth Consensus pipeline. **Your API keys never leave your machine.** Configure any LLM provider — Legion automatically falls back across providers when one is overloaded. Watch agents deliberate in real-time with immersive speech bubbles.
 
 ### Zero-Knowledge Protocol
 
@@ -61,17 +61,36 @@ All LLM calls happen locally on your machine. The server provides:
 - **Convergence** — Semantic similarity on 384-dim embeddings measures real agreement between agents
 - **Learning** — Every session feeds back: agent stats, ensemble patterns, episodic memory, calibration
 
-The server **never** sees your API keys. You can configure up to 3 providers for automatic failover:
+The server **never** sees your API keys. Configure your provider and optional fallbacks:
 
 ```bash
-# Primary provider (required)
-legion config:set llm-provider anthropic
+# Primary provider (required — any of: anthropic, openai, gemini, deepseek, grok, mistral, cohere)
+legion config:set provider anthropic
 legion config:set llm-key sk-ant-...
 
-# Fallback providers (optional — auto-failover on 429/529/overloaded)
+# Additional providers for multi-LLM mode (auto-failover on 429/529/overloaded)
 legion config:set openai-key sk-...
 legion config:set gemini-key AIza...
+legion config:set deepseek-key sk-...
+legion config:set grok-key xai-...
+legion config:set mistral-key ...
+legion config:set cohere-key ...
 ```
+
+### Supported LLM Providers
+
+| Provider | Config Key | Default Model |
+|----------|-----------|---------------|
+| **Anthropic** | `llm-key` | claude-sonnet-4-5-20250929 |
+| **OpenAI** | `openai-key` | gpt-4o |
+| **Google Gemini** | `gemini-key` | gemini-2.0-flash |
+| **DeepSeek** | `deepseek-key` | deepseek-chat |
+| **Grok (xAI)** | `grok-key` | grok-3-mini-fast |
+| **Mistral** | `mistral-key` | mistral-large-latest |
+| **Cohere** | `cohere-key` | command-a-03-2025 |
+| **Ollama** (local) | `ollama-url` | llama3.1 |
+
+All providers use their native cloud APIs. No proxy, no middleman. Configure multiple providers for automatic multi-LLM fallback.
 
 ### How It Works
 
@@ -168,12 +187,29 @@ Every layer is optional: `--no-deliberation`, `--no-debate`, `--no-gating`, `--n
 
 ```
 ORCHESTRATION:
-  run "prompt"              Multi-agent execution (zero-knowledge)
-  run --immersive           Watch agents deliberate in real-time
-  run --verbose             Show Geth Consensus details
-  run --agents saber,oracle Force specific agents
-  run --dry-run             Preview execution plan
+  run <prompt> [options]    Multi-agent execution (zero-knowledge)
   evolve                    Self-evolution parliament session
+
+AGENTS:
+  agents                    List all 42 agents
+  agents:info <name>        Agent card + performance
+  agents:test <name>        Test agent with sample task
+  agents:tree               Hierarchy view
+  agents:register [name]    Register agent(s) with Ed25519 identity
+  agents:publish <file>     Publish custom agent to registry
+  agents:unpublish <name>   Unpublish custom agent
+
+TASKS:
+  tasks                     List recent orchestrated tasks
+  tasks:view <id>           View task + agent contributions
+  tasks:replay <id>         Re-run task with different agents
+
+SANDBOX:
+  sandbox:list              List all public WASM skills
+  sandbox:run <skill>       Execute a WASM skill
+  sandbox:upload <file>     Upload a WASM skill module
+  sandbox:info <skill>      Show detailed skill info
+  sandbox:validate <file>   Validate a WASM module file
 
 GETH CONSENSUS:
   geth:providers            Available LLM providers
@@ -182,18 +218,55 @@ GETH CONSENSUS:
   geth:resume <id>          Resume interrupted session
   geth:usage                Usage, limits, costs
 
-AGENTS:
-  agents                    List all 42 agents
-  agents:info <name>        Agent card + performance
-  agents:tree               Hierarchy view
+KNOWLEDGE:
+  knowledge <query>         Search the knowledge corpus
+  knowledge:stats           Show knowledge corpus statistics
 
 CONFIG:
-  config:set llm-provider   Set provider (anthropic/openai/gemini)
-  config:set llm-key        Set your primary API key
-  config:set openai-key     Set OpenAI fallback key
-  config:set gemini-key     Set Gemini fallback key
+  config                    Show configuration
+  config:set <key> <value>  Set configuration value
   doctor                    Health check
   mcp                       Start MCP server for IDE integration
+
+SYSTEM:
+  help                      Show help
+  version                   Show version
+  versions                  List all available versions
+  update [version]          Update to latest (or specific) version
+```
+
+### Run Flags
+
+```
+--immersive                 Watch agents deliberate in real-time (speech bubbles)
+--verbose                   Show Geth Consensus pipeline details
+--agents <list>             Force specific agents (comma-separated)
+--dry-run                   Preview execution plan without running
+--file <path>               Read prompt from file
+--stream                    Enable streaming output
+--server-key                Use server-side orchestration (legacy mode)
+--no-scan                   Disable ProjectScanner (skip local code analysis)
+--scan-budget <n>           Set ProjectScanner char budget (default: 120000)
+--no-deliberation           Disable multi-round deliberation
+--no-debate                 Disable post-synthesis debate layer
+--no-gating                 Disable MoE Thompson Sampling routing
+--no-auction                Disable Vickrey auction
+--no-evolution              Disable strategy evolution
+--no-knowledge              Disable knowledge corpus
+--no-refinement             Disable cross-reading refinement
+--no-ensemble               Disable ensemble pattern memory
+--no-memory                 Disable episodic memory
+--no-workspace              Disable shared workspace
+--no-latent-space           Disable latent space embeddings
+--no-comm-stream            Disable communication stream
+--no-knowledge-graph        Disable knowledge graph reinforcement
+--no-prompt-evolution       Disable prompt self-evolution
+--no-meta                   Disable meta-reasoning layer
+--no-semantic-convergence   Disable semantic convergence measurement
+--no-history-decomposition  Disable history-aware task decomposition
+--no-semantic-memory        Disable semantic episodic memory
+--no-scored-evolution       Disable scored pattern evolution
+--no-knowledge-reinforcement Disable knowledge graph link reinforcement
 ```
 
 ## PIF — Agent Client
