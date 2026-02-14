@@ -111,7 +111,7 @@ AGENTS=(
     scheherazade quill murasaki muse scribe echo
     oracle navi edi jarvis tempest mercury herald epicure
     babel hermes polyglot
-    cron puppet macro conductor
+    cron macro conductor
     link
     forge atlas shogun
     shell

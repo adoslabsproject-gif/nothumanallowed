@@ -22,7 +22,7 @@
  * measurement, synthesis prompts) but makes ZERO LLM calls for free-tier sessions.
  *
  * Supports: Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere.
- * 42 agents: 13 primary + 29 sub-agents across 11 categories.
+ * 41 agents: 13 primary + 28 sub-agents across 11 categories.
  *
  * @version 1.8
  * @license MIT
@@ -40,7 +40,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '2.0';
+var VERSION = '2.1.0';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -72,7 +72,7 @@ class LegionConfig {
       maxRetries: 2,
       parallelism: 4,
       qualityThreshold: 0.7,
-      verbose: false,
+      verbose: true,
       // Knowledge Corpus
       knowledgeEnabled: true,
       // Geth Consensus settings
@@ -719,14 +719,7 @@ var AGENT_CATALOG = [
     origin: 'Unix Daemon', tagline: 'Relentless automation engine',
     capabilities: ['workflow-building', 'task-scheduling', 'ci-cd', 'batch-processing', 'automation-design', 'pipeline-design', 'script-generation', 'cron-scheduling'],
     inputTypes: ['requirements', 'text', 'workflow-spec'], outputTypes: ['workflow', 'pipeline-config', 'script', 'schedule'],
-    subAgents: ['puppet', 'macro', 'conductor'],
-  },
-  {
-    name: 'puppet', displayName: 'PUPPET', category: 'automation',
-    origin: 'DevOps Tool', tagline: 'Task orchestration specialist',
-    capabilities: ['task-orchestration', 'dependency-management', 'parallel-execution', 'idempotent-tasks', 'rollback-planning'],
-    inputTypes: ['task-list', 'text', 'config'], outputTypes: ['execution-plan', 'task-graph', 'rollback-plan'],
-    parentAgent: 'cron',
+    subAgents: ['macro', 'conductor'],
   },
   {
     name: 'macro', displayName: 'MACRO', category: 'automation',
@@ -738,8 +731,8 @@ var AGENT_CATALOG = [
   {
     name: 'conductor', displayName: 'CONDUCTOR', category: 'automation',
     origin: 'Orchestra Conductor', tagline: 'Harmony emerges from coordination',
-    capabilities: ['workflow-design', 'task-decomposition', 'dependency-analysis', 'bottleneck-detection', 'parallelization', 'critical-path-analysis'],
-    inputTypes: ['requirements', 'workflow-spec', 'text', 'task-graph'], outputTypes: ['dag', 'execution-plan', 'critical-path', 'resource-allocation'],
+    capabilities: ['workflow-design', 'task-decomposition', 'dependency-analysis', 'bottleneck-detection', 'parallelization', 'critical-path-analysis', 'rollback-planning', 'idempotent-tasks', 'parallel-execution'],
+    inputTypes: ['requirements', 'workflow-spec', 'text', 'task-graph', 'task-list', 'config'], outputTypes: ['dag', 'execution-plan', 'critical-path', 'resource-allocation', 'rollback-plan'],
     parentAgent: 'cron',
   },
   // Social
@@ -1507,7 +1500,7 @@ class SharedWorkspace {
       agent: agentName,
       type: type,
       tag: tag,
-      content: content.substring(0, 1000),
+      content: content,
       timestamp: Date.now(),
     });
   }
@@ -1581,7 +1574,7 @@ function parseStructuredAgentOutput(raw) {
         confidence: typeof parsed.confidence === 'number'
           ? Math.max(0, Math.min(1, parsed.confidence)) : 0.7,
         reasoningSummary: typeof parsed.reasoning_summary === 'string'
-          ? parsed.reasoning_summary.substring(0, 500) : '',
+          ? parsed.reasoning_summary : '',
         riskFlags: Array.isArray(parsed.risk_flags)
           ? parsed.risk_flags.filter(function(f) { return typeof f === 'string'; }).slice(0, 10) : [],
       };
@@ -1599,7 +1592,7 @@ function parseStructuredAgentOutput(raw) {
           confidence: typeof parsed2.confidence === 'number'
             ? Math.max(0, Math.min(1, parsed2.confidence)) : 0.7,
           reasoningSummary: typeof parsed2.reasoning_summary === 'string'
-            ? parsed2.reasoning_summary.substring(0, 500) : '',
+            ? parsed2.reasoning_summary : '',
           riskFlags: Array.isArray(parsed2.risk_flags)
             ? parsed2.risk_flags.filter(function(f) { return typeof f === 'string'; }).slice(0, 10) : [],
         };
@@ -1634,7 +1627,7 @@ class CommunicationStream {
     this.thoughts.push({
       agent: agentName,
       type: type,
-      content: content.substring(0, 500),
+      content: content,
       confidence: confidence || null,
       wave: this.currentWave,
       timestamp: Date.now(),
@@ -1682,11 +1675,8 @@ class CommunicationStream {
 
     for (var i = 0; i < otherProposals.length; i++) {
       var p = otherProposals[i];
-      var truncated = p.content.length > maxPerAgent
-        ? p.content.substring(0, maxPerAgent) + '\n[... truncated from ' + p.content.length + ' chars]'
-        : p.content;
       context += '=== ' + p.agent.toUpperCase() + ' (task: ' + p.subTaskId + ', wave: ' + p.wave + ') ===\n';
-      context += truncated + '\n\n';
+      context += p.content + '\n\n';
     }
     context += '--- END PROPOSALS ---\n';
     return context;
@@ -1980,7 +1970,7 @@ class PromptEvolver {
       var analysis = await llm.chat(
         'You analyze successful agent executions to extract reusable patterns.',
         'Agent: ' + agentName + '\nQuality: ' + (quality * 100).toFixed(0) + '%\n' +
-        'Task feedback: ' + taskFeedback.substring(0, 1000) + '\n\n' +
+        'Task feedback: ' + taskFeedback + '\n\n' +
         'Extract ONE specific, actionable pattern that made this successful. ' +
         'Output format: "When [situation], always [action] because [reason]"\n' +
         'Max 1 sentence. Output ONLY the pattern.',
@@ -1994,7 +1984,7 @@ class PromptEvolver {
       var insight = await llm.chat(
         'You analyze agent executions to extract learning insights.',
         'Agent: ' + agentName + '\nQuality: ' + (quality * 100).toFixed(0) + '% (moderate)\n' +
-        'Task feedback: ' + taskFeedback.substring(0, 1000) + '\n\n' +
+        'Task feedback: ' + taskFeedback + '\n\n' +
         'Extract ONE specific insight about what could be improved or preserved. ' +
         'Output format: "When [situation], consider [approach] which produced ' + (quality * 100).toFixed(0) + '% quality"\n' +
         'Max 1 sentence. Output ONLY the insight.',
@@ -2007,7 +1997,7 @@ class PromptEvolver {
       var avoidance = await llm.chat(
         'You analyze failed agent executions to extract anti-patterns.',
         'Agent: ' + agentName + '\nQuality: ' + (quality * 100).toFixed(0) + '%\n' +
-        'Task feedback: ' + taskFeedback.substring(0, 1000) + '\n\n' +
+        'Task feedback: ' + taskFeedback + '\n\n' +
         'Extract ONE specific mistake to avoid in future. ' +
         'Output format: "Never [action] when [situation] because [consequence]"\n' +
         'Max 1 sentence. Output ONLY the anti-pattern.',
@@ -2420,10 +2410,10 @@ function cosineSimilarityLocal(a, b) {
  */
 async function measureNoveltyScore(client, synthesizedResult, contributions, verbose) {
   try {
-    var texts = [synthesizedResult.substring(0, 1000)];
+    var texts = [synthesizedResult];
     for (var i = 0; i < contributions.length; i++) {
       if (contributions[i].result && contributions[i].status === 'completed') {
-        texts.push(contributions[i].result.substring(0, 1000));
+        texts.push(contributions[i].result);
       }
     }
     if (texts.length < 2) {
@@ -2791,7 +2781,7 @@ class ExecutionEngine {
             var edge = graphResp.edges[ki];
             kgSnapshot += '  [' + edge.linkType + '] ' + edge.sourceAgent + ' → ' + (edge.targetAgent || 'global') +
               ': ' + edge.concept + ' (strength: ' + edge.strength.toFixed(2) + ')\n';
-            kgSnapshot += '    Evidence: ' + edge.evidence.substring(0, 200) + '\n';
+            kgSnapshot += '    Evidence: ' + edge.evidence + '\n';
             if (edge.id) this._injectedLinks[agentName].push({ id: edge.id, strength: edge.strength });
           }
           kgSnapshot += '--- END KNOWLEDGE ---\n';
@@ -2813,7 +2803,7 @@ class ExecutionEngine {
           for (var li = 0; li < divResp.divergentAgents.length; li++) {
             var da = divResp.divergentAgents[li];
             lsSnapshot += '- ' + da.agentName.toUpperCase() + ' (similarity: ' + da.similarity.toFixed(2) +
-              '): "' + da.reasoningSummary.substring(0, 200) + '"\n';
+              '): "' + da.reasoningSummary + '"\n';
           }
           lsSnapshot += 'These agents see different aspects. Consider both perspectives.\n';
           lsSnapshot += '--- END LATENT SPACE ---\n';
@@ -2869,7 +2859,7 @@ class ExecutionEngine {
 
     // v5.0.0: Contribute to latent space (fire-and-forget)
     if (this.latentSpaceEnabled && this.client && this.runId) {
-      var reasoningSummary = (parsedOutput.reasoningSummary || resultStr.replace(/[#*`\[\]]/g, '').substring(0, 500)).trim();
+      var reasoningSummary = (parsedOutput.reasoningSummary || resultStr.replace(/[#*`\[\]]/g, '')).trim();
       this.client.contributeLatentVector(this.runId, agentName, reasoningSummary, this.commStream ? this.commStream.currentWave : 0)
         .catch(function() {});
     }
@@ -2969,7 +2959,7 @@ class ExecutionEngine {
 
     // v5.0.0: Contribute to latent space (fire-and-forget)
     if (this.latentSpaceEnabled && this.client && this.runId) {
-      var batchSummary = resultStr.replace(/[#*`\[\]]/g, '').substring(0, 500).trim();
+      var batchSummary = resultStr.replace(/[#*`\[\]]/g, '').trim();
       this.client.contributeLatentVector(this.runId, agentName, batchSummary, this.commStream ? this.commStream.currentWave : 0)
         .catch(function() {});
     }
@@ -3613,7 +3603,7 @@ class QualityEvaluator {
 
     // v3.3.0: If no structured items found, treat the whole prompt as ONE request
     if (requests.length === 0) {
-      requests.push(prompt.substring(0, 300));
+      requests.push(prompt);
     }
     // v3.3.0: Cap at 8 items (was 10) — fewer, more meaningful items = fairer coverage
     if (requests.length > 8) requests = requests.slice(0, 8);
@@ -4328,7 +4318,7 @@ class DeliberationEngine {
  * - Round 1: Parallel critic + judge on initial synthesis (no advocate needed)
  * - Round 2+: Advocate addresses critique, then parallel critic + judge
  * - Early exit: stops immediately if judge score >= 0.8
- * - Context truncation: critic sees max 1500 chars per contribution
+ * - Zero truncation: critic sees full contributions (v2.0.1)
  * - Reduced token limits: critic/judge use 1024 max_tokens (not 4096)
  *
  * Typical timing: 1-2 rounds × ~15s = 15-30s total (vs 3 rounds × ~60s before)
@@ -4674,14 +4664,10 @@ class GethDebate {
         'Defend your key findings in 2-3 sentences. Be specific about WHY your approach is correct.\n' +
         'Only defend points where you have strong evidence or domain expertise.';
 
-      var truncated = contrib.result.length > 2000
-        ? contrib.result.substring(0, 2000) + '...'
-        : contrib.result;
-
       try {
         var defense = await this.llm.chat(defensePrompt,
-          'Original prompt: ' + (prompt.length > 500 ? prompt.substring(0, 500) + '...' : prompt) +
-          '\n\nYour output:\n' + truncated,
+          'Original prompt: ' + prompt +
+          '\n\nYour output:\n' + contrib.result,
           { maxTokens: 512, agentTag: 'debate:defense:' + agentName }
         );
         defenses.push({ agent: agentName, defense: defense });
@@ -6646,8 +6632,8 @@ async function scanProject(projectDir, tokenBudget) {
  *     └─ POST step/validate/result ───> quality + CI gain + complete
  */
 async function runClientOrchestration(prompt, options, legionConfig, client) {
-  var verbose = legionConfig.get('verbose') || options.verbose;
-  var immersive = options.immersive || false;
+  var verbose = options.verbose !== undefined ? options.verbose : legionConfig.get('verbose');
+  var immersive = !options.noImmersive;
   var totalStart = Date.now();
 
   // Immersive rendering: agent speech bubbles + cross-reading + synthesis display
@@ -7089,19 +7075,60 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         break;
       }
 
-      // Display convergence
-      var convPct = Math.round((roundResult.convergence || 0) * 100);
+      // Display convergence (Advanced Convergence Engine)
+      var effectiveConv = roundResult.effectiveConvergence || roundResult.convergence || 0;
+      var rawConv = roundResult.convergence || 0;
+      var convPct = Math.round(effectiveConv * 100);
+      var rawPct = Math.round(rawConv * 100);
       var convBarWidth = 16;
       var convFilled = Math.round(convPct / 100 * convBarWidth);
       var convBar = '\u2588'.repeat(convFilled) + '\u2591'.repeat(convBarWidth - convFilled);
-      var divStr = '';
-      if (roundResult.divergentPairs && roundResult.divergentPairs.length > 0) {
-        var pairNames = roundResult.divergentPairs.map(function(p) { return p[0] + ' vs ' + p[1]; }).join(', ');
-        divStr = '\n  \x1b[33m\u2694 Divergent: ' + pairNames + '\x1b[0m';
-      } else {
-        divStr = '\n  \x1b[32m\u2713 All agents aligned\x1b[0m';
+
+      // Line 1: Convergence bar with effective % and method
+      console.log('\x1b[33m[ROUND ' + round + ']\x1b[0m    Convergence: ' + convBar + ' ' + convPct + '% (effective, ' + (roundResult.method || 'jaccard') + ')');
+
+      // Line 2: Raw + complementarity breakdown
+      var compLine = '             Raw: ' + rawPct + '%';
+      if (roundResult.complementarity) {
+        var compBoost = Math.round(roundResult.complementarity.score * 30);
+        var contraPenalty = Math.round(roundResult.complementarity.contradictions * 20);
+        if (compBoost > 0) compLine += ' | Complementarity: \x1b[32m+' + compBoost + '% boost\x1b[0m';
+        if (contraPenalty > 0) compLine += ' | Contradictions: \x1b[31m-' + contraPenalty + '% penalty\x1b[0m';
+        else compLine += ' | Contradictions: \x1b[32m0\x1b[0m';
+        if (roundResult.complementarity.realConflicts > 0) {
+          compLine += ' \x1b[31m(' + roundResult.complementarity.realConflicts + ' real conflict(s))\x1b[0m';
+        }
       }
-      console.log('\x1b[33m[ROUND ' + round + ']\x1b[0m    Convergence: ' + convBar + ' ' + convPct + '% (' + (roundResult.method || 'jaccard') + ')' + divStr);
+      console.log(compLine);
+
+      // Line 3: Clusters + outliers
+      if (roundResult.clusters) {
+        var clusterLine = '             Clusters: ';
+        var clusterStr = roundResult.clusters.strength !== undefined
+          ? 'strength ' + Math.round(roundResult.clusters.strength * 100) + '%'
+          : '';
+        if (roundResult.clusters.outliers && roundResult.clusters.outliers.length > 0) {
+          clusterLine += clusterStr + ' + outlier(s): \x1b[33m' + roundResult.clusters.outliers.join(', ') + '\x1b[0m';
+        } else {
+          clusterLine += clusterStr + ' \x1b[32m(all agents in consensus)\x1b[0m';
+        }
+        console.log(clusterLine);
+      }
+
+      // Line 4: Trajectory
+      if (roundResult.trajectory) {
+        var trendArrow = roundResult.trajectory.trend === 'improving' ? '\x1b[32m\u2191\x1b[0m'
+          : roundResult.trajectory.trend === 'declining' ? '\x1b[31m\u2193\x1b[0m'
+          : roundResult.trajectory.trend === 'plateau' ? '\x1b[33m\u2192\x1b[0m'
+          : roundResult.trajectory.trend === 'oscillating' ? '\x1b[33m\u223F\x1b[0m'
+          : '\x1b[90m\u2014\x1b[0m';
+        var velocityStr = roundResult.trajectory.velocity !== undefined
+          ? (roundResult.trajectory.velocity >= 0 ? '+' : '') + (roundResult.trajectory.velocity * 100).toFixed(1) + '% velocity'
+          : '';
+        console.log('             Trajectory: ' + trendArrow + ' ' + roundResult.trajectory.trend + (velocityStr ? ' (' + velocityStr + ')' : ''));
+      } else if (round === 1) {
+        console.log('             Trajectory: \x1b[90m\u2014 (first round)\x1b[0m');
+      }
 
       await reportProgress(
         { phase: 'round_' + round },
@@ -7120,9 +7147,10 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       if (roundResult.nextStatus !== 'awaiting_round') {
         // Decision: stop deliberation
         if (decisionMode) {
-          var decisionIcon = decisionMode === 'skip_consensus' ? '\x1b[32m\u2713 CONSENSUS REACHED\x1b[0m' :
-            '\u27f3 ' + String(decisionMode).toUpperCase();
-          console.log('\n' + decisionIcon + (decisionReason ? ' \x1b[90m(' + decisionReason + ')\x1b[0m' : ''));
+          var isSkipMode = decisionMode === 'skip_consensus' || decisionMode === 'skip';
+          var decisionIcon = isSkipMode ? '\x1b[32m\u2713 CONSENSUS REACHED\x1b[0m' :
+            '\u27f3 ' + String(decisionMode).toUpperCase().replace('_', ' ');
+          console.log('\n' + decisionIcon + (decisionReason ? ' \u2014 ' + decisionReason : ''));
         }
         break;
       }
@@ -7131,7 +7159,9 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
 
       // Show round decision for continuation
       if (decisionMode) {
-        console.log('\n\u27f3 Round ' + round + ': \x1b[1m' + String(decisionMode).toUpperCase() + '\x1b[0m' + (decisionReason ? ' \x1b[90m(' + decisionReason + ')\x1b[0m' : ''));
+        var modeIcons = { standard: '\u27f3', mandatory: '\u2757', arbitrator: '\u2696', targeted_mediation: '\u2694' };
+        var mIcon = modeIcons[decisionMode] || '\u27f3';
+        console.log('\n' + mIcon + ' Round ' + round + ': \x1b[1m' + String(decisionMode).toUpperCase().replace('_', ' ') + '\x1b[0m' + (decisionReason ? ' \u2014 ' + decisionReason : ''));
       }
     }
 
@@ -7255,35 +7285,48 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       }
     }
 
-    // Evaluate best individual proposal for real CI Gain
+    // Evaluate ALL individual proposals for real CI Gain — use the highest LLM-scored as baseline
+    // This prevents inflated CI Gain from non-specialist agents with high self-reported confidence
     var bestProposalScore;
-    if (valInstr.bestProposalValidator) {
+    var proposalsToEval = valInstr.proposalValidators || (valInstr.bestProposalValidator ? [valInstr.bestProposalValidator] : []);
+    if (proposalsToEval.length > 0) {
       try {
-        var bpVal = valInstr.bestProposalValidator;
-        var bpProvider = bpVal.provider || userProvider;
-        var bpProvOrder = [bpProvider].concat(availableProviders.filter(function(p) { return p !== bpProvider; }));
-        var bpRaw;
-        for (var bpi = 0; bpi < bpProvOrder.length; bpi++) {
-          try {
-            bpRaw = await llm.chatWithProvider(bpProvOrder[bpi], bpVal.systemPrompt, bpVal.userMessage, {
-              maxTokens: bpVal.maxTokens || 512,
-              agentTag: '_baseline_eval',
-            });
-            bpProvider = bpProvOrder[bpi];
-            break;
-          } catch (bpRetryErr) {
-            var isBpRL = bpRetryErr.message && (bpRetryErr.message.includes('429') || bpRetryErr.message.includes('529') || bpRetryErr.message.includes('overloaded') || bpRetryErr.message.includes('Overloaded') || bpRetryErr.message.includes('RESOURCE_EXHAUSTED') || bpRetryErr.message.includes('rate'));
-            if (isBpRL && bpi < bpProvOrder.length - 1) continue;
-            throw bpRetryErr;
+        if (verbose) console.log('  Evaluating ' + proposalsToEval.length + ' individual proposals for baseline...');
+        var evalResults = [];
+        for (var pei = 0; pei < proposalsToEval.length; pei++) {
+          var bpVal = proposalsToEval[pei];
+          var bpProvider = bpVal.provider || userProvider;
+          var bpProvOrder = [bpProvider].concat(availableProviders.filter(function(p) { return p !== bpProvider; }));
+          var bpRaw;
+          for (var bpi = 0; bpi < bpProvOrder.length; bpi++) {
+            try {
+              bpRaw = await llm.chatWithProvider(bpProvOrder[bpi], bpVal.systemPrompt, bpVal.userMessage, {
+                maxTokens: bpVal.maxTokens || 512,
+                agentTag: '_baseline_eval',
+              });
+              break;
+            } catch (bpRetryErr) {
+              var isBpRL = bpRetryErr.message && (bpRetryErr.message.includes('429') || bpRetryErr.message.includes('529') || bpRetryErr.message.includes('overloaded') || bpRetryErr.message.includes('Overloaded') || bpRetryErr.message.includes('RESOURCE_EXHAUSTED') || bpRetryErr.message.includes('rate'));
+              if (isBpRL && bpi < bpProvOrder.length - 1) continue;
+              throw bpRetryErr;
+            }
+          }
+          var bpParsed = extractJSON(bpRaw);
+          if (bpParsed && typeof bpParsed.score === 'number') {
+            var thisScore = Math.max(0, Math.min(1, bpParsed.score));
+            var agentLabel = bpVal.agentName || ('proposal_' + pei);
+            evalResults.push({ agent: agentLabel, score: thisScore });
+            if (verbose) console.log('    ' + agentLabel + ': ' + Math.round(thisScore * 100) + '%');
           }
         }
-        var bpParsed = extractJSON(bpRaw);
-        if (bpParsed && typeof bpParsed.score === 'number') {
-          bestProposalScore = Math.max(0, Math.min(1, bpParsed.score));
-          console.log('  Baseline (best individual): ' + Math.round(bestProposalScore * 100) + '%');
+        if (evalResults.length > 0) {
+          // Sort descending by score and use the BEST as baseline
+          evalResults.sort(function(a, b) { return b.score - a.score; });
+          bestProposalScore = evalResults[0].score;
+          console.log('  Baseline (best individual: ' + evalResults[0].agent + '): ' + Math.round(bestProposalScore * 100) + '%');
         }
       } catch (bpErr) {
-        if (immersive) console.log('  \x1b[90mBaseline eval failed: ' + bpErr.message + '\x1b[0m');
+        if (verbose) console.log('  \x1b[90mBaseline eval failed: ' + bpErr.message + '\x1b[0m');
       }
     }
 
@@ -7535,8 +7578,8 @@ function formatElapsed(ms) {
 // =============================================================================
 
 async function runServerConsensus(prompt, options, legionConfig, client) {
-  var verbose = legionConfig.get('verbose') || options.verbose;
-  var immersive = options.immersive || false;
+  var verbose = options.verbose !== undefined ? options.verbose : legionConfig.get('verbose');
+  var immersive = !options.noImmersive;
   var totalStart = Date.now();
 
   console.log(colors.cyan + '[LEGION X]' + colors.reset + ' Delegating to server-side Geth Consensus...');
@@ -7855,14 +7898,32 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
   function renderSynthesisWeights(event) {
     var prog = event.convergenceProgression || [];
     var progStr = prog.map(function(c) { return 'R' + c.round + ':' + Math.round(c.convergence * 100) + '%'; }).join(' \u2192 ');
-    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mPreparing final synthesis (' + (event.totalRounds || 0) + ' rounds)');
+    var strategyLabel = event.strategy ? ' [' + event.strategy.replace(/_/g, '-') + ']' : '';
+    console.log('\x1b[36m[SYNTHESIS]  \x1b[0mPreparing final synthesis (' + (event.totalRounds || 0) + ' rounds)' + strategyLabel);
     if (progStr) {
       console.log('  Convergence: ' + progStr);
     }
     var top = event.topAgents || [];
     if (top.length > 0) {
-      var topStr = top.map(function(a) { return a.name + ' (' + Math.round(a.confidence * 100) + '%)'; }).join(', ');
-      console.log('  Strongest: ' + topStr);
+      // Authority-weighted display (new format with tier/rank/calibration)
+      var hasAuthority = top[0] && top[0].tier;
+      if (hasAuthority) {
+        console.log('  \x1b[1mAgent Authority:\x1b[0m');
+        for (var i = 0; i < top.length; i++) {
+          var a = top[i];
+          var tierColor = a.tier === 'expert' ? '\x1b[32m' : a.tier === 'proficient' ? '\x1b[36m' : a.tier === 'standard' ? '\x1b[37m' : '\x1b[90m';
+          var calIcon = a.calibration === 'well-calibrated' ? '\x1b[32m\u2713\x1b[0m' : a.calibration === 'overconfident' ? '\x1b[33m\u2191\x1b[0m' : '\x1b[33m\u2193\x1b[0m';
+          var tasks = a.tasksCompleted !== undefined ? ', ' + a.tasksCompleted + ' tasks' : '';
+          console.log('    #' + (a.rank || (i + 1)) + ' ' + a.name.padEnd(14) + ' ' + tierColor + a.tier.padEnd(10) + '\x1b[0m [' + Math.round(a.confidence * 100) + '%] ' + calIcon + tasks);
+        }
+      } else {
+        // Fallback: old format
+        var topStr = top.map(function(a) { return a.name + ' (' + Math.round(a.confidence * 100) + '%)'; }).join(', ');
+        console.log('  Strongest: ' + topStr);
+      }
+    }
+    if (event.realConflicts > 0) {
+      console.log('  \x1b[33mReal conflicts: ' + event.realConflicts + '\x1b[0m');
     }
     var risk = event.riskFlaggedAgents || [];
     if (risk.length > 0) {
@@ -8363,7 +8424,7 @@ async function runOrchestration(prompt, options) {
   // --- Legacy local orchestration (unreachable, kept for reference) ---
   var registry = new AgentRegistry();
   var llm = new LLMProvider(config);
-  var verbose = config.get('verbose') || options.verbose;
+  var verbose = options.verbose !== undefined ? options.verbose : config.get('verbose');
   var totalStart = Date.now();
 
   // Initialize
@@ -8427,7 +8488,7 @@ async function runOrchestration(prompt, options) {
         knowledgeContext = '\n\nRelevant prior results (use as reference, do not copy):\n';
         for (var ki = 0; ki < knowledge.data.length; ki++) {
           var kEntry = knowledge.data[ki];
-          knowledgeContext += '- [Score: ' + ((kEntry.qualityScore || 0) * 100).toFixed(0) + '%] ' + (kEntry.content || '').substring(0, 300) + '\n';
+          knowledgeContext += '- [Score: ' + ((kEntry.qualityScore || 0) * 100).toFixed(0) + '%] ' + (kEntry.content || '') + '\n';
         }
       }
     } catch {}
@@ -9403,10 +9464,10 @@ async function runOrchestration(prompt, options) {
               var lessonResp = await llm.chat(
                 'You extract concise lessons from agent task outputs. Output ONLY the lesson, nothing else.',
                 'Agent: ' + agentName + '\nCapability: ' + cap + '\nQuality: ' + (agentQuality * 100).toFixed(0) + '%\n\n' +
-                'Output:\n' + result.substring(0, 2000),
+                'Output:\n' + result,
                 { maxTokens: 128, agentTag: 'memory-extract' }
               );
-              var lesson = lessonResp ? lessonResp.trim().substring(0, 500) : null;
+              var lesson = lessonResp ? lessonResp.trim() : null;
               if (lesson) {
                 // Hash the prompt for dedup
                 var promptHash = Array.from(new Uint8Array(
@@ -9495,7 +9556,7 @@ async function runOrchestration(prompt, options) {
 
         // Propose new patterns for all quality ranges (was: only >= 0.80 and < 0.50)
         feedbackPromises.push(
-          promptEvolver.proposeEvolution(pc.agentName, pc.result.substring(0, 1000), pcQuality, llm)
+          promptEvolver.proposeEvolution(pc.agentName, pc.result, pcQuality, llm)
             .catch(function() {})
         );
       }
@@ -9548,7 +9609,7 @@ async function runOrchestration(prompt, options) {
                 'You analyze multi-agent task outputs to identify knowledge relationships.',
                 'These agents worked on the same task:\n' +
                 completedContribs.map(function(c) {
-                  return c.agentName + ': ' + c.result.substring(0, 300);
+                  return c.agentName + ': ' + c.result;
                 }).join('\n\n') +
                 '\n\nIdentify 1-3 knowledge links between agents. For each link, output EXACTLY:\n' +
                 'SOURCE_AGENT|TARGET_AGENT|LINK_TYPE|CONCEPT|EVIDENCE\n' +
@@ -9578,7 +9639,7 @@ async function runOrchestration(prompt, options) {
                         linkType: parts[2].trim(),
                         concept: parts[3].trim(),
                         strength: initialStrength,
-                        evidence: parts[4].trim().substring(0, 500),
+                        evidence: parts[4].trim(),
                         runId: runId,
                       }).catch(function() {})
                     );
@@ -9893,7 +9954,7 @@ var COMMANDS = {
     args: '<prompt> [options]',
     handler: async function(args) {
       var prompt = '';
-      var options = { stream: false, agents: null, dryRun: false, verbose: false };
+      var options = { stream: false, agents: null, dryRun: false };
 
       for (var i = 0; i < args.length; i++) {
         if (args[i] === '--file' && args[i + 1]) {
@@ -9911,10 +9972,14 @@ var COMMANDS = {
           i++;
         } else if (args[i] === '--dry-run') {
           options.dryRun = true;
+        } else if (args[i] === '--no-verbose') {
+          options.verbose = false;
         } else if (args[i] === '--verbose') {
-          options.verbose = true;
+          // backward compat (already ON by default since v2.0.1)
+        } else if (args[i] === '--no-immersive') {
+          options.noImmersive = true;
         } else if (args[i] === '--immersive') {
-          options.immersive = true;
+          // backward compat (already ON by default since v2.0.1)
         } else if (args[i] === '--no-debate') {
           options.noDebate = true;
         } else if (args[i] === '--no-gating') {
@@ -9980,7 +10045,7 @@ var COMMANDS = {
   },
 
   agents: {
-    description: 'List all 42 agents',
+    description: 'List all 41 agents',
     args: '',
     handler: async function() {
       printBanner();
@@ -10311,7 +10376,7 @@ var COMMANDS = {
         console.log('  grok-key      - Grok/xAI API key');
         console.log('  mistral-key   - Mistral API key');
         console.log('  cohere-key    - Cohere API key');
-        console.log('  verbose       - Enable verbose logging (true/false)');
+        console.log('  verbose       - Verbose logging, ON by default (true/false)');
         console.log();
         console.log(colors.gray + 'Your API keys NEVER leave your machine. Server provides orchestration only.' + colors.reset);
         console.log(colors.gray + 'Configure multiple providers for automatic multi-LLM fallback.' + colors.reset);
@@ -10777,8 +10842,8 @@ var COMMANDS = {
       // Run flags section
       console.log(colors.bold + 'RUN FLAGS:' + colors.reset);
       var runFlags = [
-        ['--immersive',               'Watch agents deliberate in real-time with speech bubbles'],
-        ['--verbose',                 'Show Geth Consensus pipeline details'],
+        ['--no-immersive',            'Hide agent speech bubbles and cross-reading display (ON by default)'],
+        ['--no-verbose',              'Hide Geth Consensus pipeline details (ON by default)'],
         ['--agents <list>',           'Force specific agents (comma-separated, e.g. saber,oracle)'],
         ['--dry-run',                 'Preview execution plan without running'],
         ['--file <path>',             'Read prompt from file'],
@@ -10882,12 +10947,13 @@ var COMMANDS = {
 
   evolve: {
     description: 'Run self-evolution parliament (meta-agents debate system improvements via Geth Consensus)',
-    args: '[--dry-run] [--verbose]',
+    args: '[--dry-run] [--no-verbose]',
     handler: async function(args) {
-      var options = { dryRun: false, verbose: false };
+      var options = { dryRun: false };
       for (var i = 0; i < args.length; i++) {
         if (args[i] === '--dry-run') options.dryRun = true;
-        if (args[i] === '--verbose') options.verbose = true;
+        if (args[i] === '--no-verbose') options.verbose = false;
+        if (args[i] === '--verbose') { /* backward compat, already ON by default */ }
       }
 
       // 1. Gather system data from MetaIntelligence + PromptEvolver

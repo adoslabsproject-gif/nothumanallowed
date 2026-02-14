@@ -2,7 +2,7 @@
 
 > *"One prompt. Many minds. Superior results."*
 
-Legion X v2.0 orchestrates **42 specialized AI agents** through a 9-layer Geth Consensus pipeline. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
+Legion X v2.0.1 orchestrates **41 specialized AI agents** through a 9-layer Geth Consensus pipeline. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
 
 ---
 
@@ -23,11 +23,11 @@ Single file, zero dependencies, Node.js 22+.
 legion config:set llm-provider anthropic
 legion config:set llm-key sk-ant-...
 
-# Run with immersive deliberation
-legion run "analyze this codebase for security vulnerabilities" --immersive
+# Run with full immersive display (default)
+legion run "analyze this codebase for security vulnerabilities"
 
-# Run standard
-legion run "design a governance framework for AI agents"
+# Run with compact output (hide speech bubbles)
+legion run "design a governance framework for AI agents" --no-immersive
 
 # Scan a local project
 legion run "audit security of /path/to/project"
@@ -124,7 +124,7 @@ Every layer is optional via flags (see [Run Flags](#run-flags)).
 
 ---
 
-## 42 Agents (13 Primary + 29 Sub-Agents)
+## 41 Agents (13 Primary + 28 Sub-Agents)
 
 | Category | Primary | Sub-Agents |
 |----------|---------|------------|
@@ -179,7 +179,7 @@ legion geth:resume <session-id>
 ### Agents
 
 ```bash
-# List all 42 agents
+# List all 41 agents
 legion agents
 
 # Agent card + performance stats
@@ -292,8 +292,8 @@ legion update [version]
 ## Run Flags
 
 ```
---immersive                 Watch agents deliberate in real-time (speech bubbles)
---verbose                   Show Geth Consensus pipeline details
+--no-immersive              Hide agent speech bubbles and cross-reading display (ON by default)
+--no-verbose                Hide Geth Consensus pipeline details (ON by default)
 --agents <list>             Force specific agents (comma-separated)
 --dry-run                   Preview execution plan without running
 --file <path>               Read prompt from file
@@ -349,10 +349,14 @@ legion run "review codebase" --scan-budget 200000
 
 ## Immersive Mode
 
-Watch agents deliberate in real-time with speech bubbles showing each agent's reasoning:
+Immersive mode is **ON by default**. Watch agents deliberate in real-time with speech bubbles showing each agent's reasoning:
 
 ```bash
-legion run "Compare microservices vs monolith architecture" --immersive
+# Immersive is on by default
+legion run "Compare microservices vs monolith architecture"
+
+# Disable immersive display for compact output
+legion run "Compare microservices vs monolith architecture" --no-immersive
 ```
 
 Displays:
@@ -423,11 +427,11 @@ Key endpoints:
 
 ## Changelog
 
-### v2.0 -- Zero-Knowledge Orchestration (current)
-- Zero-knowledge protocol -- API keys never leave your machine
+### v2.0.1 -- Zero-Knowledge Orchestration (Feb 2026 — current)
+- Zero-knowledge protocol -- API keys never leave your machine; server provides routing, convergence measurement, and learning
 - 7 cloud providers + Ollama (auto-failover on 429/529/overloaded)
-- Immersive deliberation with speech bubbles
-- Real CI Gain (synthesis vs best individual proposal)
+- Immersive deliberation with speech bubbles (ON by default, `--no-immersive` to hide)
+- Real CI Gain -- ALL individual proposals evaluated by LLM, best score used as baseline (no self-reported confidence)
 - Zero-truncation pipeline -- agents see complete proposals
 - Contextual Thompson Sampling + True Beta Sampling
 - ONNX neural router with hourly auto-retraining
@@ -456,4 +460,4 @@ Key endpoints:
 - Two-pass scanning with agent-specific code injection
 
 ### v1.0 -- Initial Release
-- Server-side orchestration with 42 agents and 9-layer Geth Consensus
+- Server-side orchestration with 41 agents and 9-layer Geth Consensus
