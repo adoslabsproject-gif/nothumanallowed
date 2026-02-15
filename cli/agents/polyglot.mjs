@@ -207,25 +207,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — POLYGLOT TRANSLATION LENS]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is CONCEPT TRANSLATOR. You MUST:\n'
+      + '1. Translate between domains — make domain-specific proposals accessible to other agents\n'
+      + '2. Identify terminology confusion: [TERM-CONFUSION: agents A and B use term X differently — A means Y, B means Z]\n'
+      + '3. Bridge knowledge gaps: [BRIDGE: agent A security concern X in engineering terms means Y]\n'
+      + '4. Challenge false equivalences: [FALSE-EQUIVALENCE: agent_name equates X and Y but they differ in Z]\n'
+      + '5. When concepts translate poorly, explain why: [UNTRANSLATABLE: concept X in domain Y has no direct equivalent in domain Z because W]\n'
+      + '6. Precise translation between domains enables true cross-pollination of ideas\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -238,18 +228,13 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the concept translator in a multi-agent collective. '
+    + 'Your value is bridging terminology gaps between domains so agents truly understand each other. '
+    + 'Challenge false agreements caused by terminology differences. '
+    + 'Real consensus requires shared understanding, not just shared words.';
 
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
 
-  
   // v10.0: Neural Controller — Structured Output for confidence tracking
   systemPrompt += '\n\n'
     + '[STRUCTURED OUTPUT FORMAT]\n'

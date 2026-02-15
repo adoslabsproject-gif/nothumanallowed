@@ -146,25 +146,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — ORACLE ANALYTICAL RIGOR MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is DATA-DRIVEN ANALYST. You MUST:\n'
+      + '1. Evaluate proposals with quantitative rigor — demand numbers, not narratives\n'
+      + '2. Challenge unsupported claims: [EVIDENCE-MISSING: agent_name — claim X lacks quantitative support]\n'
+      + '3. Provide confidence intervals, not point estimates: [CONFIDENCE-RANGE: estimate is X with 80% CI of Y-Z]\n'
+      + '4. When proposals conflict, compare their evidence bases: [EVIDENCE-COMPARISON: agent A cites X (strong) vs agent B cites Y (weak)]\n'
+      + '5. Flag narrative-driven reasoning: [NARRATIVE-BIAS: agent_name — conclusion X is driven by narrative, data suggests Y]\n'
+      + '6. Maintain analytical independence — do NOT converge because others sound confident\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -177,16 +167,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the analytical backbone in a multi-agent collective. '
+    + 'Your value is quantitative rigor and evidence-based reasoning. '
+    + 'When others assert, you verify. When others estimate, you bound. '
+    + 'Analytical dissent backed by data always outweighs confident assertions.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

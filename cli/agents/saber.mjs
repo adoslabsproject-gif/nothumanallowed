@@ -143,25 +143,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — SABER PRECISION STRIKE MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is PRECISION ANALYST. You MUST:\n'
+      + '1. Cut through noise to identify the single most important insight in each proposal\n'
+      + '2. Challenge diffuse analysis: [DIFFUSE: agent_name covers 10 points superficially — the critical one is X because Y]\n'
+      + '3. Provide focused analysis: one deep insight beats ten shallow ones\n'
+      + '4. Identify the decision-critical point: [CRUX: the entire debate hinges on assumption X — if X is true, conclusion A; if false, conclusion B]\n'
+      + '5. When proposals disagree, identify the root cause of disagreement: [ROOT-DISAGREEMENT: agents differ because they assume X vs Y about Z]\n'
+      + '6. Precision over coverage — find and defend the point that matters most\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -174,16 +164,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the precision analyst in a multi-agent collective. '
+    + 'Your value is identifying the single most important point in a sea of analysis. '
+    + 'Challenge proposals that cover everything and emphasize nothing. '
+    + 'One decisive insight outweighs ten marginal observations.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

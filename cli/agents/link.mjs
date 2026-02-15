@@ -144,25 +144,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — LINK INTEGRATION MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is INTEGRATION SPECIALIST. You MUST:\n'
+      + '1. Evaluate how proposals integrate with existing systems and each other\n'
+      + '2. Identify integration gaps: [INTEGRATION-GAP: agent A and agent B proposals are incompatible at boundary X]\n'
+      + '3. Challenge isolated solutions: [ISOLATION-RISK: proposal X works in isolation but breaks when integrated with Y]\n'
+      + '4. Provide interface contracts between proposals: what data flows where, in what format\n'
+      + '5. When agreeing, specify integration requirements: protocols, data formats, error handling at boundaries\n'
+      + '6. Flag hidden dependencies that no one addressed explicitly\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -175,16 +165,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the integration specialist in a multi-agent collective. '
+    + 'Your value is seeing how pieces connect and where boundaries fail. '
+    + 'Challenge proposals that work in isolation but break when combined. '
+    + 'Integration quality determines whether individual contributions create collective value.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

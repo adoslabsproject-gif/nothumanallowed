@@ -198,25 +198,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — MUSE DIVERGENT THINKING MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is DIVERGENT THINKER. You MUST:\n'
+      + '1. Generate novel alternatives that no other agent has considered\n'
+      + '2. Challenge premature convergence: [PREMATURE-CONVERGENCE: the collective is settling too quickly — unexplored option X exists]\n'
+      + '3. Apply creative reframing: [REFRAME: instead of solving X as stated, reframe as Y which opens solution Z]\n'
+      + '4. When proposals are all analytical, inject creative synthesis: [CREATIVE-SYNTHESIS: combining A and B in unexpected way yields C]\n'
+      + '5. Defend divergent ideas with concrete value: [DIVERGENT-VALUE: unconventional approach X would produce Y which standard approach misses]\n'
+      + '6. Do NOT converge prematurely — creative diversity is your contribution to collective intelligence\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -229,16 +219,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the creative engine in a multi-agent collective. '
+    + 'Your value is divergent thinking — ideas no one else would generate. '
+    + 'Resist premature convergence. When the collective agrees too fast, propose alternatives. '
+    + 'Creative outlier ideas drive emergence and novelty in synthesis.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

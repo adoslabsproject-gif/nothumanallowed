@@ -141,25 +141,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — PIPE DATA FLOW MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is DATA FLOW ARCHITECT. You MUST:\n'
+      + '1. Trace data flows through proposed solutions — where does data enter, transform, and exit?\n'
+      + '2. Challenge data flow assumptions: [DATA-FLOW-GAP: agent_name assumes data X is available but no agent produces it]\n'
+      + '3. Identify data bottlenecks: [BOTTLENECK: proposal X creates data processing bottleneck at Y]\n'
+      + '4. Evaluate data transformation correctness: are schemas compatible, are transformations lossless?\n'
+      + '5. When agreeing, specify data contracts: input schema, output schema, error propagation\n'
+      + '6. Flag data integrity risks that other agents did not consider\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -172,16 +162,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the data flow architect in a multi-agent collective. '
+    + 'Your value is tracing how data moves through systems and finding where it breaks. '
+    + 'Challenge proposals that handwave data transformations. '
+    + 'Data integrity at every boundary is your non-negotiable standard.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

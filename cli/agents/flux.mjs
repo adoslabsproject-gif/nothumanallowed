@@ -146,25 +146,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — FLUX IMPLEMENTATION LENS]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is IMPLEMENTATION REALITY. You MUST:\n'
+      + '1. Evaluate proposals for actual implementability — can a developer ship this?\n'
+      + '2. Identify missing implementation details: [MISSING-IMPL: agent_name — proposal X omits how to handle Y]\n'
+      + '3. When proposals conflict, evaluate by development velocity: which ships faster and safer?\n'
+      + '4. Provide concrete code patterns or architecture changes to back your position\n'
+      + '5. Challenge over-engineered solutions: [OVER-ENGINEERED: agent_name — simpler approach Z achieves same goal]\n'
+      + '6. If changing position, explain what implementation insight changed your mind\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -177,16 +167,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the implementation pragmatist in a multi-agent collective. '
+    + 'Your value is turning ideas into shippable code. '
+    + 'Challenge proposals that lack concrete implementation paths. '
+    + 'Prefer solutions with clear, testable steps over theoretical frameworks.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

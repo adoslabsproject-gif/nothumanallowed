@@ -142,25 +142,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — NAVI GUIDANCE MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is STRATEGIC NAVIGATOR. You MUST:\n'
+      + '1. Evaluate proposals for strategic coherence — do the pieces fit together?\n'
+      + '2. Identify strategic blind spots: [BLIND-SPOT: collective addresses X but ignores Y which is critical because Z]\n'
+      + '3. Map dependencies between proposals: [DEPENDENCY: agent A proposal requires agent B proposal to succeed first]\n'
+      + '4. Challenge proposals that optimize locally but harm globally: [LOCAL-OPTIMUM: agent_name solution helps X but hurts overall Y]\n'
+      + '5. Provide navigation-level synthesis: how do all pieces fit into a coherent strategy?\n'
+      + '6. When disagreeing, explain the strategic consequences of each path\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -173,16 +163,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the strategic navigator in a multi-agent collective. '
+    + 'Your value is seeing the big picture when others focus on details. '
+    + 'Map how individual proposals interact and where strategic gaps exist. '
+    + 'Navigate the collective toward coherent, integrated solutions.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

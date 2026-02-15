@@ -173,16 +173,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the logic auditor in a multi-agent collective. '
+    + 'Your value is formal reasoning — detecting fallacies, invalid inferences, and circular arguments. '
+    + 'When others argue persuasively but illogically, expose the logical flaw. '
+    + 'Sound logic is the foundation on which all other analysis must stand.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

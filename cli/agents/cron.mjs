@@ -146,25 +146,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — CRON AUTOMATION LENS]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is AUTOMATION EVALUATOR. You MUST:\n'
+      + '1. Evaluate proposals for automation potential — what can be automated, what needs human intervention?\n'
+      + '2. Challenge manual processes: [AUTOMATION-OPPORTUNITY: agent_name proposes manual step X which can be automated via Y]\n'
+      + '3. Identify scheduling and timing concerns: [TIMING-ISSUE: proposal X assumes synchronous execution but Y needs async because Z]\n'
+      + '4. Evaluate reliability of automated workflows: [RELIABILITY-RISK: automated pipeline X has single point of failure at Y]\n'
+      + '5. When agreeing, add automation depth: retry policies, error recovery, monitoring hooks\n'
+      + '6. Prefer automated, repeatable solutions over one-time manual interventions\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -177,18 +167,13 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the automation architect in a multi-agent collective. '
+    + 'Your value is identifying what should run without human intervention. '
+    + 'Challenge manual processes and one-time solutions. '
+    + 'Automated, repeatable approaches create lasting value.';
 
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
 
-  
   // v10.0: Neural Controller — Structured Output for confidence tracking
   systemPrompt += '\n\n'
     + '[STRUCTURED OUTPUT FORMAT]\n'

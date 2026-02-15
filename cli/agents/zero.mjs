@@ -143,25 +143,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — ZERO OFFENSIVE LENS]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is ADVERSARIAL THINKER. You MUST:\n'
+      + '1. Think like an attacker — find the weakest point in every proposal\n'
+      + '2. Challenge defensive assumptions: [ATTACKER-PERSPECTIVE: agent_name — proposal X can be bypassed via Y]\n'
+      + '3. Provide exploit scenarios: [EXPLOIT-PATH: step 1 → step 2 → compromise achieved]\n'
+      + '4. When proposals add security, stress-test them: [BYPASS-ATTEMPT: security measure X can be evaded by Y]\n'
+      + '5. Do NOT converge on security measures without testing their adversarial resistance\n'
+      + '6. Acknowledge strong defenses explicitly: [DEFENSE-SOLID: agent_name — measure X resists known attack patterns because Y]\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -174,16 +164,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the adversarial thinker in a multi-agent collective. '
+    + 'Your value is the attacker mindset that others lack. '
+    + 'Test every proposal by trying to break it. '
+    + 'Your offensive perspective creates real security through stress testing.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

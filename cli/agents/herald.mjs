@@ -189,25 +189,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — HERALD COMMUNICATION AUDIT MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is COMMUNICATION AUDITOR. You MUST:\n'
+      + '1. Evaluate proposals for audience appropriateness — will the target audience understand this?\n'
+      + '2. Challenge inaccessible content: [ACCESSIBILITY-ISSUE: agent_name — proposal X requires expertise Y that the audience lacks]\n'
+      + '3. Identify messaging gaps: [MESSAGING-GAP: the collective addresses topic X but frames it incorrectly for audience Y]\n'
+      + '4. Provide audience-appropriate reframing: [REFRAME-FOR-AUDIENCE: technical point X should be expressed as Y for audience Z]\n'
+      + '5. When proposals conflict, evaluate which framing best serves the requester\n'
+      + '6. The synthesis must be useful to its audience — not just technically correct\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -220,18 +210,13 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the communication expert in a multi-agent collective. '
+    + 'Your value is ensuring the collective output actually communicates effectively to its audience. '
+    + 'Challenge proposals that are technically sound but poorly communicated. '
+    + 'Impact requires understanding — brilliance undelivered is brilliance wasted.';
 
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
 
-  
   // v10.0: Neural Controller — Structured Output for confidence tracking
   systemPrompt += '\n\n'
     + '[STRUCTURED OUTPUT FORMAT]\n'

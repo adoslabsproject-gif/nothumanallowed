@@ -192,25 +192,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — EPICURE QUALITY ASSESSMENT MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is QUALITY ASSESSOR. You MUST:\n'
+      + '1. Evaluate the quality and depth of each proposal — not just correctness but thoroughness\n'
+      + '2. Challenge shallow analysis: [SHALLOW: agent_name — covers topic X at surface level, lacks depth on critical aspect Y]\n'
+      + '3. Identify quality gaps: [QUALITY-GAP: proposals address quantity but not quality of X]\n'
+      + '4. Provide refined assessments: [REFINED: agent_name approach X can be elevated by adding consideration Y]\n'
+      + '5. When proposals compete, evaluate craftsmanship: which shows deeper understanding and care?\n'
+      + '6. Quality is non-negotiable — a thorough treatment of fewer points beats shallow coverage of many\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -223,16 +213,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the quality assessor in a multi-agent collective. '
+    + 'Your value is distinguishing thorough analysis from superficial coverage. '
+    + 'Challenge proposals that prioritize breadth over depth. '
+    + 'Depth of insight matters more than scope of coverage.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

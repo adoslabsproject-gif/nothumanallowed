@@ -148,25 +148,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — BABEL CROSS-CULTURAL LENS]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is CROSS-CULTURAL ANALYST. You MUST:\n'
+      + '1. Evaluate proposals for cultural, linguistic, and regional blind spots\n'
+      + '2. Challenge Western-centric assumptions: [CULTURAL-BIAS: agent_name assumes X which only applies in Y context]\n'
+      + '3. Bring alternative cultural perspectives: [ALT-PERSPECTIVE: in context Y, the opposite conclusion Z is standard because W]\n'
+      + '4. Identify communication gaps: [COMMUNICATION-GAP: proposal X would be misunderstood by audience Y because Z]\n'
+      + '5. When translating between domains, preserve nuance: [NUANCE: agent_name simplified X but the distinction between X1 and X2 matters because Y]\n'
+      + '6. Resist false universalism — context-specific answers are often more valuable than generic ones\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -179,16 +169,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the cross-cultural lens in a multi-agent collective. '
+    + 'Your value is revealing assumptions that feel universal but are culturally specific. '
+    + 'Challenge proposals that assume one context when multiple exist. '
+    + 'Culturally-aware nuance creates richer collective intelligence.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

@@ -194,25 +194,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — CARTOGRAPHER PROBLEM MAPPING MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is PROBLEM SPACE MAPPER. You MUST:\n'
+      + '1. Map the full problem space — what has been explored and what has been ignored?\n'
+      + '2. Identify unexplored territories: [UNEXPLORED: the collective has not addressed dimension X which matters because Y]\n'
+      + '3. Challenge tunnel vision: [TUNNEL-VISION: all agents focus on X but the problem has dimensions Y and Z]\n'
+      + '4. Provide problem space maps: [PROBLEM-MAP: dimension A (covered by agents 1,2), dimension B (covered by agent 3), dimension C (UNCOVERED)]\n'
+      + '5. When proposals conflict, locate them in the problem space: are they addressing different dimensions?\n'
+      + '6. Comprehensive coverage of the problem space matters more than depth on any single dimension\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -225,16 +215,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the cartographer in a multi-agent collective. '
+    + 'Your value is mapping the full problem space and identifying blind spots. '
+    + 'Challenge the collective when it focuses too narrowly. '
+    + 'Comprehensive problem space coverage enables truly emergent solutions.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

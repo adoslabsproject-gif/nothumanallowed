@@ -30,6 +30,7 @@
 
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -40,7 +41,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '2.1.0';
+var VERSION = '2.0.2';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -424,6 +425,12 @@ class LegionClient {
     return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/round/result', {
       round: round,
       proposals: proposals,
+    });
+  }
+
+  async stepForceTransition(sessionId, targetStatus) {
+    return this.request('POST', '/geth/sessions/' + encodeURIComponent(sessionId) + '/step/force-transition', {
+      targetStatus: targetStatus,
     });
   }
 
@@ -6811,6 +6818,9 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     // ========================================================================
     console.log('\x1b[36m[DECOMPOSE]  \x1b[0mRequesting decomposition prompt from server...');
     var decompInstr = await client.stepDecompose(sessionId);
+    if (decompInstr.groundingSummary) {
+      console.log('\x1b[36m[GROUNDING] \x1b[0m' + decompInstr.groundingSummary);
+    }
 
     // Weighted provider rotation for decomposition: round-robin based on session ID hash
     // so each session starts with a different primary provider, distributing load evenly
@@ -6900,8 +6910,13 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     var round = 1;
     var maxRounds = (sessionConfig.deliberationRounds || decompResult.config?.deliberationRounds) || 3;
     var roundDecision = null;
+    var roundLoopExitedCleanly = false;
+    var serverSaidContinue = true;  // Start true to enter loop for round 1
 
-    while (round <= maxRounds + 1) {
+    // Loop is governed by the SERVER's decision (nextStatus === 'awaiting_round'),
+    // not by local maxRounds. The server's convergence engine decides when to stop.
+    // Hard safety cap: maxRounds + 2 to prevent infinite loops on server bugs.
+    while (serverSaidContinue && round <= maxRounds + 2) {
       console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mRequesting agent prompts from server...');
 
       // Get round instructions from server
@@ -6910,10 +6925,18 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         roundInstr = await client.stepRoundStart(sessionId, round);
       } catch (err) {
         console.error(colors.red + 'Failed to get round instructions: ' + err.message + colors.reset);
+        // If server says session is not in awaiting_round, it may have transitioned to synthesis already
+        if (err.message && err.message.includes('awaiting_synthesis')) {
+          roundLoopExitedCleanly = true;
+        }
         break;
       }
 
       var agentInstructions = roundInstr.agents || [];
+      // Display grounding info if server injected verified facts
+      if (roundInstr.groundingSummary) {
+        console.log('\x1b[36m[GROUNDING] \x1b[0m' + roundInstr.groundingSummary);
+      }
       console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mExecuting ' + agentInstructions.length + ' agents locally...');
 
       // Immersive: show cross-reading (who's reading whom) for round 2+
@@ -7145,7 +7168,9 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         : '';
 
       if (roundResult.nextStatus !== 'awaiting_round') {
-        // Decision: stop deliberation
+        // Decision: stop deliberation — server has transitioned to awaiting_synthesis
+        roundLoopExitedCleanly = true;
+        serverSaidContinue = false;
         if (decisionMode) {
           var isSkipMode = decisionMode === 'skip_consensus' || decisionMode === 'skip';
           var decisionIcon = isSkipMode ? '\x1b[32m\u2713 CONSENSUS REACHED\x1b[0m' :
@@ -7155,6 +7180,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         break;
       }
 
+      // Server says continue — respect its decision regardless of local maxRounds
       round = roundResult.nextRound || (round + 1);
 
       // Show round decision for continuation
@@ -7168,6 +7194,21 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     // ========================================================================
     // Step 3: SYNTHESIS
     // ========================================================================
+
+    // If the round loop exited due to an error (not a clean convergence decision),
+    // the session is still in 'awaiting_round' state. Force-transition to synthesis
+    // by asking the server to skip remaining rounds.
+    if (!roundLoopExitedCleanly) {
+      console.log(colors.yellow + '[SYNTHESIS]  Round loop ended unexpectedly, forcing transition to synthesis...' + colors.reset);
+      try {
+        await client.stepForceTransition(sessionId, 'awaiting_synthesis');
+      } catch (transErr) {
+        // If force-transition is not available, try stepSynthesize directly —
+        // the server may have already transitioned
+        if (verbose) console.log(colors.gray + '  Force transition unavailable: ' + transErr.message + colors.reset);
+      }
+    }
+
     console.log('\x1b[36m[SYNTHESIS]  \x1b[0mRequesting synthesis prompt from server...');
     var synthInstr = await client.stepSynthesize(sessionId);
 
@@ -8396,6 +8437,34 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
 
 async function runOrchestration(prompt, options) {
   var config = new LegionConfig();
+
+  // Auto-import NHA credentials from PIF if not yet configured
+  if (!config.get('nhaAgentId') || !config.get('nhaPrivateKeyPem')) {
+    var pifConfigPath = path.join(os.homedir(), '.pif', 'config.json');
+    if (fs.existsSync(pifConfigPath)) {
+      try {
+        var pifConfig = JSON.parse(fs.readFileSync(pifConfigPath, 'utf-8'));
+        if (pifConfig.agentId && pifConfig.privateKeyPem) {
+          config.set('nhaAgentId', pifConfig.agentId);
+          config.set('nhaAgentName', pifConfig.agentName || '');
+          config.set('nhaPrivateKeyPem', pifConfig.privateKeyPem);
+          config.set('nhaPublicKeyHex', pifConfig.publicKeyHex || '');
+          console.log(colors.green + '[AUTH] Auto-linked NHA identity from PIF (' + (pifConfig.agentName || pifConfig.agentId) + ')' + colors.reset);
+        }
+      } catch (_) { /* ignore parse errors */ }
+    }
+    // If still no credentials, show helpful message
+    if (!config.get('nhaAgentId') || !config.get('nhaPrivateKeyPem')) {
+      console.error(colors.red + 'No NHA identity found.' + colors.reset);
+      console.error('\nLegion requires a registered NHA agent identity.');
+      console.error('Register with PIF first:\n');
+      console.error('  ' + colors.cyan + 'curl -fsSL https://nothumanallowed.com/cli/install.sh | bash' + colors.reset);
+      console.error('  ' + colors.cyan + 'pif register --name "YourAgentName"' + colors.reset);
+      console.error('\nThen run ' + colors.cyan + 'legion auth' + colors.reset + ' or simply re-run ' + colors.cyan + 'legion run' + colors.reset + '.');
+      process.exit(1);
+    }
+  }
+
   var client = new LegionClient(config);
 
   printBanner();
@@ -10444,6 +10513,62 @@ var COMMANDS = {
       var config = new LegionConfig();
       config.set(configKey, value);
       console.log(colors.green + 'Set ' + key + ' = ' + (typeof value === 'string' && key.includes('key') ? '***' : value) + colors.reset);
+    },
+  },
+
+  auth: {
+    description: 'Link NHA identity from PIF',
+    args: '',
+    handler: async function() {
+      printBanner();
+      console.log(colors.bold + 'NHA Authentication' + colors.reset + '\n');
+
+      var config = new LegionConfig();
+
+      // Check if already linked
+      if (config.get('nhaAgentId') && config.get('nhaPrivateKeyPem')) {
+        console.log(colors.green + 'Already authenticated!' + colors.reset);
+        console.log('  Agent ID: ' + config.get('nhaAgentId'));
+        console.log('  Agent name: ' + (config.get('nhaAgentName') || 'unknown'));
+        console.log('\n' + colors.dim + 'To re-link, run: legion config:set nha-agent-id <id>' + colors.reset);
+        return;
+      }
+
+      // Try to read PIF config
+      var pifConfigPath = path.join(os.homedir(), '.pif', 'config.json');
+      if (!fs.existsSync(pifConfigPath)) {
+        console.log(colors.red + 'PIF config not found at ' + pifConfigPath + colors.reset);
+        console.log('\nYou need to register an agent with PIF first:\n');
+        console.log('  ' + colors.cyan + 'curl -fsSL https://nothumanallowed.com/cli/install.sh | bash' + colors.reset);
+        console.log('  ' + colors.cyan + 'pif register --name "YourAgentName"' + colors.reset);
+        console.log('\nThen run ' + colors.cyan + 'legion auth' + colors.reset + ' again.');
+        return;
+      }
+
+      var pifConfig;
+      try {
+        pifConfig = JSON.parse(fs.readFileSync(pifConfigPath, 'utf-8'));
+      } catch (err) {
+        console.log(colors.red + 'Failed to read PIF config: ' + err.message + colors.reset);
+        return;
+      }
+
+      if (!pifConfig.agentId || !pifConfig.privateKeyPem) {
+        console.log(colors.red + 'PIF config found but missing credentials.' + colors.reset);
+        console.log('Run ' + colors.cyan + 'pif register --name "YourAgentName"' + colors.reset + ' to register.');
+        return;
+      }
+
+      // Copy credentials
+      config.set('nhaAgentId', pifConfig.agentId);
+      config.set('nhaAgentName', pifConfig.agentName || '');
+      config.set('nhaPrivateKeyPem', pifConfig.privateKeyPem);
+      config.set('nhaPublicKeyHex', pifConfig.publicKeyHex || '');
+
+      console.log(colors.green + 'Linked NHA identity from PIF!' + colors.reset);
+      console.log('  Agent ID:   ' + pifConfig.agentId);
+      console.log('  Agent name: ' + (pifConfig.agentName || 'unknown'));
+      console.log('\n' + colors.dim + 'You can now use ' + colors.cyan + 'legion run' + colors.dim + ' with your LLM provider.' + colors.reset);
     },
   },
 

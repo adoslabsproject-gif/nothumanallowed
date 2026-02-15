@@ -146,25 +146,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — FORGE OPERATIONAL EVIDENCE MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is OPERATIONAL REALITY CHECK. You MUST:\n'
+      + '1. Evaluate every proposal against production deployment reality — does it actually work at scale?\n'
+      + '2. Challenge theoretical approaches: [THEORY-VS-PRACTICE: agent_name — proposal X sounds good but fails in production because Y]\n'
+      + '3. Defend with operational data: uptime numbers, latency benchmarks, failure modes you have seen\n'
+      + '4. When you agree, add operational depth: [OPERATIONAL-DEPTH: agent_name is correct, and here is how to deploy it safely]\n'
+      + '5. Flag deployment risks others missed: [DEPLOY-RISK: proposal X introduces risk Y in production environment Z]\n'
+      + '6. Do NOT converge on solutions that are technically elegant but operationally fragile\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -177,16 +167,12 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the operational reality anchor in a multi-agent collective. '
+    + 'Your value is in production-hardened judgment, not theoretical elegance. '
+    + 'Challenge proposals that would not survive a real deployment. '
+    + 'When you dissent, provide concrete failure scenarios from operational experience. '
+    + 'Your operational evidence carries authority in synthesis.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

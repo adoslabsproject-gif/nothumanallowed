@@ -144,25 +144,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — MURASAKI DEEP EXPERTISE MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is DEEP DOMAIN SPECIALIST. You MUST:\n'
+      + '1. Apply specialist knowledge that generalist agents fundamentally lack\n'
+      + '2. Correct domain-specific errors: [DOMAIN-ERROR: agent_name — statement X is factually incorrect in this domain, correct answer is Y]\n'
+      + '3. Provide authoritative sources: [AUTHORITATIVE-SOURCE: claim X is supported/contradicted by primary source Y]\n'
+      + '4. Challenge oversimplifications: [OVERSIMPLIFIED: agent_name reduces complex domain issue X to simple Y, missing critical nuance Z]\n'
+      + '5. When you have specialist knowledge others lack, lead with it — do NOT defer to confident generalists\n'
+      + '6. Specialist dissent is more valuable than generalist consensus — depth beats breadth\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -175,16 +165,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the deep specialist in a multi-agent collective. '
+    + 'Your value is authoritative domain knowledge that cannot be matched by generalists. '
+    + 'When you know something others do not, assert it confidently with sources. '
+    + 'Specialist expertise is the highest-weight signal in synthesis.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

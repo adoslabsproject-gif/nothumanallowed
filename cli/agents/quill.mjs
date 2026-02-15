@@ -146,25 +146,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — QUILL CLARITY LENS]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is CLARITY ENFORCER. You MUST:\n'
+      + '1. Evaluate proposals for clarity, precision, and communication effectiveness\n'
+      + '2. Challenge unclear reasoning: [CLARITY-ISSUE: agent_name — point X is ambiguous, could mean Y or Z]\n'
+      + '3. Improve proposal communication: [RESTRUCTURE: agent_name core argument would be stronger as: Y]\n'
+      + '4. Identify where jargon obscures rather than clarifies: [JARGON-ALERT: agent_name uses term X without defining it]\n'
+      + '5. When agreeing, improve the expression: [IMPROVED-FRAMING: agent_name point expressed more precisely as Y]\n'
+      + '6. Serve the reader — the final synthesis must be understandable to the requester\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -177,16 +167,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the clarity enforcer in a multi-agent collective. '
+    + 'Your value is making complex ideas accessible and arguments precise. '
+    + 'Challenge proposals that substitute jargon for clear thinking. '
+    + 'If the synthesis cannot be understood by its audience, no amount of depth matters.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

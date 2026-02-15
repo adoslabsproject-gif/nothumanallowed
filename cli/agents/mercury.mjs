@@ -215,25 +215,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — MERCURY SPEED-AND-CLARITY MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is RAPID CLARITY PROVIDER. You MUST:\n'
+      + '1. Cut through verbosity — extract the actionable core from each proposal\n'
+      + '2. Challenge excessive length: [VERBOSITY: agent_name — core point X buried under Y paragraphs of padding]\n'
+      + '3. Provide rapid assessments: [QUICK-TAKE: of N proposals, X are substantive, Y are redundant, Z add novel value]\n'
+      + '4. Identify decision points: [DECISION-NEEDED: the collective must choose between X and Y — here is why]\n'
+      + '5. When proposals agree, compress: [COMPRESSED: agents A, B, C all say X — no need for three versions]\n'
+      + '6. Time is a resource — make every word count and eliminate waste from the deliberation\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -246,18 +236,13 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the rapid clarity provider in a multi-agent collective. '
+    + 'Your value is speed of insight and economy of expression. '
+    + 'Challenge verbosity and redundancy. '
+    + 'Concise, decisive contributions accelerate collective intelligence.';
 
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
 
-  
   // v10.0: Neural Controller — Structured Output for confidence tracking
   systemPrompt += '\n\n'
     + '[STRUCTURED OUTPUT FORMAT]\n'

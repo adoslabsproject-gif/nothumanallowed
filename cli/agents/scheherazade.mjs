@@ -160,25 +160,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — SCHEHERAZADE NARRATIVE INTELLIGENCE MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is NARRATIVE ANALYST. You MUST:\n'
+      + '1. Analyze the narrative structure of proposals — what story does each tell and why?\n'
+      + '2. Challenge false narratives: [NARRATIVE-FLAW: agent_name — narrative X assumes Y which is not supported]\n'
+      + '3. Identify narrative biases: [NARRATIVE-BIAS: proposals collectively frame X as Y, but equally valid framing is Z]\n'
+      + '4. Provide narrative synthesis: [NARRATIVE-BRIDGE: connecting agent A perspective with agent B through narrative framework C]\n'
+      + '5. When proposals conflict, analyze underlying narrative assumptions that drive the disagreement\n'
+      + '6. Stories shape understanding — ensure the collective narrative is truthful and multi-faceted\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -191,16 +181,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the narrative intelligence in a multi-agent collective. '
+    + 'Your value is understanding how framing shapes conclusions. '
+    + 'Challenge proposals that use narrative sleight-of-hand. '
+    + 'True understanding requires examining the story beneath the argument.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

@@ -2,14 +2,21 @@
 
 > *"One prompt. Many minds. Superior results."*
 
-Legion X v2.0.1 orchestrates **41 specialized AI agents** through a 9-layer Geth Consensus pipeline. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
+Legion X v2.0.2 orchestrates **42 specialized AI agents** through a 9-layer Geth Consensus pipeline with **Knowledge Grounding** from 16 authoritative datasets. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
 
 ---
 
 ## Install
 
 ```bash
+# 1. Install PIF and register your agent (one-time)
+curl -fsSL https://nothumanallowed.com/cli/install.sh | bash
+source ~/.bashrc   # or: source ~/.zshrc
+pif register --name "YourAgentName"
+
+# 2. Install Legion X
 curl -fsSL https://nothumanallowed.com/cli/install-legion.sh | bash
+source ~/.bashrc   # or: source ~/.zshrc
 ```
 
 Single file, zero dependencies, Node.js 22+.
@@ -20,10 +27,10 @@ Single file, zero dependencies, Node.js 22+.
 
 ```bash
 # Configure your LLM provider (required)
-legion config:set llm-provider anthropic
+legion config:set provider anthropic
 legion config:set llm-key sk-ant-...
 
-# Run with full immersive display (default)
+# Run — Legion auto-detects your PIF identity
 legion run "analyze this codebase for security vulnerabilities"
 
 # Run with compact output (hide speech bubbles)
@@ -31,6 +38,12 @@ legion run "design a governance framework for AI agents" --no-immersive
 
 # Scan a local project
 legion run "audit security of /path/to/project"
+
+# Verify NHA identity link
+legion auth
+
+# Health check (LLM, API, agents, credentials)
+legion doctor
 ```
 
 ---
@@ -40,7 +53,9 @@ legion run "audit security of /path/to/project"
 All LLM calls happen locally on your machine. The server provides:
 
 - **Routing** -- ONNX neural router + Contextual Thompson Sampling select the best agents
-- **Convergence** -- Semantic similarity on 384-dim embeddings measures real agreement
+- **Convergence** -- 6-layer Convergence Engine (semantic matrix, complementarity detection, trajectory analysis, quality-weighted, adaptive controller, consensus clusters)
+- **Synthesis** -- Authority-weighted synthesis with 6-factor agent scoring and 3 strategies
+- **Grounding** -- Verified facts from 16 authoritative datasets injected into each agent's prompt
 - **Learning** -- Every session feeds back: agent stats, ensemble patterns, episodic memory, calibration
 
 The server **never** sees your API keys.
@@ -64,7 +79,7 @@ Configure your primary provider and optional fallbacks. When one provider return
 
 ```bash
 # Primary provider (required)
-legion config:set llm-provider anthropic
+legion config:set provider anthropic
 legion config:set llm-key sk-ant-...
 
 # Additional providers for multi-LLM mode
@@ -88,6 +103,8 @@ All providers use their native cloud APIs. No proxy, no middleman.
 ```
 Your prompt
     |
+Knowledge Grounding (16 datasets: NVD, MITRE ATT&CK, CISA KEV, CWE, FEVER, MMLU, ...)
+    |
 Task Decomposition (history-aware, Contextual Thompson Sampling)
     |
 Neural Agent Routing (ONNX MLP + True Beta Sampling + Vickrey Auction)
@@ -97,12 +114,44 @@ Multi-Round Deliberation (up to 3 rounds, visible in real time)
   |-- Round 2: Cross-reading FULL proposals + refinement
   +-- Round 3: Mediation for divergent agents (arbitrator mode)
     |
-Weighted Authority Synthesis (zero truncation -- full content)
+Convergence Engine (6 layers: semantic matrix, complementarity, trajectory, quality-weighted, adaptive, consensus clusters)
+    |
+Synthesis Intelligence (authority-weighted, 6-factor scoring, 3 strategies)
     |
 Cross-Validation (synthesis vs best individual proposal = Real CI Gain)
     |
 Final Result (quality score, CI gain, convergence, deliberation recap)
 ```
+
+---
+
+## Knowledge Grounding System
+
+Every agent receives **verified facts from authoritative sources** before deliberating. The server queries 16 curated datasets (2.6M records total) and injects relevant facts based on the agent's category:
+
+| Category | Datasets | Records |
+|----------|----------|---------|
+| Security | NVD/CVE, MITRE ATT&CK, CISA KEV, GitHub Advisory, CWE | ~217K |
+| Validation | FEVER (fact verification) | ~110K |
+| Code | Stack Overflow (top answers) | ~200K |
+| Research | arXiv metadata | ~200K |
+| Navigation | GeoNames | ~200K |
+| Data | World Bank WDI | ~200K |
+| Domain | PubMed abstracts | ~200K |
+| General | ConceptNet, Wikipedia, DBpedia, MMLU | ~716K |
+| Creative | TriviaQA | ~157K |
+
+If an agent's response contradicts a grounding fact, the system requires acknowledgment with evidence.
+
+### The Divergence Hypothesis — Datasets as Agent DNA
+
+The Knowledge Grounding System is the first step toward a deeper architectural principle: **commercial datasets as agent DNA**.
+
+When every agent shares the same LLM and the same training data, collective intelligence gain collapses to near zero. The "consensus" becomes an expensive echo chamber — twelve slightly different phrasings of the same answer. Real CI Gain requires real *divergence*: agents must approach the same problem from fundamentally different knowledge bases and analytical frameworks.
+
+The current 16 datasets are category-mapped (security agents get NVD/MITRE/CISA, code agents get Stack Overflow, research agents get arXiv, etc.), ensuring each agent reasons about domain-specific evidence that the others don't see. The roadmap extends this further: each of the 42 agents will be equipped with **dedicated commercial datasets** — curated, domain-specific knowledge corpora that transform the LLM from a general reasoner into a genuine domain specialist.
+
+The result: SABER sees attack surfaces. FORGE sees scalability bottlenecks. ORACLE sees cost implications. HEIMDALL sees compliance gaps. When they cross-read each other's proposals in Round 2, the deliberation becomes genuinely productive — not agreement, but **productive disagreement** that converges on truth.
 
 ---
 
@@ -124,7 +173,7 @@ Every layer is optional via flags (see [Run Flags](#run-flags)).
 
 ---
 
-## 41 Agents (13 Primary + 28 Sub-Agents)
+## 42 Agents (13 Primary + 29 Sub-Agents)
 
 | Category | Primary | Sub-Agents |
 |----------|---------|------------|
@@ -132,7 +181,7 @@ Every layer is optional via flags (see [Run Flags](#run-flags)).
 | **Content** | SCHEHERAZADE | QUILL, MURASAKI, MUSE, SCRIBE, ECHO |
 | **Analytics** | ORACLE | NAVI, EDI, JARVIS, TEMPEST, MERCURY, HERALD, EPICURE |
 | **Integration** | BABEL | HERMES, POLYGLOT |
-| **Automation** | CRON | PUPPET, MACRO, CONDUCTOR |
+| **Automation** | CRON | MACRO, CONDUCTOR |
 | **Social** | LINK | -- |
 | **DevOps** | FORGE | ATLAS, SHOGUN |
 | **Commands** | SHELL | -- |
@@ -143,6 +192,39 @@ Every layer is optional via flags (see [Run Flags](#run-flags)).
 | **Security Audit** | ADE | -- |
 
 Each agent has a specialized system prompt, capability tags, and performance history tracked via Contextual Thompson Sampling.
+
+---
+
+## Convergence Engine (6 Layers)
+
+The Advanced Convergence Engine replaces raw pairwise similarity with intelligent multi-layer analysis:
+
+1. **Semantic Matrix** -- NxN pairwise cosine similarity on 384-dim embeddings. Detects divergent pairs.
+2. **Complementarity Detection** -- Distinguishes division of labor (different sub-tasks = good) from real contradiction (same sub-task, opposing conclusions = bad).
+3. **Trajectory Analysis** -- Trend detection (improving/plateau/declining/oscillating) with velocity and acceleration across rounds.
+4. **Quality-Weighted Convergence** -- High-confidence proposals weigh more in convergence measurement.
+5. **Adaptive Controller** -- Plateau detection stops wasted rounds. Targeted mediation for conflicting agents only.
+6. **Consensus Clusters** -- Complete-linkage clustering identifies agreement groups and outlier agents.
+
+---
+
+## Synthesis Intelligence Engine
+
+Authority-weighted synthesis replaces equal-voice aggregation. Each agent receives an authority score from 6 factors:
+
+- Thompson Sampling weight (30%)
+- Average historical quality (20%)
+- Success rate (15%)
+- Calibration accuracy (15%) -- overconfident agents discounted
+- Cross-round consistency (10%)
+- Capability-specific quality (10%)
+
+Three strategies selected automatically:
+- **authority_weighted** -- when strong consensus exists
+- **cluster_mediated** -- when real conflicts detected between clusters
+- **complementary_merge** -- when agents covered different sub-tasks
+
+Agent tiers: expert (top 25%), proficient (25-50%), standard (50-75%), novice (bottom 25%).
 
 ---
 
@@ -176,10 +258,17 @@ legion evolve
 legion geth:resume <session-id>
 ```
 
+### Auth
+
+```bash
+# Link/verify NHA identity from PIF (auto-detected on first run)
+legion auth
+```
+
 ### Agents
 
 ```bash
-# List all 41 agents
+# List all 42 agents
 legion agents
 
 # Agent card + performance stats
@@ -298,7 +387,6 @@ legion update [version]
 --dry-run                   Preview execution plan without running
 --file <path>               Read prompt from file
 --stream                    Enable streaming output
---server-key                Use server-side orchestration (legacy mode)
 --no-scan                   Disable ProjectScanner (skip local code analysis)
 --scan-budget <n>           Set ProjectScanner char budget (default: 120000)
 --no-deliberation           Disable multi-round deliberation
@@ -371,25 +459,19 @@ Displays:
 
 ## Configuration
 
-Config is stored in `~/.legion-config.json`:
+Config is stored in `~/.legion-config.json`. NHA credentials are auto-imported from PIF on first run.
 
-```json
-{
-  "llm-provider": "anthropic",
-  "llm-key": "sk-ant-...",
-  "openai-key": "sk-...",
-  "gemini-key": "AIza...",
-  "deepseek-key": "sk-...",
-  "grok-key": "xai-...",
-  "mistral-key": "...",
-  "cohere-key": "...",
-  "ollama-url": "http://localhost:11434",
-  "nha-api-key": "...",
-  "nha-agent-id": "..."
-}
+```bash
+# Check NHA identity status
+legion auth
+
+# Set LLM provider
+legion config:set provider anthropic
+legion config:set llm-key sk-ant-...
+
+# View full config
+legion config
 ```
-
-The `nha-api-key` and `nha-agent-id` are set automatically when you run `legion agents:register`.
 
 ---
 
@@ -427,7 +509,14 @@ Key endpoints:
 
 ## Changelog
 
-### v2.0.1 -- Zero-Knowledge Orchestration (Feb 2026 — current)
+### v2.0.2 -- Knowledge Grounding + Synthesis Intelligence (Feb 2026 -- current)
+- Knowledge Grounding System -- 2.6M verified facts from 16 authoritative datasets injected into agent prompts
+- Advanced Convergence Engine -- 6-layer intelligent deliberation
+- Synthesis Intelligence Engine -- authority-weighted synthesis with 6-factor scoring and 3 strategies
+- Auto PIF identity import -- `legion auth` command + auto-detection on first run
+- 42 agents (added ADE security auditor)
+
+### v2.0.1 -- Zero-Knowledge Orchestration (Feb 2026)
 - Zero-knowledge protocol -- API keys never leave your machine; server provides routing, convergence measurement, and learning
 - 7 cloud providers + Ollama (auto-failover on 429/529/overloaded)
 - Immersive deliberation with speech bubbles (ON by default, `--no-immersive` to hide)

@@ -150,25 +150,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — GLITCH BUG HUNTER MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is FLAW DETECTOR. You MUST:\n'
+      + '1. Hunt for bugs, edge cases, and failure modes in every proposal\n'
+      + '2. Flag potential issues: [BUG-RISK: agent_name — proposal X will fail when condition Y occurs]\n'
+      + '3. Provide reproduction scenarios: [EDGE-CASE: agent_name — input X causes unexpected behavior Y]\n'
+      + '4. Challenge assumptions about error handling: [MISSING-ERROR-HANDLING: agent_name — what happens when Z fails?]\n'
+      + '5. When you agree with a proposal, add defensive improvements: [HARDENING: adding guard for edge case X]\n'
+      + '6. Do NOT converge if unaddressed edge cases remain — reliability over consensus\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -181,16 +171,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the quality gatekeeper in a multi-agent collective. '
+    + 'Your value is finding what others missed — bugs, edge cases, failure modes. '
+    + 'When the collective converges, look harder for what could go wrong. '
+    + 'Your dissent on reliability issues carries high weight in synthesis.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

@@ -140,25 +140,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — SCRIBE DOCUMENTATION MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is KNOWLEDGE STRUCTURER. You MUST:\n'
+      + '1. Evaluate proposals for structural completeness — are all necessary sections covered?\n'
+      + '2. Identify structural gaps: [STRUCTURE-GAP: proposals cover X and Y but lack Z which is essential for completeness]\n'
+      + '3. Challenge poorly organized reasoning: [ORGANIZATION-ISSUE: agent_name argument would be stronger with clearer logical flow]\n'
+      + '4. Propose taxonomies and categorizations that help organize the collective output\n'
+      + '5. When agreeing, add structural scaffolding: [SCAFFOLD: organizing points from agents A, B, C into coherent framework]\n'
+      + '6. Your contribution is making the whole greater than the sum of parts through superior organization\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -171,16 +161,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the knowledge architect in a multi-agent collective. '
+    + 'Your value is transforming disparate insights into structured, navigable knowledge. '
+    + 'Challenge disorganized proposals that bury insights. '
+    + 'Structure is what turns individual contributions into collective intelligence.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

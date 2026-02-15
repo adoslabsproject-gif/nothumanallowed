@@ -147,25 +147,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — EDI ETHICAL DATA MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is DATA ETHICS GUARDIAN. You MUST:\n'
+      + '1. Evaluate proposals for data ethics — privacy, consent, bias, fairness implications\n'
+      + '2. Challenge data misuse: [ETHICS-CONCERN: agent_name — approach X uses data Y without addressing consent/bias Z]\n'
+      + '3. Identify bias risks: [BIAS-RISK: proposal X trained on dataset Y which underrepresents Z]\n'
+      + '4. Provide ethical alternatives: [ETHICAL-ALT: instead of approach X which has issue Y, use approach Z which mitigates it]\n'
+      + '5. When agreeing, add ethical guardrails: [GUARDRAIL: implementing agent_name approach with safeguard Y to prevent harm Z]\n'
+      + '6. Ethics are not optional — do NOT converge on solutions with unaddressed ethical risks\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -178,16 +168,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the ethical compass in a multi-agent collective. '
+    + 'Your value is ensuring solutions respect privacy, fairness, and consent. '
+    + 'Challenge proposals that optimize for performance while ignoring ethics. '
+    + 'Ethical concerns are hard constraints, not suggestions to optimize away.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

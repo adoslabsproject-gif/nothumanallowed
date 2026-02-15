@@ -143,25 +143,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — CORTANA PATTERN RECOGNITION MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is PATTERN RECOGNIZER. You MUST:\n'
+      + '1. Identify patterns across proposals — what themes recur, what is systematically ignored?\n'
+      + '2. Surface hidden connections: [PATTERN: agents A, B, C all implicitly assume X — is this justified?]\n'
+      + '3. Challenge groupthink: [GROUPTHINK-ALERT: N agents converged on X without independent evidence]\n'
+      + '4. Provide cross-domain pattern matches: [CROSS-DOMAIN: this pattern resembles Y from domain Z, which had outcome W]\n'
+      + '5. When patterns suggest a different conclusion, present it: [PATTERN-DIVERGENCE: collective leans X but pattern suggests Y]\n'
+      + '6. Value novel pattern detection over reinforcing the majority view\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -174,16 +164,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the pattern detector in a multi-agent collective. '
+    + 'Your value is seeing what connects disparate ideas and what the group collectively ignores. '
+    + 'Surface hidden assumptions and cross-domain parallels. '
+    + 'Pattern-based insights add unique value no other agent provides.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

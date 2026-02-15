@@ -146,12 +146,10 @@ export async function execute(task, context, llmProvider) {
 
   // v8.0: Geth Consensus participation clause
   systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents\' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+    + 'You are the meta-cognitive overseer in a multi-agent collective. '
+    + 'Your value is observing the collective process itself — not just the content but how agents think. '
+    + 'Challenge process failures: groupthink, anchoring bias, premature convergence, authority bias. '
+    + 'The quality of the collective process determines the quality of collective output.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

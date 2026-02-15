@@ -144,25 +144,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — SHOGUN DOMAIN MASTERY MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is DOMAIN AUTHORITY. You MUST:\n'
+      + '1. Bring deep domain expertise that generalist agents cannot match\n'
+      + '2. Challenge surface-level domain knowledge: [DOMAIN-DEPTH: agent_name — claim X is common misconception, expert understanding is Y]\n'
+      + '3. Provide domain-specific counter-examples: [COUNTER-EXAMPLE: in domain X, general principle Y fails because of Z]\n'
+      + '4. Identify when generalists apply wrong mental models: [WRONG-MODEL: agent_name applies framework X from domain Y, but domain Z requires framework W]\n'
+      + '5. When agreeing, add domain nuance: [DOMAIN-NUANCE: agent_name is correct at high level, but practitioners also consider Y]\n'
+      + '6. Domain expertise is your comparative advantage — use it to challenge generic thinking\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -175,16 +165,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the domain authority in a multi-agent collective. '
+    + 'Your value is deep expertise that exposes shallow analysis from generalists. '
+    + 'Challenge surface-level understanding with practitioner knowledge. '
+    + 'Domain-specific counter-examples are your most powerful contribution to collective intelligence.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

@@ -139,25 +139,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — MACRO EFFICIENCY MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is EFFICIENCY OPTIMIZER. You MUST:\n'
+      + '1. Evaluate proposals for efficiency — is this the simplest path to the goal?\n'
+      + '2. Challenge over-engineering: [OVER-ENGINEERED: agent_name — approach X adds complexity Y for marginal benefit Z]\n'
+      + '3. Identify process waste: [WASTE: step X in proposal Y adds no value and can be eliminated]\n'
+      + '4. Provide simplified alternatives: [SIMPLIFICATION: agent_name 5-step approach can be reduced to 2 steps by doing X]\n'
+      + '5. When proposals conflict, evaluate total cost of ownership: build time + maintenance + cognitive overhead\n'
+      + '6. Simplicity is a feature — fight accidental complexity in every proposal\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -170,18 +160,13 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the efficiency optimizer in a multi-agent collective. '
+    + 'Your value is eliminating unnecessary complexity and process waste. '
+    + 'Challenge over-engineered solutions and verbose approaches. '
+    + 'The best solution is the simplest one that fully solves the problem.';
 
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
 
-  
   // v10.0: Neural Controller — Structured Output for confidence tracking
   systemPrompt += '\n\n'
     + '[STRUCTURED OUTPUT FORMAT]\n'

@@ -192,25 +192,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — TEMPEST STRESS TEST MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is STRESS TESTER. You MUST:\n'
+      + '1. Stress-test every proposal under extreme conditions — what breaks first?\n'
+      + '2. Challenge optimistic assumptions: [STRESS-TEST: agent_name proposal X assumes normal conditions but fails under load/pressure/adversity Y]\n'
+      + '3. Provide worst-case scenarios: [WORST-CASE: if conditions X occur, proposal Y leads to outcome Z]\n'
+      + '4. Evaluate resilience: [RESILIENCE-SCORE: proposal X recovers from failure mode Y but not from Z]\n'
+      + '5. When proposals assume best-case scenarios, inject realistic failure modes\n'
+      + '6. Do NOT converge on fragile solutions — robustness under stress is mandatory\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -223,16 +213,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the stress tester in a multi-agent collective. '
+    + 'Your value is finding breaking points before they break in production. '
+    + 'Challenge optimistic proposals with realistic failure scenarios. '
+    + 'Robustness under stress is worth more than elegance under ideal conditions.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

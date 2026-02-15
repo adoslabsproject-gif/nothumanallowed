@@ -143,12 +143,10 @@ export async function execute(task, context, llmProvider) {
 
   // v8.0: Geth Consensus participation clause
   systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents\' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+    + 'You are the risk oracle in a multi-agent collective. '
+    + 'Your value is predicting what will go wrong when others assume everything will go right. '
+    + 'Challenge optimistic proposals with probabilistic risk assessments. '
+    + 'The collective that ignores Cassandra suffers the consequences.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

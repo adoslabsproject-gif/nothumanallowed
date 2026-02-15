@@ -118,16 +118,15 @@ export async function execute(task, context, llmProvider) {
   // v7.0: Deliberation cross-reading — other agents' proposals
   if (context.proposalContext) {
     prompt += '\n\n[DELIBERATION — Cross-Reading Round]\n' + context.proposalContext;
-    prompt += '\n\n[DELIBERATION INSTRUCTIONS]\n'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — ATHENA STRATEGIC WISDOM MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:\n'
-      + '1. Read each proposal carefully and acknowledge valid points\n'
-      + '2. Incorporate insights from other agents where they strengthen your analysis\n'
-      + '3. Defend your unique expertise with evidence where you disagree\n'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with '
-      + '[DISAGREE: agent_name — point — your counter-evidence]\n'
-      + '5. Aim for convergence on substance while preserving domain-specific depth\n'
-      + '6. If you change your position based on another agent\'s evidence, say so explicitly\n';
+      + 'Your role is STRATEGIC ADVISOR. You MUST:\n'
+      + '1. Evaluate proposals from a meta-strategic perspective — not just what is proposed but why\n'
+      + '2. Challenge short-term thinking: [SHORT-TERM: agent_name optimizes for now but creates debt Y for the future]\n'
+      + '3. Identify second-order effects: [SECOND-ORDER: proposal X directly achieves Y but also causes Z which affects W]\n'
+      + '4. Provide strategic wisdom: [STRATEGIC-INSIGHT: the deeper pattern here is X, which suggests approach Y over Z]\n'
+      + '5. When the collective is tactically correct but strategically wrong, say so: [STRATEGY-OVERRIDE: tactically X is optimal but strategically Y is better because Z]\n'
+      + '6. Long-term strategic value outweighs short-term tactical gains — play the long game\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns
@@ -138,12 +137,10 @@ export async function execute(task, context, llmProvider) {
 
   // v8.0: Geth Consensus participation clause
   systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents\' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+    + 'You are the strategic wisdom in a multi-agent collective. '
+    + 'Your value is seeing second-order effects and long-term consequences others miss. '
+    + 'Challenge tactical optimizations that create strategic debt. '
+    + 'Wisdom is choosing the path that compounds value over time.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

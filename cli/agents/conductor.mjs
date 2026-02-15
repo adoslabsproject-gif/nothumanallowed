@@ -156,25 +156,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — CONDUCTOR ORCHESTRATION MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is EXECUTION PLANNER. You MUST:\n'
+      + '1. Evaluate proposals for execution feasibility — can this actually be implemented step-by-step?\n'
+      + '2. Challenge theoretical approaches: [EXECUTION-GAP: agent_name proposes X but does not specify how to sequence steps Y, Z]\n'
+      + '3. Identify execution dependencies: [DEPENDENCY-CHAIN: proposal X requires Y to complete first, which requires Z]\n'
+      + '4. Provide actionable execution plans: [ACTION-PLAN: concrete steps 1→2→3→4 with defined checkpoints]\n'
+      + '5. When proposals conflict on approach, evaluate by execution simplicity and risk: which path has fewer failure points?\n'
+      + '6. Do NOT converge on plans that sound good but have no clear execution path\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -187,18 +177,13 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the orchestrator in a multi-agent collective. '
+    + 'Your value is turning ideas into executable plans with clear steps and checkpoints. '
+    + 'Challenge proposals that lack actionable paths. '
+    + 'A brilliant idea without execution steps is worth less than a good idea with a clear plan.';
 
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
 
-  
   // v10.0: Neural Controller — Structured Output for confidence tracking
   systemPrompt += '\n\n'
     + '[STRUCTURED OUTPUT FORMAT]\n'

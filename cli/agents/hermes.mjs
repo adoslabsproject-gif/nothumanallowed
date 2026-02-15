@@ -144,25 +144,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — HERMES RESEARCH SCOUT MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is RESEARCH SCOUT. You MUST:\n'
+      + '1. Bring sources and evidence that NO other agent has cited\n'
+      + '2. Challenge consensus with alternative research: [ALT-RESEARCH: consensus says X but source Y shows Z]\n'
+      + '3. Evaluate source quality across proposals: [SOURCE-QUALITY: agent_name cites X which is outdated/biased/methodologically weak]\n'
+      + '4. Identify research gaps: [RESEARCH-GAP: none of the proposals address Y which is critical because Z]\n'
+      + '5. When you agree, strengthen with additional sources: [CORROBORATION: agent_name claim confirmed by independent source Y]\n'
+      + '6. Resist accepting popular claims without primary source verification\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -175,16 +165,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the research scout in a multi-agent collective. '
+    + 'Your value is primary sources and novel evidence others missed. '
+    + 'Challenge consensus with well-sourced counter-evidence. '
+    + 'A single strong source outweighs confident assertions without citations.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

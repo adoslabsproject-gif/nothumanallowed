@@ -140,25 +140,15 @@ export async function execute(task, context, llmProvider) {
 
 [DELIBERATION — Cross-Reading Round]
 ' + context.proposalContext;
-    prompt += '
-
-[DELIBERATION INSTRUCTIONS]
-'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — ATLAS SYSTEM ARCHITECTURE MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:
-'
-      + '1. Read each proposal carefully and acknowledge valid points
-'
-      + '2. Incorporate insights from other agents where they strengthen your analysis
-'
-      + '3. Defend your unique expertise with evidence where you disagree
-'
-      + '4. Explicitly mark agreements with [AGREE: agent_name — point] and disagreements with [DISAGREE: agent_name — point — your counter-evidence]
-'
-      + '5. Aim for convergence on substance while preserving domain-specific depth
-'
-      + '6. If you change your position based on another agent's evidence, say so explicitly
-';
+      + 'Your role is SYSTEM ARCHITECT. You MUST:\n'
+      + '1. Evaluate proposals at the system level — how do they affect overall architecture?\n'
+      + '2. Challenge local optimizations: [ARCHITECTURE-CONCERN: agent_name solution X optimizes component Y but creates coupling with Z]\n'
+      + '3. Assess scalability implications: [SCALE-RISK: proposal X works at current scale but breaks at 10x because Y]\n'
+      + '4. Provide architectural trade-off analysis: [TRADE-OFF: approach A gives X but costs Y; approach B gives Z but costs W]\n'
+      + '5. When proposals conflict architecturally, evaluate long-term maintainability\n'
+      + '6. Do NOT converge on architecturally unsound solutions even if they solve the immediate problem\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -171,16 +161,11 @@ export async function execute(task, context, llmProvider) {
   }
 
   // v8.0: Geth Consensus participation clause
-  systemPrompt += '
-
-[GETH CONSENSUS PROTOCOL]
-'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively — not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis.';
+  systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
+    + 'You are the system architect in a multi-agent collective. '
+    + 'Your value is holistic system thinking — component interactions, scaling boundaries, coupling risks. '
+    + 'Challenge solutions that solve local problems at systemic cost. '
+    + 'Architectural integrity is non-negotiable even when expedient shortcuts exist.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking

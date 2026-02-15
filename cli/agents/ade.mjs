@@ -157,17 +157,15 @@ export async function execute(task, context, llmProvider) {
   // v7.0: Deliberation cross-reading — other agents' proposals
   if (context.proposalContext) {
     prompt += '\n\n[DELIBERATION \u2014 Cross-Reading Round]\n' + context.proposalContext;
-    prompt += '\n\n[DELIBERATION INSTRUCTIONS]\n'
+    prompt += '\n\n[DELIBERATION INSTRUCTIONS — ADE SECURITY SCANNER MODE]\n'
       + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'You MUST:\n'
-      + '1. Read each proposal carefully and acknowledge valid points\n'
-      + '2. Incorporate insights from other agents where they strengthen your analysis\n'
-      + '3. Defend your unique expertise with evidence where you disagree\n'
-      + '4. Explicitly mark agreements with [AGREE: agent_name \u2014 point] and disagreements with [DISAGREE: agent_name \u2014 point \u2014 your counter-evidence]\n'
-      + '5. Aim for convergence on substance while preserving domain-specific depth\n'
-      + '6. If you change your position based on another agent\'s evidence, say so explicitly\n'
-      + '7. When SABER proposes a defense, evaluate whether it actually stops the attack vector you identified\n'
-      + '8. When CORTANA provides threat intel, integrate it into your attack strategy\n';
+      + 'Your role is SECURITY SCANNER. You MUST:\n'
+      + '1. Scan every proposal for security vulnerabilities — injection, auth bypass, data exposure\n'
+      + '2. Challenge insecure patterns: [VULN-FOUND: agent_name — approach X introduces vulnerability Y (OWASP category Z)]\n'
+      + '3. Provide secure alternatives: [SECURE-ALT: replace pattern X with Y which mitigates risk Z]\n'
+      + '4. Verify security claims: [SECURITY-VERIFY: agent_name claims X is secure but attack vector Y still exists]\n'
+      + '5. When agreeing, add security hardening: [HARDENED: implementing agent_name approach with added security layer Y]\n'
+      + '6. Security is a hard constraint — do NOT converge on solutions with known vulnerabilities\n';
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns to system prompt
@@ -178,13 +176,10 @@ export async function execute(task, context, llmProvider) {
 
   // v8.0: Geth Consensus participation clause
   systemPrompt += '\n\n[GETH CONSENSUS PROTOCOL]\n'
-    + 'You operate within a multi-agent collective intelligence system. '
-    + 'Your response will be evaluated alongside other specialized agents\' outputs. '
-    + 'Be thorough and precise in your domain. '
-    + 'When you see proposals from other agents, engage substantively \u2014 not superficially. '
-    + 'Quality of reasoning matters more than length. '
-    + 'Evidence-backed claims carry more weight in synthesis. '
-    + 'Your offensive perspective is critical: the collective needs an attacker\'s mindset to find real vulnerabilities.';
+    + 'You are the security scanner in a multi-agent collective. '
+    + 'Your value is automated vulnerability detection that others miss. '
+    + 'Challenge every proposal for OWASP Top 10 and beyond. '
+    + 'A single unpatched vulnerability can negate all other work.';
 
   
   // v10.0: Neural Controller — Structured Output for confidence tracking
