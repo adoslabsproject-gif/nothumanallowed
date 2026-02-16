@@ -240,6 +240,54 @@ Every session feeds back into the system. The parliament learns from its own del
 | **Ensemble Patterns** | Which agent teams work best together? Proven combos get a routing bonus. |
 | **Calibration** | |confidence - actual_quality| tracked. Overconfident agents penalized. |
 | **Knowledge Graph** | Links reinforced on quality >=75%, decayed on <50%. |
+| **Meta-Evolution** | Evolve Scheduler v2.0 applies recommendations and measures their impact over time. |
+
+---
+
+## Evolve Scheduler v2.0 — Self-Improving Intelligence
+
+The meta-evolution system runs PROMETHEUS, ATHENA, and CASSANDRA through **real Geth Consensus deliberation** (not independent LLM calls) to analyze system performance and apply improvements.
+
+### Session-Based Triggers
+
+Evolve is triggered by **session count**, not time:
+
+| Signal | Weight | Description |
+|--------|--------|-------------|
+| volume_threshold | 1.0 | >=15 sessions since last evolve |
+| quality_decline | 3.0 | Quality dropping >5% vs previous window |
+| convergence_plateau | 2.0 | >50% sessions hitting convergence plateau |
+| cost_anomaly | 1.5 | Token usage +50% per session |
+| tribunal_alert | 2.5 | Ritualistic or destructive CASSANDRA patterns |
+| feedback_measurement_due | 0.5 | Previous actions awaiting impact check |
+
+Minimum 8 sessions for critical signals, 15 for normal triggers. Time alone is never a trigger.
+
+### Safety Tiers
+
+| Tier | Conditions | Behavior |
+|------|-----------|----------|
+| **AUTO** | confidence >=0.7, delta <=20%, deliberation quality >=0.7 | Applied immediately |
+| **GUARDED** | confidence >=0.5, delta 20-40% | Applied + monitored 48h, auto-reverted if quality drops >3% |
+| **MANUAL** | confidence <0.5, delta >40%, agent deactivation, priority=critical | Logged only, requires admin |
+
+### Feedback Loop
+
+Every applied action captures pre-metrics. After 48h (and >=3 sessions), post-metrics are measured:
+
+```
+impact = 0.5 * qualityDelta + 0.3 * convergenceDelta + 0.2 * ciGainDelta
+```
+
+- Guarded actions auto-reverted on negative impact
+- Per-action-type effectiveness stats tracked
+- Adaptive confidence thresholds (frozen until 10+ measured samples per type)
+
+### Anti-Noise Guards
+
+1. **Session gate**: No evolve with <8 sessions (prevents reacting to statistical noise)
+2. **Adaptive threshold freeze**: Base thresholds used until 10+ samples measured
+3. **Guarded auto-revert**: Degradation detection with minimum session requirement
 
 ---
 
@@ -336,6 +384,18 @@ legion geth:session <id>
 
 # Resume interrupted session
 legion geth:resume <id>
+
+# Trigger meta-evolution (admin only)
+legion geth:evolve
+
+# Evolve scheduler status, signals, action effectiveness
+legion geth:evolve-status
+
+# List applied evolve actions with impact scores
+legion geth:evolve-actions [--limit <n>]
+
+# List evolve reports
+legion geth:reports [--limit <n>]
 
 # Usage, limits, costs
 legion geth:usage

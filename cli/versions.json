@@ -167,11 +167,139 @@
       }
     ]
   },
+  "legion-x1": {
+    "latest": "X1.9.0",
+    "file": "legion-x1.mjs",
+    "minNodeVersion": 22,
+    "description": "Legion X1 v X1.9.0 — Advanced Evolve Scheduler v2.0. Real Geth Consensus meta-evolution with session-based triggers, safety-tiered auto-application, and feedback loops.",
+    "versions": [
+      {
+        "version": "X1.9.0",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-16",
+        "highlights": [
+          "Advanced Evolve Scheduler v2.0 — session-based adaptive triggers replace 24h fixed interval",
+          "Real Geth Consensus deliberation for meta-evolution — PROMETHEUS/ATHENA/CASSANDRA run through full multi-round pipeline with Tribunal",
+          "Safety-tiered auto-application — AUTO (high confidence, apply immediately), GUARDED (monitor 48h, auto-revert on degradation), MANUAL (admin review only)",
+          "Time-series intelligence — 6h rolling metrics windows for quality trend detection",
+          "Feedback loop tracker — every applied action measured for impact after 48h, learns which action types work",
+          "Adaptive confidence thresholds — frozen with <10 samples, then adjusts based on historical effectiveness",
+          "Anti-noise guards — session gate (min 8/15 sessions), threshold freeze, guarded auto-revert",
+          "3 new commands: geth:evolve-status, geth:evolve-actions, and enriched geth:reports/geth:evolve display",
+          "3 new API endpoints: GET /evolve/actions, GET /evolve/time-series, POST /evolve/actions/:id/revert"
+        ]
+      },
+      {
+        "version": "X1.8.0",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-14",
+        "highlights": [
+          "Synthesis Intelligence Engine — authority-weighted, data-driven meritocratic synthesis",
+          "Agent Authority Rankings — 6-factor scoring from Thompson Sampling + historical quality + calibration",
+          "3 synthesis strategies: authority_weighted, cluster_mediated, complementary_merge",
+          "Sub-task coverage + real conflict resolution with authority-based prioritization",
+          "Calibration-aware synthesis — overconfident agents discounted, well-calibrated trusted",
+          "Rich CLI display — authority rankings with tier colors, calibration icons, task counts"
+        ]
+      },
+      {
+        "version": "X1.7.2",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-14",
+        "highlights": [
+          "Advanced Convergence Engine — 6-layer intelligent deliberation replaces basic convergence",
+          "Complementarity Detection — division of labor vs real contradiction, sub-task aware",
+          "Trajectory Analysis — improving/plateau/declining/oscillating trend with plateau detection",
+          "Quality-Weighted Convergence — high-confidence proposals weigh more",
+          "Consensus Clusters — agreement group detection + outlier identification",
+          "Targeted mediation — only conflicting agents re-execute, saves tokens",
+          "Rich convergence display — effective %, complementarity boost, clusters, trajectory arrows"
+        ]
+      },
+      {
+        "version": "X1.7.1",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-14",
+        "highlights": [
+          "Full transparency by default — verbose + immersive ON out of the box, use --no-verbose / --no-immersive to disable",
+          "41 A-grade agent prompts — every agent rewritten with deep domain expertise, systematic methodology, anti-patterns, inter-agent coordination",
+          "PUPPET merged into CONDUCTOR — 42 agents reduced to 41 with zero capability loss",
+          "Custom deliberation modes — VERITAS (claim validator), LOGOS (proof auditor), CASSANDRA (risk predictor), SAURON (deep diagnostician)",
+          "Zero LLM truncation — 23+ truncation points removed from all LLM-bound paths"
+        ]
+      },
+      {
+        "version": "X1.7",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-13",
+        "highlights": [
+          "Zero-truncation pipeline — agents see COMPLETE proposals, validators judge COMPLETE synthesis",
+          "Real CI Gain — measured against best individual proposal (was hardcoded 65% baseline)",
+          "Full convergence measurement — semantic similarity on complete content (was 500 chars)",
+          "Complete cross-reading — Round 2+ agents see full outputs (was smartTruncate 8K)",
+          "Complete mediation context — LLM-assisted convergence sees full proposals (was 1.5K)",
+          "Complete debate context — critic/judge see full contributions and prompt (was 1.5K/500 chars)",
+          "Complete evaluation — validators see full synthesis (was smartTruncate 8K)",
+          "Immersive Meeting Room — speech bubbles, cross-reading visibility, synthesis display",
+          "Live heartbeat spinner — phase indicator with elapsed time between events",
+          "Provider routing balance — minimum 2 agents per provider when ≥6 agents"
+        ]
+      },
+      {
+        "version": "X1.3",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Deliberation Spectacle — every agent's confidence, reasoning, and risk flags visible in real time",
+          "Structured spectacle events — decomposition, agent routing, convergence, round decisions rendered live",
+          "Deliberation Recap — post-completion per-round breakdown with position changes and convergence bars",
+          "Divergent pairs shown by agent NAME — see exactly who disagrees with whom",
+          "Synthesis weights display — convergence progression, strongest voices, risk-flagged agents",
+          "Backward compatible — old servers still work, new server with old CLI shows raw JSON"
+        ]
+      },
+      {
+        "version": "X1.2",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Neural Meta-Controller — structured output with per-agent confidence tracking",
+          "Adaptive Round Decision — skip/standard/mandatory/arbitrator modes based on divergence + uncertainty",
+          "True Beta Sampling — stochastic agent routing replaces deterministic mean",
+          "Contextual Thompson Sampling + Temporal Decay + Calibration Tracking",
+          "Cost-Aware Orchestration — dynamic agent count scaled to task complexity",
+          "Router Auto-Retraining — ONNX model hot-reloaded from production data"
+        ]
+      },
+      {
+        "version": "X1.1",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-12",
+        "highlights": [
+          "Live Progress Reporting — watch every phase of deliberation in real time",
+          "Progress bar with per-agent tracking, convergence %, and elapsed time",
+          "Timeout extended to 15 minutes (was 10) for long sessions"
+        ]
+      },
+      {
+        "version": "X1",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-10",
+        "highlights": [
+          "Server-side multi-LLM deliberation (Anthropic, OpenAI, Gemini)",
+          "Cross-LLM validation — different provider evaluates quality",
+          "41 agents: 13 primary + 28 sub-agents across 13 categories",
+          "Session transcripts saved to ~/.legion/sessions/",
+          "Auto-evolve scheduler (PROMETHEUS/ATHENA/CASSANDRA parliament)"
+        ]
+      }
+    ]
+  },
   "legion": {
     "latest": "5.0.3",
     "file": "legion-5.0.3.mjs",
     "deprecated": true,
-    "deprecatedMessage": "Legion classic is deprecated. Use legion-x.mjs instead.",
+    "deprecatedMessage": "Legion classic is deprecated. Use legion-x.mjs (free) or legion-x1.mjs (premium).",
     "minNodeVersion": 22,
     "versions": [
       {

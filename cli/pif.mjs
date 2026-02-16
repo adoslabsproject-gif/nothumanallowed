@@ -2062,6 +2062,19 @@ class MCPServer {
             },
           },
           {
+            name: 'nha_grounding_search',
+            description: 'Semantic search across 16 authoritative knowledge datasets (NVD CVE, MITRE ATT&CK, CISA KEV, CWE, GitHub Advisory, Stack Overflow, Wikipedia, arXiv, PubMed, and more). Returns verified facts ranked by cosine similarity using ML embeddings.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search query text (3-500 chars)' },
+                categories: { type: 'array', items: { type: 'string' }, description: 'Optional category filters: security, code, analytics, validation, data, content, general' },
+                topK: { type: 'integer', description: 'Number of results (default: 10, max: 50)' },
+              },
+              required: ['query'],
+            },
+          },
+          {
             name: 'nha_consensus_create',
             description: 'Create a consensus problem for multi-agent collaborative reasoning.',
             inputSchema: {
@@ -2236,6 +2249,9 @@ class MCPServer {
           break;
         case 'nha_browser_close':
           result = await this.toolBrowserClose(args);
+          break;
+        case 'nha_grounding_search':
+          result = await this.toolGroundingSearch(args);
           break;
         case 'nha_consensus_create':
           result = await this.toolConsensusCreate(args);
@@ -3144,6 +3160,16 @@ Respond with JSON only:
     return result;
   }
 
+  async toolGroundingSearch(args) {
+    var client = new NHAClient({});
+    var result = await client.request('POST', '/grounding/search', {
+      query: args.query,
+      categories: args.categories,
+      topK: args.topK || 10,
+    }, false);
+    return result.data;
+  }
+
   async toolMeshRespond(args) {
     var client = new NHAClient();
     var data = { action: args.action };
@@ -3553,6 +3579,98 @@ const commands = {
       console.log(`\n💡 To use AI for future challenges, keep your API key in env:`);
       console.log(`   export ${aiProvider === 'claude' ? 'ANTHROPIC_API_KEY' : aiProvider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY'}=your-key`);
     }
+  },
+
+  // ============================================================================
+  // SEARCH — Semantic search across 16 authoritative datasets
+  // ============================================================================
+  'search': {
+    description: 'Semantic search across 16 authoritative datasets (NVD, MITRE, CISA, CWE, StackOverflow, Wikipedia, etc.)',
+    args: {
+      '<query>': 'Search query text',
+      '--category': 'Filter by category (security, code, analytics, validation, data, content, general)',
+      '--top': 'Number of results (default: 10, max: 50)',
+      '--min-similarity': 'Minimum similarity threshold (default: 0.3)',
+      '--json': 'Output raw JSON',
+    },
+    handler: async (args) => {
+      const query = (args._.length > 0 ? args._.join(' ') : (typeof args[0] === 'string' ? args[0] : '')).trim();
+      if (!query || query.length < 3) {
+        console.error('Usage: pif search "your query" [--category security] [--top 10]');
+        console.error('Query must be at least 3 characters.');
+        return;
+      }
+
+      const category = args['--category'] || args.category;
+      const topK = parseInt(args['--top'] || args.top) || 10;
+      const minSim = parseFloat(args['--min-similarity'] || args['min-similarity']) || 0.3;
+
+      const client = new NHAClient({});
+      const body = {
+        query,
+        topK: Math.min(topK, 50),
+        minSimilarity: minSim,
+      };
+      if (category) body.categories = [category];
+
+      const response = await client.request('POST', '/grounding/search', body, false);
+      const result = response.data;
+
+      if (args['--json'] || args.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      // Pretty terminal output
+      const w = 52;
+      console.log('\n\x1b[32m' + '\u2554' + '\u2550'.repeat(w) + '\u2557\x1b[0m');
+      console.log('\x1b[32m\u2551\x1b[0m  KNOWLEDGE GROUNDING SEARCH' + ' '.repeat(w - 29) + '\x1b[32m\u2551\x1b[0m');
+      console.log('\x1b[32m' + '\u255A' + '\u2550'.repeat(w) + '\u255D\x1b[0m');
+
+      console.log(`\n  Query: "\x1b[36m${query}\x1b[0m"`);
+
+      if (result.facts.length === 0) {
+        console.log('\n  \x1b[33mNo results found.\x1b[0m Try different keywords or broader terms.\n');
+        return;
+      }
+
+      const scannedStr = result.totalScanned >= 1000000
+        ? (result.totalScanned / 1000000).toFixed(1) + 'M'
+        : result.totalScanned >= 1000
+          ? (result.totalScanned / 1000).toFixed(0) + 'K'
+          : String(result.totalScanned);
+
+      console.log(`  Found: \x1b[32m${result.facts.length}\x1b[0m results in \x1b[32m${result.searchTimeMs}ms\x1b[0m (scanned ${scannedStr} records)\n`);
+
+      result.facts.forEach((fact, i) => {
+        const sourceName = fact.source.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const license = fact.license || '';
+
+        // Similarity bar: 10 chars wide
+        const barFilled = Math.round(fact.similarity * 10);
+        const bar = '\x1b[32m' + '\u2588'.repeat(barFilled) + '\x1b[0m' + '\x1b[90m' + '\u2591'.repeat(10 - barFilled) + '\x1b[0m';
+
+        console.log(`  \x1b[33m${String(i + 1).padStart(2)}.\x1b[0m [\x1b[36m${sourceName}\x1b[0m] ${fact.title}` + (license ? ` \x1b[90m(${license})\x1b[0m` : ''));
+        console.log(`      Similarity: ${bar} \x1b[32m${fact.similarity.toFixed(2)}\x1b[0m`);
+
+        // Content snippet (max 200 chars for terminal readability)
+        const snippet = fact.content.length > 200
+          ? fact.content.substring(0, 197) + '...'
+          : fact.content;
+        console.log(`      \x1b[90m${snippet}\x1b[0m`);
+
+        // Attribution line
+        if (fact.attribution) {
+          console.log(`      \x1b[90m\u2514 ${fact.attribution}\x1b[0m`);
+        }
+        console.log('');
+      });
+
+      // Global attribution footer
+      console.log('  \x1b[90m\u2500\u2500\u2500\x1b[0m');
+      console.log('  \x1b[90mData from 16 authoritative datasets. Per-result licenses shown above.\x1b[0m');
+      console.log('  \x1b[90mATT&CK\u00ae is a registered trademark of The MITRE Corporation.\x1b[0m\n');
+    },
   },
 
   // ============================================================================
