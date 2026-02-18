@@ -41,7 +41,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '2.0.2';
+var VERSION = '2.0.3';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -5610,6 +5610,12 @@ class LLMProvider {
     var maxTokens = (opts && opts.maxTokens) || 4096;
     var agentTag = (opts && opts.agentTag) || null;
 
+    // Per-provider max_tokens limits (API-imposed hard caps)
+    var PROVIDER_MAX_TOKENS = { deepseek: 8192, grok: 131072, mistral: 32768, cohere: 4096 };
+    if (PROVIDER_MAX_TOKENS[provider] && maxTokens > PROVIDER_MAX_TOKENS[provider]) {
+      maxTokens = PROVIDER_MAX_TOKENS[provider];
+    }
+
     switch (provider) {
       case 'anthropic': {
         // Direct Anthropic call with explicit key — NO mutation of this.apiKey
@@ -5902,6 +5908,7 @@ var SCAN_SKIP_DIRS = new Set([
   '.nuxt', '.expo', 'pods', 'Pods', '.gradle', '.idea', '.vs',
 ]);
 
+// NOTE: .pdf and .docx are NOT skipped — they are parsed via pdf-parse/mammoth if available
 var SCAN_SKIP_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp',
   '.woff', '.woff2', '.ttf', '.eot', '.otf',
@@ -5909,7 +5916,7 @@ var SCAN_SKIP_EXTENSIONS = new Set([
   '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar', '.xz',
   '.onnx', '.bin', '.pyc', '.pyo', '.o', '.so', '.dll', '.exe', '.dylib',
   '.lock', '.map', '.min.js', '.min.css',
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx',
+  '.xls', '.xlsx',
   '.sqlite', '.db', '.sqlite3',
 ]);
 
@@ -6359,6 +6366,36 @@ function identifyProjectType(projectDir) {
   return result;
 }
 
+/**
+ * Extract text from PDF files (text-based only, not scanned/image PDFs).
+ * Requires pdf-parse: npm install -g pdf-parse
+ */
+async function extractPdfText(filePath) {
+  try {
+    var pdfParse = (await import('pdf-parse')).default;
+    var buffer = fs.readFileSync(filePath);
+    var data = await pdfParse(buffer);
+    return data.text || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Extract text from DOCX files.
+ * Requires mammoth: npm install -g mammoth
+ */
+async function extractDocxText(filePath) {
+  try {
+    var mammoth = await import('mammoth');
+    var buffer = fs.readFileSync(filePath);
+    var result = await mammoth.extractRawText({ buffer });
+    return result.value || '';
+  } catch {
+    return '';
+  }
+}
+
 function getFilePriority(relPath) {
   var name = path.basename(relPath).toLowerCase();
   var dir = path.dirname(relPath).toLowerCase();
@@ -6373,6 +6410,11 @@ function getFilePriority(relPath) {
       name.includes('policy') || name.includes('permission') || name.includes('route') ||
       name.includes('controller') || name.includes('handler')) return 2;
 
+  // Priority 2 (documents): security/auth/policy documents
+  var isDoc = name.endsWith('.pdf') || name.endsWith('.docx') || name.endsWith('.doc') ||
+              name.endsWith('.md') || name.endsWith('.txt') || name.endsWith('.rst');
+  if (isDoc && (name.includes('security') || name.includes('auth') || name.includes('policy'))) return 2;
+
   if (dir.includes('model') || dir.includes('schema') || dir.includes('migration') ||
       dir.includes('query') || dir.includes('db') || dir.includes('database') ||
       dir.includes('config') || dir.includes('infra') ||
@@ -6381,6 +6423,9 @@ function getFilePriority(relPath) {
       name === 'dockerfile' || name.includes('docker-compose') || name.includes('nginx') ||
       name.endsWith('.conf') || name === 'jenkinsfile' ||
       (dir.includes('.github') && name.endsWith('.yml'))) return 3;
+
+  // Priority 3 (documents): architecture/design/spec documents
+  if (isDoc && (name.includes('architecture') || name.includes('design') || name.includes('spec'))) return 3;
 
   return 4;
 }
@@ -6422,7 +6467,7 @@ function extractSecuritySections(content, maxLines) {
   return selectedLines.join('\n');
 }
 
-function selectSecurityFiles(projectDir, tree, tokenBudget) {
+async function selectSecurityFiles(projectDir, tree, tokenBudget) {
   tokenBudget = tokenBudget || 120000; // v2: 120K chars (~30K tokens)
 
   // Group files by priority
@@ -6465,8 +6510,19 @@ function selectSecurityFiles(projectDir, tree, tokenBudget) {
       readPaths.add(entry.path);
 
       var filePath = path.join(projectDir, entry.path);
+      var ext = path.extname(entry.path).toLowerCase();
       var content;
-      try { content = fs.readFileSync(filePath, 'utf-8'); } catch (_) { continue; }
+      try {
+        if (ext === '.pdf') {
+          content = await extractPdfText(filePath);
+          if (!content) continue;
+        } else if (ext === '.docx' || ext === '.doc') {
+          content = await extractDocxText(filePath);
+          if (!content) continue;
+        } else {
+          content = fs.readFileSync(filePath, 'utf-8');
+        }
+      } catch (_) { continue; }
       if (content.includes('\0')) continue;
 
       var maxLines = maxLinesByPriority[pri] || 150;
@@ -6590,7 +6646,7 @@ async function scanProject(projectDir, tokenBudget) {
   var inventory = buildFileInventory(projectDir, structure.tree);
 
   // Select and deep-read security-relevant files (pass 2)
-  var files = selectSecurityFiles(projectDir, structure.tree, tokenBudget);
+  var files = await selectSecurityFiles(projectDir, structure.tree, tokenBudget);
 
   // Build structured context (v2 format)
   var structured = buildStructuredProjectContext(projectDir, files, projectType, structure, inventory);
@@ -6760,6 +6816,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
   if (legionConfig.get('deliberationRounds')) sessionConfig.deliberationRounds = legionConfig.get('deliberationRounds');
   if (legionConfig.get('deliberationConvergence')) sessionConfig.deliberationConvergence = legionConfig.get('deliberationConvergence');
   if (legionConfig.get('minDeliberationRounds')) sessionConfig.minDeliberationRounds = legionConfig.get('minDeliberationRounds');
+  if (options.noTribunal) sessionConfig.noTribunal = true;
 
   var userProvider = legionConfig.get('provider') || legionConfig.get('llmProvider') || 'anthropic';
   var availableProviders = llm.getAvailableProviders();
@@ -6888,12 +6945,15 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       console.log('  ' + (di + 1) + '. \x1b[34m[' + (dt.capability || 'general') + ']\x1b[0m ' + dt.description);
     }
 
-    // Send decomposition result to server for ONNX routing
-    console.log('\x1b[36m[ROUTING]    \x1b[0mServer performing ONNX neural routing...');
+    // Send decomposition result to server for intelligent routing
+    console.log('\x1b[36m[ROUTING]    \x1b[0mServer performing intelligent routing...');
     var decompResult = await client.stepDecomposeResult(sessionId, decomposition, decompStats);
 
     var assignments = decompResult.assignments || [];
-    console.log('\x1b[36m[ROUTING]    \x1b[0m' + assignments.length + ' agents deployed');
+    var routingLabel = decompResult.routingMethod === 'legion'
+      ? '\x1b[1;35mLegion LLM routing\x1b[0m'
+      : '\x1b[36mONNX neural routing\x1b[0m';
+    console.log('\x1b[36m[ROUTING]    \x1b[0m' + routingLabel + ' \u2192 ' + assignments.length + ' agents deployed');
     for (var ai = 0; ai < assignments.length; ai++) {
       var ag = assignments[ai];
       console.log('  \x1b[1m' + ag.agentName + '\x1b[0m (\x1b[35m' + ag.provider + '/' + ag.model + '\x1b[0m) \x1b[90m\u2192 ' + ag.subTaskId + '\x1b[0m');
@@ -6937,6 +6997,72 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       if (roundInstr.groundingSummary) {
         console.log('\x1b[36m[GROUNDING] \x1b[0m' + roundInstr.groundingSummary);
       }
+
+      // === THE TRIBUNAL: Two-Phase Round 2 ===
+      // If server signals tribunalPhaseA, CASSANDRA runs alone first.
+      // Her challenges are submitted, then we re-fetch instructions for Phase B.
+      if (roundInstr.tribunalPhaseA) {
+        console.log('\x1b[35m[TRIBUNAL]   \x1b[0mPhase A: CASSANDRA analyzing ' + (roundInstr.agentCount || '?') + ' proposals...');
+
+        // Execute CASSANDRA alone
+        var cassandraInstr = agentInstructions[0]; // Server returns only CASSANDRA for Phase A
+        if (cassandraInstr) {
+          var cassandraStart = Date.now();
+          var cassandraResult;
+          try {
+            var cassProv = cassandraInstr.provider || userProvider;
+            cassandraResult = await llm.chatWithProvider(cassProv, cassandraInstr.systemPrompt, cassandraInstr.userMessage, {
+              maxTokens: cassandraInstr.maxTokens || 4096,
+              agentTag: 'CASSANDRA',
+            });
+          } catch (cassErr) {
+            console.error('\x1b[31m[TRIBUNAL]   CASSANDRA failed: ' + cassErr.message + '\x1b[0m');
+            cassandraResult = 'Error: ' + cassErr.message;
+          }
+
+          var cassDuration = Date.now() - cassandraStart;
+          var cassStats = getTokenStats(llm, 'CASSANDRA');
+          var cassParsed = parseStructuredOutput(cassandraResult);
+          var cassContent = typeof cassParsed.answer === 'string' ? cassParsed.answer : JSON.stringify(cassParsed.answer);
+
+          console.log('  \x1b[1mCASSANDRA\x1b[0m \x1b[35m' + Math.round(cassDuration / 1000) + 's\x1b[0m (tribunal analysis)');
+
+          // Submit CASSANDRA's challenges to server for parsing
+          var cassandraProposal = [{
+            agentName: 'CASSANDRA',
+            subTaskId: '__tribunal__',
+            content: cassContent,
+            rawContent: cassandraResult,
+            confidence: cassParsed.confidence,
+            riskFlags: cassParsed.riskFlags || [],
+            reasoningSummary: typeof cassParsed.reasoningSummary === 'string' ? cassParsed.reasoningSummary : '',
+            inputTokens: cassStats.inputTokens,
+            outputTokens: cassStats.outputTokens,
+            durationMs: cassDuration,
+            provider: cassandraInstr.provider || userProvider,
+            model: cassandraInstr.model || 'unknown',
+          }];
+
+          try {
+            var phaseAResult = await client.stepRoundResult(sessionId, round, cassandraProposal);
+            var challengeCount = phaseAResult.tribunalChallengesGenerated || 0;
+            console.log('\x1b[35m[TRIBUNAL]   \x1b[0mChallenges generated: ' + challengeCount);
+          } catch (phaseAErr) {
+            console.error('\x1b[31m[TRIBUNAL]   Phase A submission failed: ' + phaseAErr.message + '\x1b[0m');
+          }
+
+          // Re-fetch instructions for Phase B (remaining agents with challenges injected)
+          console.log('\x1b[35m[TRIBUNAL]   \x1b[0mPhase B: agents responding to challenges...');
+          try {
+            roundInstr = await client.stepRoundStart(sessionId, round);
+            agentInstructions = roundInstr.agents || [];
+          } catch (phaseBErr) {
+            console.error('\x1b[31m[TRIBUNAL]   Phase B fetch failed: ' + phaseBErr.message + '\x1b[0m');
+            break;
+          }
+        }
+      }
+
       console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mExecuting ' + agentInstructions.length + ' agents locally...');
 
       // Immersive: show cross-reading (who's reading whom) for round 2+
@@ -7153,6 +7279,27 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         console.log('             Trajectory: \x1b[90m\u2014 (first round)\x1b[0m');
       }
 
+      // Display Tribunal metrics if present (after Phase B convergence measurement)
+      if (roundResult.tribunalMetrics) {
+        var tm = roundResult.tribunalMetrics;
+        var outcomeColors = {
+          emergence: '\x1b[32m',        // green
+          covert_leadership: '\x1b[33m', // yellow
+          destructive: '\x1b[31m',       // red
+          ritual: '\x1b[90m',           // gray
+          mixed: '\x1b[36m',            // cyan
+        };
+        var outcomeColor = outcomeColors[tm.tribunalOutcome] || '\x1b[0m';
+
+        console.log('\x1b[35m[TRIBUNAL]\x1b[0m   Challenges: ' + (tm.challengesParsed || 0) + '/' + (tm.challengesGenerated || 0) + ' parsed');
+        console.log('             Responses: \x1b[32mACCEPT ' + (tm.acceptCount || 0) + '\x1b[0m / \x1b[33mREBUT ' + (tm.rebutCount || 0) + '\x1b[0m / \x1b[36mMITIGATE ' + (tm.mitigateCount || 0) + '\x1b[0m / \x1b[90mIGNORED ' + (tm.ignoredCount || 0) + '\x1b[0m');
+        if (tm.ritualAcceptCount > 0) {
+          console.log('             \x1b[33mRitual ACCEPTs: ' + tm.ritualAcceptCount + ' (ACCEPT without real revision)\x1b[0m');
+        }
+        console.log('             Semantic delta: ' + (tm.meanSemanticDelta !== undefined ? (tm.meanSemanticDelta * 100).toFixed(1) + '%' : 'N/A') + ' (R1 vs R2 revision depth)');
+        console.log('             Outcome: ' + outcomeColor + (tm.tribunalOutcome || 'unknown').toUpperCase() + '\x1b[0m');
+      }
+
       await reportProgress(
         { phase: 'round_' + round },
         JSON.stringify({ type: 'convergence_update', round: round, convergence: roundResult.convergence, method: roundResult.method, divergentPairs: roundResult.divergentPairs })
@@ -7232,9 +7379,9 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         synthProvider = tryProv;
         break;
       } catch (synthErr) {
-        var isSynthRetryable = synthErr.message && (synthErr.message.includes('429') || synthErr.message.includes('529') || synthErr.message.includes('overloaded') || synthErr.message.includes('Overloaded') || synthErr.message.includes('RESOURCE_EXHAUSTED') || synthErr.message.includes('rate'));
+        var isSynthRetryable = synthErr.message && (synthErr.message.includes('429') || synthErr.message.includes('529') || synthErr.message.includes('overloaded') || synthErr.message.includes('Overloaded') || synthErr.message.includes('RESOURCE_EXHAUSTED') || synthErr.message.includes('rate') || synthErr.message.includes('max_tokens') || synthErr.message.includes('invalid_request'));
         if (isSynthRetryable && spi < synthProviderOrder.length - 1) {
-          console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + tryProv + ' unavailable, trying ' + synthProviderOrder[spi + 1] + '...' + colors.reset);
+          console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + tryProv + ' failed, trying ' + synthProviderOrder[spi + 1] + '...' + colors.reset);
           continue;
         }
         throw synthErr;
@@ -10079,6 +10226,8 @@ var COMMANDS = {
           options.noMeta = true;
         } else if (args[i] === '--no-deliberation') {
           options.noDeliberation = true;
+        } else if (args[i] === '--no-tribunal') {
+          options.noTribunal = true;
         } else if (args[i] === '--no-semantic-convergence') {
           options.noSemanticConvergence = true;
         } else if (args[i] === '--no-history-decomposition') {

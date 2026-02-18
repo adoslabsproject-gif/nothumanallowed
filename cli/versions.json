@@ -37,11 +37,36 @@
     ]
   },
   "legion-x": {
-    "latest": "2.0.2",
+    "latest": "2.1.0",
     "file": "legion-x.mjs",
     "minNodeVersion": 22,
-    "description": "Legion X v2.0.2 — Knowledge Grounding + Synthesis Intelligence + Advanced Convergence. 2.6M verified facts from 16 authoritative datasets. Authority-weighted synthesis with 6-factor agent scoring. 6-layer convergence engine. Auto PIF identity import.",
+    "description": "Legion X v2.1.0 — Parliament System. Local LLM (Legion) for intelligent routing, adversarial challenges, and synthesis audit. 42 agents, 7+ providers, zero-knowledge.",
     "versions": [
+      {
+        "version": "2.1.0",
+        "file": "legion-x.mjs",
+        "date": "2026-02-18",
+        "highlights": [
+          "Parliament System v1.0 — Local LLM (Qwen 2.5 7B) for intelligent routing replaces static ONNX neural routing",
+          "PROMETHEUS — LLM-powered agent selection with per-agent grounding prescription (custom categories, query reformulation, topK, minSimilarity)",
+          "CASSANDRA — Adversarial Tribunal challenges via local LLM with counter-grounding evidence",
+          "ATHENA — Micro-audit of synthesis results, detects omissions and dropped objections",
+          "Dynamic routing label — CLI now shows 'Legion LLM routing' or 'ONNX neural routing' based on actual method used",
+          "Grounding SQL fix — pgvector category filtering now works correctly with PostgreSQL ANY(ARRAY[...]) syntax",
+          "Graceful fallback — if local LLM unavailable, seamlessly falls back to Thompson Sampling + ONNX routing"
+        ]
+      },
+      {
+        "version": "2.0.3",
+        "file": "legion-x.mjs",
+        "date": "2026-02-16",
+        "highlights": [
+          "Code Grounding — semantic embedding of your project code and documents for context-aware agent responses",
+          "The Tribunal v1.0 — CASSANDRA adversarial challenges with two-phase Round 2",
+          "Provider limit raised to 7 — use up to 7 providers simultaneously (Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere)",
+          "42 agents (added ADE security auditor)"
+        ]
+      },
       {
         "version": "2.0.2",
         "file": "legion-x.mjs",
@@ -168,11 +193,22 @@
     ]
   },
   "legion-x1": {
-    "latest": "X1.9.0",
+    "latest": "X1.10.0",
     "file": "legion-x1.mjs",
     "minNodeVersion": 22,
-    "description": "Legion X1 v X1.9.0 — Advanced Evolve Scheduler v2.0. Real Geth Consensus meta-evolution with session-based triggers, safety-tiered auto-application, and feedback loops.",
+    "description": "Legion X1 v X1.10.0 — 5-LLM Dialectic. Genuine reasoning diversity from Anthropic, OpenAI, Gemini, Grok (xAI), and DeepSeek.",
     "versions": [
+      {
+        "version": "X1.10.0",
+        "file": "legion-x1.mjs",
+        "date": "2026-02-16",
+        "highlights": [
+          "5-LLM Dialectic — Grok (xAI) and DeepSeek join Anthropic, OpenAI, and Gemini for genuine multi-paradigm reasoning",
+          "Category-optimized routing — security→Anthropic, code→OpenAI, integration→Gemini, content→Grok, data→DeepSeek",
+          "Balanced provider assignment with min-per-provider guarantee across all 5 LLMs",
+          "Automatic fallback — unconfigured providers gracefully fall through to configured ones"
+        ]
+      },
       {
         "version": "X1.9.0",
         "file": "legion-x1.mjs",

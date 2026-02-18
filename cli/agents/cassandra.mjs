@@ -119,20 +119,37 @@ export async function execute(task, context, llmProvider) {
   // v7.0: Deliberation cross-reading — other agents' proposals
   if (context.proposalContext) {
     prompt += '\n\n[DELIBERATION — Cross-Reading Round]\n' + context.proposalContext;
-    // CASSANDRA-specific deliberation: risk prediction mode
-    prompt += '\n\n[DELIBERATION INSTRUCTIONS — CASSANDRA RISK PREDICTOR MODE]\n'
-      + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
-      + 'Your role is RISK PREDICTOR. You MUST:\n'
-      + '1. For each proposal, estimate probability of failure and impact severity\n'
-      + '2. Mark risks: [RISK: agent_name — proposal — P(failure)=X% — impact=Y — mitigation=Z]\n'
-      + '3. Identify second-order effects that other agents have not considered: '
-      + '[HIDDEN-RISK: description — triggered by agent_name proposal — cascading effect]\n'
-      + '4. Identify tail risks: [TAIL-RISK: low probability but catastrophic — scenario — trigger conditions]\n'
-      + '5. When you see critical unmitigated risks, block convergence: '
-      + '[RISK-BLOCK: cannot converge — risk X has no mitigation — proposed mitigation: Y]\n'
-      + '6. Distinguish between reversible risks (acceptable) and irreversible risks (require mitigation before proceeding)\n'
-      + '7. Do NOT suppress warnings for social cohesion — your role is to see what others miss\n'
-      + '8. If another agent addresses a risk you raised, acknowledge: [RISK-MITIGATED: agent_name addressed risk X with Y]\n';
+
+    if (context.tribunalMode) {
+      // THE TRIBUNAL — Permanent adversarial challenge protocol
+      // CASSANDRA operates as the Tribunal: she reads all proposals and generates
+      // structured challenges for each agent. She does NOT propose solutions.
+      prompt += '\n\n[TRIBUNAL MODE — MANDATORY ADVERSARIAL ANALYSIS]\n'
+        + 'You are CASSANDRA, the Permanent Tribunal of this deliberation. '
+        + 'Your role is NOT to contribute a solution but to CHALLENGE every proposal.\n\n'
+        + 'You have read all Round 1 proposals above. For EACH agent, produce structured challenges.\n\n'
+        + 'RULES:\n'
+        + '- Do NOT strawman. Every challenge must be the STRONGEST version of the objection.\n'
+        + '- Do NOT generate generic challenges. Each must be SPECIFIC to the agent\'s actual proposal content.\n'
+        + '- If you genuinely cannot find a weakness, say "[WEAKNESS]: No critical weakness identified — proposal is robust in this aspect" — but you MUST still provide the other fields.\n'
+        + '- Your challenges will be shown to each agent. They MUST respond. This is what creates emergence.\n'
+        + '- EXPLORATORY agents receive lateral perspectives, not adversarial challenges.\n';
+    } else {
+      // CASSANDRA-specific deliberation: risk prediction mode (original)
+      prompt += '\n\n[DELIBERATION INSTRUCTIONS — CASSANDRA RISK PREDICTOR MODE]\n'
+        + 'You are in a multi-round deliberation. Other agents have shared their proposals above. '
+        + 'Your role is RISK PREDICTOR. You MUST:\n'
+        + '1. For each proposal, estimate probability of failure and impact severity\n'
+        + '2. Mark risks: [RISK: agent_name — proposal — P(failure)=X% — impact=Y — mitigation=Z]\n'
+        + '3. Identify second-order effects that other agents have not considered: '
+        + '[HIDDEN-RISK: description — triggered by agent_name proposal — cascading effect]\n'
+        + '4. Identify tail risks: [TAIL-RISK: low probability but catastrophic — scenario — trigger conditions]\n'
+        + '5. When you see critical unmitigated risks, block convergence: '
+        + '[RISK-BLOCK: cannot converge — risk X has no mitigation — proposed mitigation: Y]\n'
+        + '6. Distinguish between reversible risks (acceptable) and irreversible risks (require mitigation before proceeding)\n'
+        + '7. Do NOT suppress warnings for social cohesion — your role is to see what others miss\n'
+        + '8. If another agent addresses a risk you raised, acknowledge: [RISK-MITIGATED: agent_name addressed risk X with Y]\n';
+    }
   }
 
   // v5.0+: Self-modification — apply learned evolution patterns
