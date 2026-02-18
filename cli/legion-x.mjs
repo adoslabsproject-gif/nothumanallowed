@@ -6966,6 +6966,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     var maxRounds = (sessionConfig.deliberationRounds || decompResult.config?.deliberationRounds) || 3;
     var roundDecision = null;
     var roundLoopExitedCleanly = false;
+    var allProposals = [];  // Accumulates ALL proposals across ALL rounds for full transcript
     var serverSaidContinue = true;  // Start true to enter loop for round 1
 
     // Loop is governed by the SERVER's decision (nextStatus === 'awaiting_round'),
@@ -7208,6 +7209,11 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       var providerResults = await Promise.all(providerPromises);
       for (var pri = 0; pri < providerResults.length; pri++) {
         proposals = proposals.concat(providerResults[pri]);
+      }
+
+      // Accumulate all proposals across rounds for full transcript
+      for (var api2 = 0; api2 < proposals.length; api2++) {
+        allProposals.push(proposals[api2]);
       }
 
       // Send proposals to server for convergence measurement
@@ -7581,7 +7587,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         ciGain: finalResult.ciGain || 0,
         finalConvergence: finalResult.finalConvergence || 0,
         deliberationRounds: round,
-        proposals: proposals.map(function(p) {
+        proposals: allProposals.map(function(p) {
           return {
             agentName: p.agentName,
             round: p.round || 1,
@@ -7615,10 +7621,10 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       md += '- Provider: ' + userProvider + ' (local execution)\n';
       md += '- Deliberation Rounds: ' + round + '\n\n';
       // Agent proposals by round
-      if (proposals.length > 0) {
+      if (allProposals.length > 0) {
         var roundMap = {};
-        for (var pi = 0; pi < proposals.length; pi++) {
-          var pr = proposals[pi];
+        for (var pi = 0; pi < allProposals.length; pi++) {
+          var pr = allProposals[pi];
           var rKey = pr.round || 1;
           if (!roundMap[rKey]) roundMap[rKey] = [];
           roundMap[rKey].push(pr);

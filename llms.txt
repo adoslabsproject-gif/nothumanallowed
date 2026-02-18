@@ -106,6 +106,24 @@ agents' outputs, and refines its position across rounds.
     The local LLM (Qwen 2.5 7B via llama.cpp) runs on the server. If unavailable,
     the system seamlessly falls back to ONNX neural routing + static grounding.
 
+### Why Multi-Agent Deliberation, Not Just a Better Prompt
+
+A single well-prompted LLM can produce beautiful text. But you don't know which
+alternatives it discarded, which objections it could have raised, whether its
+answer is fragile to a single counterargument, or have any decisional traceability.
+
+LEGION's Geth Consensus produces something fundamentally different:
+- Explicit objections (CASSANDRA Tribunal generates adversarial challenges)
+- Refutations (agents defend their positions with evidence or accept challenges)
+- Mitigations (agents acknowledge risks and propose safeguards)
+- Cross-validation (every agent reads every other agent's proposals and refines)
+- Measured convergence (6-layer engine quantifies agreement and disagreement)
+
+This is cognitive governance — not aesthetics. It's epistemic control. In serious
+contexts (compliance, legal, security, enterprise RAG, decision support) this is
+worth more than style. The synthesis isn't just well-written; it's auditable,
+challenged, and defended.
+
 ### Additional LEGION Systems
 
 - **Prompt Evolution** — PromptEvolver modifies agent system prompts based on
