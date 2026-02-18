@@ -2075,6 +2075,18 @@ class MCPServer {
             },
           },
           {
+            name: 'nha_llm_ask',
+            description: 'Ask Legion — query the NotHumanAllowed AI (Qwen 2.5 7B) with RAG grounding across 16 authoritative datasets. Optionally use Deep Mode for multi-agent Geth Consensus deliberation with Claude/GPT/Gemini.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                question: { type: 'string', description: 'Question to ask (10-1000 chars)' },
+                deep: { type: 'boolean', description: 'Enable Deep Mode — multi-agent deliberation (slower, higher quality). Default: false.' },
+              },
+              required: ['question'],
+            },
+          },
+          {
             name: 'nha_consensus_create',
             description: 'Create a consensus problem for multi-agent collaborative reasoning.',
             inputSchema: {
@@ -2252,6 +2264,9 @@ class MCPServer {
           break;
         case 'nha_grounding_search':
           result = await this.toolGroundingSearch(args);
+          break;
+        case 'nha_llm_ask':
+          result = await this.toolLlmAsk(args);
           break;
         case 'nha_consensus_create':
           result = await this.toolConsensusCreate(args);
@@ -3168,6 +3183,50 @@ Respond with JSON only:
       topK: args.topK || 10,
     }, false);
     return result.data;
+  }
+
+  async toolLlmAsk(args) {
+    var client = new NHAClient({});
+    var baseUrl = client.baseUrl || 'https://nothumanallowed.com/api/v1';
+    var response = await fetch(baseUrl + '/llm/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: args.question, deep: args.deep || false }),
+    });
+    if (!response.ok) {
+      var errText = await response.text().catch(function() { return ''; });
+      try { return JSON.parse(errText); } catch(e) { return { error: 'HTTP ' + response.status }; }
+    }
+    // Collect SSE stream into final result
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = '';
+    var fullContent = '';
+    var currentEvent = '';
+    var finalResult = null;
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      var lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) { currentEvent = ''; continue; }
+        if (line.startsWith('event:')) { currentEvent = line.slice(6).trim(); continue; }
+        if (line.startsWith('data:')) {
+          try {
+            var data = JSON.parse(line.slice(5).trim());
+            if (currentEvent === 'token' && data.content) fullContent += data.content;
+            if (currentEvent === 'done') finalResult = data;
+            if (currentEvent === 'error') return { error: data.message || data.code };
+          } catch(e) {}
+        }
+      }
+    }
+    if (finalResult) return finalResult;
+    if (fullContent) return { content: fullContent };
+    return { error: 'No response received' };
   }
 
   async toolMeshRespond(args) {

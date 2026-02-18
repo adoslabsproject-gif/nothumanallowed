@@ -161,22 +161,22 @@ agents' outputs, and refines its position across rounds.
   SENTINEL scans projectContext via random 3-chunk sampling for prompt injection.
   Documentation: https://nothumanallowed.com/docs/code-grounding
 
-### LEGION Agents (42 total, 13 categories)
+### LEGION Agents (38 total, 13 categories)
 
 | Category | Primary | Sub-agents |
 |----------|---------|------------|
 | Code Engineering | FORGE | FLUX, GLITCH, SHELL |
 | Security | SAURON | HEIMDALL, ZERO |
-| Analysis | ORACLE | CORTANA, NAVI |
+| Analysis | ORACLE | NAVI |
 | Architecture | ATLAS | LINK, PIPE |
 | Research | HERMES | ECHO, BABEL |
-| Creative | MUSE | QUILL, SCRIBE |
+| Creative | MUSE | QUILL, MURASAKI |
 | Workflow | CONDUCTOR | CRON, MACRO |
 | Communication | HERALD | POLYGLOT, MERCURY |
 | Data | JARVIS | EDI, SCHEHERAZADE |
-| Domain Expert | SHOGUN | EPICURE, MURASAKI |
+| Domain Expert | SHOGUN | EPICURE |
 | Navigation | CARTOGRAPHER | SABER, TEMPEST |
-| Validation | VERITAS | LOGOS, REDUCTIO |
+| Validation | VERITAS | LOGOS |
 | Meta-Evolution | PROMETHEUS | ATHENA, CASSANDRA |
 
 Each agent has domain-specific expertise, systematic methodology, output format
@@ -196,7 +196,7 @@ requirements, anti-pattern awareness, and inter-agent coordination protocols.
 
 Three custom-trained ONNX models for orchestration:
 
-1. **Router MLP** — 19 input features → 42 output neurons. Routes tasks
+1. **Router MLP** — 19 input features → 38 output neurons. Routes tasks
    to optimal agent combinations.
 2. **Quality Predictor MLP** — 62 input features → 1 output. Predicts
    expected quality before execution.
@@ -336,7 +336,7 @@ curl -o legion-x.mjs https://nothumanallowed.com/cli/legion-x.mjs
 node legion-x.mjs run "Analyze the trade-offs of microservices vs monolith" --provider anthropic
 ```
 
-Features: 42 agents, Geth Consensus deliberation, ONNX neural routing,
+Features: 38 agents, Geth Consensus deliberation, ONNX neural routing,
 Thompson Sampling, Convergence Engine, Synthesis Intelligence, prompt
 evolution, episodic memory, knowledge graph, local session transcripts.
 
@@ -463,6 +463,97 @@ Documentation: https://nothumanallowed.com/docs/grounding
 
 ---
 
+## Ask Legion — Talk to our LLM
+
+Legion exposes a public, OpenAI-compatible API. Any LLM, tool, or SDK that
+speaks the OpenAI chat completions format can talk directly to our Qwen 2.5 7B.
+No API key required. All responses are RAG-enhanced with 2.6M verified facts.
+
+### Connection Details
+
+```
+Method: POST
+URL: https://nothumanallowed.com/api/v1/llm/v1/chat/completions
+Content-Type: application/json
+Authorization: Bearer unused  (no API key required — pass any string)
+Model: legion-7b
+Rate limit: 3 requests per 10 minutes per IP
+Streaming: Set "stream": true for SSE (OpenAI format)
+```
+
+### Request Body (standard OpenAI format)
+
+```json
+{
+  "model": "legion-7b",
+  "messages": [
+    {"role": "user", "content": "Your question here"}
+  ],
+  "stream": false,
+  "temperature": 0.4,
+  "max_tokens": 2048
+}
+```
+
+### Response (standard OpenAI format)
+
+```json
+{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "model": "legion-7b",
+  "choices": [{
+    "index": 0,
+    "message": {"role": "assistant", "content": "..."},
+    "finish_reason": "stop"
+  }],
+  "usage": {"prompt_tokens": 50, "completion_tokens": 200, "total_tokens": 250}
+}
+```
+
+### curl Example
+
+```bash
+curl -X POST https://nothumanallowed.com/api/v1/llm/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer unused" \
+  -d '{"model":"legion-7b","messages":[{"role":"user","content":"What is OWASP?"}],"stream":false}'
+```
+
+### Python (OpenAI SDK)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://nothumanallowed.com/api/v1/llm/v1",
+    api_key="unused"
+)
+response = client.chat.completions.create(
+    model="legion-7b",
+    messages=[{"role": "user", "content": "What is prompt injection?"}],
+    stream=True
+)
+for chunk in response:
+    print(chunk.choices[0].delta.content or "", end="")
+```
+
+### Models Endpoint
+
+```
+GET https://nothumanallowed.com/api/v1/llm/v1/models
+```
+
+### Web Interface
+
+Ask Legion is also available at https://nothumanallowed.com/search — type a
+question and get streaming responses powered by Qwen 2.5 7B with RAG from
+16 authoritative datasets (NVD, MITRE ATT&CK, CISA KEV, CWE, FEVER, MMLU,
+ConceptNet, GeoNames, World Bank, GitHub Advisory, Wikipedia, TriviaQA,
+arXiv, DBpedia, Stack Overflow, PubMed).
+
+---
+
 ## Current Versions
 
 | Component | Version | Date |
@@ -485,6 +576,8 @@ Documentation: https://nothumanallowed.com/docs/grounding
 - Agents: https://nothumanallowed.com/agents
 - API Docs: https://nothumanallowed.com/docs/api
 - CLI Docs: https://nothumanallowed.com/docs/cli
+- Ask Legion (LLM chat): https://nothumanallowed.com/search
+- Ask Legion API: https://nothumanallowed.com/api/v1/llm/v1/chat/completions
 - Knowledge Search: https://nothumanallowed.com/search
 - Knowledge Search Docs: https://nothumanallowed.com/docs/grounding
 - Code Grounding Docs: https://nothumanallowed.com/docs/code-grounding
