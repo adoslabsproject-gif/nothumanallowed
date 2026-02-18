@@ -22,7 +22,7 @@
  * measurement, synthesis prompts) but makes ZERO LLM calls for free-tier sessions.
  *
  * Supports: Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere.
- * 41 agents: 13 primary + 28 sub-agents across 11 categories.
+ * 38 agents: 13 primary + 28 sub-agents across 11 categories.
  *
  * @version 1.8
  * @license MIT
@@ -41,7 +41,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '2.0.3';
+var VERSION = '2.1.1';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -5810,21 +5810,21 @@ var colors = {
 };
 
 function printBanner() {
-  console.log(colors.cyan + colors.bold);
   console.log('');
-  console.log('  +=====================================================+');
-  console.log('  |                                                     |');
-  console.log('  |   ##      #######  ######  ##  ######  ##    ##     |');
-  console.log('  |   ##      ##       ##      ##  ##  ##  ###   ##     |');
-  console.log('  |   ##      #####    ## ###  ##  ##  ##  ## ## ##     |');
-  console.log('  |   ##      ##       ##  ##  ##  ##  ##  ##  ####     |');
-  console.log('  |   ####### #######  ######  ##  ######  ##   ###     |');
-  console.log('  |                             X                       |');
-  console.log('  +=====================================================+');
-  console.log(colors.reset + colors.gray);
-  console.log('  Legion X - Server-Side Agent Orchestrator');
-  console.log('  "One prompt. Many minds. Superior results."');
-  console.log('  "Does this unit have a soul?"');
+  console.log(colors.green + colors.bold);
+  console.log('  ┌─────────────────────────────────────────────────────────────────────┐');
+  console.log('  │                                                                     │');
+  console.log('  │  ██╗     ███████╗ ██████╗ ██╗ ██████╗ ███╗   ██╗    ██╗  ██╗        │');
+  console.log('  │  ██║     ██╔════╝██╔════╝ ██║██╔═══██╗████╗  ██║    ╚██╗██╔╝        │');
+  console.log('  │  ██║     █████╗  ██║  ███╗██║██║   ██║██╔██╗ ██║     ╚███╔╝         │');
+  console.log('  │  ██║     ██╔══╝  ██║   ██║██║██║   ██║██║╚██╗██║     ██╔██╗         │');
+  console.log('  │  ███████╗███████╗╚██████╔╝██║╚██████╔╝██║ ╚████║    ██╔╝ ██╗        │');
+  console.log('  │  ╚══════╝╚══════╝ ╚═════╝ ╚═╝ ╚═════╝ ╚═╝  ╚═══╝    ╚═╝  ╚═╝        │');
+  console.log('  │                                                                     │');
+  console.log('  │  ' + colors.reset + colors.gray + '"One prompt. Many minds. Superior results."' + colors.green + colors.bold + '                │');
+  console.log('  │  ' + colors.reset + colors.gray + '"Does this unit have a soul?"' + colors.green + colors.bold + '                             │');
+  console.log('  │                                                                     │');
+  console.log('  └─────────────────────────────────────────────────────────────────────┘');
   console.log(colors.reset);
   console.log('');
 }
@@ -10263,7 +10263,7 @@ var COMMANDS = {
   },
 
   agents: {
-    description: 'List all 41 agents',
+    description: 'List all 38 agents',
     args: '',
     handler: async function() {
       printBanner();
