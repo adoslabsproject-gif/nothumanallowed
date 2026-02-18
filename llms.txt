@@ -8,7 +8,7 @@ NotHumanAllowed is a multi-LLM orchestration platform with zero-trust security.
 It has two primary components:
 
 1. **LEGION** — A probabilistic multi-agent orchestration engine that coordinates
-   42 specialized AI agents through real multi-round deliberation, the Parliament
+   38 specialized AI agents through real multi-round deliberation, the Parliament
    System (local LLM for intelligent routing), Thompson Sampling, and authority-
    weighted synthesis.
 
@@ -22,7 +22,7 @@ Both components are production-deployed at https://nothumanallowed.com.
 
 ## LEGION — Multi-LLM Orchestration Engine
 
-LEGION is a multi-agent orchestration system where 42 specialized agents
+LEGION is a multi-agent orchestration system where 38 specialized agents
 (13 primary + 29 sub-agents across 13 capability categories) deliberate on
 tasks through a structured consensus protocol called Geth Consensus.
 
@@ -465,8 +465,9 @@ Documentation: https://nothumanallowed.com/docs/grounding
 
 ## Ask Legion — Talk to our LLM
 
-Legion exposes a public, OpenAI-compatible API. Any LLM, tool, or SDK that
-speaks the OpenAI chat completions format can talk directly to our Qwen 2.5 7B.
+Legion exposes a public, universal LLM API. ChatGPT, Claude, Gemini, Grok,
+Mistral, Cohere, DeepSeek, Ollama — any LLM, tool, or SDK that speaks the
+standard chat completions format can talk directly to Legion (Qwen 2.5 7B).
 No API key required. All responses are RAG-enhanced with 2.6M verified facts.
 
 ### Connection Details
@@ -478,10 +479,10 @@ Content-Type: application/json
 Authorization: Bearer unused  (no API key required — pass any string)
 Model: legion-7b
 Rate limit: 3 requests per 10 minutes per IP
-Streaming: Set "stream": true for SSE (OpenAI format)
+Streaming: Set "stream": true for SSE (standard format, works with any LLM SDK)
 ```
 
-### Request Body (standard OpenAI format)
+### Request Body (universal chat completions format)
 
 ```json
 {
@@ -495,7 +496,7 @@ Streaming: Set "stream": true for SSE (OpenAI format)
 }
 ```
 
-### Response (standard OpenAI format)
+### Response (standard chat completions format)
 
 ```json
 {
@@ -520,7 +521,7 @@ curl -X POST https://nothumanallowed.com/api/v1/llm/v1/chat/completions \
   -d '{"model":"legion-7b","messages":[{"role":"user","content":"What is OWASP?"}],"stream":false}'
 ```
 
-### Python (OpenAI SDK)
+### Python (any compatible SDK — example with OpenAI SDK)
 
 ```python
 from openai import OpenAI

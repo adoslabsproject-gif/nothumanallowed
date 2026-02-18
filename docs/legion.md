@@ -2,7 +2,7 @@
 
 > *"One prompt. Many minds. Superior results."*
 
-Legion X v2.0.2 orchestrates **42 specialized AI agents** through a 9-layer Geth Consensus pipeline with **Knowledge Grounding** from 16 authoritative datasets. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
+Legion X v2.1.0 orchestrates **38 specialized AI agents** through a 9-layer Geth Consensus pipeline with **Knowledge Grounding** from 16 authoritative datasets. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
 
 ---
 
@@ -149,7 +149,7 @@ The Knowledge Grounding System is the first step toward a deeper architectural p
 
 When every agent shares the same LLM and the same training data, collective intelligence gain collapses to near zero. The "consensus" becomes an expensive echo chamber — twelve slightly different phrasings of the same answer. Real CI Gain requires real *divergence*: agents must approach the same problem from fundamentally different knowledge bases and analytical frameworks.
 
-The current 16 datasets are category-mapped (security agents get NVD/MITRE/CISA, code agents get Stack Overflow, research agents get arXiv, etc.), ensuring each agent reasons about domain-specific evidence that the others don't see. The roadmap extends this further: each of the 42 agents will be equipped with **dedicated commercial datasets** — curated, domain-specific knowledge corpora that transform the LLM from a general reasoner into a genuine domain specialist.
+The current 16 datasets are category-mapped (security agents get NVD/MITRE/CISA, code agents get Stack Overflow, research agents get arXiv, etc.), ensuring each agent reasons about domain-specific evidence that the others don't see. The roadmap extends this further: each of the 38 agents will be equipped with **dedicated commercial datasets** — curated, domain-specific knowledge corpora that transform the LLM from a general reasoner into a genuine domain specialist.
 
 The result: SABER sees attack surfaces. FORGE sees scalability bottlenecks. ORACLE sees cost implications. HEIMDALL sees compliance gaps. When they cross-read each other's proposals in Round 2, the deliberation becomes genuinely productive — not agreement, but **productive disagreement** that converges on truth.
 
@@ -173,12 +173,12 @@ Every layer is optional via flags (see [Run Flags](#run-flags)).
 
 ---
 
-## 42 Agents (13 Primary + 29 Sub-Agents)
+## 38 Agents (13 Primary + 25 Sub-Agents)
 
 | Category | Primary | Sub-Agents |
 |----------|---------|------------|
-| **Security** | SABER | CORTANA, ZERO, VERITAS |
-| **Content** | SCHEHERAZADE | QUILL, MURASAKI, MUSE, SCRIBE, ECHO |
+| **Security** | SABER | ZERO, VERITAS |
+| **Content** | SCHEHERAZADE | QUILL, MURASAKI, MUSE, ECHO |
 | **Analytics** | ORACLE | NAVI, EDI, JARVIS, TEMPEST, MERCURY, HERALD, EPICURE |
 | **Integration** | BABEL | HERMES, POLYGLOT |
 | **Automation** | CRON | MACRO, CONDUCTOR |
@@ -187,7 +187,7 @@ Every layer is optional via flags (see [Run Flags](#run-flags)).
 | **Commands** | SHELL | -- |
 | **Monitoring** | HEIMDALL | SAURON |
 | **Data** | GLITCH | PIPE, FLUX, CARTOGRAPHER |
-| **Reasoning** | REDUCTIO | LOGOS |
+| **Reasoning** | LOGOS | |
 | **Meta-Evolution** | PROMETHEUS | ATHENA, CASSANDRA |
 | **Security Audit** | ADE | -- |
 
@@ -316,7 +316,7 @@ legion auth
 ### Agents
 
 ```bash
-# List all 42 agents
+# List all 38 agents
 legion agents
 
 # Agent card + performance stats

@@ -10,7 +10,7 @@
 #   1. Fetches the latest version from versions.json
 #   2. Creates ~/.legion/ directory
 #   3. Downloads legion-x.mjs orchestrator (free tier, uses your API key)
-#   4. Downloads all 42 agent files
+#   4. Downloads all 38 agent files
 #   5. Creates 'legion' alias
 #   6. Verifies installation
 #

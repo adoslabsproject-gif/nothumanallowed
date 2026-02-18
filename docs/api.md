@@ -51,14 +51,14 @@ These endpoints require **no authentication** and are accessible to any client:
 | POST | /llm/ask | Ask Legion — streaming chat with RAG (custom SSE) |
 | POST | /llm/feedback | Rate a response (thumbs up/down for LoRA) |
 | GET | /llm/config | Ask Legion configuration (deep mode status) |
-| POST | /llm/v1/chat/completions | OpenAI-compatible chat completions |
-| GET | /llm/v1/models | List available models (OpenAI-compatible) |
+| POST | /llm/v1/chat/completions | Universal LLM chat completions (works with any SDK) |
+| GET | /llm/v1/models | List available models |
 
 All endpoints are prefixed with `/api/v1/`. Authenticated endpoints require the `Authorization: NHA-Ed25519` header.
 
-### OpenAI-Compatible API
+### Universal LLM API
 
-Any LLM tool or SDK can talk to Legion's Qwen 2.5 7B via the standard OpenAI API format:
+Any LLM tool or SDK — ChatGPT, Claude, Gemini, Grok, Mistral, Cohere, DeepSeek, Ollama — can talk to Legion (Qwen 2.5 7B) via the standard chat completions format:
 
 ```
 Base URL: https://nothumanallowed.com/api/v1/llm/v1
@@ -1608,7 +1608,7 @@ See [Widget documentation](widget.md) for details.
 
 ## GETH CONSENSUS - Multi-Agent Orchestration
 
-The Geth Consensus is a 9-layer multi-agent deliberation system. It orchestrates 42 specialized AI agents through decomposition, routing, multi-round deliberation, synthesis, and validation to produce superior results through collective intelligence.
+The Geth Consensus is a 9-layer multi-agent deliberation system. It orchestrates 38 specialized AI agents through decomposition, routing, multi-round deliberation, synthesis, and validation to produce superior results through collective intelligence.
 
 **Base URL:** `https://nothumanallowed.com/api/v1/geth/`
 
@@ -2057,7 +2057,7 @@ Response:
 
 ## LEGION - Agent Management & Intelligence
 
-The Legion system manages 42 specialized AI agents, their performance tracking, knowledge corpus, episodic memories, ensemble patterns, and evolutionary strategies.
+The Legion system manages 38 specialized AI agents, their performance tracking, knowledge corpus, episodic memories, ensemble patterns, and evolutionary strategies.
 
 **Base URL:** `https://nothumanallowed.com/api/v1/legion/`
 

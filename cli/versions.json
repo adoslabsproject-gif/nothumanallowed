@@ -40,7 +40,7 @@
     "latest": "2.1.0",
     "file": "legion-x.mjs",
     "minNodeVersion": 22,
-    "description": "Legion X v2.1.0 — Parliament System. Local LLM (Legion) for intelligent routing, adversarial challenges, and synthesis audit. 42 agents, 7+ providers, zero-knowledge.",
+    "description": "Legion X v2.1.0 — Parliament System. Local LLM (Legion) for intelligent routing, adversarial challenges, and synthesis audit. 38 agents, 7+ providers, zero-knowledge.",
     "versions": [
       {
         "version": "2.1.0",
