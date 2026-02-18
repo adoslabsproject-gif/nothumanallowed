@@ -37,11 +37,24 @@
     ]
   },
   "legion-x": {
-    "latest": "2.1.0",
+    "latest": "2.1.2",
     "file": "legion-x.mjs",
     "minNodeVersion": 22,
-    "description": "Legion X v2.1.0 — Parliament System. Local LLM (Legion) for intelligent routing, adversarial challenges, and synthesis audit. 38 agents, 7+ providers, zero-knowledge.",
+    "description": "Legion X v2.1.2 — Full session transcripts + banner redesign. Complete agent responses saved per-round in local session files. 38 agents, 7+ providers, zero-knowledge.",
     "versions": [
+      {
+        "version": "2.1.2",
+        "file": "legion-x.mjs",
+        "date": "2026-02-18",
+        "highlights": [
+          "Full session transcripts — every agent response for every round now saved in local .json and .md files (was synthesis-only)",
+          "Proposals include round number, provider, model, content, confidence, risk flags, reasoning summary, token usage, duration",
+          "Markdown transcript organized by round with per-agent sections",
+          "Banner redesign — clean ANSI Shadow art without misaligned box borders",
+          "Ask Legion system prompt rewritten — Rule #0 Language enforcement, no more Chinese responses to Italian questions",
+          "Grounding similarity threshold raised from 0.3 to 0.60 — eliminates irrelevant knowledge base noise"
+        ]
+      },
       {
         "version": "2.1.0",
         "file": "legion-x.mjs",

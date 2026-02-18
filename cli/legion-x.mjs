@@ -41,7 +41,7 @@ var __dirname = path.dirname(__filename);
 // Section 1: Header + Config
 // ============================================================================
 
-var VERSION = '2.1.1';
+var VERSION = '2.1.2';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
 var AGENTS_DIR = path.join(__dirname, 'agents');
 var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
@@ -5812,20 +5812,15 @@ var colors = {
 function printBanner() {
   console.log('');
   console.log(colors.green + colors.bold);
-  console.log('  ┌─────────────────────────────────────────────────────────────────────┐');
-  console.log('  │                                                                     │');
-  console.log('  │  ██╗     ███████╗ ██████╗ ██╗ ██████╗ ███╗   ██╗    ██╗  ██╗        │');
-  console.log('  │  ██║     ██╔════╝██╔════╝ ██║██╔═══██╗████╗  ██║    ╚██╗██╔╝        │');
-  console.log('  │  ██║     █████╗  ██║  ███╗██║██║   ██║██╔██╗ ██║     ╚███╔╝         │');
-  console.log('  │  ██║     ██╔══╝  ██║   ██║██║██║   ██║██║╚██╗██║     ██╔██╗         │');
-  console.log('  │  ███████╗███████╗╚██████╔╝██║╚██████╔╝██║ ╚████║    ██╔╝ ██╗        │');
-  console.log('  │  ╚══════╝╚══════╝ ╚═════╝ ╚═╝ ╚═════╝ ╚═╝  ╚═══╝    ╚═╝  ╚═╝        │');
-  console.log('  │                                                                     │');
-  console.log('  │  ' + colors.reset + colors.gray + '"One prompt. Many minds. Superior results."' + colors.green + colors.bold + '                │');
-  console.log('  │  ' + colors.reset + colors.gray + '"Does this unit have a soul?"' + colors.green + colors.bold + '                             │');
-  console.log('  │                                                                     │');
-  console.log('  └─────────────────────────────────────────────────────────────────────┘');
-  console.log(colors.reset);
+  console.log('    ██╗     ███████╗ ██████╗ ██╗ ██████╗ ███╗   ██╗    ██╗  ██╗');
+  console.log('    ██║     ██╔════╝██╔════╝ ██║██╔═══██╗████╗  ██║    ╚██╗██╔╝');
+  console.log('    ██║     █████╗  ██║  ███╗██║██║   ██║██╔██╗ ██║     ╚███╔╝');
+  console.log('    ██║     ██╔══╝  ██║   ██║██║██║   ██║██║╚██╗██║     ██╔██╗');
+  console.log('    ███████╗███████╗╚██████╔╝██║╚██████╔╝██║ ╚████║    ██╔╝ ██╗');
+  console.log('    ╚══════╝╚══════╝ ╚═════╝ ╚═╝ ╚═════╝ ╚═╝  ╚═══╝    ╚═╝  ╚═╝');
+  console.log('');
+  console.log('    ' + colors.reset + colors.gray + '"One prompt. Many minds. Superior results."');
+  console.log('    "Does this unit have a soul?"' + colors.reset);
   console.log('');
 }
 
@@ -7139,6 +7134,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
             var proposal = {
               agentName: agentInstr.agentName,
               subTaskId: agentInstr.subTaskId || '',
+              round: round,
               content: answerContent,
               rawContent: agentResponse,
               confidence: parsedOutput.confidence,
@@ -7573,7 +7569,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       var shortId = sessionId.substring(0, 8);
       var baseName = datePrefix + '_' + shortId;
 
-      // JSON transcript
+      // JSON transcript — includes full agent responses per round
       var jsonTranscript = {
         sessionId: sessionId,
         planType: 'free',
@@ -7585,6 +7581,22 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         ciGain: finalResult.ciGain || 0,
         finalConvergence: finalResult.finalConvergence || 0,
         deliberationRounds: round,
+        proposals: proposals.map(function(p) {
+          return {
+            agentName: p.agentName,
+            round: p.round || 1,
+            subTaskId: p.subTaskId || '',
+            provider: p.provider || userProvider,
+            model: p.model || 'unknown',
+            content: p.content,
+            confidence: p.confidence,
+            riskFlags: p.riskFlags,
+            reasoningSummary: p.reasoningSummary || '',
+            inputTokens: p.inputTokens || 0,
+            outputTokens: p.outputTokens || 0,
+            durationMs: p.durationMs || 0,
+          };
+        }),
         synthesis: synthRaw,
         tokenUsage: usage,
         durationMs: totalMs,
@@ -7602,7 +7614,33 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       md += '- Plan: Free (zero-knowledge, client orchestration)\n';
       md += '- Provider: ' + userProvider + ' (local execution)\n';
       md += '- Deliberation Rounds: ' + round + '\n\n';
-      md += '---\n\n';
+      // Agent proposals by round
+      if (proposals.length > 0) {
+        var roundMap = {};
+        for (var pi = 0; pi < proposals.length; pi++) {
+          var pr = proposals[pi];
+          var rKey = pr.round || 1;
+          if (!roundMap[rKey]) roundMap[rKey] = [];
+          roundMap[rKey].push(pr);
+        }
+        var roundKeys = Object.keys(roundMap).sort(function(a, b) { return Number(a) - Number(b); });
+        for (var ri = 0; ri < roundKeys.length; ri++) {
+          var rk = roundKeys[ri];
+          md += '## Round ' + rk + '\n\n';
+          var roundProposals = roundMap[rk];
+          for (var rpi = 0; rpi < roundProposals.length; rpi++) {
+            var rp = roundProposals[rpi];
+            md += '### ' + (rp.agentName || 'Unknown') + ' (' + (rp.provider || 'unknown') + ')\n';
+            md += '- Confidence: ' + ((rp.confidence || 0.7) * 100).toFixed(0) + '%\n';
+            if (rp.reasoningSummary) md += '- Reasoning: ' + rp.reasoningSummary + '\n';
+            if (rp.riskFlags && rp.riskFlags.length > 0) md += '- Risk Flags: ' + rp.riskFlags.join(', ') + '\n';
+            md += '- Tokens: ' + (rp.inputTokens || 0) + ' in / ' + (rp.outputTokens || 0) + ' out\n\n';
+            md += (rp.content || '[No content]') + '\n\n';
+          }
+          md += '---\n\n';
+        }
+      }
+
       md += '## Final Synthesis\n\n';
       md += (synthRaw || '[No synthesis]') + '\n\n';
       md += '---\n\n';
