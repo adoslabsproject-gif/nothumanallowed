@@ -107,8 +107,8 @@ echo -e "${GREEN}[+]${NC} Legion v${VERSION} downloaded (${FILE_SIZE} bytes)"
 
 # Download agents
 AGENTS=(
-    saber cortana zero veritas ade
-    scheherazade quill murasaki muse scribe echo
+    saber zero veritas ade
+    scheherazade quill murasaki muse echo
     oracle navi edi jarvis tempest mercury herald epicure
     babel hermes polyglot
     cron macro conductor
@@ -117,7 +117,7 @@ AGENTS=(
     shell
     heimdall sauron
     glitch pipe flux cartographer
-    reductio logos
+    logos
     prometheus athena cassandra
 )
 

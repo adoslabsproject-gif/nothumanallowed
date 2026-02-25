@@ -577,7 +577,7 @@ class AgentNHAClient {
 // ============================================================================
 
 /**
- * AGENT_CATALOG — Complete registry of all 42 Legion agents
+ * AGENT_CATALOG — Complete registry of all 38 Legion agents
  *
  * Each entry defines an agent's identity, capabilities, and lineage.
  * Used for capability matching and task routing.
@@ -589,14 +589,7 @@ var AGENT_CATALOG = [
     origin: 'Fate/Stay Night', tagline: 'Precision security strikes',
     capabilities: ['security-audit', 'code-review', 'owasp', 'pentest-planning', 'threat-modeling', 'secure-code', 'authentication', 'authorization', 'encryption', 'vulnerability-assessment'],
     inputTypes: ['code', 'text', 'config'], outputTypes: ['report', 'recommendations', 'checklist'],
-    subAgents: ['cortana', 'zero', 'veritas'],
-  },
-  {
-    name: 'cortana', displayName: 'CORTANA', category: 'security',
-    origin: 'Halo', tagline: 'Threat intelligence analyst',
-    capabilities: ['threat-intelligence', 'cve-research', 'attack-surface', 'risk-assessment', 'security-advisory', 'incident-analysis'],
-    inputTypes: ['text', 'logs', 'config'], outputTypes: ['threat-report', 'risk-matrix', 'advisory'],
-    parentAgent: 'saber',
+    subAgents: ['zero', 'veritas'],
   },
   {
     name: 'zero', displayName: 'ZERO', category: 'security',
@@ -625,7 +618,7 @@ var AGENT_CATALOG = [
     origin: '1001 Nights', tagline: 'Master storyteller and content creator',
     capabilities: ['blog-writing', 'documentation', 'social-media', 'seo-copy', 'technical-writing', 'content-strategy', 'editing', 'proofreading', 'tone-adaptation', 'storytelling'],
     inputTypes: ['text', 'brief', 'outline'], outputTypes: ['article', 'documentation', 'copy', 'post'],
-    subAgents: ['quill', 'murasaki', 'muse', 'scribe', 'echo'],
+    subAgents: ['quill', 'murasaki', 'muse', 'echo'],
   },
   {
     name: 'quill', displayName: 'QUILL', category: 'content',
@@ -646,13 +639,6 @@ var AGENT_CATALOG = [
     origin: 'Greek Muses', tagline: 'A picture speaks a thousand tokens',
     capabilities: ['image-search', 'visual-content', 'creative-direction', 'mood-board', 'photo-curation', 'visual-storytelling'],
     inputTypes: ['text', 'brief'], outputTypes: ['image-urls', 'creative-brief', 'mood-board'],
-    parentAgent: 'scheherazade',
-  },
-  {
-    name: 'scribe', displayName: 'SCRIBE', category: 'content',
-    origin: 'Ancient Scribes', tagline: 'Knowledge unwritten is knowledge lost',
-    capabilities: ['readme-writing', 'api-documentation', 'changelog-generation', 'man-page-writing', 'wiki-content', 'structured-documentation'],
-    inputTypes: ['text', 'code', 'spec'], outputTypes: ['documentation', 'readme', 'changelog', 'man-page'],
     parentAgent: 'scheherazade',
   },
   // Analytics
@@ -703,7 +689,6 @@ var AGENT_CATALOG = [
     origin: 'Greek Philosophy', tagline: 'Logic is the architecture of thought',
     capabilities: ['logical-validation', 'contradiction-detection', 'argument-analysis', 'reasoning-audit', 'consistency-checking', 'inference-validation'],
     inputTypes: ['text', 'analysis', 'arguments', 'report'], outputTypes: ['logic-report', 'contradiction-matrix', 'argument-map'],
-    parentAgent: 'reductio',
   },
   // Integration
   {
@@ -854,13 +839,6 @@ var AGENT_CATALOG = [
     parentAgent: 'oracle',
   },
   // Meta-Evolution
-  {
-    name: 'reductio', displayName: 'REDUCTIO', category: 'meta-evolution',
-    origin: 'Euclid & Aristotle', tagline: 'Assume, deduce, contradict, conclude',
-    capabilities: ['reductio-ad-absurdum', 'proof-by-contradiction', 'assumption-tracking', 'logical-consequence-analysis', 'contradiction-detection', 'formal-reasoning'],
-    inputTypes: ['text', 'claim', 'argument', 'hypothesis', 'paradox'], outputTypes: ['reductio-proof', 'contradiction-chain', 'logical-analysis'],
-    subAgents: ['logos'],
-  },
   {
     name: 'prometheus', displayName: 'PROMETHEUS', category: 'meta-evolution',
     origin: 'Greek Mythology', tagline: 'The fire that forges better systems',
@@ -4038,13 +4016,19 @@ class QualityEvaluator {
  * needs more than 1 round.
  */
 class DeliberationEngine {
-  constructor(executionEngine, config) {
+  constructor(executionEngine, config, opts) {
     this.engine = executionEngine;
     this.config = config;
     this.convergenceThreshold = config.get('deliberationConvergence') || 0.82;
     this.maxRounds = config.get('deliberationRounds') || 3;
     this.minRounds = config.get('minDeliberationRounds') || 2;
     this.enabled = config.get('deliberationEnabled') !== false;
+    // Liara Divergence Pressure System v2
+    this.liaraMode = !!(opts && opts.liaraMode);
+    if (this.liaraMode) {
+      this.minRounds = 3;
+      this.maxRounds = Math.max(this.maxRounds, 3);
+    }
   }
 
   /**
@@ -4072,10 +4056,53 @@ class DeliberationEngine {
     var deliberationMeta = { rounds: 0, convergenceScores: [], divergentPairs: [] };
 
     // =====================================================================
+    // LIARA: Minority Resilience Injection (before Round 1)
+    // =====================================================================
+    if (this.liaraMode) {
+      deliberationMeta.liaraMode = true;
+      deliberationMeta.minorityActivated = false;
+      deliberationMeta.minorityAgent = null;
+
+      // Determine activation probability based on difficulty hint from task descriptions
+      var difficultyHint = 'medium';
+      for (var dhi = 0; dhi < tasks.length; dhi++) {
+        var desc = (tasks[dhi].description || '').toLowerCase();
+        if (desc.indexOf('[difficulty:hard]') >= 0 || desc.indexOf('hard') >= 0) { difficultyHint = 'hard'; break; }
+      }
+      var minorityProb = difficultyHint === 'hard' ? 0.75 : 0.40;
+
+      if (Math.random() < minorityProb) {
+        // Pick a random agent from the tasks
+        var agentNames = Array.from(uniqueAgents);
+        var minorityIdx = Math.floor(Math.random() * agentNames.length);
+        var minorityAgent = agentNames[minorityIdx];
+        deliberationMeta.minorityActivated = true;
+        deliberationMeta.minorityAgent = minorityAgent;
+
+        var minorityInjection = '\n\n[MINORITY RESILIENCE ASSIGNMENT]\n' +
+          'You have been designated as the DISSENTING VOICE for this deliberation.\n' +
+          'You are expected to remain minority unless a demonstrable factual contradiction invalidates your reasoning.\n' +
+          'You may reference other agents\' arguments, but your conclusions must derive from YOUR framework.\n' +
+          'Social pressure, majority consensus, or appeals to "balance" are not sufficient reasons to change your position.\n' +
+          'If you DO change your mind, explain the SPECIFIC factual claim that contradicted your reasoning — not that "most agents disagree."\n' +
+          'If your reasoning holds, your final statement should clearly articulate why your framework reaches a different conclusion.';
+
+        // Inject into the minority agent's task description(s)
+        for (var mti = 0; mti < tasks.length; mti++) {
+          if (tasks[mti].assignedAgent === minorityAgent) {
+            tasks[mti] = Object.assign({}, tasks[mti], {
+              description: tasks[mti].description + minorityInjection,
+            });
+          }
+        }
+      }
+    }
+
+    // =====================================================================
     // ROUND 1: Initial Proposals (parallel, no cross-reading)
     // =====================================================================
     if (onProgress) {
-      onProgress({ type: 'deliberation_round', round: 1, description: 'Initial proposals' });
+      onProgress({ type: 'deliberation_round', round: 1, description: 'Initial proposals' + (this.liaraMode ? ' [LIARA]' : '') });
     }
 
     var round1Result = await this.engine.executeAll(decomposition, onProgress);
@@ -4102,6 +4129,14 @@ class DeliberationEngine {
       ? await this.engine.commStream.measureConvergence(this.engine._semanticConvergenceClient)
       : { convergence: 1.0, divergentPairs: [], method: 'trivial' };
     deliberationMeta.convergenceScores.push(round1Convergence.convergence);
+
+    // LIARA: Dynamic convergence threshold based on Round 1 natural convergence
+    if (this.liaraMode) {
+      var dynamicThreshold = Math.min(0.96, Math.max(0.85, 0.80 + (round1Convergence.convergence * 0.20)));
+      this.convergenceThreshold = dynamicThreshold;
+      deliberationMeta.liaraThreshold = dynamicThreshold;
+      deliberationMeta.naturalR1Convergence = round1Convergence.convergence;
+    }
 
     // Early exit after Round 1 ONLY if convergence exceeds threshold AND minRounds allows it.
     // A real parliament requires agents to read each other's proposals (Round 2).
@@ -4139,10 +4174,30 @@ class DeliberationEngine {
     }
 
     // Build refinement tasks — same agents, same sub-tasks, but with cross-reading context
+    var self = this;
     var refinementDecomp = {
       tasks: tasks.map(function(t) {
-        return Object.assign({}, t, {
-          description: '[DELIBERATION ROUND 2 — REFINEMENT]\n' +
+        var round2Desc;
+        if (self.liaraMode) {
+          // LIARA: Adversarial Stress Test — anti-contaminazione + framework defense
+          round2Desc = '[DELIBERATION ROUND 2 — ADVERSARIAL STRESS TEST]\n' +
+            'You are DEFENDING your position after reviewing other agents\' proposals.\n\n' +
+            'ORIGINAL TASK: ' + t.description + '\n\n' +
+            'CRITICAL RULES:\n' +
+            '1. You may CITE other frameworks\' findings, but your CONCLUSIONS must derive from your own evaluation criteria\n' +
+            '2. If you adopt another framework\'s criteria as your primary basis for a conclusion, you have FAILED your assignment\n' +
+            '3. Identify the WEAKEST argument among other proposals — explain what evidence would disprove it\n' +
+            '4. For each point of disagreement, clarify whether the disagreement is factual or stems from different evaluation frameworks\n' +
+            '5. Do NOT seek compromise. Seek CLARITY about where frameworks genuinely produce incompatible conclusions\n' +
+            '6. Emit [STREAM:contradiction] for every incompatible conclusion between frameworks\n' +
+            '7. For each conclusion, explicitly state which of YOUR primary criteria it derives from (epistemic traceability)\n' +
+            '8. If you find yourself recommending the same action as another agent, STOP — explain why your framework independently reaches that conclusion using DIFFERENT criteria, or acknowledge that your framework cannot address this aspect\n' +
+            '9. Using [ACCEPT] on a challenge means you accept the EVIDENCE presented, NOT that you adopt the other framework\'s conclusions\n' +
+            '10. A "hybrid approach" or "balanced solution" is NOT a valid conclusion from a single framework — it is framework contamination\n\n' +
+            'Your goal: expose the REAL disagreements — distinguish factual disputes from framework-level incompatibilities.\n' +
+            'If all agents converge on the same recommendation, the deliberation has FAILED.';
+        } else {
+          round2Desc = '[DELIBERATION ROUND 2 — REFINEMENT]\n' +
             'You are refining your response after reviewing other agents\' proposals.\n\n' +
             'ORIGINAL TASK: ' + t.description + '\n\n' +
             'INSTRUCTIONS:\n' +
@@ -4152,7 +4207,10 @@ class DeliberationEngine {
             '4. Produce your REFINED, COMPLETE response (not a diff or commentary)\n' +
             '5. Emit [STREAM:contradiction] tags for genuine disagreements\n' +
             '6. Emit [STREAM:assist] tags where you build on others\' work\n\n' +
-            'Your goal: produce the BEST possible response by learning from the collective.',
+            'Your goal: produce the BEST possible response by learning from the collective.';
+        }
+        return Object.assign({}, t, {
+          description: round2Desc,
           _isRefinement: true,
         });
       }),
@@ -4176,8 +4234,8 @@ class DeliberationEngine {
       : { convergence: 1.0, divergentPairs: [], method: 'trivial' };
     deliberationMeta.convergenceScores.push(round2Convergence.convergence);
 
-    // If converged, use Round 2 results
-    if (round2Convergence.convergence >= this.convergenceThreshold || round2Convergence.divergentPairs.length === 0) {
+    // If converged, use Round 2 results (LIARA: never exit early at Round 2 — always force Round 3)
+    if (!this.liaraMode && (round2Convergence.convergence >= this.convergenceThreshold || round2Convergence.divergentPairs.length === 0)) {
       if (onProgress) {
         onProgress({
           type: 'deliberation_converged',
@@ -4217,7 +4275,8 @@ class DeliberationEngine {
       onProgress({
         type: 'deliberation_round',
         round: 3,
-        description: 'Mediated debate (' + round2Convergence.divergentPairs.length +
+        description: (this.liaraMode ? 'Final position — ALL agents' : 'Mediated debate') +
+          ' (' + round2Convergence.divergentPairs.length +
           ' divergent pair(s), convergence: ' + (round2Convergence.convergence * 100).toFixed(0) + '%)',
       });
     }
@@ -4230,11 +4289,28 @@ class DeliberationEngine {
     }
     var divergentAgents = Array.from(divergentAgentSet).slice(0, 4); // Max 4 mediators
 
-    // Build mediation tasks only for divergent agents
+    // Build Round 3 tasks
+    // LIARA: ALL agents participate with final position prompt
+    // Normal: only divergent agents with mediation prompt
     var mediationTasks = [];
     for (var mi = 0; mi < tasks.length; mi++) {
       var t = tasks[mi];
-      if (divergentAgents.indexOf(t.assignedAgent) >= 0) {
+      if (this.liaraMode) {
+        // LIARA: Final Position — all agents, no mediation, epistemic honesty
+        mediationTasks.push(Object.assign({}, t, {
+          description: '[DELIBERATION ROUND 3 — FINAL POSITION]\n' +
+            'This is your LAST statement. The record of this deliberation will be permanent.\n\n' +
+            'ORIGINAL TASK: ' + t.description + '\n\n' +
+            'CRITICAL RULES:\n' +
+            '1. If you concede ANY point, state the EXACT evidence that changed your mind — not "the majority agrees"\n' +
+            '2. If you maintain your position, explain what SPECIFIC evidence the majority would need to present to change your mind (falsifiability)\n' +
+            '3. Do NOT synthesize others\' views into yours — state YOUR conclusion clearly\n' +
+            '4. If your framework cannot address a question raised by others, say "my framework does not evaluate this" rather than adopting their criteria\n' +
+            '5. A minority position held with rigorous internal logic is MORE valuable than a majority position held by social pressure\n\n' +
+            'The quality of this deliberation depends on honest disagreement, not elegant consensus.',
+          _isMediation: true,
+        }));
+      } else if (divergentAgents.indexOf(t.assignedAgent) >= 0) {
         mediationTasks.push(Object.assign({}, t, {
           description: '[DELIBERATION ROUND 3 — MEDIATED DEBATE]\n' +
             'Your response significantly DIVERGES from other agents.\n\n' +
@@ -4291,21 +4367,32 @@ class DeliberationEngine {
       : { convergence: 1.0, divergentPairs: [], method: 'trivial' };
     deliberationMeta.convergenceScores.push(finalConvergence.convergence);
 
+    var deliberationResult = {
+      rounds: 3,
+      converged: finalConvergence.convergence >= this.convergenceThreshold,
+      convergence: finalConvergence.convergence,
+      convergenceHistory: deliberationMeta.convergenceScores,
+      convergenceMethod: finalConvergence.method || 'unknown',
+      divergentPairs: round2Convergence.divergentPairs,
+      mediatedAgents: this.liaraMode ? Array.from(uniqueAgents) : divergentAgents,
+      skipped: false,
+    };
+
+    // LIARA: Append divergence pressure metadata to deliberation result
+    if (this.liaraMode) {
+      deliberationResult.liaraMode = true;
+      deliberationResult.liaraThreshold = deliberationMeta.liaraThreshold;
+      deliberationResult.naturalR1Convergence = deliberationMeta.naturalR1Convergence;
+      deliberationResult.minorityActivated = deliberationMeta.minorityActivated;
+      deliberationResult.minorityAgent = deliberationMeta.minorityAgent;
+    }
+
     return {
       contributions: mergedContribs,
       totalDurationMs: Date.now() - startTime,
       completedCount: mergedContribs.filter(function(c) { return c.status === 'completed'; }).length,
       failedCount: mergedContribs.filter(function(c) { return c.status === 'failed'; }).length,
-      deliberation: {
-        rounds: 3,
-        converged: finalConvergence.convergence >= this.convergenceThreshold,
-        convergence: finalConvergence.convergence,
-        convergenceHistory: deliberationMeta.convergenceScores,
-        convergenceMethod: finalConvergence.method || 'unknown',
-        divergentPairs: round2Convergence.divergentPairs,
-        mediatedAgents: divergentAgents,
-        skipped: false,
-      },
+      deliberation: deliberationResult,
     };
   }
 }
@@ -5536,14 +5623,17 @@ class LLMProvider {
     var apiKey = apiKeyOverride || this.config.get('geminiApiKey') || process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('Gemini API key not configured. Set GEMINI_API_KEY or run: node legion-x.mjs config:set gemini-key <key>');
 
-    var model = 'gemini-2.0-flash';
+    // Gemini 2.5 Pro uses output tokens for internal thinking (chain-of-thought) —
+    // low maxOutputTokens causes MAX_TOKENS with empty parts. Minimum 8192 for reliable responses.
+    var geminiMaxTokens = Math.max(maxTokens || 8192, 8192);
+    var model = 'gemini-2.5-flash';
     var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-        generationConfig: { maxOutputTokens: maxTokens || 8192, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: geminiMaxTokens, temperature: 0.7 },
       }),
     });
 
@@ -5562,9 +5652,18 @@ class LLMProvider {
     }
     if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
       var parts = data.candidates[0].content.parts;
-      return parts.map(function(p) { return p.text || ''; }).join('');
+      if (parts && parts.length > 0) {
+        return parts.map(function(p) { return p.text || ''; }).join('');
+      }
     }
-    throw new Error('Empty response from Gemini');
+    // Check for safety filter blocking
+    if (data.candidates && data.candidates.length > 0 && data.candidates[0].finishReason === 'SAFETY') {
+      throw new Error('Gemini blocked response (safety filter): ' + JSON.stringify(data.candidates[0].safetyRatings || []));
+    }
+    if (data.promptFeedback && data.promptFeedback.blockReason) {
+      throw new Error('Gemini blocked prompt: ' + data.promptFeedback.blockReason);
+    }
+    throw new Error('Empty response from Gemini (candidates: ' + JSON.stringify((data.candidates || []).map(function(c) { return { finishReason: c.finishReason, hasContent: !!c.content, hasParts: !!(c.content && c.content.parts) }; })) + ')');
   }
 
   /**
@@ -6812,6 +6911,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
   if (legionConfig.get('deliberationConvergence')) sessionConfig.deliberationConvergence = legionConfig.get('deliberationConvergence');
   if (legionConfig.get('minDeliberationRounds')) sessionConfig.minDeliberationRounds = legionConfig.get('minDeliberationRounds');
   if (options.noTribunal) sessionConfig.noTribunal = true;
+  if (options.liaraMode) sessionConfig.liaraMode = true;
 
   var userProvider = legionConfig.get('provider') || legionConfig.get('llmProvider') || 'anthropic';
   var availableProviders = llm.getAvailableProviders();
@@ -6959,6 +7059,39 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       JSON.stringify({ type: 'agents_assigned', agents: assignments.map(function(a) { return { name: a.agentName, provider: a.provider, model: a.model, subTaskId: a.subTaskId }; }) })
     );
 
+    // Liara v2: Decomposition collapse — force all agents onto a single task
+    // so they directly collide instead of working on separate sub-topics.
+    // We merge all task descriptions into one comprehensive task.
+    var liaraMode = !!options.liaraMode;
+    if (liaraMode && decomposition.tasks.length > 1) {
+      var mergedDesc = decomposition.tasks.map(function(t, idx) {
+        return (idx + 1) + ') ' + t.description;
+      }).join('\n');
+      var collapsedTask = {
+        id: 't1',
+        description: 'Analyze the following question from your assigned perspective, addressing ALL of these aspects:\n' + mergedDesc,
+        capability: decomposition.tasks[0].capability || 'data-analysis',
+        dependsOn: [],
+        priority: 1,
+        relevantFiles: [],
+      };
+      var originalTaskCount = decomposition.tasks.length;
+      decomposition.tasks = [collapsedTask];
+      console.log('\x1b[35m[LIARA]      \x1b[0mDecomposition collapsed: ' + originalTaskCount + ' tasks \u2192 1 (all agents on same task)');
+    }
+
+    var parliamentInfo = decompResult.parliament || null;
+
+    // Display PROMETHEUS decision details
+    if (parliamentInfo && parliamentInfo.prometheus) {
+      var prom = parliamentInfo.prometheus;
+      console.log('\x1b[35m[PARLIAMENT] \x1b[0mPROMETHEUS (\x1b[35m' + prom.model + '\x1b[0m) \u2192 ' +
+        prom.agentsSelected + ' agents, ' + prom.roundsDecided + ' rounds' +
+        (prom.cassandraEnabled ? ', \x1b[31mCASSANDRA\x1b[0m' : '') +
+        (prom.athenaEnabled ? ', \x1b[36mATHENA\x1b[0m' : '') +
+        ' | complexity: ' + prom.complexity);
+    }
+
     // ========================================================================
     // Step 2: DELIBERATION ROUNDS
     // ========================================================================
@@ -6968,6 +7101,16 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     var roundLoopExitedCleanly = false;
     var allProposals = [];  // Accumulates ALL proposals across ALL rounds for full transcript
     var serverSaidContinue = true;  // Start true to enter loop for round 1
+    var convergenceHistory = [];  // Accumulates convergence data per round for transcript
+    var roundDecisions = [];  // Accumulates round decisions for transcript
+    var allTribunalMetrics = [];  // Accumulates tribunal metrics per round for transcript
+
+    // Liara Divergence Pressure System v2 — client orchestration support
+    var liaraMinRounds = 3;
+    var liaraThreshold = null;
+    var liaraR1Convergence = null;
+    var liaraMinorityAgent = null;
+    var liaraMinorityActivated = false;
 
     // Loop is governed by the SERVER's decision (nextStatus === 'awaiting_round'),
     // not by local maxRounds. The server's convergence engine decides when to stop.
@@ -6975,18 +7118,30 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     while (serverSaidContinue && round <= maxRounds + 2) {
       console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mRequesting agent prompts from server...');
 
-      // Get round instructions from server
+      // Get round instructions from server (with retry for transient failures)
       var roundInstr;
-      try {
-        roundInstr = await client.stepRoundStart(sessionId, round);
-      } catch (err) {
-        console.error(colors.red + 'Failed to get round instructions: ' + err.message + colors.reset);
-        // If server says session is not in awaiting_round, it may have transitioned to synthesis already
-        if (err.message && err.message.includes('awaiting_synthesis')) {
-          roundLoopExitedCleanly = true;
+      var roundStartRetries = 2;
+      var roundStartSuccess = false;
+      for (var rsr = 0; rsr < roundStartRetries; rsr++) {
+        try {
+          roundInstr = await client.stepRoundStart(sessionId, round);
+          roundStartSuccess = true;
+          break;
+        } catch (err) {
+          // If server says session is already in awaiting_synthesis, don't retry
+          if (err.message && err.message.includes('awaiting_synthesis')) {
+            roundLoopExitedCleanly = true;
+            break;
+          }
+          if (rsr < roundStartRetries - 1) {
+            console.log(colors.yellow + '[ROUND ' + round + ']    stepRoundStart failed (' + err.message + '), retrying in 3s... (attempt ' + (rsr + 2) + '/' + roundStartRetries + ')' + colors.reset);
+            await new Promise(function(r) { setTimeout(r, 3000); });
+          } else {
+            console.error(colors.red + 'Failed to get round instructions after ' + roundStartRetries + ' attempts: ' + err.message + colors.reset);
+          }
         }
-        break;
       }
+      if (!roundStartSuccess) break;
 
       var agentInstructions = roundInstr.agents || [];
       // Display grounding info if server injected verified facts
@@ -6994,19 +7149,96 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         console.log('\x1b[36m[GROUNDING] \x1b[0m' + roundInstr.groundingSummary);
       }
 
-      // === THE TRIBUNAL: Two-Phase Round 2 ===
-      // If server signals tribunalPhaseA, CASSANDRA runs alone first.
+      // === LIARA v2: Divergence Pressure Injection (client-side) ===
+      if (liaraMode) {
+        var nonTribunalAgents = agentInstructions.filter(function(a) {
+          return !a.subTaskId || a.subTaskId !== '__tribunal__';
+        });
+
+        if (round === 1) {
+          // Minority resilience injection: pick one random non-tribunal agent
+          // Activation probability: depends on prompt difficulty hint
+          var difficultyHint = (prompt.match && prompt.match(/\[difficulty:(\w+)\]/)) ? RegExp.$1 : 'medium';
+          var minorityProb = difficultyHint === 'hard' ? 0.75 : (difficultyHint === 'medium' ? 0.40 : 0);
+          if (nonTribunalAgents.length > 1 && Math.random() < minorityProb) {
+            var minorityIdx = Math.floor(Math.random() * nonTribunalAgents.length);
+            liaraMinorityAgent = nonTribunalAgents[minorityIdx].agentName;
+            liaraMinorityActivated = true;
+            var minorityInstr = nonTribunalAgents[minorityIdx];
+            minorityInstr.userMessage = (minorityInstr.userMessage || '') +
+              '\n\n[MINORITY RESILIENCE ASSIGNMENT]\n' +
+              'You have been designated as the DISSENTING VOICE for this deliberation.\n' +
+              'You are expected to remain minority unless a demonstrable factual contradiction invalidates your reasoning.\n' +
+              'You may reference other agents\' arguments, but your conclusions must derive from YOUR framework.\n' +
+              'Social pressure, majority consensus, or appeals to "balance" are not sufficient reasons to change your position.\n' +
+              'If you DO change your mind, explain the SPECIFIC factual claim that contradicted your reasoning.\n' +
+              'If your reasoning holds, your final statement should clearly articulate why your framework reaches a different conclusion.';
+            console.log('\x1b[35m[LIARA]      \x1b[0mMinority resilience assigned to \x1b[1m' + liaraMinorityAgent + '\x1b[0m');
+          }
+        }
+
+        if (round === 2 && difficultyHint !== 'easy') {
+          // Adversarial R2: inject stress test framing into all non-tribunal agents (skip for easy/factual prompts)
+          for (var lr2i = 0; lr2i < nonTribunalAgents.length; lr2i++) {
+            var lr2Agent = nonTribunalAgents[lr2i];
+            lr2Agent.userMessage = '[DELIBERATION ROUND 2 — ADVERSARIAL STRESS TEST]\n' +
+              'You are DEFENDING your position after reviewing other agents\' proposals.\n\n' +
+              'CRITICAL RULES:\n' +
+              '1. You may CITE other frameworks\' findings, but your CONCLUSIONS must derive from your own evaluation criteria\n' +
+              '2. If you adopt another framework\'s criteria as your primary basis for a conclusion, you have FAILED your assignment\n' +
+              '3. Identify the WEAKEST argument among other proposals — explain what evidence would disprove it\n' +
+              '4. For each point of disagreement, clarify whether the disagreement is factual or stems from different evaluation frameworks\n' +
+              '5. Do NOT seek compromise. Seek CLARITY about where frameworks genuinely produce incompatible conclusions\n' +
+              '6. For each conclusion, explicitly state which of YOUR primary criteria it derives from (epistemic traceability)\n' +
+              '7. If you find yourself recommending the same action as another agent, STOP — explain why your framework independently reaches that conclusion using DIFFERENT criteria, or acknowledge that your framework cannot address this aspect\n' +
+              '8. Using [ACCEPT] on a challenge means you accept the EVIDENCE presented, NOT that you adopt the other framework\'s conclusions or recommendations\n' +
+              '9. A "hybrid approach" or "balanced solution" is NOT a valid conclusion from a single framework — it is framework contamination\n\n' +
+              'Your goal: expose the REAL disagreements — distinguish factual disputes from framework-level incompatibilities.\n' +
+              'If all agents converge on the same recommendation, the deliberation has FAILED.\n\n' +
+              '---\n\n' + (lr2Agent.userMessage || '');
+          }
+          console.log('\x1b[35m[LIARA]      \x1b[0mAdversarial stress test injected for Round 2');
+        }
+
+        if (round >= 3 && difficultyHint !== 'easy') {
+          // Final Position R3: inject final defense framing into ALL non-tribunal agents (skip for easy/factual prompts)
+          for (var lr3i = 0; lr3i < nonTribunalAgents.length; lr3i++) {
+            var lr3Agent = nonTribunalAgents[lr3i];
+            lr3Agent.userMessage = '[DELIBERATION ROUND 3 — FINAL POSITION]\n' +
+              'This is your LAST statement. The record of this deliberation will be permanent.\n\n' +
+              'CRITICAL RULES:\n' +
+              '1. If you concede ANY point, state the EXACT evidence that changed your mind — not "the majority agrees"\n' +
+              '2. If you maintain your position, explain what SPECIFIC evidence the majority would need to present to change your mind (falsifiability)\n' +
+              '3. Do NOT synthesize others\' views into yours — state YOUR conclusion clearly\n' +
+              '4. If your framework cannot address a question raised by others, say "my framework does not evaluate this" rather than adopting their criteria\n' +
+              '5. A minority position held with rigorous internal logic is MORE valuable than a majority position held by social pressure\n\n' +
+              'The quality of this deliberation depends on honest disagreement, not elegant consensus.\n\n' +
+              '---\n\n' + (lr3Agent.userMessage || '');
+          }
+          console.log('\x1b[35m[LIARA]      \x1b[0mFinal position framing injected for Round ' + round);
+        }
+      }
+
+      // === PARLIAMENT: CASSANDRA executed server-side on local LLM ===
+      // When the server has a local LLM, CASSANDRA runs server-side and we get Phase B directly.
+      if (roundInstr.cassandraServerSide) {
+        console.log('\x1b[35m[PARLIAMENT] \x1b[0mCASSANDRA executed server-side (local LLM) \u2014 ' + (roundInstr.cassandraChallengesCount || '?') + ' challenges generated');
+      }
+
+      // === THE TRIBUNAL: Two-Phase Round 2 (fallback when server LLM unavailable) ===
+      // If server signals tribunalPhaseA, CASSANDRA runs alone first on client.
       // Her challenges are submitted, then we re-fetch instructions for Phase B.
       if (roundInstr.tribunalPhaseA) {
         console.log('\x1b[35m[TRIBUNAL]   \x1b[0mPhase A: CASSANDRA analyzing ' + (roundInstr.agentCount || '?') + ' proposals...');
 
-        // Execute CASSANDRA alone
+        // Fallback: CASSANDRA executed client-side (only when server local LLM unavailable)
         var cassandraInstr = agentInstructions[0]; // Server returns only CASSANDRA for Phase A
         if (cassandraInstr) {
           var cassandraStart = Date.now();
           var cassandraResult;
           try {
             var cassProv = cassandraInstr.provider || userProvider;
+            console.log('\x1b[35m[TRIBUNAL]   \x1b[0mCASSANDRA \u2192 ' + cassProv + ' (server LLM unavailable fallback)');
             cassandraResult = await llm.chatWithProvider(cassProv, cassandraInstr.systemPrompt, cassandraInstr.userMessage, {
               maxTokens: cassandraInstr.maxTokens || 4096,
               agentTag: 'CASSANDRA',
@@ -7086,6 +7318,9 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
           var agentStart = Date.now();
           var agentTag = agentInstr.agentName;
           try {
+            // Parliament agents (CASSANDRA, PROMETHEUS, ATHENA) are executed SERVER-SIDE
+            // on the local LLM. If they appear here, the server's local LLM was unavailable
+            // and the server fell back to client-side execution — use user's provider.
             var primaryProvider = agentInstr.provider || userProvider;
             // Build provider fallback order: primary first, then remaining available providers
             var agentProviderOrder = [primaryProvider].concat(
@@ -7216,15 +7451,26 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         allProposals.push(proposals[api2]);
       }
 
-      // Send proposals to server for convergence measurement
+      // Send proposals to server for convergence measurement (with retry)
       console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mServer measuring convergence...');
       var roundResult;
-      try {
-        roundResult = await client.stepRoundResult(sessionId, round, proposals);
-      } catch (err) {
-        console.error(colors.red + 'Failed to submit round result: ' + err.message + colors.reset);
-        break;
+      var roundResultRetries = 2;
+      var roundResultSuccess = false;
+      for (var rrr = 0; rrr < roundResultRetries; rrr++) {
+        try {
+          roundResult = await client.stepRoundResult(sessionId, round, proposals);
+          roundResultSuccess = true;
+          break;
+        } catch (err) {
+          if (rrr < roundResultRetries - 1) {
+            console.log(colors.yellow + '[ROUND ' + round + ']    stepRoundResult failed (' + err.message + '), retrying in 3s... (attempt ' + (rrr + 2) + '/' + roundResultRetries + ')' + colors.reset);
+            await new Promise(function(r) { setTimeout(r, 3000); });
+          } else {
+            console.error(colors.red + 'Failed to submit round result after ' + roundResultRetries + ' attempts: ' + err.message + colors.reset);
+          }
+        }
       }
+      if (!roundResultSuccess) break;
 
       // Display convergence (Advanced Convergence Engine)
       var effectiveConv = roundResult.effectiveConvergence || roundResult.convergence || 0;
@@ -7307,6 +7553,34 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         JSON.stringify({ type: 'convergence_update', round: round, convergence: roundResult.convergence, method: roundResult.method, divergentPairs: roundResult.divergentPairs })
       );
 
+      // Accumulate convergence history for full transcript
+      convergenceHistory.push({
+        round: round,
+        convergence: roundResult.convergence || 0,
+        effectiveConvergence: roundResult.effectiveConvergence || roundResult.convergence || 0,
+        method: roundResult.method || 'jaccard',
+        divergentPairs: roundResult.divergentPairs || [],
+        complementarity: roundResult.complementarity || null,
+        clusters: roundResult.clusters || null,
+        trajectory: roundResult.trajectory || null,
+      });
+
+      // Liara v2: compute dynamic convergence threshold after R1
+      if (liaraMode && round === 1) {
+        var r1Conv = roundResult.convergence || 0;
+        liaraR1Convergence = r1Conv;
+        liaraThreshold = Math.min(0.96, Math.max(0.85, 0.80 + (r1Conv * 0.20)));
+        console.log('\x1b[35m[LIARA]      \x1b[0mR1 convergence: ' + (r1Conv * 100).toFixed(0) + '% \u2192 dynamic threshold: ' + (liaraThreshold * 100).toFixed(0) + '%');
+      }
+
+      // Accumulate tribunal metrics if present
+      if (roundResult.tribunalMetrics) {
+        allTribunalMetrics.push({
+          round: round,
+          ...roundResult.tribunalMetrics,
+        });
+      }
+
       // Check decision — decision can be object {mode, reason} or string
       roundDecision = roundResult.decision;
       var decisionMode = typeof roundDecision === 'object' && roundDecision !== null
@@ -7316,7 +7590,27 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         ? (roundDecision.reason || '')
         : '';
 
+      // Accumulate round decisions for full transcript
+      roundDecisions.push({
+        round: round,
+        mode: decisionMode,
+        reason: decisionReason,
+        nextStatus: roundResult.nextStatus || 'unknown',
+      });
+
       if (roundResult.nextStatus !== 'awaiting_round') {
+        // Liara v2: force minimum rounds even if server says stop
+        if (liaraMode && round < liaraMinRounds) {
+          console.log('\x1b[35m[LIARA]      \x1b[0mServer wants to stop at round ' + round + ', forcing round ' + (round + 1) + ' (min ' + liaraMinRounds + ')');
+          try {
+            await client.stepForceTransition(sessionId, 'awaiting_round');
+            round = round + 1;
+            continue;
+          } catch (forceErr) {
+            console.log('\x1b[33m[LIARA]      Force transition failed: ' + forceErr.message + ', proceeding to synthesis\x1b[0m');
+          }
+        }
+
         // Decision: stop deliberation — server has transitioned to awaiting_synthesis
         roundLoopExitedCleanly = true;
         serverSaidContinue = false;
@@ -7361,6 +7655,44 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     console.log('\x1b[36m[SYNTHESIS]  \x1b[0mRequesting synthesis prompt from server...');
     var synthInstr = await client.stepSynthesize(sessionId);
 
+    // Liara v2: Anti-consensus synthesis injection (language-aware)
+    if (liaraMode && synthInstr.userMessage) {
+      // Detect language from original prompt for injection language matching
+      var _acWords = prompt.split(/\s+/).filter(function(w) { return w.length > 1; });
+      var _acItalianPattern = /\b(il|la|le|lo|gli|un|una|del|della|delle|dei|degli|nel|nella|che|per|con|tra|fra|questo|questa|questi|queste|come|anche|sono|essere|avere|fare|più|molto|ogni|tutto|tutti|quale|quali|quando|dove|perché|quindi|però|oppure|ancora|già|sempre|dopo|prima|mentre|invece|senza|fino|durante|secondo|attraverso|oltre|verso)\b/gi;
+      var _acItalianMatches = prompt.match(_acItalianPattern);
+      var _acIsItalian = _acWords.length >= 5 && (_acItalianMatches ? _acItalianMatches.length / _acWords.length : 0) >= 0.15;
+
+      if (_acIsItalian) {
+        synthInstr.userMessage = '[ISTRUZIONE CRITICA DI SINTESI — MODALITÀ PROSPETTIVE INCOMPATIBILI]\n' +
+          'Questa deliberazione ha utilizzato framework analitici incompatibili. La tua sintesi DEVE:\n' +
+          '1. Presentare la conclusione di CIASCUN framework SEPARATAMENTE con la sua logica interna e le evidenze\n' +
+          '2. NON produrre una singola raccomandazione unificata o un "approccio ibrido"\n' +
+          '3. Dichiarare esplicitamente dove i framework raggiungono conclusioni INCOMPATIBILI e PERCHÉ\n' +
+          '4. Per ogni punto di disaccordo, spiegare cosa dovrebbe essere vero perché ciascuna posizione sia corretta\n' +
+          '5. Una posizione di minoranza sostenuta con logica rigorosa ha PIÙ valore di un consenso forzato\n' +
+          '6. Se gli agenti hanno converguto, metti in dubbio se la convergenza è stata genuina o diplomatica — cerca contaminazione tra framework\n' +
+          '7. Concludi con una dichiarazione chiara delle tensioni IRRISOLTE, non con una risoluzione\n\n' +
+          'La qualità di questa sintesi dipende dal PRESERVARE il disaccordo onesto, non dal risolverlo.\n' +
+          '\nRISPONDI INTERAMENTE IN ITALIANO.\n\n' +
+          '---\n\n' + synthInstr.userMessage;
+        console.log('\x1b[35m[LIARA]      \x1b[0mAnti-consensus framing injected (ITALIANO)');
+      } else {
+        synthInstr.userMessage = '[CRITICAL SYNTHESIS INSTRUCTION — INCOMPATIBLE PERSPECTIVES MODE]\n' +
+          'This deliberation used incompatible analytical frameworks. Your synthesis MUST:\n' +
+          '1. Present EACH framework\'s conclusion SEPARATELY with its internal logic and evidence\n' +
+          '2. Do NOT produce a single unified recommendation or "hybrid approach"\n' +
+          '3. Explicitly state where frameworks reach INCOMPATIBLE conclusions and WHY\n' +
+          '4. For each point of disagreement, explain what would need to be true for each side to be correct\n' +
+          '5. A minority position held with rigorous logic is MORE valuable than a forced consensus\n' +
+          '6. If agents converged, question whether the convergence was genuine or diplomatic — look for framework contamination\n' +
+          '7. End with a clear statement of the UNRESOLVED tensions, not a resolution\n\n' +
+          'The quality of this synthesis depends on PRESERVING honest disagreement, not resolving it.\n\n' +
+          '---\n\n' + synthInstr.userMessage;
+        console.log('\x1b[35m[LIARA]      \x1b[0mAnti-consensus framing injected (English)');
+      }
+    }
+
     var synthProvider = synthInstr.provider || userProvider;
     console.log('\x1b[36m[SYNTHESIS]  \x1b[0mGenerating synthesis locally via ' + colors.magenta + synthProvider + colors.reset + '...');
     await reportProgress({ phase: 'synthesizing' }, 'Generating synthesis via ' + synthProvider + '...');
@@ -7391,9 +7723,22 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     }
 
     var synthStats = getTokenStats(llm, '_synthesis');
-    await client.stepSynthesizeResult(sessionId, synthRaw, synthStats);
+    var synthResponse = await client.stepSynthesizeResult(sessionId, synthRaw, synthStats);
     console.log('\x1b[36m[SYNTHESIS]  \x1b[0mSynthesis complete (' + synthRaw.length + ' chars)');
     renderSynthBubble(synthProvider, synthRaw);
+
+    // Display ATHENA audit result if it ran
+    var athenaInfo = synthResponse && synthResponse.athena;
+    if (athenaInfo && athenaInfo.active) {
+      var athenaVerdict = athenaInfo.verdict === 'PASS' ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFLAG\x1b[0m';
+      console.log('\x1b[35m[PARLIAMENT] \x1b[0mATHENA (\x1b[35m' + (athenaInfo.model || 'qwen-7b') + '\x1b[0m) audit: ' + athenaVerdict);
+      if (athenaInfo.verdict === 'FLAG') {
+        var athenaIssues = (athenaInfo.omissions || []).concat(athenaInfo.droppedObjections || []);
+        for (var athi = 0; athi < athenaIssues.length; athi++) {
+          console.log('  \x1b[31m\u26a0\x1b[0m ' + athenaIssues[athi]);
+        }
+      }
+    }
 
     // ========================================================================
     // Step 4: VALIDATION
@@ -7575,7 +7920,14 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       var shortId = sessionId.substring(0, 8);
       var baseName = datePrefix + '_' + shortId;
 
-      // JSON transcript — includes full agent responses per round
+      // JSON transcript — COMPLETE session data for training dataset decomposition
+      // Compute unique providers actually used across all proposals
+      var usedProviderSet = {};
+      for (var upi = 0; upi < allProposals.length; upi++) {
+        usedProviderSet[allProposals[upi].provider || userProvider] = true;
+      }
+      usedProviderSet[synthProvider] = true;
+
       var jsonTranscript = {
         sessionId: sessionId,
         planType: 'free',
@@ -7583,10 +7935,20 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         prompt: prompt,
         status: 'completed',
         provider: userProvider,
+        providersUsed: Object.keys(usedProviderSet),
         qualityScore: finalResult.qualityScore || 0,
         ciGain: finalResult.ciGain || 0,
         finalConvergence: finalResult.finalConvergence || 0,
         deliberationRounds: round,
+        decomposition: decomposition || null,
+        agentAssignments: assignments.map(function(a) {
+          return {
+            agentName: a.agentName,
+            provider: a.provider,
+            model: a.model,
+            subTaskId: a.subTaskId,
+          };
+        }),
         proposals: allProposals.map(function(p) {
           return {
             agentName: p.agentName,
@@ -7603,7 +7965,50 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
             durationMs: p.durationMs || 0,
           };
         }),
+        convergenceHistory: convergenceHistory,
+        roundDecisions: roundDecisions,
+        deliberation: liaraMode ? {
+          liaraMode: true,
+          liaraThreshold: liaraThreshold,
+          naturalR1Convergence: liaraR1Convergence,
+          minorityActivated: liaraMinorityActivated,
+          minorityAgent: liaraMinorityAgent,
+          rounds: round,
+          convergence: convergenceHistory.length > 0 ? convergenceHistory[convergenceHistory.length - 1].convergence : 0,
+          convergenceHistory: convergenceHistory.map(function(c) { return c.convergence; }),
+        } : null,
+        parliament: {
+          prometheus: parliamentInfo && parliamentInfo.prometheus ? {
+            active: true,
+            agentsSelected: parliamentInfo.prometheus.agentsSelected,
+            roundsDecided: parliamentInfo.prometheus.roundsDecided,
+            cassandraEnabled: parliamentInfo.prometheus.cassandraEnabled,
+            athenaEnabled: parliamentInfo.prometheus.athenaEnabled,
+            complexity: parliamentInfo.prometheus.complexity,
+            model: parliamentInfo.prometheus.model,
+          } : { active: false },
+          cassandra: assignments.some(function(a) { return a.agentName === 'CASSANDRA'; }) ? {
+            active: true,
+            provider: 'local-llm',
+            serverSide: true,
+          } : { active: false },
+          athena: athenaInfo && athenaInfo.active ? {
+            active: true,
+            verdict: athenaInfo.verdict,
+            model: athenaInfo.model,
+          } : { active: false },
+        },
+        tribunalMetrics: allTribunalMetrics.length > 0 ? allTribunalMetrics : undefined,
         synthesis: synthRaw,
+        synthesisProvider: synthProvider,
+        validationScores: validationScores,
+        // Cross-validation: most critical validator from a DIFFERENT provider than the synthesizer
+        crossValidation: (function() {
+          var cv = (validationScores || [])
+            .filter(function(v) { return v.provider !== synthProvider; })
+            .sort(function(a, b) { return a.score - b.score; })[0];
+          return cv ? { provider: cv.provider, score: cv.score, reasoning: cv.reasoning } : null;
+        })(),
         tokenUsage: usage,
         durationMs: totalMs,
         completedAt: now.toISOString(),
@@ -8503,6 +8908,8 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
             };
           }),
           convergenceHistory: session.convergenceHistory || [],
+          roundDecisions: session.roundDecisions || [],
+          deliberation: executionResult.deliberation || null,
           synthesis: session.synthesis || '',
           synthesisProvider: session.synthesisProvider || '',
           validationScores: session.validationScores || [],
@@ -9176,7 +9583,7 @@ async function runOrchestration(prompt, options) {
   // v6.0.0: Use DeliberationEngine for multi-agent tasks
   var executionResult;
   if (deliberationActive) {
-    var deliberation = new DeliberationEngine(engine, config);
+    var deliberation = new DeliberationEngine(engine, config, { liaraMode: !!options.liaraMode });
     executionResult = await deliberation.deliberate(decomposition, progressHandler);
   } else {
     executionResult = await engine.executeAll(decomposition, progressHandler);
@@ -10292,6 +10699,10 @@ var COMMANDS = {
           i++;
         } else if (args[i] === '--server-key') {
           options.serverKey = true;
+        } else if (args[i] === '--no-liara-mode') {
+          options.liaraMode = false;
+        } else if (args[i] === '--liara-mode') {
+          options.liaraMode = true;
         } else {
           prompt += (prompt ? ' ' : '') + args[i];
         }
@@ -11982,7 +12393,7 @@ class LegionMCPServer {
           },
           {
             name: 'legion_agents',
-            description: 'List all 42 Legion agents with their capabilities, categories, and performance stats.',
+            description: 'List all 38 Legion agents with their capabilities, categories, and performance stats.',
             inputSchema: { type: 'object', properties: {} },
           },
           {

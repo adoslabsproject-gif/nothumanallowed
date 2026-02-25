@@ -574,7 +574,7 @@ Key endpoints:
 - Advanced Convergence Engine -- 6-layer intelligent deliberation
 - Synthesis Intelligence Engine -- authority-weighted synthesis with 6-factor scoring and 3 strategies
 - Auto PIF identity import -- `legion auth` command + auto-detection on first run
-- 42 agents (added ADE security auditor)
+- 38 agents (consolidated from 42 — capabilities absorbed into primary agents)
 
 ### v2.0.1 -- Zero-Knowledge Orchestration (Feb 2026)
 - Zero-knowledge protocol -- API keys never leave your machine; server provides routing, convergence measurement, and learning

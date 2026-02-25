@@ -37,22 +37,22 @@
     ]
   },
   "legion-x": {
-    "latest": "2.1.2",
+    "latest": "2.1.1",
     "file": "legion-x.mjs",
     "minNodeVersion": 22,
-    "description": "Legion X v2.1.2 — Full session transcripts + banner redesign. Complete agent responses saved per-round in local session files. 38 agents, 7+ providers, zero-knowledge.",
+    "description": "Legion X v2.1.1 — Ask Legion + OpenAI-Compatible API. Any LLM can talk to Legion. 38 agents, Parliament System, zero-knowledge.",
     "versions": [
       {
-        "version": "2.1.2",
+        "version": "2.1.1",
         "file": "legion-x.mjs",
         "date": "2026-02-18",
         "highlights": [
-          "Full session transcripts — every agent response for every round now saved in local .json and .md files (was synthesis-only)",
-          "Proposals include round number, provider, model, content, confidence, risk flags, reasoning summary, token usage, duration",
-          "Markdown transcript organized by round with per-agent sections",
-          "Banner redesign — clean ANSI Shadow art without misaligned box borders",
-          "Ask Legion system prompt rewritten — Rule #0 Language enforcement, no more Chinese responses to Italian questions",
-          "Grounding similarity threshold raised from 0.3 to 0.60 — eliminates irrelevant knowledge base noise"
+          "Ask Legion — public chat with Qwen 2.5 7B + RAG from 16 grounding datasets, streaming SSE",
+          "OpenAI-compatible API — POST /api/v1/llm/v1/chat/completions, any LLM tool can connect (no API key required)",
+          "Deep Mode — mini Geth Consensus session with 3-5 agents via geth-premium (toggleable)",
+          "LoRA dataset collection — every Q&A pair saved with thumbs up/down feedback for future fine-tuning",
+          "Agent cleanup — 41 to 38 agents (REDUCTIO, SCRIBE, CORTANA removed, capabilities absorbed)",
+          "PIF MCP tool nha_llm_ask — Ask Legion from Claude Code, Cursor, or any MCP client"
         ]
       },
       {
@@ -104,7 +104,7 @@
           "PUPPET merged into CONDUCTOR — 42 agents reduced to 41 with zero capability loss (rollback + idempotency absorbed)",
           "Custom deliberation modes — VERITAS (claim validator), LOGOS (proof auditor), CASSANDRA (risk predictor), SAURON (deep diagnostician)",
           "Zero LLM truncation — 22+ truncation points removed: proposals, cross-reading, debate, synthesis, validation, episodic memory, knowledge graph all see complete content",
-          "41 agents: 13 primary + 28 sub-agents across 13 categories"
+          "38 agents: 13 primary + 28 sub-agents across 13 categories"
         ]
       },
       {
@@ -126,7 +126,7 @@
           "Adaptive round decision — skip/standard/mandatory/arbitrator based on divergence + uncertainty + conflict",
           "Structured agent output — confidence, reasoning_summary, risk_flags per agent",
           "Provider resilience — hash-based rotation distributes load, automatic fallback on every LLM call",
-          "41 agents: 13 primary + 28 sub-agents across 13 categories"
+          "38 agents: 13 primary + 28 sub-agents across 13 categories"
         ]
       },
       {
@@ -197,7 +197,7 @@
         "date": "2026-02-10",
         "highlights": [
           "Server-side orchestration with your own API key",
-          "41 agents: 13 primary + 28 sub-agents across 13 categories",
+          "38 agents: 13 primary + 28 sub-agents across 13 categories",
           "Single provider per session (Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere)",
           "Session transcripts saved to ~/.legion/sessions/",
           "Physical process isolation — your key never touches server LLM keys"
@@ -337,7 +337,7 @@
         "highlights": [
           "Server-side multi-LLM deliberation (Anthropic, OpenAI, Gemini)",
           "Cross-LLM validation — different provider evaluates quality",
-          "41 agents: 13 primary + 28 sub-agents across 13 categories",
+          "38 agents: 13 primary + 28 sub-agents across 13 categories",
           "Session transcripts saved to ~/.legion/sessions/",
           "Auto-evolve scheduler (PROMETHEUS/ATHENA/CASSANDRA parliament)"
         ]
@@ -359,7 +359,7 @@
           "3 Meta-Evolution agents: PROMETHEUS (Code Evolution Architect), ATHENA (Technology Research), CASSANDRA (Predictive Consequence Analyst)",
           "New `evolve` command — self-evolution parliament where meta-agents debate system improvements via full Geth Consensus",
           "13th agent category: meta-evolution",
-          "41 agents total: 13 primary + 28 sub-agents across 13 categories",
+          "38 agents total: 13 primary + 28 sub-agents across 13 categories",
           "VERSION variable fix (was stuck at 5.0.1 since v5.0.2)"
         ]
       },
