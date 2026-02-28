@@ -177,10 +177,18 @@ class LegionClient {
       var authHeader = this.getAuth(method, '/api/v1' + apiPath, body);
       if (authHeader) headers['Authorization'] = authHeader;
     }
+    // Generous timeout: step/round/start can block for 10+ minutes when CASSANDRA
+    // runs server-side on CPU (llama.cpp). Default undici headers timeout (300s)
+    // kills the connection before CASSANDRA finishes. 15 min covers worst case.
+    // Other endpoints use 2 min (more than enough for DB operations).
+    var fetchTimeout = apiPath.includes('/step/round/start') ? 900000
+      : apiPath.includes('/step/synthesize') ? 600000
+      : 120000;
     var res = await fetch(API_BASE + apiPath, {
       method: method,
       headers: headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(fetchTimeout),
     });
     var contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
@@ -7041,8 +7049,34 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     }
 
     // Send decomposition result to server for intelligent routing
+    // PROMETHEUS runs async on local LLM (5-12 min CPU inference).
+    // Server returns { routingPending: true } immediately, client polls until done.
     console.log('\x1b[36m[ROUTING]    \x1b[0mServer performing intelligent routing...');
     var decompResult = await client.stepDecomposeResult(sessionId, decomposition, decompStats);
+
+    // PROMETHEUS async polling: server launched PROMETHEUS in background
+    if (decompResult && decompResult.routingPending) {
+      var routingPollInterval = decompResult.pollIntervalMs || 15000;
+      var routingPollMax = 60; // 60 polls × 15s = 15 min max wait
+      var routingPollCount = 0;
+      console.log(colors.cyan + '[ROUTING]    PROMETHEUS is routing on server (local LLM)... polling every ' + Math.round(routingPollInterval / 1000) + 's' + colors.reset);
+      while (decompResult.routingPending && routingPollCount < routingPollMax) {
+        routingPollCount++;
+        var routingElapsed = Math.round(routingPollCount * routingPollInterval / 1000);
+        process.stdout.write(colors.dim + '\r[ROUTING]    Waiting for PROMETHEUS... ' + routingElapsed + 's elapsed' + colors.reset);
+        await new Promise(function(r) { setTimeout(r, routingPollInterval); });
+        try {
+          decompResult = await client.stepDecomposeResult(sessionId, decomposition, decompStats);
+        } catch (pollErr) {
+          console.error(colors.yellow + '\n[ROUTING]    Poll error: ' + (pollErr.message || pollErr) + ', retrying...' + colors.reset);
+        }
+      }
+      if (decompResult.routingPending) {
+        console.error(colors.red + '\n[ROUTING]    PROMETHEUS routing timed out after ' + routingPollMax + ' polls' + colors.reset);
+        process.exit(1);
+      }
+      console.log(''); // newline after \r progress
+    }
 
     var assignments = decompResult.assignments || [];
     var routingLabel = decompResult.routingMethod === 'legion'
@@ -7118,13 +7152,37 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
     while (serverSaidContinue && round <= maxRounds + 2) {
       console.log('\x1b[33m[ROUND ' + round + ']    \x1b[0mRequesting agent prompts from server...');
 
-      // Get round instructions from server (with retry for transient failures)
+      // Get round instructions from server (with retry + tribunal polling)
+      // When CASSANDRA runs server-side on local LLM (5-12 min CPU inference),
+      // the server returns { tribunalPending: true, pollIntervalMs: 15000 }
+      // instead of blocking. Client polls until CASSANDRA finishes.
       var roundInstr;
-      var roundStartRetries = 2;
+      var roundStartRetries = 3;
       var roundStartSuccess = false;
+      var tribunalPollMax = 60; // 60 polls × 15s = 15 min max wait
       for (var rsr = 0; rsr < roundStartRetries; rsr++) {
         try {
           roundInstr = await client.stepRoundStart(sessionId, round);
+
+          // Tribunal polling: CASSANDRA is running async on server
+          if (roundInstr && roundInstr.tribunalPending) {
+            var pollInterval = roundInstr.pollIntervalMs || 15000;
+            var pollCount = 0;
+            console.log(colors.cyan + '[TRIBUNAL] CASSANDRA is deliberating on server (local LLM)... polling every ' + Math.round(pollInterval / 1000) + 's' + colors.reset);
+            while (roundInstr.tribunalPending && pollCount < tribunalPollMax) {
+              pollCount++;
+              var elapsed = Math.round(pollCount * pollInterval / 1000);
+              process.stdout.write(colors.dim + '\r[TRIBUNAL] Waiting for CASSANDRA... ' + elapsed + 's elapsed' + colors.reset);
+              await new Promise(function(r) { setTimeout(r, pollInterval); });
+              roundInstr = await client.stepRoundStart(sessionId, round);
+            }
+            if (roundInstr.tribunalPending) {
+              console.log('\n' + colors.yellow + '[TRIBUNAL] CASSANDRA timed out after ' + tribunalPollMax + ' polls — proceeding without challenges' + colors.reset);
+            } else {
+              console.log('\n' + colors.green + '[TRIBUNAL] CASSANDRA completed — challenges ready' + colors.reset);
+            }
+          }
+
           roundStartSuccess = true;
           break;
         } catch (err) {
@@ -7134,8 +7192,8 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
             break;
           }
           if (rsr < roundStartRetries - 1) {
-            console.log(colors.yellow + '[ROUND ' + round + ']    stepRoundStart failed (' + err.message + '), retrying in 3s... (attempt ' + (rsr + 2) + '/' + roundStartRetries + ')' + colors.reset);
-            await new Promise(function(r) { setTimeout(r, 3000); });
+            console.log(colors.yellow + '[ROUND ' + round + ']    stepRoundStart failed (' + err.message + '), retrying in 5s... (attempt ' + (rsr + 2) + '/' + roundStartRetries + ')' + colors.reset);
+            await new Promise(function(r) { setTimeout(r, 5000); });
           } else {
             console.error(colors.red + 'Failed to get round instructions after ' + roundStartRetries + ' attempts: ' + err.message + colors.reset);
           }

@@ -37,11 +37,24 @@
     ]
   },
   "legion-x": {
-    "latest": "2.1.1",
+    "latest": "2.1.2",
     "file": "legion-x.mjs",
     "minNodeVersion": 22,
-    "description": "Legion X v2.1.1 — Ask Legion + OpenAI-Compatible API. Any LLM can talk to Legion. 38 agents, Parliament System, zero-knowledge.",
+    "description": "Legion X v2.1.2 — Epistemic dataset generation engine. Async Parliament routing, PROMETHEUS/CASSANDRA fire-and-poll, provider diversity floor. 38 agents, zero-knowledge.",
     "versions": [
+      {
+        "version": "2.1.2",
+        "file": "legion-x.mjs",
+        "date": "2026-02-28",
+        "highlights": [
+          "Async PROMETHEUS routing — fire-and-poll pattern eliminates 300s timeout on local LLM routing",
+          "Async CASSANDRA challenges — fire-and-poll for Tribunal Phase A (same pattern as PROMETHEUS)",
+          "Provider diversity floor — minimum provider distribution across agents, shuffle round-robin",
+          "Bot IP dynamic verification — zero hardcoded IPs, 6 official JSON sources refreshed every 6h",
+          "Epistemic dataset runner — batch deliberation runner with progress tracking, difficulty filters, cooldown",
+          "Deliberation runner health detection — automatic retry on stuck sessions"
+        ]
+      },
       {
         "version": "2.1.1",
         "file": "legion-x.mjs",

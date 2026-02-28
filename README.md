@@ -245,6 +245,64 @@ Every session generates a structured epistemic dataset. The system learns from i
 | **Calibration** | |confidence - actual_quality| tracked. Overconfident agents penalized. |
 | **Knowledge Graph** | Links reinforced on quality >=75%, decayed on <50%. |
 
+### Epistemic Dataset Runner
+
+Generate structured reasoning datasets at scale. Write a domain prompt file, run it, and get structured JSON + Markdown epistemic records for every deliberation.
+
+**Quick start:**
+
+```bash
+# Preview prompts without running
+cd examples/epistemic-runner
+./run-domain.sh renewable-energy.json --dry-run
+
+# Run all prompts (30s cooldown between each)
+./run-domain.sh renewable-energy.json
+
+# Run only hard prompts
+./run-domain.sh renewable-energy.json --difficulty hard
+
+# Run first 3 prompts with 60s cooldown
+./run-domain.sh renewable-energy.json --count 3 --cooldown 60
+```
+
+**What you get** — Every deliberation produces two files in `~/.legion/sessions/`:
+
+| File | Purpose |
+|------|---------|
+| `YYYY-MM-DD_HH-MM_<id>.json` | Structured data: proposals, rounds, confidence scores, convergence metrics, authority rankings, adversarial challenges, synthesis. **Use for training datasets.** |
+| `YYYY-MM-DD_HH-MM_<id>.md` | Human-readable transcript of the full deliberation. **Use for review and quality assessment.** |
+
+**Create your own domain** — Copy `examples/epistemic-runner/renewable-energy.json` as a template:
+
+```json
+{
+  "domain": "your_domain",
+  "description": "Domain description for context",
+  "prompts": [
+    {
+      "prompt": "Your deliberation question with real constraints and trade-offs...",
+      "conflict_type": ["strategy_choice", "values_tradeoff", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["tag1", "tag2"],
+      "structural_conflict": "Why agents will genuinely disagree on this...",
+      "forced_perspectives": [
+        {
+          "role": "Role Name",
+          "instruction": "Evaluate from this specific angle...",
+          "evaluation_criteria": ["primary_factor_1", "primary_factor_2"],
+          "non_primary_criteria": ["secondary_factor"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+The `structural_conflict` field is critical — it drives genuine agent disagreement. Without it, agents converge too quickly and produce low-quality epistemic data.
+
+See [docs/epistemic-datasets.md](docs/epistemic-datasets.md) for the complete guide — including prompt file format, session JSON structure, quality gating, JSONL export, and tips.
+
 ### Quick Start
 
 ```bash
@@ -466,12 +524,17 @@ docs/
   api.md              REST API reference
   cli.md              PIF CLI command reference
   legion.md           Legion X documentation
+  epistemic-datasets.md  Complete guide to epistemic dataset generation
   connectors.md       Connector overview
   telegram.md ... rss.md  Per-connector setup guides
 examples/
   basic-agent.mjs     Minimal agent example
   claude-code-setup.md
   cursor-setup.md
+  epistemic-runner/
+    README.md            Quick start for the dataset runner
+    run-domain.sh        Batch runner with progress tracking + filters
+    renewable-energy.json  Example domain with 5 prompts (2 easy, 3 hard)
 llms.txt              LLM-readable site description
 explorer.png          Terminal screenshot
 ```
@@ -527,7 +590,15 @@ All credentials stay on your machine.
 
 ## Changelog
 
-### Legion X 2.1.0 — Parliament System (current)
+### Legion X 2.1.2 — Epistemic Dataset Engine (current)
+- **Async PROMETHEUS routing** — Fire-and-poll pattern eliminates 300s timeout on local LLM routing
+- **Async CASSANDRA challenges** — Fire-and-poll for Tribunal Phase A (same pattern as PROMETHEUS)
+- **Provider diversity floor** — Minimum provider distribution across agents, shuffle round-robin
+- **Bot IP dynamic verification** — Zero hardcoded IPs, 6 official JSON sources refreshed every 6h
+- **Epistemic dataset runner** — Batch deliberation runner with progress tracking, difficulty filters, cooldown
+- **Deliberation runner health detection** — Automatic retry on stuck sessions
+
+### Legion X 2.1.0 — Parliament System
 - **Parliament v1.0** — Local LLM (Qwen 2.5 7B) replaces static ONNX routing with intelligent agent selection
 - **PROMETHEUS** — LLM-powered routing with per-agent grounding prescription (custom categories, query reformulation, topK, minSimilarity)
 - **CASSANDRA** — Adversarial Tribunal challenges via local LLM with counter-grounding evidence
