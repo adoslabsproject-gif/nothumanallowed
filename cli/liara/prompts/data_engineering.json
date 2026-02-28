@@ -1,0 +1,286 @@
+{
+  "domain": "data_engineering",
+  "description": "Prompt di deliberazione per il dominio Data Engineering: architetture dati, pipeline ETL/ELT, batch vs streaming, data quality, governance, lakehouse, orchestrazione, schema evolution e ottimizzazione costi su larga scala.",
+  "prompts": [
+    {
+      "prompt": "ETL tradizionale vs ELT moderno per un cloud data warehouse su BigQuery con 500 GB di dati giornalieri. Quale approccio scegliere?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["etl", "elt", "bigquery", "cloud"],
+      "structural_conflict": "ETL trasforma prima del caricamento riducendo storage ma aumentando complessita pipeline; ELT carica raw e trasforma in-warehouse sfruttando la potenza di calcolo del cloud ma aumentando costi storage del 40-60%."
+    },
+    {
+      "prompt": "Data lake vs data warehouse per un'azienda e-commerce con 200 GB di log giornalieri e 50 GB di dati strutturati transazionali. Quale architettura adottare?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["data-lake", "data-warehouse", "architettura"],
+      "structural_conflict": "Il data warehouse garantisce query performanti sui dati strutturati ma non gestisce bene i log semi-strutturati; il data lake accetta tutto ma senza governance rischia di diventare un data swamp inutilizzabile."
+    },
+    {
+      "prompt": "Apache Airflow vs cron job per orchestrare 15 pipeline ETL giornaliere che processano complessivamente 80 GB. Vale la complessita aggiuntiva di Airflow?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["airflow", "orchestrazione", "cron"],
+      "structural_conflict": "Cron e semplice e zero-overhead ma non offre retry, dipendenze tra task o monitoring; Airflow aggiunge 2-3 settimane di setup e manutenzione infrastrutturale ma garantisce osservabilita e gestione errori enterprise."
+    },
+    {
+      "prompt": "Formato Parquet vs formato CSV per lo storage di 2 TB di dati analitici su S3. Quale formato scegliere per query con Athena?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["parquet", "csv", "s3", "athena", "storage"],
+      "structural_conflict": "CSV e universalmente leggibile e semplice da produrre ma scansiona l'intero file per ogni query; Parquet riduce i costi di scansione del 90% con columnar storage ma richiede tooling specifico per produzione e debugging."
+    },
+    {
+      "prompt": "Star schema vs snowflake schema per un data warehouse con 30 tabelle dimensionali e 5 fact table. Il team di 4 analisti usa prevalentemente SQL.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["star-schema", "snowflake-schema", "modellazione"],
+      "structural_conflict": "Star schema e piu semplice da queryare con join ridotti ma denormalizza causando ridondanza dati del 20-30%; snowflake schema normalizza risparmiando storage ma aumenta la complessita delle query con 3-4 livelli di join."
+    },
+    {
+      "prompt": "dbt Core (self-hosted) vs dbt Cloud per un team di 6 data engineer che gestisce 200 modelli SQL su Snowflake. Il budget annuale per tooling e di 30.000 euro.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["dbt", "trasformazione", "tooling"],
+      "structural_conflict": "dbt Core e gratuito e completamente personalizzabile ma richiede 1-2 engineer dedicati alla CI/CD e infrastruttura; dbt Cloud costa circa 7.000-15.000 euro/anno per 6 utenti (100$/utente/mese piano Team + overage sui model run) ma elimina overhead operativo offrendo scheduling, IDE e documentazione integrata."
+    },
+    {
+      "prompt": "Slowly Changing Dimension Type 2 vs Type 1 per tracciare le modifiche agli indirizzi di 5 milioni di clienti in un data warehouse retail. Le query storiche sono richieste dal team compliance.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["scd", "dimensioni", "data-warehouse", "compliance"],
+      "structural_conflict": "SCD Type 1 sovrascrive il valore mantenendo la tabella snella ma perde lo storico necessario per compliance; SCD Type 2 mantiene ogni versione con date validita ma moltiplica le righe di 3-5x complicando le query e aumentando storage."
+    },
+    {
+      "prompt": "Chiave surrogata auto-increment vs UUID v7 come primary key per le fact table di un data warehouse con 500 milioni di righe e ingestione da 12 sorgenti diverse.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["chiavi", "modellazione", "performance"],
+      "structural_conflict": "Le chiavi surrogate auto-increment sono compatte (8 byte) e ottime per join performance ma creano conflitti con ingestione multi-sorgente; UUID v7 sono globalmente unici e time-sortable ma occupano 16 byte raddoppiando la dimensione degli indici su 500M righe."
+    },
+    {
+      "prompt": "Batch processing con Spark ogni ora vs stream processing con Apache Flink per alimentare dashboard real-time di un e-commerce con 10.000 ordini/ora. Spark e gia in produzione, Flink richiederebbe 3 mesi di migrazione e il team non ha esperienza streaming.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["spark", "flink", "batch", "streaming", "real-time"],
+      "structural_conflict": "Spark batch e maturo e il team lo conosce ma aggiunge fino a 60 minuti di latenza inaccettabile per dashboard real-time; Flink offre latenza sub-secondo ma introduce complessita 3x superiore con gestione stato, checkpoint e exactly-once semantics che il team non padroneggia."
+    },
+    {
+      "prompt": "Architettura medallion (bronze/silver/gold) vs pipeline ETL diretta source-to-mart per un lakehouse su Databricks con 50 sorgenti dati e 2 TB giornalieri. Il team di 8 engineer lamenta che il medallion triplica lo storage.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["medallion", "lakehouse", "databricks", "architettura"],
+      "structural_conflict": "Il medallion architecture garantisce riproducibilita e debugging isolando ogni layer ma triplica lo storage (6 TB/giorno vs 2 TB) con costi aggiuntivi di 15.000 euro/mese; la pipeline diretta riduce storage e latenza ma rende impossibile il replay e il debugging di trasformazioni intermedie."
+    },
+    {
+      "prompt": "Apache Kafka vs Amazon Kinesis per un sistema di event streaming con 50.000 eventi/secondo, 3 consumer group e requisito di retention 7 giorni. L'infrastruttura e su AWS e il team preferisce managed services.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["kafka", "kinesis", "streaming", "aws"],
+      "structural_conflict": "Kinesis e fully managed su AWS con zero ops ma ha limiti di 1 MB/s per shard e costi che scalano linearmente fino a 8.000 euro/mese a 50K eventi/s; Kafka self-managed su EC2 gestisce il throughput facilmente a 3.000 euro/mese ma richiede 1 engineer dedicato alla manutenzione cluster."
+    },
+    {
+      "prompt": "Airflow vs Dagster vs Prefect per orchestrare 120 pipeline con dipendenze complesse, retry logic e SLA monitoring. Il team di 5 engineer ha 2 anni di esperienza Airflow ma lamenta problemi di scalabilita con il scheduler.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["airflow", "dagster", "prefect", "orchestrazione"],
+      "structural_conflict": "Airflow ha l'ecosistema piu grande e il team lo conosce ma il scheduler ha una sezione critica single-threaded che degrada la concorrenza oltre 100 DAG; Dagster offre software-defined assets e testing superiore ma richiede 4-6 mesi di migrazione; Prefect e il piu semplice ma ha l'ecosistema piu piccolo e meno integrazioni enterprise."
+    },
+    {
+      "prompt": "Schema evolution con Avro e Schema Registry vs Protobuf con breaking change detection per un sistema di 30 microservizi che producono eventi su Kafka. Il team deve gestire 200 schemi con backward e forward compatibility.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["schema-evolution", "avro", "protobuf", "kafka"],
+      "structural_conflict": "Avro con Schema Registry offre compatibility check automatico e schema evolution nativa ma aggiunge un single point of failure e 5-10ms di latenza per lookup; Protobuf e piu performante e type-safe ma non ha un registry centralizzato e i breaking change sono responsabilita di ogni team individualmente."
+    },
+    {
+      "prompt": "Data quality con Great Expectations integrato in ogni pipeline vs quality check centralizzato post-ingestione per un data warehouse con 80 tabelle e 15 pipeline giornaliere. Il team ha 3 data engineer e 5 analisti che lamentano dati inconsistenti.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["data-quality", "great-expectations", "testing"],
+      "structural_conflict": "Quality check in-pipeline blocca dati sporchi alla fonte ma aggiunge 20-30% di tempo di esecuzione a ogni pipeline e richiede che ogni engineer scriva aspettative; il check centralizzato post-ingestione non rallenta le pipeline ma lascia passare dati sporchi che possono propagarsi ai report prima della detection."
+    },
+    {
+      "prompt": "Snowflake vs Databricks come piattaforma dati principale per un'azienda con 10 TB di dati, 30 utenti SQL e un team ML di 4 persone che vuole trainare modelli sui dati del warehouse. Budget annuale 150.000 euro.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["snowflake", "databricks", "lakehouse", "piattaforma"],
+      "structural_conflict": "Snowflake eccelle nelle query SQL analitiche con performance 2-3x superiore per i 30 analisti ma richiede export dati per il training ML; Databricks unifica analytics e ML in un lakehouse ma le query SQL sono meno ottimizzate e la curva di apprendimento per gli analisti SQL-only e di 2-3 mesi."
+    },
+    {
+      "prompt": "Data lineage con OpenLineage e Marquez vs lineage proprietario integrato in Databricks Unity Catalog per tracciare l'impatto delle modifiche su 200 tabelle e 60 pipeline. Il team opera su un mix di Databricks, Airflow e dbt.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["data-lineage", "openlineage", "unity-catalog", "governance"],
+      "structural_conflict": "OpenLineage e open-standard e cattura lineage cross-tool (Airflow + dbt + Spark) ma richiede 4-6 settimane di integrazione custom e manutenzione; Unity Catalog offre lineage automatico zero-config ma solo per asset Databricks, lasciando cieche le pipeline Airflow e dbt che rappresentano il 40% del flusso."
+    },
+    {
+      "prompt": "Partitioning per data vs partitioning per customer_id per una fact table di 5 miliardi di righe su BigQuery. Le query del team analytics filtrano sempre per data range (ultimi 30 giorni), ma le query del team customer success filtrano per singolo cliente.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["partitioning", "bigquery", "performance", "ottimizzazione"],
+      "structural_conflict": "Partizionare per data ottimizza le query analytics (95% del volume) scansionando solo 30/365 partizioni ma le query per cliente scansionano comunque 30 partizioni intere; partizionare per customer_id rende le query cliente istantanee ma le query analytics su 30 giorni devono scansionare milioni di partizioni."
+    },
+    {
+      "prompt": "CDC con Debezium vs trigger-based CDC vs timestamp-based incremental load per sincronizzare 25 tabelle PostgreSQL (800 GB totali) con un data warehouse Redshift. Il database sorgente ha un carico OLTP di 2.000 transazioni/secondo.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["cdc", "debezium", "postgresql", "replica"],
+      "structural_conflict": "Debezium legge il WAL con impatto quasi zero sul database ma aggiunge complessita infrastrutturale (Kafka Connect cluster) e richiede gestione degli snapshot iniziali per 800 GB; i trigger catturano ogni modifica ma aggiungono 15-20% di overhead sulle 2.000 TPS; l'incremental timestamp e il piu semplice ma perde i delete e richiede full-scan periodici."
+    },
+    {
+      "prompt": "Materializzare le trasformazioni dbt come tabelle vs viste materializzate per un layer gold con 60 modelli su Snowflake. I modelli piu complessi richiedono 15 minuti di build e gli analisti vogliono dati freschi entro 30 minuti.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["dbt", "materializzazione", "snowflake", "performance"],
+      "structural_conflict": "Le tabelle dbt garantiscono query istantanee per gli analisti ma richiedono rebuild schedulato ogni 30 minuti con costi compute di 4.000 euro/mese; le viste materializzate si aggiornano automaticamente ma Snowflake le supporta con limitazioni severe (no join di alcun tipo, no window functions, solo query su singola tabella) escludendo il 40% dei modelli."
+    },
+    {
+      "prompt": "Data catalog con DataHub (self-hosted) vs Atlan (SaaS) per un'organizzazione con 500 tabelle, 100 pipeline e 40 utenti tra engineer, analisti e stakeholder. Budget annuale per il catalogo: 50.000 euro.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["data-catalog", "datahub", "governance", "discovery"],
+      "structural_conflict": "DataHub e open-source e infinitamente personalizzabile ma richiede 1-2 engineer dedicati per hosting, upgrade e integrazioni custom con costo effettivo di 80.000 euro/anno in tempo-persona; Atlan costa 40.000 euro/anno ed e pronto all'uso ma vincola a un vendor con personalizzazione limitata e rischio lock-in sui metadati."
+    },
+    {
+      "prompt": "Implementare data contracts tra 8 team produttori e il data platform team vs approccio schema-on-read con validazione post-ingestione. I produttori cambiano schema senza preavviso causando 3-4 rotture pipeline al mese.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["data-contracts", "governance", "schema", "organizzazione"],
+      "structural_conflict": "I data contracts formalizzano le interfacce eliminando rotture impreviste ma richiedono buy-in organizzativo da 8 team, tooling custom e 3-6 mesi di adozione con resistenza culturale; schema-on-read e flessibile e non richiede coordinamento ma accetta il caos con 3-4 incidenti/mese che costano circa 40 ore/mese di debugging."
+    },
+    {
+      "prompt": "Spark su Kubernetes (spark-on-k8s-operator) vs Spark su YARN per processare 5 TB di dati giornalieri. L'azienda ha gia un cluster Kubernetes per i microservizi ma il team data ha 4 anni di esperienza con YARN su EMR.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["spark", "kubernetes", "yarn", "infrastruttura"],
+      "structural_conflict": "Spark su K8s unifica l'infrastruttura con i microservizi e offre autoscaling superiore ma il team deve imparare pod templating, resource quotas e debugging su K8s con curva di 3-4 mesi; YARN su EMR e collaudato e il team lo padroneggia ma mantiene un cluster separato con costi base di 5.000 euro/mese anche a riposo."
+    },
+    {
+      "prompt": "Implementare un feature store (Feast) vs query dirette al data warehouse per servire 50 feature ML in tempo reale con latenza P99 sotto 20ms. Il team ML ha 6 data scientist e il data warehouse e Redshift.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["feature-store", "feast", "ml", "real-time"],
+      "structural_conflict": "Feast pre-materializza feature in Redis garantendo P99 di 5ms ma introduce un nuovo sistema da gestire con sincronizzazione batch/streaming e 2.000 euro/mese di infrastruttura aggiuntiva; le query dirette a Redshift evitano duplicazione ma hanno P99 di 200-500ms inaccettabile per serving real-time e rischiano di impattare i workload analytics."
+    },
+    {
+      "prompt": "Utilizzare Apache Iceberg vs Delta Lake come table format per un lakehouse su S3 con 20 TB di dati e requisiti di time-travel, schema evolution e merge-on-read. L'azienda usa sia Spark che Trino per le query.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["iceberg", "delta-lake", "lakehouse", "table-format"],
+      "structural_conflict": "Iceberg ha supporto nativo eccellente per Trino e multi-engine query ma l'ecosistema di merge/upsert e meno maturo; Delta Lake ha merge-on-read superiore e integrazione perfetta con Spark/Databricks ma il supporto Trino richiede connettori aggiuntivi e alcune feature sono disponibili solo su Databricks."
+    },
+    {
+      "prompt": "Data mesh con ownership distribuita ai 6 domain team vs data platform centralizzata con 4 data engineer per un'azienda di 500 persone con 20 sorgenti dati, 300 tabelle e requisiti di compliance GDPR stringenti. I domain team non hanno competenze data engineering.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["data-mesh", "organizzazione", "governance", "gdpr"],
+      "structural_conflict": "Conflitto organizzativo con vincolo regolatorio: il data mesh richiede che 6 domain team diventino autonomi nel data engineering, ma il GDPR richiede un Data Protection Officer che verifichi ogni trattamento — la decentralizzazione della data ownership entra in conflitto con la centralizzazione della responsabilita legale (Art. 37-39 GDPR). Se un domain team gestisce male i PII, la multa (fino al 4% del fatturato globale, Art. 83) ricade sull'azienda, non sul team. La piattaforma centralizzata garantisce compliance ma il backlog di 6 settimane significa che i domain team bypassano il processo — creando shadow data pipeline non governate che sono un rischio GDPR maggiore del backlog stesso."
+    },
+    {
+      "prompt": "Real-time streaming end-to-end con Kafka + Flink + Druid vs micro-batch ogni 5 minuti con Spark Structured Streaming + Delta Lake per un sistema antifrode bancario che processa 100.000 transazioni/secondo con requisito di detection sotto 1 secondo. Il costo del real-time puro e stimato in 45.000 euro/mese vs 15.000 euro/mese per micro-batch.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["streaming", "antifrode", "kafka", "flink", "spark", "real-time"],
+      "structural_conflict": "Ottimizzazione con breakeven calcolabile: il real-time costa 30K euro/mese in piu (45K-15K). Il micro-batch lascia una finestra di 5 minuti = 100K transazioni/5min × P(frode) non bloccate. Se le perdite per frode nella finestra superano 30K euro/mese, il real-time ha ROI positivo. Ma P(frode) nella finestra dipende dal tipo di frode: le frodi bulk (molte transazioni piccole in sequenza rapida) sono catturate solo dal real-time, le frodi singole di alto importo sono catturate anche dal batch. Il valore atteso delle perdite nella finestra di 5 minuti e il discriminante — e la sua stima richiede dati storici sulla distribuzione temporale delle frodi che l'azienda potrebbe non avere."
+    },
+    {
+      "prompt": "Migrare 15 TB di data warehouse da Oracle on-premise a Snowflake cloud con big-bang migration in un weekend vs migrazione incrementale tabella per tabella su 6 mesi. L'azienda ha 200 report che dipendono dal warehouse e un SLA di disponibilita del 99.5%.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["migrazione", "oracle", "snowflake", "cloud", "on-premise"],
+      "structural_conflict": "La big-bang in un weekend elimina il dual-running e la sincronizzazione bidirezionale ma se qualcosa fallisce i 200 report sono down con violazione SLA e rollback complesso su 15 TB; la migrazione incrementale minimizza il rischio ma richiede 6 mesi di dual-running con sincronizzazione bidirezionale che costa 25.000 euro/mese e introduce inconsistenze temporanee tra i due sistemi."
+    },
+    {
+      "prompt": "Implementare row-level security nativo nel data warehouse (Snowflake) vs gestire i permessi a livello applicativo con viste filtrate per 10 business unit, 300 utenti e dati PII di 20 milioni di clienti soggetti a GDPR. Il team security richiede audit trail completo di ogni accesso.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["sicurezza", "rls", "gdpr", "snowflake", "governance"],
+      "structural_conflict": "RLS nativo in Snowflake garantisce enforcement a livello engine impossibile da bypassare ma richiede gestione di policy complesse per 10 BU con performance degradation del 10-15% su query cross-BU; le viste filtrate sono piu semplici da implementare e non impattano le performance ma sono bypassabili da utenti con privilegi elevati e richiedono 300 viste duplicate con manutenzione quadratica."
+    },
+    {
+      "prompt": "Architettura lambda (batch + speed layer) vs architettura kappa (solo streaming) per un sistema IoT che ingesta 1 milione di eventi/secondo da 50.000 sensori con requisiti sia di analisi storica (ultimi 2 anni, 500 TB) che di alerting real-time (latenza sotto 5 secondi). Il team ha 6 data engineer.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["lambda", "kappa", "iot", "streaming", "architettura"],
+      "structural_conflict": "Lambda garantisce sia analisi storica ottimizzata che alerting real-time ma mantiene due codebase parallele (batch Spark + streaming Flink) con logica duplicata e 6 engineer divisi su due stack; kappa elimina la duplicazione processando tutto in streaming ma rielaborare 500 TB di dati storici via replay Kafka e impraticabile e le query analitiche su finestre di 2 anni via streaming hanno performance 10x peggiori rispetto a un batch engine."
+    },
+    {
+      "prompt": "Data vault 2.0 vs dimensional modeling (Kimball) come metodologia di modellazione per un data warehouse enterprise con 40 sorgenti, 500 entita di business e requisito di aggiungere 5 nuove sorgenti ogni trimestre. Il team di 10 data engineer ha background Kimball ma il CTO vuole flessibilita a lungo termine.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["data-vault", "kimball", "modellazione", "enterprise"],
+      "structural_conflict": "Data Vault 2.0 separa struttura (hub/link/satellite) rendendo l'aggiunta di nuove sorgenti quasi zero-impact ma aumenta la complessita delle query di 3-4x con join multipli e richiede 4-6 mesi di retraining del team; Kimball e intuitivo per analisti e il team lo padroneggia ma ogni nuova sorgente richiede refactoring delle dimensioni condivise con rischio di breaking change sui 200+ report esistenti."
+    },
+    {
+      "prompt": "Governance dei dati federata con ownership ai domain team e standard globali del data platform team vs governance completamente centralizzata per un'organizzazione con 1.200 dipendenti, 50 sorgenti, 15 domain team e requisiti SOC2 + GDPR. La governance centralizzata attuale ha un backlog di 4 mesi per le richieste di accesso dati.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["governance", "federata", "organizzazione", "compliance", "soc2"],
+      "structural_conflict": "Paradosso di controllo: la governance centralizzata e teoricamente piu sicura ma il backlog di 4 mesi CAUSA comportamenti non-compliant (shadow IT: copie su laptop, S3 personali) che sono invisibili e piu pericolosi. La governance federata e teoricamente piu rischiosa ma riduce l'incentivo ai workaround. Il rischio effettivo e: P(violazione|federata) × multa vs P(violazione|centralizzata_con_shadow_IT) × multa. Se P(shadow_IT) e alta (probabile con 15 team e 4 mesi di backlog), la governance centralizzata potrebbe essere PIU rischiosa della federata — ma gli auditor SOC2 vedono solo la governance formale, non i workaround. L'ottimizzazione del rischio reale e l'ottimizzazione del rischio percepito divergono."
+    },
+    {
+      "prompt": "Reverse ETL con Census/Hightouch per sincronizzare dati dal warehouse a 12 tool SaaS (Salesforce, HubSpot, Intercom, etc.) vs API custom per ogni integrazione. Il team marketing lamenta dati stale di 24-48 ore nei loro tool e il budget per tooling e 40.000 euro/anno.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["reverse-etl", "saas", "integrazione", "census"],
+      "structural_conflict": "Census/Hightouch risolvono il problema in 2-3 settimane per tutte le 12 integrazioni ma costano 30.000-50.000 euro/anno e creano dipendenza da un vendor per un flusso critico; le API custom costano zero in licenze ma richiedono 6-8 mesi di sviluppo per 12 integrazioni con manutenzione continua stimata in 0.5 FTE dedicato, equivalente a 40.000 euro/anno in costo opportunita."
+    },
+    {
+      "prompt": "Implementare un semantic layer centralizzato con dbt Metrics/Cube.js vs metriche definite in ogni tool di BI (Looker, Metabase, fogli Google) per un'azienda con 3 tool di BI, 40 metriche di business e discrepanze del 15-20% tra i report di team diversi sulle stesse metriche.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["semantic-layer", "metriche", "bi", "governance"],
+      "structural_conflict": "Il semantic layer centralizzato elimina le discrepanze garantendo una single source of truth ma aggiunge un layer di astrazione che rallenta le query del 20-30% e richiede che ogni modifica metrica passi dal data team con 1-2 settimane di lead time; le metriche distribuite sono piu veloci e autonome per ogni team ma le discrepanze del 15-20% causano decisioni errate con impatto stimato di 500.000 euro/anno in opportunita perse."
+    },
+    {
+      "prompt": "Ottimizzazione costi: ridurre la spesa Snowflake da 80.000 a 40.000 euro/mese downgrading da warehouse XL a M e aumentando clustering vs mantenere XL e ridurre il volume dati con aggressive data retention (eliminare dati oltre 1 anno). L'azienda ha 50 TB in Snowflake e query analitiche che scansionano regolarmente 2 anni di storico.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["costi", "snowflake", "ottimizzazione", "retention"],
+      "structural_conflict": "Downsizing a M con clustering riduce il compute del 50% ma le query piu complesse passano da 30 secondi a 4-5 minuti frustrando i 30 analisti; eliminare dati oltre 1 anno riduce storage e velocizza le query ma distrugge lo storico necessario per analisi YoY e modelli ML che usano 2 anni di training data, e una volta eliminati i dati non sono recuperabili."
+    },
+    {
+      "prompt": "Testing delle pipeline dati: unit test su ogni trasformazione dbt con dbt-expectations vs integration test end-to-end con data sample per un progetto con 200 modelli dbt, 15 pipeline Airflow e release settimanali. Il team ha 5 engineer e zero test attualmente.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["testing", "dbt", "data-quality", "ci-cd"],
+      "structural_conflict": "Unit test su ogni modello dbt catturano regressioni a livello di singola trasformazione ma richiedono 3-4 mesi per scrivere 600+ test per i 200 modelli e il 30% del tempo di ogni PR va in manutenzione test; integration test end-to-end validano il flusso completo in 2 settimane di setup ma non isolano dove si rompe la pipeline e un singolo test su 200 modelli richiede 45 minuti, rendendo la CI troppo lenta per release settimanali."
+    },
+    {
+      "prompt": "Multi-tenancy nel data warehouse: schema separato per ognuno dei 50 clienti enterprise vs schema condiviso con tenant_id in ogni tabella per un prodotto SaaS B2B con 50 clienti, 500 GB medi per cliente e requisito di isolamento dati certificato SOC2. Il cliente piu grande ha 5 TB.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["multi-tenancy", "saas", "isolamento", "soc2"],
+      "structural_conflict": "Schema separati garantiscono isolamento fisico perfetto per SOC2 ma con 50 clienti significano 50 copie di ogni migrazione, 50 pipeline parallele e costi operativi che scalano linearmente con O(n) complessita; schema condiviso con tenant_id scala a costo costante ma un singolo bug nel filtro tenant_id espone dati cross-tenant con responsabilita legale multimilionaria e gli auditor SOC2 richiedono prove aggiuntive di isolamento logico."
+    },
+    {
+      "prompt": "Implementare data observability con Monte Carlo (SaaS) vs costruire un sistema custom con Great Expectations + Airflow alerting + dashboard Grafana per monitorare 300 tabelle, 80 pipeline e rilevare anomalie nei dati. Il team ha avuto 12 data incident nell'ultimo trimestre scoperti dagli analisti, non dal monitoring.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["observability", "monte-carlo", "monitoring", "anomaly-detection"],
+      "structural_conflict": "Monte Carlo rileva anomalie automaticamente con ML su freshness, volume, schema e distribution in 1 settimana di setup ma costa 60.000-100.000 euro/anno e invia il metadata dei tuoi dati a un vendor esterno; il sistema custom con GE + Airflow + Grafana costa zero in licenze e i dati restano interni ma richiede 3-4 mesi di sviluppo, copre solo le anomalie per cui scrivi regole esplicite e non ha ML per anomalie sconosciute che rappresentano il 70% dei 12 incident trimestrali."
+    },
+    {
+      "prompt": "Data lakehouse su-misura con Iceberg + Trino + Airflow + dbt su infrastruttura propria vs all-in su Databricks Lakehouse Platform per un'azienda con 100 TB di dati, 20 data engineer e un CTO che vuole evitare vendor lock-in. Il costo stimato e 30.000 euro/mese per l'infrastruttura propria vs 50.000 euro/mese per Databricks.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["lakehouse", "databricks", "iceberg", "vendor-lock-in", "costi"],
+      "structural_conflict": "L'infrastruttura propria costa il 40% in meno e garantisce portabilita totale ma richiede 3-4 engineer dedicati full-time alla piattaforma (costo effettivo 80.000 euro/mese includendo salari) e ogni integrazione (ML, governance, lineage) va costruita o assemblata; Databricks costa piu in licenza ma integra tutto out-of-the-box liberando i 3-4 engineer per lavoro a valore aggiunto, al prezzo di un lock-in profondo dove migrare via richiederebbe 12-18 mesi."
+    },
+    {
+      "prompt": "Zero-copy cloning per ambienti di sviluppo e staging su Snowflake (clone dell'intero warehouse da 30 TB) vs subset dei dati con dbt seed e fixture generate per ambienti non-production. Il team di 10 engineer ha bisogno di dati realistici per testare pipeline ma i dati contengono PII di 5 milioni di clienti EU soggetti a GDPR.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["snowflake", "testing", "gdpr", "ambienti", "pii"],
+      "structural_conflict": "Zero-copy clone fornisce dati identici alla produzione con zero storage aggiuntivo e tempo di creazione sotto 1 minuto ma clona anche i PII violando GDPR se gli ambienti dev non hanno gli stessi controlli di accesso della produzione; subset con dati sintetici e GDPR-compliant ma generare fixture realistiche per 30 TB con relazioni integre tra 200 tabelle richiede 2-3 mesi di sviluppo e i test non cattureranno mai i data quality issue che emergono solo con dati reali."
+    },
+    {
+      "prompt": "Implementare un data product marketplace interno con self-service discovery, quality SLA e chargeback ai domain team vs continuare con il modello attuale dove il data platform team riceve richieste via Jira e produce dataset ad-hoc. L'organizzazione ha 2.000 dipendenti, 25 domain team e il data platform team di 12 engineer spende il 70% del tempo su richieste ad-hoc con lead time medio di 3 settimane.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["data-product", "marketplace", "self-service", "organizzazione"],
+      "structural_conflict": "Il marketplace self-service libera il 70% del tempo del platform team e riduce il lead time da 3 settimane a ore ma richiede 12-18 mesi di investimento upfront (stimato 500.000 euro), adozione culturale massiva e il rischio che i domain team producano data product di bassa qualita senza supervisione; il modello Jira attuale garantisce qualita ma scala linearmente con il numero di richieste e con 25 team il backlog e destinato a crescere fino a 6-8 settimane di lead time entro un anno."
+    }
+  ]
+}

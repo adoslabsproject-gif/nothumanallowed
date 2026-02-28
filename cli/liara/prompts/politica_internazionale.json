@@ -1,0 +1,286 @@
+{
+  "domain": "politica_internazionale",
+  "description": "Politica internazionale, governance globale, diritto internazionale, ONU, NATO, UE, diritti umani",
+  "prompts": [
+    {
+      "prompt": "Cos'è il Consiglio di Sicurezza dell'ONU, come funziona il diritto di veto dei 5 membri permanenti, e perché è stato progettato così nel 1945?",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "easy",
+      "tags": ["consiglio_sicurezza", "onu", "veto", "p5"],
+      "structural_conflict": "Il veto era necessario nel 1945 per convincere le grandi potenze ad aderire all'ONU — senza di esso, nessuna avrebbe accettato. Ma il meccanismo che ha reso possibile l'ONU è lo stesso che la paralizza nelle crisi più gravi."
+    },
+    {
+      "prompt": "Qual è la differenza tra diritto internazionale consuetudinario e diritto internazionale convenzionale (trattati)?",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "easy",
+      "tags": ["diritto_internazionale", "consuetudine", "trattati"],
+      "structural_conflict": "Il diritto consuetudinario e quello convenzionale creano un dilemma di enforcement asimmetrico: uno stato che viola una consuetudine può contestarne l'esistenza stessa (non c'è testo da citare), mentre uno stato che viola un trattato viola un testo preciso ma può semplicemente ritirarsi. Il risultato è che le norme più universali sono le più deboli, e le più forti si applicano solo ai volenterosi. Un sistema legale dove il più potente può sempre trovare un modo per sottrarsi non è un sistema legale — è un sistema di raccomandazioni."
+    },
+    {
+      "prompt": "Cos'è il principio di sovranità westfaliana e perché è il fondamento del sistema internazionale dal 1648?",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "easy",
+      "tags": ["sovranita", "westfalia", "sistema_internazionale"],
+      "structural_conflict": "La sovranità protegge gli stati dall'interferenza esterna ma protegge anche i regimi che opprimono i propri cittadini. Il principio che garantisce l'ordine internazionale è lo stesso che impedisce la protezione dei diritti umani dentro i confini statali."
+    },
+    {
+      "prompt": "Cos'è la NATO, perché è stata fondata nel 1949, e cosa dice l'articolo 5 sulla difesa collettiva?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["nato", "articolo_5", "difesa_collettiva", "guerra_fredda"],
+      "structural_conflict": "L'articolo 5 dice che un attacco a uno è un attacco a tutti, ma non specifica la risposta obbligatoria. Ogni stato decide autonomamente come rispondere. La deterrenza funziona solo se l'avversario crede che tutti risponderebbero militarmente — credenza che non è mai stata testata."
+    },
+    {
+      "prompt": "Qual è la differenza tra la Corte Internazionale di Giustizia (ICJ) e la Corte Penale Internazionale (ICC)?",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "easy",
+      "tags": ["icj", "icc", "giustizia_internazionale", "differenza"],
+      "structural_conflict": "L'ICJ e l'ICC creano un paradosso di legittimità opposta: l'ICJ ha giurisdizione quasi universale ma nessun enforcement — le sue sentenze vengono ignorate quando scomode (Nicaragua v. USA 1986). L'ICC ha enforcement (mandati di arresto) ma giurisdizione limitata ai 125 stati parte — e le grandi potenze che commettono le violazioni più gravi non ne fanno parte. Il risultato è che nel sistema internazionale, autorità e potere sono distribuiti in modo inversamente proporzionale: chi ha l'autorità legale non ha il potere di farla rispettare, e chi ha il potere non è soggetto all'autorità."
+    },
+    {
+      "prompt": "Cosa sono le operazioni di peacekeeping dell'ONU e perché i caschi blu non possono usare la forza se non per autodifesa?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["peacekeeping", "onu", "caschi_blu", "regole_ingaggio"],
+      "structural_conflict": "Il peacekeeping presuppone che ci sia una pace da mantenere. Se le parti non rispettano il cessate il fuoco, i caschi blu con regole di ingaggio restrittive diventano osservatori impotenti di massacri — come a Srebrenica nel 1995."
+    },
+    {
+      "prompt": "Cos'è l'Unione Europea come progetto politico — non solo economico — e cosa significa il concetto di 'sovranità condivisa'?",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "easy",
+      "tags": ["ue", "sovranita_condivisa", "integrazione", "progetto_politico"],
+      "structural_conflict": "La sovranità condivisa moltiplica il potere collettivo ma riduce l'autonomia individuale. Ogni stato membro è più forte grazie all'UE ma meno libero. La tensione tra potere collettivo e libertà individuale è permanente e irrisolvibile."
+    },
+    {
+      "prompt": "Spiega la differenza tra realismo e liberalismo nelle relazioni internazionali come cornici interpretative della politica internazionale.",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "easy",
+      "tags": ["realismo", "liberalismo", "teoria_ri", "paradigmi"],
+      "structural_conflict": "Realismo e liberalismo generano prescrizioni operative divergenti: il realista investe in deterrenza e autonomia strategica, il liberale investe in istituzioni e interdipendenza. Un decision-maker che segue il paradigma sbagliato spreca risorse: se il mondo è realista, l'investimento in istituzioni è ingenuità costosa; se è liberale, l'investimento in deterrenza è provocazione destabilizzante. Non è possibile hedgare — le due strategie si contraddicono e le risorse sono finite. La scelta del paradigma è una scommessa strategica non falsificabile fino a quando non è troppo tardi."
+    },
+    {
+      "prompt": "Un paese democratico commercia per 45 miliardi di dollari all'anno con una dittatura che imprigiona 1.2 milioni di persone in campi di lavoro forzato. Le sanzioni economiche danneggerebbero i 80 milioni di cittadini ordinari della dittatura più del regime — storicamente, le sanzioni colpiscono il 90% dei civili e il 10% dell'elite. Il commercio arricchisce il regime ma anche i cittadini, finanziando un ceto medio che storicamente nel 60% dei casi spinge verso la democratizzazione in 20-30 anni. La realpolitik dice 'commercia e aspetta', l'idealismo dice 'sanziona ora'. Quale approccio produce meno sofferenza nel lungo periodo?",
+      "conflict_type": ["values_tradeoff", "prediction_uncertainty", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["commercio_vs_diritti_umani", "sanzioni", "realpolitik", "idealismo", "sofferenza"],
+      "structural_conflict": "Le sanzioni puniscono i civili nel breve termine nella speranza di cambiare il regime nel lungo termine — ma il 70% delle sanzioni storiche non ha prodotto regime change. Il commercio arricchisce il regime nel breve termine nella speranza che il ceto medio porti democrazia — ma la Cina dimostra che la crescita economica non garantisce la democratizzazione. Entrambi gli approcci sono scommesse con evidenze miste."
+    },
+    {
+      "prompt": "La Dichiarazione Universale dei Diritti Umani del 1948 è stata scritta da 18 paesi, prevalentemente occidentali. La Cina, l'Arabia Saudita e molti paesi asiatici e africani contestano l'universalità dei diritti umani, sostenendo che sono un prodotto culturale occidentale usato come strumento di politica estera. I 'valori asiatici' di Lee Kuan Yew (stabilità, ordine, collettività) hanno prodotto Singapore — uno dei paesi più prosperi del mondo senza democrazia liberale. I diritti umani sono universali o culturalmente contingenti? L'evidenza empirica supporta quale posizione?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["diritti_umani", "universalismo", "relativismo_culturale", "valori_asiatici"],
+      "structural_conflict": "Sostenere l'universalità rischia l'imperialismo culturale. Accettare il relativismo rischia di legittimare l'oppressione. Singapore mostra che prosperità senza democrazia è possibile — ma è l'eccezione, non la regola. I dati mostrano che le democrazie hanno in media redditi più alti, ma la correlazione non è causalità e la direzione è contestata."
+    },
+    {
+      "prompt": "Il Trattato di Non-Proliferazione Nucleare (NPT) del 1968 divide il mondo in 5 stati nucleari 'legali' (USA, Russia, UK, Francia, Cina) e tutti gli altri che hanno accettato di non sviluppare armi nucleari in cambio dell'accesso al nucleare civile e della promessa di disarmo dei 5. 57 anni dopo, i 5 non hanno disarmato, 4 paesi hanno l'atomica fuori dal trattato (India, Pakistan, Israele, Corea del Nord), e l'Iran è sulla soglia. Il NPT è un trattato funzionante o un'ipocrisia istituzionalizzata?",
+      "conflict_type": ["values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["npt", "proliferazione", "ipocrisia", "disarmo", "discriminazione_nucleare"],
+      "structural_conflict": "Il NPT ha probabilmente impedito la proliferazione a 20-30 paesi che avevano capacità tecnica — ma funziona su un'asimmetria strutturale: i 5 possono avere le armi, gli altri no. La promessa di disarmo non è stata mantenuta. Il trattato sopravvive perché l'alternativa (nessun trattato) sarebbe peggiore, non perché è giusto."
+    },
+    {
+      "prompt": "L'Assemblea Generale ONU ha votato 187-2 (USA e Israele contrari) contro l'embargo di Cuba per 32 anni consecutivi (al 2024). La risoluzione è non vincolante. Gli USA mantengono l'embargo. Questo dimostra che l'ONU è un forum democratico dove ogni stato ha un voto o un'istituzione impotente dove la volontà del 97% dei paesi è ignorata dal 3%?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["assemblea_generale", "embargo_cuba", "democrazia_internazionale", "enforcement"],
+      "structural_conflict": "L'Assemblea Generale è democratica (un paese, un voto) ma impotente (risoluzioni non vincolanti). Il Consiglio di Sicurezza è potente ma non democratico (5 veti). L'ONU non può essere contemporaneamente democratica e efficace nel sistema attuale — la democrazia richiede enforcement, l'enforcement richiede potere, il potere è concentrato."
+    },
+    {
+      "prompt": "La NATO si è espansa da 12 a 32 membri dal 1949 al 2024 (con l'ingresso della Svezia nel marzo 2024). La Russia considera l'espansione una minaccia esistenziale e l'ha usata come giustificazione per l'invasione dell'Ucraina. L'Occidente risponde che ogni stato sovrano ha diritto di scegliere le proprie alleanze. Ma il diritto di uno stato di aderire alla NATO confligge con la percezione di sicurezza di un altro stato nucleare. Il diritto alla scelta alleata è assoluto o deve essere bilanciato con la stabilità regionale?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["nato_espansione", "russia", "sovranita", "sicurezza", "percezione_minaccia"],
+      "structural_conflict": "Il diritto sovrano di scegliere alleanze è un principio fondamentale. Ma esercitarlo quando la conseguenza è una guerra che uccide centinaia di migliaia di persone solleva la domanda: un principio vale più delle vite che il suo esercizio costa? La risposta dipende dall'orizzonte temporale — cedere al ricatto russo crea un precedente peggiore nel lungo termine."
+    },
+    {
+      "prompt": "Il principio 'Responsibility to Protect' (R2P) stabilisce che se uno stato non protegge i propri cittadini da genocidio, crimini di guerra, pulizia etnica e crimini contro l'umanità, la comunità internazionale ha il diritto di intervenire. Ma chi decide quando la soglia è stata raggiunta? L'intervento in Libia (2011) è stato autorizzato, quello in Siria no (veto russo-cinese). Come si applica un principio universale in modo selettivo senza distruggerlo?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["r2p", "intervento", "selettivita", "libia", "siria", "doppi_standard"],
+      "structural_conflict": "Un principio applicato selettivamente non è un principio — è uno strumento politico. Ma applicarlo universalmente richiederebbe intervenire anche contro alleati potenti, cosa che nessuno farà. La R2P è idealmente universale e praticamente selettiva, e questa contraddizione la mina dall'interno."
+    },
+    {
+      "prompt": "Taiwan partecipa all'economia globale, ha un PIL di circa 790 miliardi, 23 milioni di abitanti, una democrazia funzionante, e produce oltre il 90% dei semiconduttori avanzati mondiali. Ma solo 12 stati la riconoscono diplomaticamente (dopo che Nauru ha cambiato riconoscimento nel gennaio 2024). Non è membro dell'ONU, dell'OMS, o di quasi nessuna organizzazione internazionale. La 'One China Policy' impedisce qualsiasi riconoscimento formale. Come può esistere uno stato di fatto senza esistere di diritto? Il diritto internazionale è adeguato a gestire questa anomalia?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["taiwan", "riconoscimento", "one_china", "anomalia_giuridica", "realta_vs_diritto"],
+      "structural_conflict": "Taiwan soddisfa tutti i criteri dello statehood (territorio, popolazione, governo, capacità di relazioni internazionali) ma il sistema internazionale rifiuta di riconoscerla per non provocare la Cina. Il diritto internazionale è stato costruito per gestire stati — non per gestire la pressione politica che impedisce a un'entità di diventare stato."
+    },
+    {
+      "prompt": "L'Unione Africana ha 55 stati membri e il principio di 'soluzioni africane ai problemi africani'. Ma il suo budget annuale di 750 milioni di dollari dipende per il 60% da donatori esterni (UE, Cina, USA). Una forza di peacekeeping africana da 60.000 soldati (African Standby Force) non è mai stata completamente operativa. L'autonomia africana nella governance è reale o è una narrativa che copre dipendenza strutturale?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["unione_africana", "autonomia", "dipendenza", "peacekeeping", "finanziamento"],
+      "structural_conflict": "L'autonomia richiede risorse proprie che l'Africa non ha ancora. La dipendenza dal finanziamento esterno significa che i donatori hanno influenza sulle priorità. Ma rifiutare i fondi esterni per principio lascerebbe l'UA senza capacità operative. L'autonomia è un processo, non uno stato — ma il processo è circolare: servono risorse per diventare autonomi, ma l'autonomia richiede di non dipendere dalle risorse altrui."
+    },
+    {
+      "prompt": "Il BRICS (Brasile, Russia, India, Cina, Sudafrica + 4 nuovi membri dal 2024: Egitto, Etiopia, Iran, EAU) rappresenta circa il 45% della popolazione mondiale e il 36% del PIL globale (PPP). Propone una New Development Bank come alternativa a FMI e World Bank, e un sistema di pagamenti alternativo al dollaro. Il BRICS può creare un ordine internazionale parallelo o le divergenze interne (India vs Cina, democrazie vs autocrazie) lo renderanno incoerente?",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["brics", "ordine_alternativo", "de_dollarizzazione", "multipolarismo"],
+      "structural_conflict": "Il BRICS è unito dal rifiuto dell'ordine occidentale ma diviso su cosa mettere al suo posto. India e Cina hanno una disputa di confine con 200.000 soldati schierati. Brasile è una democrazia, la Cina no. L'unico collante è l'opposizione a qualcosa — non la costruzione di qualcosa. I blocchi costruiti sull'anti- tendono a frammentarsi quando l'anti- non basta più."
+    },
+    {
+      "prompt": "Le sanzioni secondarie americane (secondary sanctions) puniscono non solo il paese target ma anche qualsiasi azienda nel mondo che commercia con il target. L'UE considera le sanzioni secondarie una violazione della propria sovranità. Ma le aziende europee obbediscono alle sanzioni USA per non perdere l'accesso al mercato americano (25 trilioni di PIL). Il dollaro come valuta di riserva e il sistema SWIFT come infrastruttura danno agli USA un potere sanzionatorio globale unilaterale. Questo potere è legittimo?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["sanzioni_secondarie", "sovranita", "dollaro", "swift", "extraterritorialita"],
+      "structural_conflict": "Le sanzioni secondarie funzionano perché il mercato USA è troppo grande per rinunciarci. Questo dà agli USA un potere de facto di imporre la propria politica estera al mondo. È efficace ma viola la sovranità di ogni altro stato. L'alternativa — un sistema finanziario frammentato — ridurrebbe il potere USA ma anche l'efficacia del sistema sanzionatorio globale."
+    },
+    {
+      "prompt": "La Convenzione di Ginevra del 1949 protegge i civili e i prigionieri di guerra nei conflitti tra stati. Ma i conflitti moderni sono prevalentemente non-statali: guerre civili, insurgenze, terrorismo. I combattenti non statali non sono coperti come 'prigionieri di guerra'. Gli USA hanno creato Guantanamo per detenere 'combattenti nemici illegali' fuori dal framework di Ginevra. Il diritto umanitario internazionale è adeguato ai conflitti del XXI secolo?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "medium",
+      "tags": ["ginevra", "combattenti_illegali", "guantanamo", "diritto_umanitario", "conflitti_asimmetrici"],
+      "structural_conflict": "Ginevra è stata scritta per guerre tra stati con uniformi, fronti e prigionieri. I conflitti moderni hanno civili armati, droni operati da remoto, e combattenti senza stato. Applicare Ginevra letteralmente lascia lacune enormi. Estenderla richiede nuovi trattati che nessuno vuole negoziare perché la vaghezza favorisce tutti."
+    },
+    {
+      "prompt": "Il WTO (Organizzazione Mondiale del Commercio) ha bloccato il suo meccanismo di risoluzione delle dispute dal 2019 perché gli USA bloccano la nomina dei giudici dell'Appellate Body. Il commercio globale vale 25 trilioni di dollari ma ora non ha un arbitro funzionante. UE e altri 50+ paesi hanno creato un meccanismo alternativo (MPIA) che USA e Cina non riconoscono. Il sistema commerciale multilaterale è in crisi terminale?",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["wto", "commercio", "dispute_settlement", "multilateralismo", "frammentazione"],
+      "structural_conflict": "Il WTO funzionava quando gli USA erano il maggior beneficiario. Ora che la Cina ne beneficia di più, gli USA lo sabotano. Un sistema commerciale senza arbitro funziona finché le parti collaborano volontariamente — ma la competizione USA-Cina rende la collaborazione improbabile. Il commercio globale potrebbe frammentarsi in blocchi rivali come negli anni '30."
+    },
+    {
+      "prompt": "L'uso dei droni armati solleva questioni di diritto internazionale non risolte. Gli USA hanno condotto 14.000+ attacchi con droni dal 2001 in 7 paesi, uccidendo 8.000-17.000 persone tra cui stimate 1.000-2.000 civili. I droni permettono 'targeted killings' senza dichiarazione di guerra, senza processo, e senza rischio per il paese che attacca. Questo viola la sovranità dei paesi colpiti e il diritto alla vita senza processo. Ma i target sono spesso terroristi che pianificano attacchi. Come si regola una tecnologia che rende la guerra troppo facile?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["droni", "targeted_killing", "sovranita", "diritto_vita", "guerra_facile"],
+      "structural_conflict": "I droni eliminano il costo politico della guerra (zero vittime proprie) rendendo l'uso della forza più probabile. Senza costo, non c'è deterrenza all'uso. Il diritto internazionale non ha un framework per uccisioni mirate extraterritoriali in tempo di 'pace'. La tecnologia ha superato il diritto di 20 anni."
+    },
+    {
+      "prompt": "Analizza il concetto di 'global commons' — spazi che non appartengono a nessuno stato: alto mare, atmosfera, spazio extra-atmosferico, cyberspazio, Antartide. Il Trattato Antartico (1959) e il Trattato sullo Spazio Extra-Atmosferico (1967) funzionano da decenni. Ma l'alto mare è sovrasfruttato (overfishing del 34%), l'atmosfera è inquinata, e il cyberspazio è anarchico. Perché la governance dei global commons funziona in alcuni ambiti e fallisce in altri?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["global_commons", "antartide", "alto_mare", "governance", "tragedia_commons"],
+      "structural_conflict": "I global commons dove nessuno ha interesse economico immediato (Antartide, spazio) sono governabili. Quelli dove il profitto è immediato (pesca, emissioni) subiscono la tragedia dei commons. La governance funziona dove non serve e fallisce dove serve — perché il problema non è legale ma incentivale."
+    },
+    {
+      "prompt": "Il G7 rappresenta circa il 43% del PIL mondiale (nominale, ~30% in PPP) con il 10% della popolazione. Il G20 rappresenta l'85% del PIL con il 67% della popolazione. Nessuno dei due è un'organizzazione internazionale formale — non hanno segretariato permanente, carta, o potere vincolante. Eppure prendono decisioni che influenzano il mondo. I club informali di potenze sono più efficaci delle organizzazioni formali? A che costo in termini di legittimità democratica?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["g7", "g20", "governance_informale", "legittimita", "efficacia"],
+      "structural_conflict": "L'efficacia richiede pochi attori al tavolo (G7). La legittimità richiede rappresentanza universale (ONU). I club informali sono efficaci perché escludono — ma l'esclusione mina la legittimità delle decisioni. Non esiste un formato che sia contemporaneamente efficace e rappresentativo."
+    },
+    {
+      "prompt": "Il concetto di 'state-building' occidentale ha fallito in Afghanistan (2001-2021), Iraq (2003-), Libia (2011-), e Somalia (1993-). In tutti i casi, istituzioni democratiche sono state imposte su società con strutture tribali, etniche o settarie incompatibili. Il costo totale supera i 6 trilioni di dollari. Esiste un modello di state-building che funzioni, o il concetto stesso è fondamentalmente viziato?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["state_building", "fallimenti", "democrazia_imposta", "tribalismo", "costo"],
+      "structural_conflict": "Lo state-building occidentale assume che le istituzioni democratiche siano universalmente applicabili. I fallimenti suggeriscono che le istituzioni funzionano solo se crescono organicamente dalla società. Ma 'aspettare la crescita organica' in uno stato fallito significa accettare anni di caos, terrorismo e sofferenza civile. Il dilemma è tra imposizione che fallisce e inazione che perpetua il dolore."
+    },
+    {
+      "prompt": "La migrazione climatica colpirà stimati 200 milioni di persone entro il 2050. Non esiste uno status di 'rifugiato climatico' nel diritto internazionale — la Convenzione di Ginevra del 1951 copre solo persecuzioni politiche, razziali, religiose. I paesi più responsabili del cambiamento climatico (USA, UE, Cina) sono anche quelli con le politiche migratorie più restrittive. Come si colma questo vuoto giuridico quando i responsabili non hanno interesse a farlo?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["migrazione_climatica", "rifugiato_climatico", "vuoto_giuridico", "responsabilita_storica"],
+      "structural_conflict": "Chi causa il problema non ne subisce le conseguenze dirette. Chi subisce le conseguenze non ha causato il problema. Il framework dei rifugiati non copre la causa più grande di sfollamento futuro. Creare una nuova categoria giuridica richiederebbe ai responsabili di accettare obblighi verso le vittime — obbligo che nessun paese ricco è disposto ad assumere."
+    },
+    {
+      "prompt": "Le armi autonome letali (LAWS — killer robots) possono selezionare e ingaggiare target senza intervento umano. 30+ paesi chiedono un divieto preventivo. USA, Russia, Cina e Israele — che sviluppano queste armi — si oppongono. Il diritto internazionale umanitario richiede 'distinzione' (civili vs combattenti) e 'proporzionalità' — un algoritmo può rispettare questi principi? E se un drone autonomo uccide un civile, chi è responsabile: il programmatore, il comandante, il paese, o nessuno?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["armi_autonome", "laws", "responsabilita", "diritto_umanitario", "algoritmo"],
+      "structural_conflict": "Un algoritmo potrebbe essere più preciso di un soldato stressato in combattimento — riducendo le vittime civili. Ma un algoritmo non ha coscienza, non può essere processato, e non prova rimorso. La responsabilità legale richiede un soggetto — senza soggetto responsabile, l'uccisione diventa un 'errore di sistema'. Questo è inaccettabile moralmente ma potrebbe essere preferibile statisticamente."
+    },
+    {
+      "prompt": "L'Ungheria di Orbán è membro dell'UE e della NATO ma ha smantellato l'indipendenza della magistratura, controllato i media (80% dei media nell'orbita governativa), ridotto i diritti delle minoranze, e bloccato sistematicamente decisioni UE sulla Russia e sull'Ucraina con il veto. L'UE non ha un meccanismo di espulsione. L'Articolo 7 (sospensione del diritto di voto) richiede unanimità degli altri 26 — la Polonia ha promesso di porre il veto. Come si gestisce una democrazia illiberale all'interno di un'alleanza democratica?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["ungheria", "democrazia_illiberale", "ue", "veto", "stato_diritto", "articolo_7"],
+      "structural_conflict": "L'UE è stata costruita sull'assunto che tutti i membri sarebbero rimasti democratici. Non ha strumenti per gestire il backsliding democratico. L'espulsione richiederebbe unanimità che non c'è. I fondi strutturali sono l'unica leva ma tagliarli punisce i cittadini ungheresi più del governo. L'UE è intrappolata: non può espellere, non può costringere, non può ignorare."
+    },
+    {
+      "prompt": "Il debito dei paesi in via di sviluppo ha raggiunto i 9 trilioni di dollari. 60+ paesi spendono più per il servizio del debito che per sanità e istruzione combinati. L'FMI impone condizionalità (austerity, privatizzazioni) che hanno storicamente peggiorato le condizioni di vita. La Cina, nuovo grande creditore, non partecipa ai meccanismi di ristrutturazione del debito. Come si risolve la crisi del debito del Global South quando i creditori non hanno incentivi a concedere e i debitori non hanno leva per chiedere?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["debito_sovrano", "fmi", "condizionalita", "global_south", "cina_creditore"],
+      "structural_conflict": "Il debito crea un circolo vizioso: i paesi tagliano servizi per pagare il debito, il che riduce la crescita, il che aumenta il debito relativo. L'FMI impone riforme che teoricamente funzionano ma praticamente devastano la popolazione nel breve termine. La Cina non partecipa alle ristrutturazioni perché non ha incentivi. I creditori hanno il potere e i debitori la sofferenza."
+    },
+    {
+      "prompt": "Analizza il ruolo delle ONG internazionali (Médecins Sans Frontières, Amnesty International, Human Rights Watch) nella politica internazionale. Hanno budget combinati di miliardi, influenzano l'opinione pubblica, e a volte cambiano le politiche dei governi. Ma non sono elette da nessuno, non rispondono a nessun elettorato, e la loro leadership è prevalentemente occidentale. Sono un pilastro della governance globale o un potere non democratico con agenda propria?",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["ong", "governance_globale", "legittimita", "accountability", "societa_civile"],
+      "structural_conflict": "Le ONG riempiono i vuoti che gli stati lasciano — ma nessuno le ha autorizzate a farlo. La loro legittimità viene dall'expertise e dalla missione, non dal mandato democratico. Quando un'ONG occidentale definisce le priorità dei diritti umani per l'Africa, chi le ha dato quel diritto? Ma senza le ONG, chi documenta le violazioni che gli stati nascondono?"
+    },
+    {
+      "prompt": "La Corte Penale Internazionale ha emesso mandati di arresto per leader di paesi africani (Sudan, Kenya, Uganda, Libia) ma mai per leader di grandi potenze. L'Unione Africana ha chiesto ai suoi membri di non cooperare con l'ICC. Nel 2023, l'ICC ha emesso un mandato per Putin — che ovviamente non sarà mai eseguito. L'ICC è giustizia internazionale o giustizia selettiva che si applica solo ai deboli?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "medium",
+      "tags": ["icc", "giustizia_selettiva", "africa", "putin", "impunita"],
+      "structural_conflict": "L'ICC ha giurisdizione ma non potere di enforcement. Può incriminare Putin ma non arrestarlo. Può processare leader africani perché i loro paesi cooperano o sono deboli. La giustizia che funziona solo contro i deboli non è giustizia — ma è meglio di nessuna giustizia?"
+    },
+    {
+      "prompt": "Il cyberspazio non ha governance internazionale. Non esiste un 'trattato di Ginevra digitale'. La Russia propone un trattato ONU che darebbe ai governi sovranità sulla propria internet. L'Occidente propone un 'internet libero e aperto'. La Cina ha già il Great Firewall. 20+ paesi praticano shutdown di internet durante le proteste. Come si governa uno spazio che è simultaneamente globale e soggetto a sovranità nazionali?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["governance_internet", "sovranita_digitale", "great_firewall", "internet_libero"],
+      "structural_conflict": "Un internet globale senza regole è vulnerabile a cyberattacchi e disinformazione. Un internet regolato da ogni stato diventa fragmented e censurabile. La proposta russa usa la 'sovranità' per giustificare la censura. La proposta occidentale usa la 'libertà' per giustificare la sorveglianza commerciale. Nessuna proposta è disinteressata."
+    },
+    {
+      "prompt": "L'acqua potabile sta diventando la risorsa più contesa del XXI secolo. 2.2 miliardi di persone non hanno accesso all'acqua potabile gestita in modo sicuro. Il 60% delle riserve d'acqua dolce mondiale attraversa confini internazionali. Non esiste un trattato globale vincolante sull'acqua condivisa. La Convenzione UN sui corsi d'acqua del 1997 ha solo 36 ratifiche (entrata in vigore nel 2014 dopo 17 anni). Come si previene la 'guerra dell'acqua' quando il diritto internazionale non è attrezzato e la risorsa è in diminuzione?",
+      "conflict_type": ["prediction_uncertainty", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["acqua", "risorse_idriche", "conflitti_idrici", "governance", "scarsita"],
+      "structural_conflict": "L'acqua è vita — nessuno stato può accettare di cederla. Ma i fiumi attraversano confini e chi sta a monte controlla chi sta a valle. Il diritto internazionale non ha un principio chiaro: 'uso ragionevole ed equo' è vago e ogni stato lo interpreta a proprio favore. La scarsità crescente rende i compromessi sempre più difficili."
+    },
+    {
+      "prompt": "La governance dell'intelligenza artificiale è frammentata: l'UE ha l'AI Act (regolamentazione strict), gli USA hanno un approccio volontario (executive orders), la Cina regola l'AI per controllo sociale. Non esiste un trattato internazionale sull'AI. Un'AI sviluppata in un paese senza regole può essere usata in un paese con regole strict. Un incidente con un'AI autonoma potrebbe causare danni transfrontalieri senza un framework di responsabilità. Come si governa una tecnologia globale con regolamentazioni nazionali frammentate?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["governance_ai", "ai_act", "frammentazione_regolatoria", "responsabilita_transfrontaliera"],
+      "structural_conflict": "La regolamentazione strict rallenta l'innovazione ma protegge i cittadini. La deregolamentazione accelera l'innovazione ma crea rischi. In un mercato globale, le aziende migrano dove le regole sono più lasse — creando un 'race to the bottom' regolatorio. Un trattato globale richiederebbe accordo tra USA, UE e Cina — le tre potenze che competono più ferocemente sull'AI."
+    },
+    {
+      "prompt": "Il sistema internazionale post-1945 era bipolare (USA-URSS), poi unipolare (USA), ora è in transizione verso il multipolarismo. Ma il multipolarismo è storicamente il sistema più instabile — il sistema europeo multipolare ha prodotto due guerre mondiali. Il bipolarismo della Guerra Fredda ha prodotto proxy wars ma non conflitti diretti. L'unipolarismo americano ha prodotto interventismo ma stabilità strategica. Quale sistema è 'meno peggio' e siamo condannati all'instabilità multipolare?",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["multipolarismo", "bipolarismo", "unipolarismo", "stabilita", "transizione_sistemica"],
+      "structural_conflict": "Ogni sistema ha il suo tipo di conflitto: il bipolarismo produce proxy wars, l'unipolarismo produce interventismo, il multipolarismo produce grandi guerre. La transizione tra sistemi è il momento più pericoloso — le potenze emergenti sfidano quelle in declino, e le istituzioni costruite per il sistema precedente non funzionano nel nuovo."
+    },
+    {
+      "prompt": "Il concetto di 'sovranità alimentare' versus 'sicurezza alimentare' divide il Global South. La sicurezza alimentare (WTO, World Bank) dice: importa cibo dal mercato globale se è più economico. La sovranità alimentare dice: ogni paese deve poter produrre il proprio cibo anche se costa di più. L'Ucraina ha dimostrato che dipendere dalle importazioni in tempo di guerra è catastrofico — 50+ paesi dipendevano dal grano ucraino-russo. Chi ha ragione?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["sovranita_alimentare", "sicurezza_alimentare", "wto", "dipendenza", "ucraina"],
+      "structural_conflict": "L'efficienza economica dice specializzazione e commercio. La resilienza strategica dice autosufficienza. In tempo di pace l'efficienza vince. In tempo di crisi l'autosufficienza vince. Nessun paese sa in anticipo se il futuro sarà di pace o di crisi — la scelta è una scommessa."
+    },
+    {
+      "prompt": "Analizza il fenomeno del 'democratic backsliding' globale. Freedom House riporta 19 anni consecutivi di declino della libertà globale (al rapporto 2025). Turchia, Ungheria, India, Brasile (sotto Bolsonaro), Philippines (sotto Duterte) — tutte democrazie che hanno arretrato. Le istituzioni internazionali (ONU, UE) non hanno strumenti efficaci per prevenirlo. La democrazia liberale è in ritirata strutturale o è un ciclo temporaneo?",
+      "conflict_type": ["prediction_uncertainty", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["democratic_backsliding", "freedom_house", "democrazia_liberale", "declino", "autoritarismo"],
+      "structural_conflict": "Le democrazie possono votare per smantellare se stesse — e lo fanno sempre più spesso. Le istituzioni democratiche sono state costruite per proteggere la democrazia dall'esterno, non dall'interno. Un leader eletto democraticamente che smantella la democrazia è il paradosso che il sistema non sa risolvere."
+    },
+    {
+      "prompt": "Lo spazio extra-atmosferico sta diventando militarizzato. USA, Cina e Russia hanno testato armi anti-satellite (ASAT). Ci sono 12.000+ satelliti operativi — molti critici per GPS, comunicazioni, intelligence. Un attacco ai satelliti di una potenza potrebbe accecare le sue forze militari e la sua economia in poche ore. Il Trattato sullo Spazio del 1967 vieta le armi nucleari nello spazio ma non le armi convenzionali. Come si previene una corsa agli armamenti spaziali quando il framework legale ha 58 anni e non copre le tecnologie attuali?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["spazio", "militarizzazione", "asat", "trattato_spazio", "corsa_armamenti"],
+      "structural_conflict": "Distruggere un satellite è facile e economico; sostituirlo è difficile e costoso. Questa asimmetria favorisce l'aggressore. Ma un test ASAT crea detriti che minacciano i satelliti di tutti, inclusi quelli dell'aggressore. La deterrenza nel caso spaziale è la distruzione reciproca dell'ambiente operativo — una MAD dei detriti."
+    },
+    {
+      "prompt": "Le Nazioni Unite hanno 193 stati membri ma il loro contributo al bilancio è profondamente asimmetrico: gli USA pagano il 22%, il Giappone il 8.5%, la Germania il 6.1%, mentre 130+ paesi pagano meno dello 0.1% ciascuno. Il maggior contribuente (USA) minaccia regolarmente di ridurre i fondi per influenzare le decisioni. Un'organizzazione 'di tutti' può funzionare quando è finanziata da pochi? La dipendenza finanziaria compromette l'indipendenza decisionale?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["onu", "finanziamento", "indipendenza", "asimmetria", "influenza"],
+      "structural_conflict": "L'universalità dell'ONU richiede finanziamento universale, ma la capacità di pagare è concentrata. Chi paga di più pretende più voce — ma un'organizzazione dove chi paga comanda non è democratica. Chi paga poco non ha voce ma subisce le decisioni. L'ONU è intrappolata tra legittimità democratica e realtà finanziaria."
+    },
+    {
+      "prompt": "Il principio di 'non-refoulement' vieta di rimandare un rifugiato in un paese dove rischia persecuzione. Ma 15+ paesi UE hanno firmato accordi con paesi terzi (Turchia, Libia, Tunisia, Rwanda) per bloccare i migranti prima che raggiungano il territorio europeo — aggirando de facto il non-refoulement senza violarlo formalmente. L'esternalizzazione delle frontiere è una violazione dello spirito del diritto internazionale mascherata da conformità tecnica?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["non_refoulement", "esternalizzazione_frontiere", "rifugiati", "diritto_asilo", "ue"],
+      "structural_conflict": "Il non-refoulement si applica a chi è sul tuo territorio. Impedire l'arrivo sul territorio evita l'obbligo legale senza violare la lettera della legge. Ma lo spirito della protezione è svuotato. I paesi terzi dove i migranti vengono bloccati (Libia) praticano torture e schiavitù documentate. La conformità legale e la conformità morale divergono radicalmente."
+    },
+    {
+      "prompt": "Il concetto di 'minilateralismo' — piccole coalizioni di volenterosi che agiscono dove il multilateralismo fallisce — sta crescendo: AUKUS (sicurezza indo-pacifico), Quad (USA-Giappone-India-Australia), I2U2 (India-Israele-UAE-USA). Queste coalizioni sono più agili dell'ONU ma escludono la maggior parte del mondo. Il minilateralismo è la soluzione pragmatica alla paralisi multilaterale o è il suo becchino, frammentando l'ordine internazionale in club esclusivi?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["minilateralismo", "aukus", "quad", "coalizioni", "frammentazione", "multilateralismo"],
+      "structural_conflict": "Il minilateralismo funziona perché è piccolo — ma è piccolo perché esclude chi non è d'accordo. Le coalizioni risolvono problemi specifici ma creano un mondo di club sovrapposti senza governance comune. Ogni coalizione è una risposta al fallimento del multilateralismo che ne accelera il declino."
+    }
+  ]
+}

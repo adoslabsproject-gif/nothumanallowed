@@ -1,0 +1,609 @@
+{
+  "domain": "decision_making",
+  "description": "Teoria delle decisioni, bias cognitivi, decision under uncertainty, group decision making, nudging, risk analysis",
+  "prompts": [
+    {
+      "prompt": "Un terremoto ha colpito una città. Hai 3 squadre di soccorso. I sensori rilevano segnali di vita in 5 edifici crollati. Edificio A: scuola, possibili 40 bambini, struttura molto instabile, rischio crollo per i soccorritori. Edificio B: ospedale, possibili 15 pazienti, accesso relativamente sicuro. Edificio C: condominio residenziale, segnali deboli, forse 100 persone ma i sensori potrebbero essere inaffidabili. Edifici D ed E: segnali ambigui. Come allochi le 3 squadre, in quale ordine, e come gestisci l'incertezza sui dati dei sensori?",
+      "conflict_type": [
+        "resource_allocation",
+        "diagnosis_ambiguity",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "triage_catastrofe",
+        "incertezza_sensoriale",
+        "rischio_soccorritori",
+        "allocazione_risorse"
+      ],
+      "gold": true,
+      "structural_conflict": "L'edificio A ha il maggior numero di bambini ma il rischio più alto per i soccorritori — mandare una squadra potrebbe significare perdere sia i soccorritori sia i bambini. L'edificio C ha potenzialmente il maggior numero di persone ma i sensori sono inaffidabili — investire lì potrebbe essere uno spreco di risorse critiche. L'edificio B è la scelta 'sicura' ma con meno vite in gioco. Il tempo è il vincolo più duro: ogni minuto di deliberazione è un minuto di mancato soccorso. L'incertezza non è riducibile nel tempo decisionale disponibile."
+    },
+    {
+      "prompt": "Cos'è il bias di conferma e come influenza le decisioni quotidiane? Fai 3 esempi concreti di situazioni in cui il bias di conferma porta a decisioni subottimali nel contesto lavorativo.",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "bias_conferma",
+        "decisioni_quotidiane",
+        "contesto_lavorativo"
+      ],
+      "structural_conflict": "Nessun conflitto profondo — domanda definitoria. Tuttavia riconoscere il bias di conferma non lo elimina: i soggetti informati del bias mostrano solo una riduzione del 12% nei suoi effetti."
+    },
+    {
+      "prompt": "Che cos'è l'euristica della disponibilità e perché ci porta a sovrastimare la probabilità di eventi drammatici (incidenti aerei, attacchi terroristici) e sottostimare quella di eventi probabili (incidenti stradali, malattie cardiovascolari)?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "euristica_disponibilita",
+        "percezione_rischio",
+        "media"
+      ],
+      "structural_conflict": "L'euristica è adattiva in ambienti dove la frequenza percepita correla con la frequenza reale. Nell'era dei mass media, la correlazione è rotta: la salienza mediatica sostituisce la frequenza reale come proxy. Correggere l'euristica richiede pensiero lento (System 2) ma le decisioni quotidiane usano il pensiero veloce (System 1)."
+    },
+    {
+      "prompt": "Spiega la differenza tra decisione sotto rischio e decisione sotto incertezza. Perché la distinzione è cruciale quando un imprenditore deve decidere se investire 200.000€ in un mercato che non conosce?",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "rischio_vs_incertezza",
+        "knight",
+        "investimento"
+      ],
+      "structural_conflict": "Sotto rischio le probabilità sono note e calcolabili. Sotto incertezza (knightiana) non lo sono — e nessun modello può generarle. L'imprenditore che usa modelli probabilistici per decisioni sotto incertezza confonde i due regimi e prende decisioni falsamente precise."
+    },
+    {
+      "prompt": "Cos'è il framing effect? Se ti dicono che un'operazione ha il 90% di sopravvivenza oppure il 10% di mortalità, la tua decisione cambia anche se l'informazione è identica. Spiega perché e quali conseguenze ha per la comunicazione medico-paziente.",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "framing",
+        "kahneman_tversky",
+        "comunicazione_medica"
+      ],
+      "structural_conflict": "Il framing dimostra che le preferenze non sono stabili ma costruite dalla presentazione. Questo invalida il modello dell'agente razionale su cui si basa il consenso informato. Se il modo in cui il medico presenta le opzioni determina la scelta del paziente, il consenso è 'informato' o 'manipolato'?"
+    },
+    {
+      "prompt": "Cos'è il sunk cost fallacy? Un'azienda ha già speso 2 milioni in un progetto software che non funziona. Il CTO dice 'abbiamo già investito troppo per fermarci'. Perché questo ragionamento è fallace e qual è il framework corretto per decidere?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "sunk_cost",
+        "costo_irrecuperabile",
+        "decisione_continuazione"
+      ],
+      "structural_conflict": "I costi irrecuperabili sono irrilevanti per le decisioni future — contano solo i costi e benefici marginali. Ma abbandonare un progetto da 2M richiede di ammettere un errore, e l'avversione alla perdita è circa 2x più forte del piacere per un guadagno equivalente (lambda ≈ 2.25 in Tversky & Kahneman 1991). La razionalità economica confligge con la psicologia dell'ammissione di errore."
+    },
+    {
+      "prompt": "Cos'è il paradosso di Allais? Nella formulazione classica, le persone preferiscono la certezza di 1 milione (opzione A) al gamble con il 10% di vincere 5 milioni, l'89% di vincere 1 milione e l'1% di non vincere nulla (opzione B) — anche se il valore atteso di B è superiore. Ma nella seconda coppia di scelte, le stesse persone preferiscono il 10% di 5 milioni al 11% di 1 milione, violando l'assioma di indipendenza. Perché?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "paradosso_allais",
+        "avversione_rischio",
+        "valore_atteso"
+      ],
+      "structural_conflict": "L'utilità attesa assume linearità delle preferenze rispetto alle probabilità (assioma di indipendenza). Ma le persone sovrapesano la certezza (certainty effect) e trattano la riduzione da 100% a 99% come qualitativamente diversa dalla riduzione da 11% a 10%. Il paradosso dimostra che la teoria dell'utilità attesa è descrittivamente inadeguata — le persone non rispettano l'indipendenza e non è chiaro che dovrebbero."
+    },
+    {
+      "prompt": "Spiega la differenza tra un nudge e una manipolazione. Un supermercato mette la frutta all'altezza degli occhi e le patatine in basso. È un nudge legittimo o un'interferenza nella libertà di scelta?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "nudge",
+        "paternalismo_libertario",
+        "scelta_alimentare"
+      ],
+      "structural_conflict": "Thaler e Sunstein definiscono il nudge come un intervento che non limita le opzioni. Ma 'non limitare' non significa 'non influenzare'. L'architettura delle scelte è sempre una scelta di qualcuno — l'alternativa al nudge non è neutralità ma un'altra architettura. La questione non è SE influenzare ma CHI ha il diritto di farlo e verso quale fine."
+    },
+    {
+      "prompt": "Un CEO deve decidere se acquisire un competitor per 500M€. Il team M&A è favorevole — ha investito 6 mesi di due diligence e ha un incentivo sul deal. Il CFO è contrario — il debito salirebbe a 3.2x EBITDA, sopra la soglia di sicurezza di 2.5x. Il CTO è neutrale — la tecnologia del competitor è buona ma duplica il 60% della loro. Il CEO sa che il 70% delle acquisizioni distrugge valore per gli azionisti. Come separa il segnale dal rumore decisionale quando ogni stakeholder ha un bias strutturale? Quale framework usa per decidere?",
+      "conflict_type": [
+        "strategy_choice",
+        "diagnosis_ambiguity"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "acquisizioni",
+        "sunk_cost",
+        "conflitto_interessi",
+        "decisione_strategica"
+      ],
+      "structural_conflict": "Il team M&A ha un incentivo economico diretto (bonus sul deal). Il CFO ha un bias conservativo strutturale. Il CTO valuta solo la dimensione tecnologica. Il CEO deve decidere integrando input da fonti tutte sistematicamente distorte. Il 70% di fallimento è una base rate che dovrebbe pesare enormemente ma verrà ignorata per ottimismo."
+    },
+    {
+      "prompt": "Un comitato di 7 persone deve decidere dove costruire un nuovo ospedale. 3 membri preferiscono la zona nord (più popolata), 2 la zona est (più povera e con meno servizi), 2 la zona centro (più accessibile). Se votano, vince il nord. Se usano un criterio utilitarista (salute per euro speso), vince l'est. Se usano un criterio di accessibilità (tempi di percorrenza), vince il centro. La scelta del metodo decisionale predetermina il risultato. Chi decide il metodo, e su quale base?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "decisione_collettiva",
+        "metodo_decisionale",
+        "ospedale",
+        "criteri_multipli"
+      ],
+      "structural_conflict": "Ogni metodo decisionale (maggioranza, utilitarismo, accessibilità) produce un risultato diverso. La scelta del metodo è essa stessa una decisione — ma non esiste un meta-metodo per scegliere il metodo. Chi propone 'votiamo' favorisce chi ha la maggioranza. Chi propone 'analizziamo' favorisce chi controlla i criteri dell'analisi. La neutralità procedurale è impossibile."
+    },
+    {
+      "prompt": "Un manager deve scegliere tra promuovere il dipendente A (performance eccellente, 15 anni di anzianità, basso rischio) e il dipendente B (performance buona, 3 anni di anzianità, alto potenziale ma track record limitato). I dati storici dell'azienda mostrano che il 78% delle promozioni 'sicure' (tipo A) non genera miglioramenti dopo la promozione, mentre il 45% delle promozioni 'rischiose' (tipo B) genera salti di performance significativi. Come strutturi la decisione per evitare sia l'avversione al rischio sia l'eccesso di ottimismo?",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "promozione",
+        "avversione_rischio",
+        "potenziale_vs_track_record"
+      ],
+      "structural_conflict": "Promuovere A è la scelta difendibile ex post (se fallisce, 'chi poteva saperlo'). Promuovere B è la scelta difendibile ex ante (base rate migliore). Il manager razionale sceglie B ma il manager politicamente accorto sceglie A — perché il costo reputazionale di un fallimento visibile supera il beneficio di un successo atteso."
+    },
+    {
+      "prompt": "Un'azienda farmaceutica ha due farmaci in pipeline. Farmaco X: probabilità di approvazione 75%, mercato stimato 200M€/anno, investimento necessario 80M€. Farmaco Y: probabilità di approvazione 25%, mercato stimato 2 miliardi/anno, investimento necessario 300M€. Il budget R&D è di 350M€. Come allochi il budget e quale framework decisionale usi? Considera che il valore atteso di Y (500M€) è superiore a X (150M€) ma la varianza è enormemente diversa e l'azienda non può sopportare una perdita di 300M€.",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "allocazione_R&D",
+        "valore_atteso_vs_varianza",
+        "ruin_risk",
+        "farmaceutica"
+      ],
+      "structural_conflict": "Il valore atteso dice Y. Ma il criterio di Kelly e la ruin theory dicono: non scommettere il 86% del budget su un evento con il 75% di probabilità di fallimento. La varianza conta quanto la media quando la perdita potrebbe essere terminale. Il framework del valore atteso assume che il decisore possa giocare infinite volte — l'azienda ha una sola chance."
+    },
+    {
+      "prompt": "Un giudice deve decidere se concedere la libertà condizionale a un detenuto. Un algoritmo predittivo dice che il rischio di recidiva è del 32%. Ma il giudice sa che: l'algoritmo ha un tasso di falsi positivi del 18% per i detenuti neri (vs 8% per i bianchi), il detenuto ha completato tutti i programmi riabilitativi, e la vittima del reato ha scritto una lettera contraria alla scarcerazione. Il giudice deve usare l'algoritmo come dato consultivo, ignorarlo, o è obbligato a seguirlo? Come si integra predizione algoritmica, valutazione qualitativa e dimensione umana in una decisione ad alta posta in gioco?",
+      "conflict_type": [
+        "strategy_choice",
+        "diagnosis_ambiguity",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "giustizia_predittiva",
+        "bias_algoritmico",
+        "discrezionalita_giudiziaria",
+        "recidiva"
+      ],
+      "structural_conflict": "L'algoritmo è statisticamente migliore del giudice medio ma sistematicamente peggiore per alcune categorie. Il giudice che lo ignora perde informazione. Il giudice che lo segue delega una decisione umana a una macchina con bias noti. La lettera della vittima è emotivamente potente ma giuridicamente irrilevante per la prognosi di recidiva. Ogni framework decisionale produce un risultato diverso."
+    },
+    {
+      "prompt": "Il governo deve decidere tra 3 strategie energetiche per i prossimi 20 anni. Strategia A: nucleare — costo 45 miliardi, emissioni quasi zero, ma rischio di incidente grave stimato a 1 su 100.000/anno per reattore, e problema stoccaggio scorie irrisolto. Strategia B: rinnovabili + storage — costo 62 miliardi, emissioni basse, ma dipendenza da litio cinese per le batterie e intermittenza non ancora risolta. Strategia C: gas naturale come transizione — costo 28 miliardi, emissioni moderate, dipendenza dalla Russia ridotta ma non eliminata. I modelli climatici dicono che C non raggiunge gli obiettivi 2050. I modelli finanziari dicono che B supera il budget. I modelli di rischio dicono che A ha code catastrofiche. Come si decide quando ogni modello è ottimizzato per una sola dimensione?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "politica_energetica",
+        "nucleare_vs_rinnovabili",
+        "modelli_conflittuali",
+        "rischio_catastrofico"
+      ],
+      "structural_conflict": "Ogni strategia è ottimale secondo un singolo criterio e sub-ottimale secondo gli altri. I modelli non sono comparabili: il rischio nucleare è una coda fat-tail, il costo delle rinnovabili è un'incertezza parametrica, la dipendenza dal gas è un rischio geopolitico. Non esiste una metrica comune per convertire 'probabilità di meltdown' in 'miliardi di costo' in 'tonnellate di CO2'. La decisione è irriducibilmente politica."
+    },
+    {
+      "prompt": "Un team di 12 persone deve prendere una decisione strategica. Il leader chiede il parere a ciascuno in ordine di anzianità (il più senior parla per primo). I dati sulla dinamica di gruppo mostrano che l'80% dei membri successivi al primo speaker si ancora alla prima opinione espressa (effetto ancoraggio sociale). In questo caso il senior è anche quello con meno dati aggiornati. Come si ristruttura il processo decisionale per ridurre l'ancoraggio senza offendere il senior e senza rallentare la decisione?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "ancoraggio_sociale",
+        "decisione_gruppo",
+        "gerarchia",
+        "processo_decisionale"
+      ],
+      "structural_conflict": "L'ordine di parola è un'architettura decisionale con effetti misurabili. Invertirlo (il junior parla per primo) riduce l'ancoraggio ma viola la norma sociale di deferenza. Il voto segreto elimina l'ancoraggio ma elimina anche la deliberazione. La tecnica Delphi (scritto + anonimo) è efficace ma lenta. Ogni soluzione al bias introduce un costo procedurale o sociale."
+    },
+    {
+      "prompt": "Un investitore ha 100.000€ da allocare. Il suo consulente propone 60% azionario e 40% obbligazionario. L'investitore ha appena visto un documentario sulla crisi del 2008 (euristica della disponibilità) e vuole 100% obbligazionario. I dati storici su 100 anni mostrano che il portafoglio 60/40 ha rendimento medio annuo del 8.2% con drawdown massimo del -35%, mentre il 100% obbligazionario ha rendimento del 4.1% con drawdown massimo del -12%. L'investitore ha 30 anni davanti e non ha bisogno del capitale per 15 anni. Come deve agire il consulente: rispettare la preferenza del cliente (autonomia) o indirizzarlo verso la scelta statisticamente migliore (competenza)?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "finanza_personale",
+        "autonomia_vs_competenza",
+        "bias_disponibilita",
+        "consulenza"
+      ],
+      "structural_conflict": "Il consulente sa che la paura del cliente è irrazionale dato l'orizzonte temporale. Ma 'correggere' l'irrazionalità del cliente è paternalistico e viola il principio di autonomia. Se il mercato crolla del 35% e il cliente si era fidato del consulente, la fiducia si distrugge anche se la scelta era statisticamente corretta. L'esperienza emotiva del drawdown non è riducibile a una percentuale."
+    },
+    {
+      "prompt": "Un ospedale deve scegliere tra due macchinari diagnostici. Macchinario A: sensibilità 95%, specificità 80%, costo 800.000€. Macchinario B: sensibilità 85%, specificità 95%, costo 600.000€. Per una malattia con prevalenza del 2%. Calcola il valore predittivo positivo e negativo di entrambi e spiega quale scegli e perché. Considera che un falso positivo costa 5.000€ in esami di approfondimento e ansia, mentre un falso negativo costa potenzialmente la vita del paziente.",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "diagnostica",
+        "sensibilita_specificita",
+        "bayes",
+        "costi_errore_asimmetrici"
+      ],
+      "structural_conflict": "Con prevalenza 2%, anche il macchinario migliore produce più falsi positivi che veri positivi. A ha VPP ~9% (91% dei positivi è falso), B ha VPP ~26% (74% è falso). Ma A manca meno malati veri. Il costo degli errori è radicalmente asimmetrico: un falso negativo può uccidere, un falso positivo costa 5.000€ e ansia. La scelta dipende da quanto valore si assegna a una vita rispetto a migliaia di esami inutili."
+    },
+    {
+      "prompt": "Un comune ha avuto 3 alluvioni in 10 anni. Il costo medio dei danni è 15 milioni per alluvione. Un piano di difesa idrogeologica costerebbe 35 milioni ma ridurrebbe i danni del 80%. I cittadini sono contrari: 'l'ultima alluvione è stata 2 anni fa, non ne avremo un'altra per un po''. Questo ragionamento è un esempio della gambler's fallacy — le alluvioni non sono meno probabili perché ce n'è stata una recente. Come si comunica il rischio a una popolazione che ragiona intuitivamente e non probabilisticamente?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "gambler_fallacy",
+        "comunicazione_rischio",
+        "difesa_idrogeologica",
+        "prevenzione"
+      ],
+      "structural_conflict": "Il valore atteso dice: 35M di investimento vs 45M di danni attesi in 10 anni (3 alluvioni × 15M). Ma il beneficio è invisibile (danni evitati) mentre il costo è visibile e immediato (35M di tasse). La gambler's fallacy rende il rischio percepito inversamente proporzionale alla sua frequenza recente. Comunicare probabilità non funziona perché il cervello non processa probabilità — processa narrative."
+    },
+    {
+      "prompt": "Un'azienda tech ha 3 progetti in fase avanzata e deve cancellarne 1 per taglio budget. Progetto Alpha: AI generativa, investiti 4M, mancano 2M per il lancio, mercato potenziale 50M/anno ma 8 competitor. Progetto Beta: cybersecurity, investiti 1.5M, mancano 3M, mercato potenziale 30M/anno ma 2 competitor. Progetto Gamma: IoT industriale, investiti 5M, mancano 1M, mercato potenziale 20M/anno e 0 competitor. Il CEO è emotivamente legato a Gamma (lo ha proposto lui). Il CTO sponsorizza Alpha. Il sales team vuole Beta perché ha già 3 clienti in pipeline. Quale progetto cancelli e come neutralizzi i bias degli stakeholder?",
+      "conflict_type": [
+        "strategy_choice",
+        "diagnosis_ambiguity"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "portfolio_decisionale",
+        "sunk_cost",
+        "bias_stakeholder",
+        "cancellazione_progetto"
+      ],
+      "structural_conflict": "I costi irrecuperabili (4M, 1.5M, 5M) non dovrebbero pesare ma pesano enormemente. Gamma ha il costo residuo più basso ma il mercato più piccolo. Alpha ha il mercato più grande ma la competizione più intensa. Beta ha il miglior rapporto competizione/potenziale ma il costo residuo più alto. La scelta 'razionale' (cancellare Gamma) è la più politicamente difficile perché il CEO l'ha proposto."
+    },
+    {
+      "prompt": "Una startup ha 18 mesi di runway. Il fondatore deve scegliere tra: (A) pivot aggressivo verso un mercato adiacente — il 22% dei pivot a questo stadio ha successo; (B) raddoppiare sul prodotto attuale — il mercato è piccolo ma i primi 50 clienti hanno NPS 78; (C) vendere a un acquirente strategico per 3M — il fondatore ha investito 4 anni della sua vita. I dati mostrano che le startup che non pivotano al mese 18 hanno il 6% di probabilità di raggiungere Series A. Ma le startup con NPS sopra 70 hanno il 34%. Quali numeri contano di più e come eviti che l'identità del fondatore (4 anni investiti) distorca la decisione?",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "startup",
+        "pivot",
+        "runway",
+        "identita_fondatore"
+      ],
+      "structural_conflict": "Il 6% base rate dice 'pivota o vendi'. Il 34% condizionato al NPS dice 'resta'. I due numeri sono in conflitto perché condizionano su variabili diverse. I 4 anni del fondatore sono un sunk cost ma anche un segnale di perseveranza — e nel mondo startup la perseveranza è narrata come virtù. Vendere a 3M è 'perdere' anche se è la scelta che preserva valore certo. L'identità personale è indissociabile dalla decisione strategica."
+    },
+    {
+      "prompt": "Un consiglio regionale deve allocare 50 milioni di fondi europei tra 4 settori. Turismo: ogni milione genera 12 posti di lavoro a breve termine ma stagionali. Innovazione: ogni milione genera 3 posti a breve ma 15 a 10 anni. Sanità: non genera posti ma riduce costi di 1.8M per milione investito a 5 anni. Agricoltura: genera 8 posti e mantiene il territorio ma ha bisogno di sussidio permanente. I politici vogliono risultati prima delle elezioni (2 anni). Gli economisti vogliono il ROI a 10 anni. I cittadini vogliono sanità. Come si decide quando l'orizzonte temporale è il fattore discriminante e ogni stakeholder usa un orizzonte diverso?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "fondi_europei",
+        "orizzonte_temporale",
+        "allocazione_pubblica",
+        "ciclo_elettorale"
+      ],
+      "structural_conflict": "Il ciclo elettorale (2 anni) e il ciclo economico (10 anni) sono strutturalmente incompatibili. Il politico che investe in innovazione perde le elezioni prima di vederne i frutti. Il politico che investe in turismo vince le elezioni ma non ha creato valore duraturo. La sanità non ha appeal elettorale ma ha il miglior rapporto costo/beneficio. L'orizzonte temporale non è una variabile tecnica ma il prodotto di incentivi istituzionali."
+    },
+    {
+      "prompt": "Un project manager deve stimare i tempi di un progetto software. Il suo team dice 6 mesi. I dati storici dell'azienda mostrano che i progetti simili hanno richiesto in media 11 mesi. La ricerca sulla planning fallacy (Buehler, Griffin & Ross 1994) mostra che circa il 70% dei progetti supera le stime iniziali. Il PM deve presentare la stima al cliente. Se dice 6 mesi, probabilmente non rispetterà la deadline. Se dice 11 mesi, il cliente potrebbe scegliere un competitor. Se dice 8 mesi (compromesso), non è basato su alcun dato. Come si costruisce una stima onesta quando l'onestà ha un costo competitivo?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "planning_fallacy",
+        "stima_temporale",
+        "onesta_vs_competitivita"
+      ],
+      "structural_conflict": "La planning fallacy è uno dei bias più robusti e resistenti alla correzione. L'inside view (6 mesi) è ottimistica. L'outside view (11 mesi) è realistica ma commercialmente svantaggiosa. Il mercato premia chi promette poco tempo e consegna in ritardo, non chi promette realisticamente. L'incentivo strutturale è a mentire. La reference class forecasting (Kahneman) è il metodo corretto ma nessun PM lo usa perché le base rate dicono cose scomode."
+    },
+    {
+      "prompt": "Un'agenzia di rating deve decidere il giudizio su un'azienda. I fondamentali finanziari indicano BBB (investment grade). Ma l'analista ha informazioni qualitative: il CEO è sotto indagine, 3 dirigenti senior sono usciti in 6 mesi, e un whistleblower ha segnalato irregolarità contabili. Le informazioni qualitative non sono ancora pubbliche e non sono verificate. Se l'agenzia declassa a BB (junk) sulla base di voci, potrebbe causare una crisi di liquidità auto-avverante. Se mantiene BBB e le irregolarità si confermano, la sua credibilità è distrutta. Come decide in condizioni di informazione asimmetrica e potenziale profezia auto-avverante?",
+      "conflict_type": [
+        "strategy_choice",
+        "diagnosis_ambiguity",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "rating",
+        "informazione_asimmetrica",
+        "profezia_autoavverante",
+        "credibilita"
+      ],
+      "structural_conflict": "Il declassamento può causare ciò che pretende di segnalare (profezia auto-avverante). Ma non declassare e poi essere smentiti distrugge la fiducia nel sistema dei rating. Le informazioni qualitative sono 'soft' ma spesso più predittive dei fondamentali. L'agenzia ha responsabilità verso gli investitori (trasparenza) e verso l'azienda (non causare danni ingiustificati). Queste responsabilità sono strutturalmente incompatibili."
+    },
+    {
+      "prompt": "Un medico di base deve decidere se prescrivere uno screening oncologico a un paziente di 52 anni senza fattori di rischio. Le linee guida dicono di iniziare a 50, ma le meta-analisi recenti mostrano che lo screening genera il 30% di sovradiagnosi (tumori che non avrebbero mai causato sintomi), con conseguenti interventi chirurgici non necessari nel 12% dei casi. Il paziente chiede 'dottore, mi prescrive tutto quello che c'è — voglio essere sicuro'. Come si gestisce la domanda di 'sicurezza' quando la sicurezza percepita (più esami) confligge con la sicurezza reale (meno sovradiagnosi)?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "screening",
+        "sovradiagnosi",
+        "medicina_difensiva",
+        "sicurezza_percepita"
+      ],
+      "structural_conflict": "Il paziente equivoca 'più esami = più sicurezza'. Il medico sa che non è vero ma dire 'meno esami' suona come negligenza. Se non prescrive lo screening e il paziente sviluppa un tumore, il medico è vulnerabile legalmente. Se lo prescrive e il paziente subisce un intervento inutile, è 'pratica standard'. La medicina difensiva incentiva la sovradiagnosi. L'incentivo del medico è allineato con l'errore del paziente."
+    },
+    {
+      "prompt": "Un direttore delle risorse umane deve scegliere il format dei colloqui di selezione. I dati della ricerca mostrano che: i colloqui non strutturati predicono la performance lavorativa con correlazione r=0.38, i colloqui strutturati con r=0.51, e i work sample test con r=0.54. Ma il 92% dei manager vuole i colloqui non strutturati perché 'io capisco le persone'. Il HR sa che il colloquio non strutturato è un predittore debole rispetto alle alternative strutturate, ma il manager lo ritiene il suo strumento migliore. Come imponi una procedura evidence-based quando chi la deve usare è convinto del contrario?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "selezione_personale",
+        "colloquio_strutturato",
+        "overconfidence",
+        "evidence_based"
+      ],
+      "structural_conflict": "L'overconfidence dei manager nella propria capacità di 'leggere' le persone è uno dei bias più robusti — nessuna formazione lo riduce significativamente. Il colloquio non strutturato serve al manager per sentirsi in controllo, non per predire la performance. Obbligare il formato strutturato è efficace ma alienante. Il compromesso (strutturato + 15 min liberi) ha base scientifica debole ma viabilità politica alta."
+    },
+    {
+      "prompt": "Sei il sindaco di una città colpita da un'epidemia. Hai dati incompleti: i casi confermati sono 340 ma il tasso di testing è solo del 15%, quindi i casi reali potrebbero essere tra 1.500 e 5.000. L'ospedale ha 200 posti letto e ne occupa già 160. Due epidemiologi ti danno previsioni divergenti: il primo prevede il picco tra 2 settimane con 800 casi simultanei, il secondo prevede un plateau a 400 casi. I dati non permettono di distinguere i due scenari. Devi decidere ORA se costruire un ospedale da campo (costo 2.5M€, pronto in 10 giorni) o no. Come decidi sotto ambiguità radicale?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "epidemia",
+        "decisione_sotto_ambiguita",
+        "ospedale_campo",
+        "previsioni_divergenti"
+      ],
+      "structural_conflict": "Due esperti competenti con modelli diversi producono previsioni incompatibili. Non è un caso di 'uno ha ragione e l'altro no' — l'incertezza sui parametri è strutturale. L'ospedale da campo è uno spreco se il plateau è a 400 e una salvezza se il picco è a 800. Ma il costo dell'errore è asimmetrico: sprecare 2.5M vs collasso ospedaliero. Il minimax (minimizzare la perdita massima) dice di costruire. Ma il minimax ignora le probabilità."
+    },
+    {
+      "prompt": "Un'azienda di e-commerce scopre che il suo algoritmo di pricing dinamico ha iniziato ad alzare i prezzi del 18% nelle zone con meno competitor, che coincidono con le zone a più basso reddito. Non c'è discriminazione intenzionale — l'algoritmo massimizza il profitto e le zone senza competitor hanno domanda meno elastica. Ma l'effetto è che i poveri pagano di più. Il comitato etico dice di aggiungere un 'cap' al prezzo. Il CFO dice che il cap costerebbe 3.2M/anno di mancato ricavo. Il legale dice che non c'è violazione di legge. Come si bilancia ottimizzazione del profitto, equità e responsabilità sociale quando l'algoritmo non 'discrimina' ma produce effetti discriminatori?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "pricing_dinamico",
+        "discriminazione_algoritmica",
+        "equita",
+        "profitto_vs_etica"
+      ],
+      "structural_conflict": "L'algoritmo fa esattamente ciò per cui è stato progettato — massimizzare il profitto. L'effetto discriminatorio è un'esternalità non intenzionale ma prevedibile. Il cap è una soluzione tecnica a un problema strutturale: la distribuzione ineguale della concorrenza rispecchia la distribuzione ineguale del reddito. Aggiungere vincoli etici all'algoritmo è un intervento redistributivo mascherato da 'correzione tecnica'."
+    },
+    {
+      "prompt": "Un team di ricercatori conduce un trial clinico su un nuovo farmaco. A metà del trial (300 pazienti su 600 previsti), i risultati intermedi mostrano un effetto significativo (p=0.02) nel ridurre la mortalità del 23%. Il comitato etico può fermare il trial per dare il farmaco a tutti. Ma la significatività a metà trial ha una probabilità del 30% di non essere confermata nel trial completo (regression to the mean, multiple testing). Se fermano e il farmaco non funziona, hanno dato false speranze e contaminato le evidenze. Se continuano e il farmaco funziona, 150 pazienti nel gruppo placebo muoiono inutilmente. Come si decide?",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "trial_clinico",
+        "analisi_intermedia",
+        "etica_ricerca",
+        "regressione_media"
+      ],
+      "structural_conflict": "Fermare il trial salva vite ORA ma potrebbe distruggere l'evidenza che salverebbe milioni di vite dopo. Continuare sacrifica potenzialmente 150 persone per certezza statistica. Il p=0.02 intermedio non è robusto — le stopping rules esistono proprio per questo. Ma dire a un paziente 'il farmaco sembra funzionare ma devi restare nel gruppo placebo per la scienza' è eticamente insostenibile."
+    },
+    {
+      "prompt": "Un'università deve scegliere il sistema di ammissione. Opzione A: test standardizzato — predice i voti del primo anno con r=0.42, è uguale per tutti ma sfavorisce chi non ha accesso a corsi di preparazione (il 60% dei quintili bassi). Opzione B: portfolio + colloquio — predice con r=0.31, è più equo ma soggettivo e il bias dell'intervistatore è documentato. Opzione C: lotteria tra i candidati sopra una soglia minima — elimina tutti i bias ma anche il segnale. I dati di Harvard mostrano che la lotteria (opzione C) produce laureati con performance indistinguibile staticamente dai selezionati con SAT. Vale la pena selezionare se la selezione non predice?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "ammissione_universitaria",
+        "test_standardizzato",
+        "lotteria",
+        "equita_vs_merito"
+      ],
+      "structural_conflict": "Se la lotteria produce risultati indistinguibili dalla selezione, la selezione ha un costo (iniquità) senza beneficio (predizione). Ma la lotteria è politicamente inaccettabile perché viola la narrativa meritocratica. L'università che adotta la lotteria perde ranking (che dipende dalla selettività). Il sistema dei ranking incentiva la selezione anche quando non funziona."
+    },
+    {
+      "prompt": "Un'azienda manifatturiera deve decidere se automatizzare una linea di produzione. L'automazione eliminerebbe 85 posti di lavoro, ridurrebbe i costi del 34%, e aumenterebbe la qualità del 12%. I 85 lavoratori hanno un'età media di 47 anni e competenze non facilmente ricollocabili. Il CEO chiede al consulente: 'dammi i numeri per decidere'. Ma il consulente sa che i numeri non catturano: l'impatto sulla comunità locale (l'azienda è il primo datore di lavoro in un paese di 3.000 abitanti), il costo reputazionale, e il morale dei dipendenti restanti. Come si integrano variabili quantificabili e non quantificabili in una decisione dove i numeri raccontano solo metà della storia?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "automazione",
+        "licenziamenti",
+        "quantificazione_limiti",
+        "comunita_locale"
+      ],
+      "structural_conflict": "L'analisi costi-benefici cattura il 34% di risparmio ma non il costo di 85 famiglie senza reddito in un paese di 3.000 abitanti. L'azienda è un'entità economica con obblighi verso gli azionisti, ma anche un'istituzione sociale con responsabilità verso la comunità. Non automatizzare è irrazionale economicamente. Automatizzare è irrazionale socialmente. La 'razionalità' dipende da cosa conta come costo e chi definisce i confini del calcolo."
+    },
+    {
+      "prompt": "Due analisti nella stessa azienda di intelligence producono report opposti sulla probabilità di un'invasione militare in un paese confinante. L'analista A assegna probabilità 70% basandosi su movimenti di truppe, retorica politica e intelligence satellitare. L'analista B assegna 15% basandosi su costi economici dell'invasione, pressione diplomatica internazionale e precedenti storici. Entrambi hanno track record eccellenti. Il decisore politico deve scegliere se evacuare i cittadini dal paese confinante — evacuazione che costa 40M€ e potrebbe essere vista come provocazione. Come si aggregano giudizi esperti divergenti quando la posta in gioco è massima?",
+      "conflict_type": [
+        "prediction_uncertainty",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "intelligence",
+        "aggregazione_giudizi",
+        "evacuazione",
+        "rischio_geopolitico"
+      ],
+      "structural_conflict": "La media (42.5%) non ha senso perché i due analisti usano modelli incompatibili — non è che la verità sta 'nel mezzo'. L'analista A usa indicatori militari (leading indicators), B usa indicatori strutturali (constraining factors). Entrambi possono avere ragione simultaneamente: i movimenti di truppe sono reali E l'invasione è economicamente irrazionale. La storia mostra che le invasioni economicamente irrazionali avvengono (Russia-Ucraina). Il costo dell'evacuazione non necessaria (40M€) vs il costo della non-evacuazione necessaria (vite umane) è radicalmente asimmetrico."
+    },
+    {
+      "prompt": "Un'azienda alimentare scopre che uno dei suoi prodotti più venduti (120M€/anno di fatturato) contiene un ingrediente che uno studio recente (non ancora peer-reviewed) associa a un aumento del 8% del rischio di allergia nei bambini sotto i 3 anni. Lo studio è stato condotto su 450 soggetti — campione piccolo. Rimuovere l'ingrediente cambia il sapore e ridurrebbe le vendite del 25% stimato. Aspettare il peer-review richiede 8-12 mesi. In quei mesi, circa 2 milioni di bambini consumeranno il prodotto. Come si applica il principio di precauzione quando lo studio è preliminare, il rischio è basso (8%), ma la popolazione esposta è enorme?",
+      "conflict_type": [
+        "risk_assessment",
+        "strategy_choice",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "principio_precauzione",
+        "studio_preliminare",
+        "rischio_popolazione",
+        "alimentare"
+      ],
+      "structural_conflict": "Il principio di precauzione forte dice: agisci anche senza certezza. Il principio debole dice: agisci se il rischio è plausibile. Lo studio è preliminare (campione piccolo, non peer-reviewed) ma il rischio × popolazione = 160.000 bambini potenzialmente colpiti (8% × 2M). Aspettare è scientificamente corretto ma eticamente rischioso. Ritirare è eticamente prudente ma economicamente devastante e potrebbe essere basato su un artefatto statistico."
+    },
+    {
+      "prompt": "Un direttore scolastico deve scegliere tra 3 approcci per ridurre il bullismo nella sua scuola (1.200 studenti, incidenza attuale 14%). Programma A: 'tolleranza zero' — espulsione automatica dopo 2 episodi documentati. I dati USA mostrano riduzione del 22% ma aumento dell'abbandono scolastico del 15%. Programma B: 'giustizia riparativa' — mediazione tra bullo e vittima. I dati scandinavi mostrano riduzione del 35% ma il 28% delle vittime rifiuta la mediazione. Programma C: 'formazione socio-emotiva' — 2 ore settimanali per tutti. I dati mostrano riduzione del 18% dopo 2 anni ma i genitori si oppongono: 'toglie ore alla matematica'. Quale scegli e come gestisci le controindicazioni?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "bullismo",
+        "scuola",
+        "tolleranza_zero_vs_riparativa",
+        "approcci_conflittuali"
+      ],
+      "structural_conflict": "A punisce ma non educa ed espelle chi avrebbe più bisogno della scuola. B ripara ma rivittimizza il 28% delle vittime che non vogliono mediare. C previene ma è lenta e sottrae risorse didattiche. Ogni programma è ottimo sulla propria metrica e pessimo su quella degli altri. La 'tolleranza zero' è la più popolare tra i genitori ma la meno efficace secondo la ricerca. Scegliere B o C richiede andare contro il consenso."
+    },
+    {
+      "prompt": "Un team di soccorso alpino ha 4 ore di luce residua. Ci sono due escursionisti dispersi in zone diverse della montagna. L'escursionista 1 ha attivato il GPS di emergenza 6 ore fa in una zona accessibile — probabilmente illeso ma senza rifugio e con temperatura in calo a -5°C nelle prossime 8 ore. L'escursionista 2 è stato segnalato da un elicottero in una zona rocciosa a 2.800m — sembra ferito ma la posizione esatta è incerta (raggio 500m). Il team ha 6 membri e può dividersi in due gruppi di 3, ma la zona rocciosa richiede almeno 4 membri per sicurezza. Mandi tutti e 6 verso l'escursionista 2 (certo di trovarlo, incerto sulle sue condizioni) o dividi il team (certo di trovare l'escursionista 1, incerto di trovare il 2)?",
+      "conflict_type": [
+        "resource_allocation",
+        "risk_assessment",
+        "diagnosis_ambiguity"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "soccorso_alpino",
+        "allocazione_risorse",
+        "incertezza",
+        "tempo_limitato"
+      ],
+      "structural_conflict": "Dividere il team garantisce il soccorso dell'escursionista 1 ma manda un gruppo sottodimensionato (3 su 4 necessari) verso il 2, mettendo a rischio i soccorritori. Non dividere abbandona l'escursionista 1 a -5°C per 12+ ore. La posizione incerta del 2 potrebbe consumare tutte le 4 ore senza trovarlo. Il fattore tempo è il vincolo duro: ogni minuto di deliberazione è un minuto perso."
+    },
+    {
+      "prompt": "Un comitato etico di un'azienda tech deve decidere se rilasciare un modello AI che genera deepfake realistici. Il modello ha applicazioni legittime (cinema, accessibilità, educazione) e applicazioni dannose (frode, disinformazione, revenge porn). Il team legale dice 'non c'è legge che lo vieti'. Il team di ricerca dice 'se non lo rilasciamo noi, lo farà qualcun altro tra 6 mesi'. Il team etico dice 'il fatto che altri lo faranno non ci solleva dalla responsabilità'. I precedenti mostrano che il 67% delle tecnologie dual-use rilasciate senza restrizioni viene usata prevalentemente per scopi dannosi nei primi 2 anni. Come si decide?",
+      "conflict_type": [
+        "values_tradeoff",
+        "prediction_uncertainty",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "deepfake",
+        "dual_use",
+        "responsabilita_tecnologica",
+        "comitato_etico"
+      ],
+      "structural_conflict": "L'argomento 'lo faranno comunque' è un'abdication of responsibility strutturale — è vero empiricamente ma non solleva dalla responsabilità morale. Il 67% di uso dannoso è una base rate allarmante. Ma ritardare il rilascio non elimina la tecnologia, la privatizza in mano a chi ha meno scrupoli. Le restrizioni d'accesso (API gated) sono un compromesso ma tecnicamente aggirabili. La domanda fondamentale è: esiste un 'rilascio responsabile' per una tecnologia il cui uso primario è il danno?"
+    },
+    {
+      "prompt": "Un genitore deve decidere se vaccinare il proprio figlio di 2 anni contro una malattia rara (1 caso su 50.000/anno). Il vaccino ha un'efficacia del 94% e un rischio di effetto avverso grave di 1 su 500.000. Il calcolo razionale è chiaro: il rischio della malattia (20/milione/anno) supera il rischio del vaccino (2/milione). Ma il genitore ha un fratello che ha avuto un effetto avverso da un vaccino diverso 15 anni fa. La sua esperienza personale pesa più della statistica. Come si aiuta un decisore la cui valutazione del rischio è dominata da un'esperienza aneddotica ma emotivamente potentissima?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "vaccino",
+        "rischio_aneddotico_vs_statistico",
+        "euristica_disponibilita",
+        "comunicazione"
+      ],
+      "structural_conflict": "I numeri dicono 'vaccina' con margine di 10:1. L'esperienza personale dice 'non rischiare'. La neuroscienza mostra che l'esperienza personale attiva l'amigdala (sistema emotivo) mentre le statistiche attivano la corteccia prefrontale (sistema analitico). In condizioni di conflitto, l'amigdala vince. Informare di più non funziona — il genitore ha già i numeri. Il problema non è informativo ma emotivo, e la medicina non ha strumenti per 'trattare' le emozioni con i dati."
+    },
+    {
+      "prompt": "Un'azienda ha implementato un sistema di decision support basato su AI per le decisioni di credito. L'AI approva il 91% dei casi che un analista umano avrebbe approvato, ma rifiuta il 9% che l'umano avrebbe approvato. In 2 anni, il tasso di default dei clienti rifiutati dall'AI (ma approvabili dall'umano) è stato del 4% — più basso del 6.2% medio dell'intero portafoglio. L'AI sta rifiutando clienti che avrebbero performato MEGLIO della media. L'errore è sistematico: il 78% dei rifiutati in eccesso sono under 30 o lavoratori autonomi. L'AI penalizza profili atipici che non corrispondono ai pattern storici. Come si corregge un sistema che è globalmente accurato ma sistematicamente ingiusto su sottogruppi?",
+      "conflict_type": [
+        "strategy_choice",
+        "diagnosis_ambiguity",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "credito_AI",
+        "bias_sottogruppi",
+        "accuratezza_vs_equita",
+        "profili_atipici"
+      ],
+      "structural_conflict": "L'AI è 'giusta' in aggregato (riduce i default) ma 'ingiusta' sui sottogruppi (penalizza i giovani e gli autonomi). Correggere il bias sui sottogruppi potrebbe peggiorare l'accuratezza globale. I profili atipici sono atipici per ragioni storiche (giovani e autonomi avevano meno accesso al credito) — l'AI perpetua la discriminazione storica travestendola da predizione. L'override umano è la soluzione ovvia ma reintroduce il bias umano che l'AI doveva eliminare."
+    },
+    {
+      "prompt": "Un negoziatore deve scegliere la strategia per un contratto da 10M€. Il suo BATNA (best alternative to negotiated agreement) è 7M€. Non conosce il BATNA dell'altra parte. Ha 3 strategie: (A) ancoraggio aggressivo — chiedere 14M€ e scendere. Il rischio è che l'altra parte abbandoni il tavolo (probabilità stimata 20%). (B) Ancoraggio moderato — chiedere 11M€. Minor rischio di rottura (5%) ma margine inferiore. (C) Strategia collaborativa — dichiarare il proprio BATNA e chiedere una divisione equa del surplus. Funziona solo se l'altra parte reciproca; se non lo fa, perde potere negoziale. I dati di 500 negoziazioni simili mostrano che A produce in media 11.2M€ quando non fallisce, B 9.8M€, C 10.5M€. Ma A fallisce il 20% delle volte e quando fallisce il risultato è il BATNA (7M€). Qual è la strategia ottimale e come la calcoli?",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "negoziazione",
+        "BATNA",
+        "ancoraggio",
+        "valore_atteso"
+      ],
+      "structural_conflict": "Il valore atteso di A è (0.8 × 11.2M) + (0.2 × 7M) = 10.36M. Il valore atteso di B è (0.95 × 9.8M) + (0.05 × 7M) = 9.66M. Il valore atteso di C è 10.5M ma solo se la controparte coopera — se non coopera, il risultato è imprevedibile. A è superiore in valore atteso ma ha varianza alta. Se la negoziazione è one-shot (non ripetibile), la varianza conta più della media. Il negoziatore risk-neutral sceglie A, il risk-averse sceglie B, il fiducioso sceglie C. La 'scelta ottimale' non esiste senza definire la funzione di utilità."
+    },
+    {
+      "prompt": "Un city manager deve decidere se chiudere una strada al traffico per creare un'area pedonale. I dati mostrano: le zone pedonali nelle città europee simili aumentano il fatturato dei negozi del 12-25% ma il 73% dei commercianti è inizialmente contrario (temono la perdita di parcheggi). Il traffico sulla strada è di 15.000 veicoli/giorno. La chiusura sposterebbe il traffico su 3 strade parallele già congestionate. I residenti delle parallele raccolgono 1.800 firme contro. I dati sull'inquinamento mostrano che l'area pedonale ridurrebbe il PM2.5 nella zona del 18% ma lo aumenterebbe del 7% nelle strade parallele. Come si decide quando il beneficio aggregato è positivo ma la distribuzione del costo è diseguale?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "area_pedonale",
+        "esternalita_negative",
+        "distribuzione_costi",
+        "urbanistica"
+      ],
+      "structural_conflict": "Il beneficio netto è positivo ma chi paga il costo (residenti parallele) e chi riceve il beneficio (commercianti zona pedonale) sono gruppi diversi. Le 1.800 firme dei residenti delle parallele hanno lo stesso peso democratico delle richieste dei commercianti. L'inquinamento si sposta, non si elimina. La decisione è un gioco a somma positiva dove alcuni giocatori perdono — e non vengono compensati."
+    },
+    {
+      "prompt": "Un consiglio di amministrazione deve decidere se chiudere una fabbrica in una città di 25.000 abitanti dove la fabbrica impiega 1.800 persone (14% della forza lavoro locale). La fabbrica perde 12M€/anno e non sarà competitiva senza un investimento di 85M€ in automazione che ridurrebbe i dipendenti a 400. Le opzioni sono: (A) chiudere — risparmio di 12M€/anno ma devastazione economica locale; (B) automatizzare — investimento alto, 1.400 licenziamenti, ma la fabbrica sopravvive con 400 posti qualificati; (C) vendere a un fondo che promette di mantenere i posti per 3 anni — dopo i 3 anni nessuna garanzia, e il fondo ha una storia di asset stripping. I sindacati preferiscono C (mantiene i posti a breve). Il CFO preferisce A (taglio netto). Il CEO preferisce B (soluzione strutturale). Il board ha 3 settimane per decidere perché il trimestrale è in scadenza. Come si decide e quale peso si dà all'impatto sulla comunità locale quando il CdA ha doveri fiduciari verso gli azionisti?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "chiusura_fabbrica",
+        "doveri_fiduciari",
+        "impatto_comunita",
+        "ristrutturazione"
+      ],
+      "structural_conflict": "Il dovere fiduciario verso gli azionisti dice A (chiudere, tagliare le perdite). La responsabilità sociale dice B o C. C è la scelta che 'compra tempo' ma il track record del fondo suggerisce che il tempo è un'illusione. B è strutturalmente corretta ma richiede 85M€ di investimento e comunque licenzia l'78% dei dipendenti. Il CdA non ha un mandato per pesare l'impatto sulla comunità — la legge societaria non lo prevede. Ma la comunità subisce le conseguenze più pesanti. Chi non è al tavolo della decisione ne paga il prezzo più alto."
+    }
+  ]
+}

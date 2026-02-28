@@ -1,0 +1,286 @@
+{
+  "domain": "marketing",
+  "description": "Prompt di deliberazione per il dominio Marketing: strategia e posizionamento, segmentazione, pricing, digital marketing (SEO, SEM, social, email, content), brand management, customer journey, attribution modeling, influencer marketing, marketing automation, privacy-first marketing, neuromarketing, growth hacking, community building e referral programs.",
+  "prompts": [
+    {
+      "prompt": "Qual e la differenza fondamentale tra marketing B2B e B2C in termini di ciclo decisionale, touchpoint e metriche principali?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["b2b", "b2c", "fondamenti", "segmentazione"],
+      "structural_conflict": "Il B2B ha cicli decisionali di 3-12 mesi con 6-10 stakeholder e privilegia lead quality e CAC; il B2C ha cicli di minuti-giorni con decisioni emotive e privilegia volume, conversion rate e ROAS. Applicare metriche B2C al B2B o viceversa porta a ottimizzare per i KPI sbagliati."
+    },
+    {
+      "prompt": "Cos'e il funnel AIDA e come si applica a una campagna di lancio prodotto per un e-commerce di cosmetici naturali con budget 50K euro?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["funnel", "aida", "e-commerce", "lancio-prodotto"],
+      "structural_conflict": "Il modello AIDA (Attention-Interest-Desire-Action) linearizza un percorso d'acquisto che nella realta e non-lineare e multi-touch; allocare budget rigidamente per fase rischia di sovra-investire in awareness (top funnel) trascurando il mid-funnel dove avviene la conversione reale nel beauty."
+    },
+    {
+      "prompt": "Content marketing tramite blog aziendale vs social media marketing per un SaaS B2B con ticket medio di 500 euro/mese. Quale canale prioritizzare nel primo anno?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["content-marketing", "social-media", "saas", "b2b"],
+      "structural_conflict": "Il blog aziendale con SEO genera traffico organico compounding ma richiede 6-12 mesi per produrre lead qualificati; i social media generano visibilita immediata ma il traffico e effimero e il CPL su LinkedIn per B2B SaaS e 110-250 euro, insostenibile senza conversion rate elevato."
+    },
+    {
+      "prompt": "Email marketing con database proprietario di 25.000 contatti vs campagne paid social su Meta per un negozio di abbigliamento online con AOV di 85 euro. Quale canale ha ROI superiore?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["email-marketing", "paid-social", "e-commerce", "roi"],
+      "structural_conflict": "L'email marketing ha ROI medio di 36:1 e costo quasi zero per invio ma soffre di list fatigue con open rate che calano del 2-3% al mese senza nurturing; il paid social ha ROI di 4-8:1 ma permette di raggiungere nuovi segmenti fuori dal database esistente alimentando la crescita."
+    },
+    {
+      "prompt": "Strategia SEO on-page vs link building off-page per un sito di comparazione assicurazioni con 500 pagine e Domain Authority 25. Dove allocare il budget mensile di 5.000 euro?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["seo", "on-page", "off-page", "link-building"],
+      "structural_conflict": "L'on-page SEO (contenuti, technical SEO, UX) e fondamentale ma con DA 25 il sito non rankera per keyword competitive indipendentemente dalla qualita dei contenuti; la link building accelera il DA ma link di qualita costano 200-500 euro ciascuno e senza contenuti ottimizzati il traffico acquisito non converte."
+    },
+    {
+      "prompt": "Marketing di un'app mobile: strategia di lancio con campagna ASO (App Store Optimization) vs campagna di acquisizione a pagamento su Google UAC con budget di 30.000 euro per i primi 3 mesi.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["app-marketing", "aso", "user-acquisition", "mobile"],
+      "structural_conflict": "ASO e gratuita e genera download organici sostenibili ma richiede 3-6 mesi per produrre volumi significativi; Google UAC genera download immediati a CPI di 1.50-4.00 euro ma il 70% degli utenti acquisiti a pagamento abbandona entro 7 giorni se il prodotto non ha retention nativa."
+    },
+    {
+      "prompt": "Cos'e il Net Promoter Score e come si interpreta un NPS di 32 per un servizio di food delivery rispetto alla media di settore? Quali azioni marketing derivano?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["nps", "customer-satisfaction", "food-delivery", "metriche"],
+      "structural_conflict": "Un NPS di 32 e significativamente sopra la media food delivery (la media di settore e circa 0, con molte piattaforme in territorio negativo) ma il punteggio nasconde la distribuzione bimodale: i promoter (9-10) generano referral ma i detrattori (0-6) generano recensioni negative con impatto 3x superiore; ottimizzare per alzare i promoter vs ridurre i detrattori richiede investimenti marketing radicalmente diversi."
+    },
+    {
+      "prompt": "Differenza tra marketing automation con HubSpot (890 dollari/mese piano Marketing Hub Professional, circa 800 euro) vs Mailchimp (circa 400 euro/mese piano Standard per 50.000 contatti) per un e-commerce con 50.000 contatti e 3 flussi di nurturing. Quale piattaforma scegliere?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["marketing-automation", "hubspot", "mailchimp", "e-commerce"],
+      "structural_conflict": "HubSpot offre CRM integrato, lead scoring avanzato e attribution multi-touch ma costa circa il doppio e richiede 2-3 mesi di onboarding; Mailchimp e operativo in 2 settimane a costo ridotto ma manca di lead scoring nativo e l'attribution e limitata a last-click, rendendo impossibile misurare il vero impatto dei flussi di nurturing."
+    },
+    {
+      "prompt": "Brand awareness con campagna TV nazionale (reach 5M, CPM 15 euro, zero targeting, 30s spot) vs performance marketing digitale (reach 500K, CPA 8 euro, targeting per interesse e comportamento) per il lancio di un nuovo snack. Il budget totale e 200.000 euro.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["tv", "digital", "brand-awareness", "performance", "fmcg"],
+      "structural_conflict": "La TV raggiunge 10x piu persone costruendo brand awareness di massa ma senza targeting il 70% dell'audience non e in target e l'effetto sulla vendita e misurabile solo dopo 8-12 settimane; il digital targeting preciso converte immediatamente ma 500K di reach non basta per costruire notorieta di marca in un mercato FMCG dove la distribuzione fisica richiede brand pull."
+    },
+    {
+      "prompt": "Pricing freemium con conversione storica del 3.2% vs modello trial 14 giorni con conversione del 18% per un tool di project management SaaS. Il piano paid costa 12 euro/mese per utente. La base utenti freemium e di 200.000 utenti che generano 45.000 euro/mese di costi infrastrutturali.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["pricing", "freemium", "trial", "saas", "conversione"],
+      "structural_conflict": "Il freemium genera 6.400 utenti paganti (76.800 euro/mese revenue) ma costa 45.000 euro/mese di infrastruttura per i non-paganti con margine netto di 31.800 euro; il trial convertirebbe il 18% dei nuovi signup ma eliminerebbe il network effect virale dei 200K utenti free che generano il 60% dei referral organici, potenzialmente dimezzando l'acquisizione organica."
+    },
+    {
+      "prompt": "Investire il 100% del budget Google Ads (15.000 euro/mese) in Search con CPC medio di 2.80 euro e conversion rate del 4.2%, oppure split 60/40 tra Search e Performance Max che ha CPC di 0.90 euro ma conversion rate dell'1.8%. Il prodotto e un software gestionale per PMI con LTV di 2.400 euro.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["google-ads", "sem", "performance-max", "search", "pmi"],
+      "structural_conflict": "Search puro genera ~225 conversioni/mese (15K/2.80*4.2%) a CPA di 66.67 euro con ROI prevedibile; lo split 60/40 genera ~135 da Search (9K/2.80*4.2%) + ~120 da PMax (6K/0.90*1.8%) = ~255 conversioni totali a CPA medio di 58.82 euro, ma il 30-40% delle conversioni PMax potrebbe essere cannibalizzazione di traffico branded che convertirebbe comunque, gonfiando artificialmente il ROAS attribuito."
+    },
+    {
+      "prompt": "Un brand di moda fast fashion con 120 negozi fisici deve decidere se investire 500.000 euro in una campagna influencer marketing con 50 micro-influencer (10K-50K follower, engagement rate 4.5%) oppure 10 macro-influencer (500K-2M follower, engagement rate 1.2%). L'obiettivo e drive-to-store.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["influencer-marketing", "micro-influencer", "macro-influencer", "drive-to-store", "fashion"],
+      "structural_conflict": "I 50 micro-influencer generano engagement 3.75x superiore e audience geograficamente distribuibile sui 120 negozi ma la gestione di 50 relazioni richiede 2-3 FTE e il reach totale e limitato a ~1.5M; i 10 macro-influencer raggiungono ~12M con gestione semplificata ma l'engagement basso (1.2%) e l'audience concentrata in 2-3 citta rende il drive-to-store sui 120 negozi quasi impossibile."
+    },
+    {
+      "prompt": "Strategia di content marketing: produrre 4 articoli lunghi (3.000+ parole) al mese ottimizzati SEO con costo di 800 euro/articolo, oppure 20 post brevi social (carousel, reel, stories) a 150 euro ciascuno per un brand di formazione professionale online. Budget mensile: 3.200 euro.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["content-marketing", "seo", "social-media", "formazione", "content-strategy"],
+      "structural_conflict": "I 4 articoli SEO long-form costruiscono asset evergreen che generano traffico cumulativo (after 12 mesi: ~8.000 visite/mese organiche) ma non producono risultati nei primi 6 mesi; i 20 post social generano visibilita immediata e nurturing ma il contenuto ha shelf life di 24-48 ore e non costruisce patrimonio di traffico organico duraturo."
+    },
+    {
+      "prompt": "Implementare un programma di referral con reward monetario (20 euro di sconto per referrer e referee) vs reward esperienziale (accesso anticipato a nuove feature + badge community) per un'app di fitness con 80.000 utenti attivi e churn rate mensile del 8%.",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["referral", "growth-hacking", "community", "retention", "fitness"],
+      "structural_conflict": "Il reward monetario genera 3-5x piu referral immediati ma attrae utenti price-sensitive con churn rate del 45% dopo il primo mese (vs 8% baseline); il reward esperienziale attrae utenti intrinsecamente motivati con retention 2x superiore ma il volume di referral e troppo basso per compensare l'8% di churn mensile che erode la base utenti."
+    },
+    {
+      "prompt": "Attribution model: last-click (attuale) vs data-driven attribution (Google Analytics 4) per un e-commerce multi-canale con 5 touchpoint medi per conversione, spesa media di 120 euro e budget marketing di 80.000 euro/mese distribuito su Google Ads, Meta Ads, email e affiliazione.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["attribution", "analytics", "multi-touch", "data-driven", "e-commerce"],
+      "structural_conflict": "Il last-click sovra-attribuisce il 40-60% delle conversioni a brand search e retargeting (ultimi touchpoint) causando sotto-investimento in awareness che alimenta il funnel; il data-driven redistribuisce il credito ma richiede 3.000+ conversioni/mese per essere statisticamente affidabile e il passaggio puo mostrare un calo apparente di ROAS su canali storicamente performanti, creando panico nel management."
+    },
+    {
+      "prompt": "Un'azienda SaaS B2B deve scegliere tra ABM (Account-Based Marketing) focalizzato su 50 enterprise account con deal size medio di 80.000 euro/anno, oppure inbound marketing scalabile che genera 500 MQL/mese con conversion rate a SQL del 12% e deal size medio di 8.000 euro/anno. Il team marketing e di 4 persone.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["abm", "inbound", "b2b", "saas", "enterprise", "lead-generation"],
+      "structural_conflict": "L'ABM su 50 account concentra le risorse con potenziale revenue di 4M euro ma il win rate enterprise e del 10-15% (5-7 deal chiusi) con cicli di 6-12 mesi e il rischio di zero revenue per trimestri interi; l'inbound genera 60 SQL/mese con revenue prevedibile di ~480K euro/anno ma il team di 4 non riesce a seguire sia la macchina inbound che l'ABM personalizzato."
+    },
+    {
+      "prompt": "Localizzazione marketing per espansione in Germania: adattare le campagne italiane traducendole (costo 15.000 euro, time-to-market 1 mese) oppure creare campagne native con agenzia locale (costo 80.000 euro, time-to-market 4 mesi). Il mercato tedesco vale potenzialmente 3x l'Italia per il prodotto.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["internazionalizzazione", "localizzazione", "espansione", "germania"],
+      "structural_conflict": "La traduzione e economica e veloce ma il marketing tedesco ha codici culturali profondamente diversi (precisione tecnica, certificazioni, diffidenza verso il tone-of-voice emozionale italiano) con rischio di CTR 60-70% inferiore; l'agenzia locale produce campagne native efficaci ma 80K euro e 4 mesi di ritardo possono significare che un competitor locale occupa il posizionamento prima dell'azienda."
+    },
+    {
+      "prompt": "Dynamic pricing con algoritmo ML che aggiusta i prezzi in tempo reale basandosi su domanda, competitor e orario (aumento medio revenue del 12%) vs prezzo fisso trasparente per un marketplace di servizi professionali. I clienti B2B rappresentano il 65% del fatturato.",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["dynamic-pricing", "pricing", "ml", "marketplace", "trasparenza"],
+      "structural_conflict": "Il dynamic pricing massimizza la revenue del 12% ma i clienti B2B (65% del fatturato) necessitano di prezzi prevedibili per i loro budget annuali e la scoperta di prezzi variabili genera perdita di fiducia con churn B2B stimato al 25%; il prezzo fisso garantisce prevedibilita e fiducia ma rinuncia al 12% di revenue optimization e non sfrutta la willingness-to-pay variabile del segmento B2C."
+    },
+    {
+      "prompt": "Strategia social media: concentrare il 100% dello sforzo su TikTok (audience 18-34, circa 1.6-1.9B utenti attivi mensili, organic reach elevato) oppure diversificare su Instagram + LinkedIn + TikTok per un brand di consulenza finanziaria per millennials. Il team social e di 2 persone.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["social-media", "tiktok", "instagram", "linkedin", "strategia-canale"],
+      "structural_conflict": "Concentrare su TikTok massimizza l'organic reach (3-10% vs 2-4% Instagram) con il target demografico perfetto ma crea dipendenza da un singolo canale il cui algoritmo cambia frequentemente e dove i contenuti finanziari subiscono restrizioni crescenti; diversificare su 3 piattaforme riduce il rischio ma 2 persone producono contenuti mediocri su 3 canali invece di eccellenti su 1, con engagement rate che crolla sotto il 2% su tutte."
+    },
+    {
+      "prompt": "Marketing automation: implementare lead scoring predittivo con ML che analizza 45 segnali comportamentali (apertura email, pagine visitate, download, tempo su sito) vs lead scoring rule-based manuale con 8 regole ponderate. Il database e di 120.000 lead con storico di 18 mesi.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["marketing-automation", "lead-scoring", "ml", "predittivo"],
+      "structural_conflict": "Il ML predittivo migliora la precisione del lead scoring del 25-35% ma richiede 3-4 mesi di training, un data engineer dedicato e il rischio di overfitting su pattern storici che non riflettono il mercato attuale; il rule-based e implementabile in 2 settimane e interpretabile dal team commerciale ma le 8 regole statiche non catturano le correlazioni non-lineari tra i 45 segnali, misclassificando il 30% dei lead."
+    },
+    {
+      "prompt": "Community building: investire 100.000 euro/anno in una community proprietaria (forum/app dedicata) con pieno controllo dei dati vs community su Discord/Slack gratuiti per un brand di gaming con 50.000 fan attivi. La community deve guidare product development e fidelizzazione.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["community", "community-building", "gaming", "retention", "dati"],
+      "structural_conflict": "La community proprietaria offre pieno controllo dati, personalizzazione e zero rischio di platform policy changes ma i 100K euro/anno di costi e la friction di adozione riducono la partecipazione del 60-70% rispetto a Discord; Discord e gratuito con adoption friction zero e i gamer lo usano gia, ma i dati comportamentali restano su Discord, non c'e integrazione CRM nativa e un ban o policy change puo cancellare 50K utenti overnight."
+    },
+    {
+      "prompt": "Strategia SEO per e-commerce: ottimizzare le 2.000 pagine prodotto esistenti (product SEO) vs creare un blog informazionale con 100 articoli how-to (content SEO). Il sito ha DA 35, 50.000 visite/mese organiche e il 90% del traffico arriva da keyword transazionali.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["seo", "e-commerce", "content-seo", "product-seo"],
+      "structural_conflict": "Ottimizzare le 2.000 pagine prodotto ha impatto diretto su revenue con keyword ad alto intent d'acquisto ma il ceiling di traffico e limitato dal volume di ricerca transazionale del settore; il blog informazionale intercetta il 70% del search volume (keyword informazionali) ampliando il funnel ma il traffico how-to converte allo 0.5-1% vs il 3-5% delle pagine prodotto, richiedendo 12-18 mesi per giustificare l'investimento."
+    },
+    {
+      "prompt": "Un brand di cosmetici scopre che una campagna con testimonial celebrity (500.000 euro, reach 8M) ha generato un brand lift del 18% ma solo +3% di vendite incrementali, mentre una campagna UGC (User Generated Content) da 50.000 euro ha generato brand lift del 4% ma +11% di vendite. Il CEO chiede quale scalare per il prossimo anno con budget di 1M euro.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["celebrity-marketing", "ugc", "brand-lift", "roi", "cosmetici"],
+      "structural_conflict": "La celebrity campaign costruisce brand equity misurabile nel lungo termine (18% brand lift) ma con ROI vendite immediato negativo (500K spesi per ~150K vendite incrementali); la campagna UGC ha ROI vendite 11x ma il brand lift del 4% suggerisce che le vendite sono guidate da scarcity/social proof effimero che non costruisce posizionamento duraturo. Scalare UGC a 1M potrebbe saturare l'effetto, scalare celebrity potrebbe non migliorare la conversione."
+    },
+    {
+      "prompt": "Privacy-first marketing post-cookie: investire in una Customer Data Platform (CDP) first-party (implementazione 150.000 euro + 50.000 euro/anno) oppure adottare Google Privacy Sandbox con Topics API e Attribution Reporting API a costo quasi zero. L'azienda ha 3M di visitatori unici/mese e 400.000 clienti registrati.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["privacy", "cookieless", "cdp", "first-party-data", "google-privacy-sandbox"],
+      "structural_conflict": "La CDP first-party offre controllo totale dei dati e targeting basato su 400K clienti reali ma copre solo il 13% del traffico (registrati vs visitatori) e costa 200K il primo anno; il Privacy Sandbox e gratuito e copre il 100% del traffico Chrome ma la granularita del targeting e ridotta dell'80% rispetto ai cookie third-party e crea dipendenza totale da Google che puo modificare le API unilateralmente."
+    },
+    {
+      "prompt": "Un'azienda scopre che il dark pattern nel checkout (pre-selezionare l'assicurazione sul prodotto a 9.90 euro) aumenta le conversioni del 22% e aggiunge 340.000 euro/anno di revenue, ma genera il 35% di resi in piu, il NPS cala di 15 punti e le recensioni negative su Trustpilot aumentano del 40%. Il CFO vede piu revenue netta (+180.000 euro dopo i resi), il CMO vede brand damage irreparabile. Chi ha ragione su un orizzonte di 3 anni?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["dark-pattern", "etica", "conversione", "nps", "brand-damage", "checkout"],
+      "structural_conflict": "Il CFO ha ragione sul breve termine: 180K netti/anno sono reali. Ma il CMO ha ragione sul lungo: NPS -15 punti correla con calo del 20-30% del referral organico in 18 mesi, le recensioni Trustpilot negative riducono il conversion rate dei nuovi visitatori del 12-18%, e la normativa europea sui dark pattern (Digital Services Act) potrebbe imporre sanzioni fino al 6% del fatturato. Il vero conflitto e tra revenue incrementale certa oggi e degrado cumulativo della fiducia che erode il CAC futuro in modo non-lineare."
+    },
+    {
+      "prompt": "Value-based pricing vs cost-plus pricing per un software di AI per diagnosi mediche. Il costo di sviluppo e 2M euro, il mercato potenziale e 500 ospedali in Italia. Il software riduce i tempi di diagnosi del 40% (valore stimato: 200.000 euro/anno per ospedale in efficienza). Cost-plus pricing: 15.000 euro/anno per licenza (margine 60%). Value-based pricing: 60.000 euro/anno per licenza (30% del valore creato). Come prezzare?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["pricing", "value-based", "cost-plus", "healthtech", "saas"],
+      "structural_conflict": "Il cost-plus a 15K garantisce adozione rapida (TAM penetration stimata 40% = 200 ospedali = 3M/anno) ma sottovaluta enormemente il valore creato, lasciando 37M/anno di value capture sul tavolo e rendendo il prodotto percepito come commodity; il value-based a 60K cattura il valore reale (TAM penetration stimata 15% = 75 ospedali = 4.5M/anno) ma esclude l'80% degli ospedali pubblici con budget IT limitati, creando un mercato elitario dove un competitor low-cost puo entrare e dominare il segmento pubblico."
+    },
+    {
+      "prompt": "Un brand DTC (Direct-to-Consumer) di abbigliamento sostenibile con 15M euro di fatturato deve decidere se entrare in wholesale con 3 catene retail (margine lordo cala dal 72% al 38%, ma volume +300%) oppure restare DTC puro investendo 2M euro in customer acquisition. Il CAC DTC e salito da 28 a 52 euro in 18 mesi per saturazione dei canali digitali.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["dtc", "wholesale", "distribuzione", "margini", "crescita", "sostenibilita"],
+      "structural_conflict": "Restare DTC mantiene il margine del 72% e il controllo totale del brand ma il CAC in crescita del 85% in 18 mesi segnala saturazione dei canali digitali con ceiling di crescita prevedibile; il wholesale triplicherebbe il volume ma il margine al 38% dimezza la profittabilita per unita, il brand perde controllo sull'esperienza in-store, e i retailer possono scontare il prodotto distruggendo il posizionamento premium che giustifica il prezzo DTC. Se i clienti retail scoprono il prezzo inferiore, il canale DTC collassa."
+    },
+    {
+      "prompt": "Neuromarketing applicato: un test A/B su 10.000 utenti mostra che il design A (colori caldi, urgency timer, scarcity message 'solo 3 rimasti') ha conversion rate del 8.2%, mentre il design B (design pulito, trasparente, senza pressione) ha conversion rate del 4.1%. Ma il design A ha return rate del 28% vs 9% del design B, e il CLV a 12 mesi e 120 euro per A vs 340 euro per B. Quale design adottare?",
+      "conflict_type": ["values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["neuromarketing", "ab-testing", "conversione", "clv", "etica", "ux"],
+      "structural_conflict": "Il design A genera 2x conversioni ma il 28% di resi e il CLV di 120 euro producono revenue netta per 1.000 visitatori di 82*0.72*120 = 7.085 euro; il design B genera revenue netta di 41*0.91*340 = 12.682 euro per 1.000 visitatori, 79% in piu. Ma il CFO vede solo il conversion rate headline, il team growth e misurato su conversioni mensili non su CLV, e switchare a B causa un calo del 50% nelle metriche di acquisizione nel quarter successivo con impatto su funding/valutazione."
+    },
+    {
+      "prompt": "Un marketplace con 2M di utenti attivi deve scegliere tra investire 500K euro in un loyalty program con cashback del 3% (costo stimato: 1.8M euro/anno a regime) oppure investire gli stessi 500K in miglioramento dell'algoritmo di raccomandazione che aumenterebbe l'average order value del 15% e la frequenza d'acquisto del 8%. Il margine netto attuale e del 12%.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["loyalty", "cashback", "raccomandazione", "marketplace", "retention"],
+      "structural_conflict": "Il loyalty program con cashback 3% erode il margine netto dal 12% al 9% ma riduce il churn del 20-30% creando switching cost per gli utenti; l'algoritmo di raccomandazione aumenta revenue per utente del 24% (15% AOV + 8% frequenza) senza erodere margini ma non crea lock-in e un competitor con loyalty program puo sottrarre utenti con incentivi diretti. Il conflitto profondo: investire in retention difensiva (loyalty) o in growth offensiva (raccomandazione) quando le risorse sono mutuamente esclusive."
+    },
+    {
+      "prompt": "Growth hacking per una fintech: implementare un referral program virale (invita un amico, entrambi ricevete 10 euro) con K-factor storico di 0.6 e CAC effettivo di 18 euro, oppure investire in partnership B2B con 5 banche tradizionali che porterebbero 50.000 utenti pre-qualificati a CAC di 3 euro/utente ma con 8 mesi di integrazione tecnica e compliance. L'obiettivo e 200.000 nuovi utenti in 12 mesi.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["growth-hacking", "referral", "partnership", "fintech", "acquisizione"],
+      "structural_conflict": "Il referral con K-factor 0.6 genera crescita sub-virale (ogni utente porta 0.6 utenti) raggiungendo ~120.000 utenti in 12 mesi a 18 euro CAC (2.16M euro) con crescita prevedibile ma insufficiente; le partnership bancarie portano 250.000 utenti a 150K euro totali ma gli 8 mesi di integrazione lasciano solo 4 mesi effettivi, il rischio di fallimento di anche 1 partnership su 5 riduce il volume del 20%, e gli utenti bancari hanno engagement 40% inferiore perche non hanno scelto attivamente il prodotto."
+    },
+    {
+      "prompt": "Un brand di lusso con heritage di 80 anni (fatturato 50M euro) deve decidere se aprire un canale TikTok con contenuti dietro le quinte e tone-of-voice accessibile per raggiungere la Gen Z (potenziale +30% di brand awareness under-30) oppure mantenere esclusivamente la comunicazione aspirazionale tradizionale (riviste, eventi privati, ambassador selezionati). Il rischio e la diluizione del brand.",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["lusso", "brand-management", "tiktok", "gen-z", "brand-equity", "heritage"],
+      "structural_conflict": "TikTok raggiunge circa 1.6-1.9B di utenti con la Gen Z che sara circa il 25-30% dei consumatori di lusso entro 2030 (Bain & Company), ma il tone-of-voice accessibile e i contenuti behind-the-scenes demoliscono il mystique che giustifica i prezzi premium con rischio di perceived value drop del 15-20%; la comunicazione tradizionale preserva il posizionamento ma il brand diventa invisibile per un'intera generazione che non legge riviste e non frequenta eventi, con penetrazione under-30 che cala del 5% annuo creando un cliff demografico a 10 anni."
+    },
+    {
+      "prompt": "Marketing mix modeling vs multi-touch attribution per allocare un budget marketing di 3M euro/anno su 8 canali (TV, radio, OOH, Google Ads, Meta Ads, email, affiliazione, sponsorship). Il CMO vuole sapere con certezza dove tagliare 500K euro senza impattare le vendite.",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["mmm", "attribution", "media-mix", "budget-allocation", "econometria"],
+      "structural_conflict": "Il Marketing Mix Modeling (econometrico) cattura effetti offline (TV, radio, OOH) e halo effect cross-canale ma opera su dati aggregati settimanali con intervallo di confidenza del 20-30%, rendendo impossibile attribuire con certezza i 500K da tagliare; la Multi-Touch Attribution traccia ogni touchpoint digitale con precisione ma e cieca ai canali offline (35% del budget) e sovra-attribuisce ai canali digitali, suggerendo di tagliare TV/radio che in realta alimentano il 40% del search branded."
+    },
+    {
+      "prompt": "Un'azienda di food delivery scopre che il segmento 'power user' (top 5% = 8.000 utenti, 12+ ordini/mese, AOV 35 euro) genera il 38% del fatturato. Il team propone di lanciare un programma VIP con free delivery + priority support a costo di 800.000 euro/anno. Ma i dati mostrano che il 60% dei power user ha gia retention del 95% senza incentivi. Investire nel VIP program o riallocare il budget per ridurre il churn del segmento 'medium' (20.000 utenti, 4-6 ordini/mese, churn 35%)?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["segmentazione", "retention", "vip", "churn", "food-delivery", "ltv"],
+      "structural_conflict": "Il VIP program sui power user protegge il 38% del fatturato ma il 60% di loro ha gia retention 95%, quindi 480K euro dei 800K vanno a utenti che resterebbero comunque (deadweight loss); investire 800K per ridurre il churn medium dal 35% al 20% salverebbe ~3.000 utenti/anno con LTV stimato di 1.200 euro (3.6M euro di revenue protetta), ma il rischio e che il segmento medium non risponda agli incentivi perche il churn e guidato da insoddisfazione di prodotto, non da mancanza di programmi fedelta."
+    },
+    {
+      "prompt": "Un e-commerce di elettronica (fatturato 25M euro) ha il 78% del traffico da mobile ma il conversion rate mobile e dell'1.2% vs 3.8% desktop. Il team propone di investire 300.000 euro in una Progressive Web App (PWA) per migliorare l'esperienza mobile. Ma l'analisi mostra che il 65% del traffico mobile e informazionale (ricerca prodotto) e converte poi su desktop (cross-device). Il team analytics sostiene che il problema non e UX mobile ma il modello di attribuzione.",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["mobile", "pwa", "conversion-rate", "cross-device", "attribution", "e-commerce"],
+      "structural_conflict": "Se il gap di conversione e reale (UX problem), la PWA a 300K euro potrebbe portare il CR mobile al 2.5% generando ~3.2M euro di revenue incrementale (ROI 10x); se il gap e un artefatto dell'attribution cross-device, i 300K euro sono sprecati perche gli utenti convertono gia su desktop e la PWA non cambia il comportamento. Ma senza cross-device tracking affidabile (post-cookie), e impossibile sapere quale percentuale del gap e UX vs attribution, rendendo l'investimento una scommessa con varianza altissima."
+    },
+    {
+      "prompt": "Marketing automation con AI generativa: sostituire il team di 3 copywriter (costo 180.000 euro/anno) con AI per generare il 100% delle email, post social, e ad copy (costo tool AI: 24.000 euro/anno) oppure usare un modello ibrido (1 copywriter senior + AI per drafting). I test A/B su 50.000 email mostrano che il copy AI puro ha CTR del 2.1% vs 2.8% del copy umano, ma l'AI produce 20x il volume.",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["ai-generativa", "copywriting", "automazione", "email-marketing", "roi"],
+      "structural_conflict": "L'AI pura risparmia 156K euro/anno e produce 20x il volume ma il CTR inferiore del 25% su scala significa migliaia di conversioni perse e il rischio di brand voice dilution quando il 100% del contenuto e generato; il modello ibrido (1 senior + AI) costa 84K euro/anno, mantiene il CTR del 2.8% con volume 5x ma il copywriter senior diventa single point of failure e il team perde 2 junior che portavano diversita creativa e successione. Il vero dilemma: il 25% di CTR perso e recuperabile con piu volume o il volume amplifica contenuto mediocre?"
+    },
+    {
+      "prompt": "Un'azienda B2B SaaS (ARR 8M euro) deve decidere se investire 400K euro nel rebranding completo (nuovo nome, logo, identita visiva, messaging) per posizionarsi come enterprise platform, oppure investire gli stessi 400K in demand generation con l'identita attuale. Il brand attuale e percepito come 'tool per startup' limitando il deal size medio a 12K euro/anno vs il target enterprise di 80K euro/anno.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["rebranding", "brand-management", "b2b", "saas", "enterprise", "posizionamento"],
+      "structural_conflict": "Il rebranding riposiziona l'azienda verso l'enterprise ma costa 6-12 mesi di esecuzione durante i quali il pipeline si congela (perdita stimata 15-20% dell'ARR), il SEO crolla per 3-6 mesi (cambio dominio/URL), e i 2.000 clienti esistenti si sentono abbandonati con churn risk del 10-15%; mantenere l'identita e investire 400K in demand gen produce risultati immediati ma continua ad attrarre startup a 12K/anno e ogni tentativo di vendere a enterprise fallisce al primo touchpoint perche il brand screams 'piccolo tool', creando un ceiling permanente alla crescita."
+    },
+    {
+      "prompt": "Strategia di pricing per un'app di meditazione: modello subscription a 9.99 euro/mese (conversion rate da free: 4.2%, churn mensile: 8%) vs modello lifetime purchase a 149 euro (conversion rate: 2.1%, zero churn). L'app ha 2M di utenti free, costi server di 0.15 euro/utente/mese e il VC chiede di massimizzare l'ARR per il prossimo round.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["pricing", "subscription", "lifetime", "app", "meditazione", "arr"],
+      "structural_conflict": "La subscription genera 84.000 utenti paganti, ARR di 10M euro, ma l'8% di churn mensile significa che il LTV medio e 124 euro con break-even a 12.4 mesi e un leaky bucket che richiede acquisizione costante; il lifetime a 149 euro genera 42.000 acquirenti, revenue one-time di 6.3M euro senza recurring ma con LTV immediato superiore e zero costo di retention. Il VC valuta su ARR (subscription vince) ma il business model sano preferisce il lifetime (margine superiore, no churn). La scelta dipende se l'obiettivo e fundraising (ARR metric) o profittabilita reale."
+    },
+    {
+      "prompt": "Un brand di integratori alimentari con 40% di market share scopre che il competitor principale sta investendo massicciamente in influencer marketing medico (medici e nutrizionisti su Instagram/YouTube). Rispondere con la stessa strategia (budget stimato 600K euro/anno per 30 professionisti sanitari) oppure investire 600K in clinical trials e pubblicazioni peer-reviewed che richiedono 18-24 mesi ma danno credibilita scientifica inattaccabile?",
+      "conflict_type": ["strategy_choice", "values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["influencer-marketing", "healthcare", "clinical-trials", "credibilita", "competitive-response"],
+      "structural_conflict": "Gli influencer medici producono risultati immediati (reach stimato 5M, trust transfer dal professionista) ma la normativa sulla pubblicita sanitaria (Reg. EU 1924/2006 su health claims) rende i contenuti a rischio di sanzioni con multa media di 50-100K euro per claim non autorizzato; i clinical trials danno evidenza inattaccabile ma 18-24 mesi significano che il competitor consolida 2 anni di vantaggio nel top-of-mind, e se i trial non producono risultati statisticamente significativi i 600K sono persi senza asset di marketing utilizzabile."
+    },
+    {
+      "prompt": "Marketing in recessione economica: tagliare il budget marketing del 40% (da 2M a 1.2M euro) per proteggere il margine operativo come chiede il CFO, oppure mantenere o aumentare il budget per guadagnare market share mentre i competitor tagliano. I dati storici mostrano che i brand che mantengono lo spending in recessione guadagnano 2-3 punti di share che valgono 5M euro/anno post-recovery, ma la cassa dell'azienda copre solo 8 mesi di operativita al burn rate attuale.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["recessione", "budget-allocation", "market-share", "survival", "strategia"],
+      "structural_conflict": "Mantenere 2M di spending in recessione e la mossa corretta da manuale strategico (studi McKinsey e Bain lo confermano) ma con solo 8 mesi di runway la sopravvivenza dell'azienda e a rischio se la recessione dura 12+ mesi; tagliare a 1.2M estende il runway a 14 mesi ma il SOV (Share of Voice) cala sotto la soglia critica del 60% dello share of market, innescando un circolo vizioso dove il calo di visibilita causa calo vendite che causa ulteriori tagli. Il conflitto e esistenziale: rischiare la sopravvivenza per la crescita futura o garantire la sopravvivenza sacrificando il posizionamento competitivo."
+    },
+    {
+      "prompt": "Un'azienda SaaS con 50.000 utenti e ARPU di 25 euro/mese scopre che implementare un paywall piu aggressivo (limitare il piano free da 5 a 2 progetti) aumenterebbe la conversione free-to-paid dal 5% al 11%, ma il 30% degli utenti free che non convertono abbandona la piattaforma, riducendo il network effect e il volume di contenuti UGC che attraggono nuovi utenti via SEO (40% dell'acquisizione organica).",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["freemium", "paywall", "conversione", "network-effect", "saas", "ugc"],
+      "structural_conflict": "Il paywall aggressivo genera 3.050 nuovi utenti paganti (+76.250 euro/mese) ma la perdita del 30% degli utenti free (15.000 utenti) riduce il contenuto UGC del 25-30% causando un calo del traffico SEO stimato al 15-20% in 6 mesi; questo calo erode l'acquisizione organica (40% del totale) richiedendo 180-240K euro/anno di paid acquisition aggiuntiva per compensare. Il break-even del paywall aggressivo dipende dalla velocita con cui il calo SEO si materializza: se lento (12+ mesi), il paywall vince; se rapido (3-6 mesi), il costo di acquisizione sostitutivo annulla il gain."
+    }
+  ]
+}

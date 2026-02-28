@@ -741,4 +741,4 @@ Key endpoints:
 - Two-pass scanning with agent-specific code injection
 
 ### v1.0 -- Initial Release
-- Server-side orchestration with 41 agents and 9-layer Geth Consensus
+- Server-side orchestration with 38 agents and 9-layer Geth Consensus

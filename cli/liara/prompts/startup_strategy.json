@@ -1,0 +1,286 @@
+{
+  "domain": "startup_strategy",
+  "description": "Prompt di deliberazione per il dominio Startup Strategy: fundraising, product-market fit, scaling, pivot, exit strategy, venture building, cap table, go-to-market, pricing, moat building, founder dynamics, internazionalizzazione e gestione del rischio imprenditoriale.",
+  "prompts": [
+    {
+      "prompt": "Qual e la differenza tra un seed round e una Series A? Una startup pre-revenue con un MVP funzionante e 500 utenti beta dovrebbe puntare a un seed da 500K o aspettare metriche piu solide per una Series A da 3-5M?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["fundraising", "seed", "series-a", "round"],
+      "structural_conflict": "Il seed round permette di raccogliere capitale con metriche deboli ma impone una valutazione bassa (3-5M pre-money) che diluisce i founder del 15-20%; aspettare la Series A richiede 6-12 mesi di bootstrapping con il rischio di esaurire le risorse personali, ma consente una valutazione 3-5x superiore e una diluizione del 10-15%."
+    },
+    {
+      "prompt": "Cos'e il burn rate e come si calcola il runway? Una startup con 400K in banca, 50K di MRR e 80K di spese mensili dovrebbe considerare il gross burn o il net burn per pianificare il prossimo round?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["burn-rate", "runway", "finanza", "cash-management"],
+      "structural_conflict": "Il gross burn (80K/mese) da un runway di 5 mesi ed e piu conservativo per pianificare fundraising; il net burn (30K/mese) da un runway di 13 mesi ed e piu realistico ma assume che il MRR resti stabile, cosa mai garantita per una startup early-stage con churn potenzialmente alto."
+    },
+    {
+      "prompt": "MVP con landing page e waitlist vs MVP funzionante con feature minime. Una startup B2B nel settore HR tech ha validato il problema con 30 interviste qualitative. Quale approccio di validazione scegliere prima di scrivere codice?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["mvp", "lean-startup", "validazione", "build-measure-learn"],
+      "structural_conflict": "La landing page con waitlist valida l'interesse in 2 settimane con 500 euro di ads ma non prova la willingness-to-pay ne la retention; il MVP funzionante richiede 2-3 mesi e 20-30K di sviluppo ma genera dati reali di utilizzo, conversione e churn che sono gli unici indicatori affidabili di product-market fit."
+    },
+    {
+      "prompt": "Un founder tecnico sta costruendo una startup SaaS da solo. Deve cercare un co-founder business/sales prima del lancio o lanciare da solo e cercare il co-founder dopo aver validato il prodotto con i primi 10 clienti paganti?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["co-founder", "founding-team", "solo-founder", "hiring"],
+      "structural_conflict": "Cercare il co-founder prima del lancio allinea la visione fin dall'inizio e permette di dividere equity quando la valutazione e bassa, ma ritarda il lancio di 3-6 mesi e un co-founder sbagliato e la causa #1 di fallimento; lanciare da solo genera traction reale che attrae co-founder migliori, ma il founder tecnico rischia di costruire un prodotto senza distribuzione e il futuro co-founder chiederà comunque il 20-30% di equity."
+    },
+    {
+      "prompt": "Una startup ha due canali di acquisizione: content marketing organico (CAC 30 euro, payback 4 mesi, scala lentamente) e paid ads su LinkedIn (CAC 150 euro, payback 2 mesi, scala velocemente). Il budget marketing mensile e 10K euro. Come allocare?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["go-to-market", "cac", "marketing", "acquisizione"],
+      "structural_conflict": "Investire tutto nel content marketing minimizza il CAC e costruisce un asset duraturo ma genera risultati solo dopo 6-12 mesi, troppo lento se il runway e sotto i 12 mesi; le paid ads generano lead immediati e prevedibili ma il CAC 5x piu alto erode il margine e crea dipendenza da un canale che diventa piu costoso con la scala."
+    },
+    {
+      "prompt": "Pricing freemium vs trial di 14 giorni per un tool SaaS di project management per team di 5-20 persone. Il piano a pagamento costa 12 euro/utente/mese. Quale modello di pricing adottare al lancio?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["pricing", "freemium", "trial", "saas", "go-to-market"],
+      "structural_conflict": "Il freemium genera una base utenti ampia che crea network effect e word-of-mouth ma storicamente solo il 2-5% converte a pagamento e i costi di infrastruttura per gli utenti free erodono il margine; il trial di 14 giorni filtra solo utenti con intent reale e ha conversion rate del 15-25% ma limita la viralita e richiede un funnel di onboarding perfetto perche il tempo e limitato."
+    },
+    {
+      "prompt": "Una startup italiana deve scegliere la struttura societaria: SRL con quote vs SRL innovativa. Ha 2 founder, prevede di fare un seed round entro 12 mesi e vuole un ESOP per i primi dipendenti. Quale struttura?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["struttura-societaria", "srl", "startup-innovativa", "equity", "esop"],
+      "structural_conflict": "La SRL tradizionale e piu flessibile e meno vincolata ma non ha accesso a incentivi fiscali per investitori (detrazione fino al 65% IRPEF in regime de minimis, storicamente 30%) ne alla facilitazione per l'ESOP; la SRL innovativa offre incentivi fiscali che attraggono angel investor e semplifica l'emissione di stock option, ma impone vincoli (70% laureati o 15% in R&D) e obblighi di reporting che aggiungono costi amministrativi di 3-5K/anno."
+    },
+    {
+      "prompt": "Partecipare a un acceleratore top-tier (es. Y Combinator) che investe 500K (125K per il 7% di equity + 375K in SAFE uncapped con clausola MFN) e offre network, o usare quei 3 mesi per vendere direttamente ai clienti? La startup ha gia un prodotto funzionante con 5 clienti paganti.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["acceleratore", "yc", "techstars", "equity", "network"],
+      "structural_conflict": "L'acceleratore offre network, mentorship e un brand che aumenta la probabilita di fundraising del 3x, ma il 7% di equity a una valutazione implicita di 1.8M (125K/7%) piu un SAFE da 375K che diluisce ulteriormente al prossimo round possono essere molto sotto il valore reale se la startup ha gia traction; concentrarsi sulle vendite per 3 mesi potrebbe portare il MRR da 5K a 20K, giustificando una valutazione di 5-8M al seed round con molta meno diluizione."
+    },
+    {
+      "prompt": "Bootstrapping vs VC funding per una startup SaaS B2B con 15K di MRR, crescita del 10% mese su mese, e un founder che puo mantenersi per altri 12 mesi senza stipendio. Il mercato TAM e stimato a 500M euro. Un angel offre 300K per il 10% di equity.",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["bootstrapping", "vc", "fundraising", "controllo", "crescita"],
+      "structural_conflict": "Il bootstrapping mantiene il 100% di controllo e permette di crescere profittevolmente, ma con il 10% MoM la startup raggiunge 1M ARR in 18 mesi — troppo lento se un competitor VC-backed entra nel mercato con 5M di funding e acquisisce clienti a perdita; accettare i 300K accelera l'hiring e il go-to-market ma crea aspettative di crescita 3-5x e una timeline di exit di 7-10 anni che potrebbe non allinearsi con la visione del founder."
+    },
+    {
+      "prompt": "Una startup SaaS ha raggiunto 50K MRR con un singolo prodotto venduto a PMI (ACV 3K euro). Il churn mensile e del 5%. Deve investire nella riduzione del churn (migliorare onboarding, customer success) o nella crescita (piu sales, piu marketing) per raggiungere i 100K MRR necessari per la Series A?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["churn", "retention", "crescita", "saas-metrics", "series-a"],
+      "structural_conflict": "Con il 5% di churn mensile la startup perde meta dei clienti in 14 mesi — investire in retention potrebbe portare il churn al 2% e il net revenue retention sopra il 100%, metriche che i VC Series A richiedono; ma se investe in retention invece che in crescita, il MRR potrebbe stagnare a 50-60K e il round non si chiude perche i VC vogliono vedere sia retention che growth rate sopra il 15% MoM."
+    },
+    {
+      "prompt": "Cap table dopo il seed round: 2 founder (60/40), un angel (10%), un acceleratore (7%). La startup deve assumere un CTO esterno che chiede il 8% di equity + 80K di stipendio annuo. Il pool ESOP attuale e del 10%. Accettare le condizioni del CTO o cercare alternative?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["cap-table", "equity", "hiring", "cto", "esop", "diluizione"],
+      "structural_conflict": "Dare l'8% al CTO dal pool ESOP lascia solo il 2% per futuri dipendenti chiave, rendendo impossibile attrarre senior engineer con equity competitiva; rifiutare e cercare un CTO piu economico rischia di attrarre talento mediocre in un momento in cui la qualita tecnica e critica per la Series A, e ogni mese di ricerca costa 15-20K di burn senza progresso sul prodotto."
+    },
+    {
+      "prompt": "Una startup B2B ha trovato product-market fit in Italia con 30K MRR. Deve espandersi in un nuovo mercato europeo (UK o Germania) o consolidare il mercato italiano puntando a 100K MRR? Il runway rimanente e 10 mesi con il burn attuale di 40K/mese.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["internazionalizzazione", "espansione", "focus", "mercato"],
+      "structural_conflict": "Consolidare l'Italia e piu sicuro e capital-efficient ma il TAM italiano potrebbe avere un ceiling di 5M ARR che non giustifica una Series A; espandersi in UK/Germania apre un TAM 10x piu grande e rende la startup piu attraente per VC internazionali, ma richiede localizzazione, compliance locale (GDPR varianti), hiring in loco e almeno 6 mesi di investimento prima dei primi ricavi, bruciando 240K di runway senza garanzia di replicare il PMF."
+    },
+    {
+      "prompt": "Due co-founder con equity 50/50 sono in disaccordo sulla direzione del prodotto. Il CEO vuole pivotare verso enterprise (ACV 50K, ciclo vendita 6 mesi) mentre il CTO vuole restare su SMB (ACV 5K, ciclo vendita 2 settimane). Il MRR attuale da SMB e 25K. Non c'e un vesting cliff attivo. Come risolvere?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["founder-dynamics", "equity", "pivot", "conflitto", "governance"],
+      "structural_conflict": "L'equity 50/50 senza un meccanismo di tiebreaker (board seat indipendente, advisor con voto) crea un deadlock decisionale che puo paralizzare la startup per mesi; il pivot enterprise ha margini 10x superiori ma richiede un ciclo di vendita che il runway di 8 mesi non supporta senza nuovo funding, mentre restare su SMB genera cash flow prevedibile ma non costruisce il moat che i VC cercano."
+    },
+    {
+      "prompt": "Una startup ha ricevuto un term sheet da due VC per la Series A. VC Alpha offre 3M a 15M pre-money (20% diluizione) con full ratchet anti-dilution e 2 board seats. VC Beta offre 2.5M a 12M pre-money (20.8% diluizione) con weighted average anti-dilution e 1 board seat. Quale term sheet accettare?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["term-sheet", "series-a", "anti-dilution", "board", "fundraising"],
+      "structural_conflict": "VC Alpha offre 500K in piu e una valutazione superiore, ma il full ratchet anti-dilution significa che se il prossimo round e un down round, i founder vengono diluiti massicciamente retroattivamente, e 2 board seats su 3-4 totali danno al VC potere di veto su quasi ogni decisione; VC Beta offre meno capitale e valutazione piu bassa, ma il weighted average protegge i founder in caso di down round e il singolo board seat mantiene il controllo decisionale."
+    },
+    {
+      "prompt": "Una startup SaaS B2B con 80K MRR sta valutando se lanciare un secondo prodotto complementare (cross-sell alla base esistente, stimato +30K MRR in 6 mesi) o raddoppiare gli investimenti sul prodotto core per ridurre il churn dal 4% al 2% mensile. Il team e di 8 persone, 4 engineer.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["product-strategy", "churn", "cross-sell", "focus", "multi-product"],
+      "structural_conflict": "Il secondo prodotto diversifica il revenue e aumenta il switching cost del cliente, ma divide l'attenzione di un team gia piccolo e storicamente le startup che lanciano il secondo prodotto troppo presto vedono il churn del prodotto core aumentare del 30-50%; focalizzarsi sulla retention migliora il net revenue retention e la unit economics, ma senza nuovi revenue stream la crescita rallenta e la startup rischia di non raggiungere i 150K MRR target per la Series A nei prossimi 12 mesi."
+    },
+    {
+      "prompt": "Una startup ha 3 mesi di runway e il round di funding non si sta chiudendo. Le opzioni sono: (A) tagliare il team da 10 a 5 persone per estendere il runway a 8 mesi, (B) accettare un bridge round da un angel a condizioni sfavorevoli (SAFE con cap a 3M, il 40% sotto la valutazione attuale), (C) cercare revenue immediato con consulenza custom per 2-3 clienti enterprise. Quale strategia di sopravvivenza?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["runway", "sopravvivenza", "bridge-round", "licenziamenti", "consulting"],
+      "structural_conflict": "Tagliare il team salva runway ma perde talento chiave che ha impiegato 6 mesi a trovare e distrugge il morale — i migliori se ne vanno subito; il bridge round a condizioni sfavorevoli diluisce pesantemente e segnala debolezza ai futuri investitori creando un down-round implicito; la consulenza genera cash immediato ma distrae dal prodotto e trasforma la startup in un'agenzia, rendendo impossibile dimostrare scalabilita ai VC."
+    },
+    {
+      "prompt": "Un'azienda corporate offre una partnership strategica alla startup: accesso a 500 clienti enterprise del corporate in cambio di esclusiva di 2 anni sul verticale e revenue share del 30%. La startup ha 20K MRR e nessun cliente enterprise. Accettare?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["partnership", "corporate", "esclusiva", "distribuzione", "revenue-share"],
+      "structural_conflict": "L'accesso a 500 clienti enterprise potrebbe portare il MRR da 20K a 200K in 12 mesi con CAC quasi zero, trasformando la startup in un candidato Series A; ma l'esclusiva di 2 anni impedisce di lavorare con competitor del corporate che potrebbero essere il 60% del mercato, il revenue share del 30% erode i margini sotto il 50% rendendo la unit economics non-VC-compatible, e la dipendenza da un singolo canale di distribuzione crea un rischio esistenziale se il corporate cambia strategia."
+    },
+    {
+      "prompt": "Una startup deep-tech (AI/ML) con 2 founder PhD e zero revenue ha bruciato 18 mesi di ricerca. Ha un paper accettato a NeurIPS e un modello che batte lo state-of-the-art del 15%. Deve continuare la ricerca per altri 6 mesi per un miglioramento del 25% o commercializzare subito il modello attuale con un MVP per validare il mercato?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["deep-tech", "ricerca-vs-commercializzazione", "ai", "mvp", "timing"],
+      "structural_conflict": "Continuare la ricerca potrebbe creare un vantaggio tecnologico insormontabile e un paper piu forte che attrae VC deep-tech disposti a investire a valutazioni 2-3x superiori, ma 6 mesi senza revenue aumentano il rischio che un competitor con piu risorse replichi i risultati del paper pubblico; commercializzare subito valida il mercato e genera revenue ma il modello potrebbe non essere abbastanza buono per i clienti enterprise che richiedono accuracy del 99%+, e il tempo speso su vendite e prodotto rallenta la ricerca."
+    },
+    {
+      "prompt": "Una startup e-commerce D2C ha un LTV di 120 euro e un CAC di 80 euro (ratio 1.5x). Deve migliorare il LTV (upsell, retention) o ridurre il CAC (ottimizzare funnel, referral program) per raggiungere il benchmark VC di LTV/CAC > 3x prima della Series A?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["ltv", "cac", "unit-economics", "e-commerce", "d2c", "growth"],
+      "structural_conflict": "Migliorare il LTV richiede investimenti in prodotto, CRM e customer success che hanno payback di 6-12 mesi e risultati incerti — il LTV si misura retrospettivamente e i VC potrebbero non credere alle proiezioni; ridurre il CAC e piu veloce e misurabile ma con un LTV di 120 euro anche un CAC di 40 euro (ratio 3x) lascia margini sottilissimi dopo COGS, shipping e resi, e i canali a basso CAC (organico, referral) non scalano linearmente."
+    },
+    {
+      "prompt": "Una startup ha 4 mesi per prepararsi alla Series A. Il board suggerisce di assumere un VP Sales (costo 120K/anno + equity) per costruire il sales playbook prima del round. Il founder CEO sta facendo vendite founder-led con successo (closing rate 25%, 5 deal/mese). Assumere il VP Sales ora o dopo il round?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["hiring", "vp-sales", "founder-led-sales", "series-a", "timing"],
+      "structural_conflict": "Assumere il VP Sales prima del round dimostra ai VC che la startup sta costruendo un go-to-market scalabile e non dipendente dal founder, ma il VP Sales impiega 3-6 mesi per essere produttivo e nel frattempo il burn aumenta di 10K/mese riducendo il runway critico; mantenere le founder-led sales preserva il runway e il closing rate alto, ma i VC Series A vogliono vedere un sales process replicabile e un VP Sales gia in rampa, non un founder che fa tutto da solo."
+    },
+    {
+      "prompt": "Una startup SaaS verticale nel settore legal-tech ha raggiunto 200K ARR con 50 studi legali clienti in Italia. Un grande studio legale internazionale (Magic Circle) propone un contratto annuale da 150K ma richiede 6 feature custom che richiedono 4 mesi di sviluppo. Accettare il contratto enterprise?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["enterprise", "custom-development", "product-strategy", "concentrazione-clienti"],
+      "structural_conflict": "Il contratto da 150K raddoppia quasi l'ARR e porta un logo enterprise prestigioso che facilita il fundraising, ma le 6 feature custom trasformano il team in un body shop per 4 mesi rallentando la roadmap per gli altri 50 clienti che generano il 57% del revenue; rifiutare protegge la roadmap e il modello scalabile SaaS, ma 150K di ARR perso significa crescita piatta per un trimestre e un cliente che potrebbe andare da un competitor che accetta di customizzare."
+    },
+    {
+      "prompt": "Una startup marketplace due-sided ha raggiunto 1000 venditori e 5000 acquirenti con un GMV di 500K/mese e take rate del 10% (50K MRR). La crescita dei venditori e stagnante al 2% mensile mentre gli acquirenti crescono al 15%. Deve investire nel supply-side (piu venditori) o demand-side (piu acquirenti) per sbloccare la crescita?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["marketplace", "supply-demand", "network-effect", "crescita", "chicken-egg"],
+      "structural_conflict": "Investire nel supply-side e il bottleneck ovvio — piu venditori significa piu scelta per gli acquirenti e GMV piu alto — ma acquisire venditori di qualita costa 5-10x acquisire acquirenti e richiede account management dedicato; investire nel demand-side con la supply attuale rischia di creare frustrazione negli acquirenti che non trovano quello che cercano (search-to-fill ratio basso), ma l'eccesso di domanda e il segnale piu forte per convincere nuovi venditori a unirsi organicamente."
+    },
+    {
+      "prompt": "Il CTO co-founder vuole riscrivere il backend da un monolite Node.js a microservizi in Go. La riscrittura richiederebbe 4 mesi e bloccherebbe lo sviluppo di nuove feature. La startup ha 40K MRR, 12 mesi di runway e sta preparando la Series A. Il monolite attuale ha problemi di performance sopra i 100 utenti concorrenti. Permettere la riscrittura?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["tech-debt", "riscrittura", "microservizi", "monolite", "cto", "timing"],
+      "structural_conflict": "La riscrittura risolve un problema reale di scalabilita che diventera critico con la crescita, ma 4 mesi senza nuove feature significa zero progresso sul prodotto durante il periodo piu critico pre-Series A e i VC investono in crescita non in riscritture; mantenere il monolite e aggiungere caching/optimization potrebbe comprare 6-12 mesi di tempo con 2 settimane di lavoro, ma accumula tech debt che rendera ogni futura feature 2-3x piu costosa e aumenta il rischio di downtime che fa perdere clienti enterprise."
+    },
+    {
+      "prompt": "Una startup SaaS ha product-market fit con un segmento di nicchia (gestione inventory per birrifici artigianali) che genera 2M ARR in crescita del 30% annuo. Un VC tier-1 offre 10M di Series A ma solo se la startup pivota verso il mercato food&beverage generale (TAM 50B vs 200M attuale). Il pivot richiede ricostruire il 60% del prodotto. Accettare il funding con il pivot o rifiutare e crescere organicamente nella nicchia?",
+      "conflict_type": ["strategy_choice", "values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["pivot", "vc", "nicchia-vs-mercato", "tam", "product-market-fit", "diluizione"],
+      "structural_conflict": "Il mercato dei birrifici ha un ceiling realistico di 15-20M ARR — troppo piccolo per un return VC 10x — e senza funding esterno la startup resta un lifestyle business profittevole ma non venture-scale; il pivot verso food&beverage apre un TAM 250x piu grande ma distrugge il PMF attuale che ha richiesto 3 anni per costruire, il 60% del prodotto da ricostruire significa 12-18 mesi di execution risk con probabilita di successo del 20-30% basata su dati storici di pivot, e il fallimento significherebbe aver bruciato sia il funding che la nicchia profittevole."
+    },
+    {
+      "prompt": "Una startup con 500K ARR riceve un'offerta di acquisizione da un corporate a 8M euro (16x ARR). I founder hanno il 70% dell'equity dopo seed round e angel. L'alternativa e fare una Series A a 20M di valutazione, prendere 4M di funding (20% diluizione) e puntare a una exit da 100M+ in 5-7 anni. I founder hanno 32 e 35 anni, mutui, e non prendono stipendio da 18 mesi. Vendere o continuare?",
+      "conflict_type": ["strategy_choice", "values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["exit", "acquisizione", "series-a", "founder-dilemma", "valuation"],
+      "structural_conflict": "Vendere a 8M significa 5.6M per i founder (70%) — life-changing money che elimina il rischio personale dopo 18 mesi senza stipendio — ma rinunciare a un potenziale 70M+ (70% di 100M meno diluizione futura); continuare con la Series A statisticamente ha il 75% di probabilita di non raggiungere mai una exit da 100M (solo il 1% delle startup raggiunge questa scala), i founder verranno diluiti al 40-50% entro la Series B, e tra 5-7 anni l'exit potrebbe essere inferiore agli 8M offerti oggi se il mercato cambia o un competitor domina."
+    },
+    {
+      "prompt": "Una startup AI-first ha costruito il proprio moat su un modello proprietario fine-tuned. OpenAI lancia un modello general-purpose che raggiunge l'85% della performance del modello proprietario a costo 10x inferiore. La startup ha 150K MRR e 20 clienti enterprise. Deve raddoppiare l'investimento nel modello proprietario per mantenere il gap del 15%, o migrare a OpenAI come base e differenziarsi su UX, integrazioni e domain expertise?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["ai", "moat", "commoditizzazione", "build-vs-buy", "differenziazione"],
+      "structural_conflict": "Raddoppiare sul modello proprietario mantiene il vantaggio tecnico ma OpenAI migliora a velocita esponenziale e il gap del 15% potrebbe chiudersi in 6-12 mesi rendendo l'investimento in R&D inutile — e la startup sta competendo con un'azienda da 100B di valutazione; migrare a OpenAI riduce i costi del 80% e libera il team ML per lavorare su differenziatori di dominio, ma elimina il moat tecnologico che ha convinto i 20 clienti enterprise a firmare e che i VC hanno valutato nella due diligence, e crea dipendenza da un fornitore che potrebbe aumentare i prezzi o lanciare un prodotto competitivo."
+    },
+    {
+      "prompt": "Una startup con 3 co-founder (tecnico, business, design) sta per fare la Series A. Il co-founder design ha contribuito significativamente nei primi 12 mesi (il prodotto ha vinto un design award) ma negli ultimi 6 mesi il suo contributo e diminuito perche il prodotto e stabile e il design system e completo. Il vesting e 4 anni con cliff di 1 anno (gia passato). Ha il 20% dell'equity. Il VC chiede ai founder di 'risolvere la situazione' prima di investire. Come gestire?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["founder-dynamics", "equity", "vesting", "co-founder-conflict", "series-a"],
+      "structural_conflict": "Forzare il co-founder design fuori prima della Series A protegge la cap table e soddisfa il VC, ma e eticamente discutibile dato che il suo contributo iniziale e stato fondamentale e il cliff e passato quindi ha diritto al 5% maturato — inoltre una causa legale da un ex-founder e un red flag per qualsiasi VC; mantenerlo con il 20% pieno significa che in 3 anni avra equity per un contributo marginale, diluendo il valore per i founder operativi e creando risentimento — e il VC potrebbe ritirare il term sheet se percepisce un team non allineato."
+    },
+    {
+      "prompt": "Una startup B2B SaaS ha 300K ARR con 100 clienti. Il top 3 clienti rappresentano il 45% del revenue (135K ARR). Uno di questi clienti (60K ARR, il 20% del totale) minaccia di lasciare se non viene sviluppata una feature specifica che richiederebbe 3 mesi di sviluppo e non serve agli altri 99 clienti. La startup sta raccogliendo una Series A dove il net revenue retention e la metrica chiave. Sviluppare la feature o rischiare il churn?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["concentrazione-revenue", "churn", "enterprise", "product-strategy", "nrr"],
+      "structural_conflict": "Perdere 60K ARR (20% del revenue) durante il fundraising Series A devasterebbe le metriche — il net revenue retention crollerebbe sotto l'80% e nessun VC investirebbe; sviluppare la feature salva il cliente ma crea un precedente pericoloso dove i clienti grandi dettano la roadmap, il prodotto diverge dal mercato ampio, e i 3 mesi di sviluppo custom impediscono di lavorare sulle feature che acquisirebbero i prossimi 100 clienti che ridurrebbero la concentrazione di revenue."
+    },
+    {
+      "prompt": "Una startup fintech ha ottenuto la licenza di istituto di pagamento dopo 14 mesi di processo regolatorio e 200K di costi legali. Un competitor ben finanziato (30M di Series B) lancia un prodotto identico con UX superiore, pricing aggressivo (50% sotto) e un team di 40 persone. La startup ha 8 persone, 100K MRR e 15 mesi di runway. Come competere?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["competition", "fintech", "moat", "pricing", "david-vs-goliath"],
+      "structural_conflict": "Competere sul prezzo e suicidio — il competitor ha 30M e puo operare in perdita per 3 anni mentre la startup ha 15 mesi di runway; competere sulle feature richiede un team 5x piu grande; la licenza regolatoria e un moat temporaneo (il competitor otterrà la propria in 6-12 mesi); nicchiarsi in un segmento specifico dove il competitor non investe (es. cross-border per PMI) potrebbe funzionare ma restringe il TAM del 70%; cercare l'acquisizione ora capitalizza sulla licenza e la base clienti ma l'acquirente offrirebbe poco sapendo che la startup e sotto pressione competitiva."
+    },
+    {
+      "prompt": "Una startup ha 18 mesi di runway e sta crescendo del 8% MoM (sotto il benchmark VC del 15%). Il CEO vuole assumere 3 sales rep per accelerare la crescita a 20%+ MoM prima della Series A tra 9 mesi. Ogni sales rep costa 5K/mese (base) + commissioni. Il ramp-up medio e 4 mesi. Il CFO/COO obietta che l'assunzione riduce il runway a 11 mesi e se i sales rep non performano la startup muore. Assumere aggressivamente o conservare il runway?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["hiring", "sales", "crescita", "runway", "rischio", "burn-rate"],
+      "structural_conflict": "Senza crescita al 15%+ MoM la Series A non si chiude e la startup muore comunque quando il runway finisce — il risultato e lo stesso sia che si assuma sia che non si assuma, ma il timing e diverso; assumere 3 sales rep comprime il runway ma se anche solo 2 su 3 performano dopo il ramp-up di 4 mesi la crescita potrebbe raggiungere il target, ma c'e un gap di 4 mesi dove il burn aumenta senza revenue aggiuntivo e se il ramp-up e piu lento del previsto (6-8 mesi nel B2B enterprise) il runway scende a 7 mesi con una crescita ancora al 10%, troppo poco per chiudere e troppo poco per sopravvivere."
+    },
+    {
+      "prompt": "Una startup developer-tools open-source ha 50K stelle su GitHub, 10K utenti attivi settimanali, e zero revenue. Due strategie di monetizzazione: (A) open-core con feature enterprise (SSO, audit log, RBAC) a 500 euro/mese per organizzazione, stimando 100 conversioni in 12 mesi (600K ARR), (B) cloud-hosted managed service a 50 euro/mese per team, stimando 500 conversioni in 12 mesi (300K ARR). Il team e di 5 persone. Quale modello?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["open-source", "monetizzazione", "open-core", "saas", "developer-tools", "community"],
+      "structural_conflict": "Open-core ha ACV piu alto e margini migliori ma aliena la community open-source che vede le feature enterprise come 'hostage-ware' — e la community e l'unico moat della startup; il managed service ha ACV piu basso ma converte piu utenti e mantiene la community felice, ma i costi infrastrutturali per hostare il servizio per 500 team mangiano il 40-60% del margine e richiedono competenze DevOps che il team di 5 non ha; entrambi i modelli competono con il self-hosting gratuito che il 90% degli utenti preferira sempre."
+    },
+    {
+      "prompt": "Una startup climate-tech ha sviluppato una tecnologia di cattura CO2 che funziona ma costa 400 euro/tonnellata vs il prezzo di mercato dei crediti carbonio di 80 euro/tonnellata. Un corporate offre un contratto di off-take decennale a 200 euro/tonnellata (sotto il costo) in cambio di un investimento di 15M che permetterebbe di costruire un impianto pilota e ridurre il costo a 150 euro/tonnellata in 3 anni. La startup ha bruciato 3M di grant e ha 8 mesi di runway. Accettare il contratto in perdita?",
+      "conflict_type": ["strategy_choice", "values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["climate-tech", "deep-tech", "hardware", "unit-economics", "corporate", "contratto"],
+      "structural_conflict": "Accettare significa operare in perdita di 200 euro/tonnellata per 3 anni con la speranza di raggiungere 150 euro/tonnellata — ancora sotto il prezzo di vendita — creando una dipendenza totale dal corporate che potrebbe rinegoziare o abbandonare il contratto; rifiutare mantiene l'indipendenza ma con 8 mesi di runway e un costo 5x il mercato, la startup non ha ne il tempo ne i clienti per sopravvivere, e i VC climate-tech investono solo in startup con off-take agreements che de-riskano la tecnologia."
+    },
+    {
+      "prompt": "Una startup health-tech ha sviluppato un algoritmo diagnostico AI con accuracy del 94% per il cancro alla pelle, validato in uno studio clinico con 5000 pazienti. Per ottenere la certificazione come dispositivo medico (CE Mark classe IIa) servono 18 mesi e 800K euro. L'alternativa e lanciare come 'wellness tool' non regolamentato con disclaimer, raggiungere PMF in 3 mesi e usare i dati per la certificazione futura. La startup ha 1.2M in banca e burn di 50K/mese.",
+      "conflict_type": ["strategy_choice", "values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["health-tech", "regolamentazione", "ce-mark", "dispositivo-medico", "etica", "compliance"],
+      "structural_conflict": "La certificazione CE Mark richiede quasi tutto il runway rimanente (800K su 1.2M) e 18 mesi di attesa senza revenue, ma e l'unica via per vendere a ospedali e assicurazioni che rappresentano il 90% del TAM; lanciare come wellness tool genera revenue immediato e dati di utilizzo reali, ma un'accuracy del 94% significa 6% di falsi negativi su una diagnosi di cancro — un singolo caso di mancata diagnosi potrebbe generare una causa legale milionaria, distruggere la reputazione del brand e rendere impossibile la futura certificazione, oltre al peso etico di un tool che le persone trattano come diagnostico nonostante il disclaimer."
+    },
+    {
+      "prompt": "Una startup edtech ha 400K ARR vendendo a scuole pubbliche italiane con ciclo di vendita di 9-12 mesi e pagamento a 180 giorni. Il cash flow e perennemente negativo nonostante il prodotto sia profittevole su base annuale. Un VC propone una Series A da 5M ma vuole che la startup aggiunga il mercato delle scuole private e corporate training (ciclo di vendita 1 mese, pagamento a 30 giorni) anche se il prodotto non e progettato per quei segmenti. Il pivot richiederebbe 6 mesi di sviluppo. Accettare le condizioni del VC?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["edtech", "cash-flow", "ciclo-vendita", "pivot", "vc-conditions", "segmentazione"],
+      "structural_conflict": "Il mercato scuole pubbliche ha il problema strutturale dei pagamenti a 180 giorni che rende la startup dipendente da funding esterno per sopravvivere — anche con 1M ARR il cash flow resterebbe negativo senza una linea di credito; il mercato privato e corporate risolve il cash flow ma richiede un prodotto diverso per buyer diversi con metriche di successo diverse, e dividere il focus tra 3 segmenti con un team di 12 persone significa fare tutto male — inoltre il VC sta essenzialmente chiedendo alla startup di diventare un'azienda diversa come condizione per l'investimento."
+    },
+    {
+      "prompt": "Una startup marketplace ha raggiunto 1M di GMV mensile con un take rate del 15% (150K MRR). Amazon entra nel verticale con un prodotto competitivo a take rate del 5%. Il 60% dei venditori della startup ha gia un account Amazon. La startup deve: (A) abbassare il take rate al 7% per competere (dimezzando il revenue a 70K MRR), (B) differenziarsi con servizi a valore aggiunto (fulfillment, marketing tools) mantenendo il 15%, (C) pivotare verso un modello SaaS per i venditori (subscription invece di take rate). Il runway e 14 mesi.",
+      "conflict_type": ["strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["marketplace", "amazon", "competition", "take-rate", "pivot", "moat"],
+      "structural_conflict": "Abbassare il take rate dimezza il revenue e non batte comunque Amazon sul prezzo perche Amazon puo operare a 0% per anni; differenziarsi con servizi mantiene il revenue ma richiede investimenti in fulfillment e tecnologia che il team attuale non ha, e ogni venditore confrontera comunque il 15% vs il 5% di Amazon; pivotare a SaaS elimina la dipendenza dal GMV ma cambia completamente il modello di business, i unit economics e il tipo di cliente — e i venditori che pagano il 15% su transazioni potrebbero non voler pagare 200 euro/mese fissi per un tool."
+    },
+    {
+      "prompt": "Una startup proptech ha raccolto 2M di seed e ha 12 mesi di runway. Ha sviluppato una piattaforma di tokenizzazione immobiliare su blockchain. Il prodotto funziona tecnicamente ma in 8 mesi ha attratto solo 3 investitori per un totale di 150K euro investiti (target era 2M). Il problema e regolatorio: la normativa italiana sui security token e ambigua e i notai rifiutano di validare le transazioni. Le opzioni: (A) spostare la sede legale a Lussemburgo (regolamentazione chiara, 6 mesi e 100K di costi), (B) pivotare verso un modello di crowdfunding immobiliare tradizionale (regolamentato, mercato provato), (C) usare la tecnologia per offrire servizi B2B a fondi immobiliari (gestione portafoglio tokenizzato). Quale strada?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["proptech", "blockchain", "regolamentazione", "pivot", "tokenizzazione", "compliance"],
+      "structural_conflict": "Spostare la sede in Lussemburgo risolve il problema regolatorio ma aggiunge complessita operativa, costi e aliena il mercato italiano che e l'unico che conoscono; il pivot verso crowdfunding tradizionale e la scelta sicura con mercato provato (~260M euro/anno in Italia, di cui oltre 100M in real estate equity) ma abbandona la tecnologia blockchain che e il differenziatore e la ragione per cui i VC hanno investito — potrebbe violare le aspettative degli investitori seed; il B2B verso fondi immobiliari mantiene la tecnologia e ha clienti con budget, ma il ciclo di vendita B2B enterprise nel real estate e 12-18 mesi e la startup ha solo 12 mesi di runway, e passare da B2C a B2B richiede competenze commerciali completamente diverse."
+    },
+    {
+      "prompt": "Tre co-founder stanno negoziando l'equity split. Il CEO (business) ha l'idea originale e ha lavorato 6 mesi part-time sulla validazione. Il CTO si unisce full-time e costruira tutto il prodotto. Il terzo founder porta un network di 200 potenziali clienti enterprise nel settore e 100K di investimento personale. Nessun revenue ancora. Come dividere l'equity considerando un vesting di 4 anni con cliff di 1 anno?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["equity-split", "co-founder", "vesting", "cap-table", "founding-team"],
+      "structural_conflict": "Il CEO ha la visione ma 6 mesi part-time non valgono quanto full-time — uno split che premia troppo l'idea penalizza l'esecuzione e il CTO potrebbe andarsene; il CTO costruisce il prodotto e senza di lui non esiste nulla, ma uno split che premia troppo il tech ignora che il go-to-market e altrettanto critico; il terzo founder porta distribuzione e capitale ma il network potrebbe non convertire e i 100K sono un seed round mascherato da equity — se prende il 33% paga solo 100K per equity che un angel otterrebbe con il 5-10%, ma se prende il 15% potrebbe non essere motivato abbastanza da attivare il network; qualsiasi split crea un founder scontento che sara il primo ad andarsene."
+    },
+    {
+      "prompt": "Una startup SaaS ha raggiunto 1M ARR in 24 mesi. La crescita e rallentata dal 15% al 5% MoM negli ultimi 3 mesi. Il board (2 VC + 2 founder) e diviso: i VC vogliono raddoppiare il budget marketing da 50K a 100K/mese e assumere 5 sales rep per riaccelerare la crescita prima che il mercato percepisca un rallentamento; i founder credono che il rallentamento sia un segnale di saturazione del segmento iniziale e vogliono investire in un secondo prodotto per espandere il TAM. Il burn attuale e 120K/mese con 18 mesi di runway. Chi ha ragione?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["crescita", "rallentamento", "board", "founder-vs-investor", "product-expansion", "sales"],
+      "structural_conflict": "Se il rallentamento e dovuto a execution (funnel inefficiente, messaging sbagliato), piu budget marketing e sales lo risolvono — ma se e dovuto a saturazione del segmento, raddoppiare la spesa brucia 600K in 6 mesi senza risultati e riduce il runway a 8 mesi con crescita piatta, la peggiore posizione possibile per un fundraising; il secondo prodotto potrebbe aprire un TAM 5x piu grande ma richiede 6-9 mesi di sviluppo durante i quali la crescita del prodotto core continua a rallentare e i VC perdono fiducia — e storicamente il 70% dei secondi prodotti lanciati troppo presto fallisce perche il team non ha la bandwidth per mantenere due prodotti contemporaneamente."
+    },
+    {
+      "prompt": "Una startup ha ricevuto un acquisition offer da Google per 50M euro. I founder hanno il 45% dell'equity (dopo seed + Series A). Il contratto prevede un earn-out di 2 anni dove i founder devono restare in Google e raggiungere target di integrazione specifici — se i target non vengono raggiunti, il 40% del prezzo (20M) non viene pagato. L'alternativa e continuare indipendenti con 3M ARR, crescita del 40% annuo, e fare una Series B a valutazione di 60-80M. I founder hanno 36 e 38 anni.",
+      "conflict_type": ["strategy_choice", "values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["exit", "acquisizione", "google", "earn-out", "series-b", "valuation"],
+      "structural_conflict": "L'acquisizione a 50M da ai founder 22.5M lordi (45%) ma il 40% e vincolato a un earn-out con target decisi da Google — storicamente il 50% degli earn-out non viene pagato per intero perche l'acquirente cambia priorita, il team viene smembrato o i target diventano impossibili dopo l'integrazione; continuare indipendenti con il 40% di crescita potrebbe portare a una valutazione di 200M+ alla Series C in 3-4 anni, ma la startup compete in un mercato dove Google potrebbe lanciare un prodotto competitivo con il rifiuto come motivazione, e la probabilita statistica di raggiungere una exit da 200M+ e sotto il 5% per qualsiasi startup Series B."
+    },
+    {
+      "prompt": "Una startup SaaS con 800K ARR e net revenue retention del 115% sta valutando la strategia di pricing. Attualmente ha un piano unico a 99 euro/mese per team. Il 20% dei clienti usa il prodotto 10x piu degli altri (piu utenti, piu storage, piu API calls). Le opzioni: (A) introdurre pricing usage-based che catturerebbe il 3x del valore dai power user ma rischia di spaventare il 80% dei clienti normali, (B) introdurre 3 tier (Starter 49 euro, Pro 149 euro, Enterprise 499 euro) con feature gating, (C) mantenere il prezzo unico e aumentarlo gradualmente del 20% anno su anno.",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["pricing", "saas", "usage-based", "tier", "revenue-optimization", "retention"],
+      "structural_conflict": "Il pricing usage-based allinea il valore al costo ed e il modello preferito dai VC nel 2025-2026, ma introduce imprevedibilita nella fattura mensile dei clienti che aumenta il churn del 15-25% nei primi 6 mesi dopo la transizione e complica il forecasting per il fundraising; i 3 tier catturano piu valore dai power user ma il feature gating crea frustrazione e il 60% dei clienti finira nel tier sbagliato generando richieste di supporto e upgrade/downgrade continui; aumentare il prezzo unico del 20% annuo e la scelta piu semplice ma lascia sul tavolo il 60-70% del valore dei power user e in 3 anni il prezzo di 170 euro potrebbe essere troppo alto per i clienti small che rappresentano il 50% della base."
+    }
+  ]
+}

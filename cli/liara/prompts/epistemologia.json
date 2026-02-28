@@ -1,0 +1,286 @@
+{
+  "domain": "epistemologia",
+  "description": "Epistemologia, teoria della conoscenza, metodo scientifico, demarcazione, probabilita' epistemica, peer disagreement",
+  "prompts": [
+    {
+      "prompt": "Qual e' la differenza tra deduzione e induzione? Fornisci un esempio di ciascuna e spiega perche' la deduzione e' truth-preserving mentre l'induzione no.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["deduzione", "induzione", "logica", "inferenza"],
+      "structural_conflict": "La deduzione trasmette la verita' dalle premesse alla conclusione ma non aggiunge informazione. L'induzione aggiunge informazione ma non garantisce la verita'. La conoscenza scientifica richiede induzione ma la giustificazione logica richiede deduzione — tensione fondamentale."
+    },
+    {
+      "prompt": "Cos'e' lo scetticismo filosofico? Descrivi lo scetticismo cartesiano (genio maligno) e la differenza con lo scetticismo pirroniano (sospensione del giudizio).",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["scetticismo", "cartesio", "pirrone", "sospensione_giudizio"],
+      "structural_conflict": "Lo scetticismo cartesiano e' metodico (dubitare per trovare il certo), quello pirroniano e' finale (la sospensione e' il risultato). Cartesio cerca un fondamento indubitabile, Pirrone nega che esista. Due programmi epistemologici opposti nascono dalla stessa domanda."
+    },
+    {
+      "prompt": "Cos'e' il fondazionalismo epistemologico? Spiega la distinzione tra credenze basiche e credenze derivate e perche' il regresso della giustificazione e' un problema.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["fondazionalismo", "regresso", "giustificazione", "credenze_basiche"],
+      "structural_conflict": "Il fondazionalismo ferma il regresso postulando credenze auto-giustificate. Ma quali sono? I dati sensoriali (empirismo classico) sono fallibili. Le verita' a priori sono troppo poche. Il regresso sembra ineliminabile a meno di accettare credenze ingiustificate alla base."
+    },
+    {
+      "prompt": "Qual e' la differenza tra conoscenza a priori e conoscenza a posteriori? Kant introduce i giudizi sintetici a priori — spiega cosa sono e perche' sono controversi.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["a_priori", "a_posteriori", "kant", "sintetico_a_priori"],
+      "structural_conflict": "L'analitico a priori e' sicuro ma vuoto (tautologie). Il sintetico a posteriori e' informativo ma contingente. Kant afferma che esiste il sintetico a priori (matematica, causalita') — informativo e necessario. Quine nega la distinzione stessa analitico/sintetico, minando l'intero edificio kantiano."
+    },
+    {
+      "prompt": "Cos'e' la fallacia dell'appello all'autorita'? Quando il richiamo all'autorita' e' legittimo e quando e' fallace? Fai esempi di entrambi i casi.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["fallacie", "appello_autorita", "ragionamento", "expertise"],
+      "structural_conflict": "L'appello all'autorita' e' legittimo quando l'autorita' e' pertinente, c'e' consenso tra esperti, e la questione e' empirica. E' fallace quando l'autorita' e' fuori dominio, c'e' dissenso tra esperti, o la questione e' valoriale. Il confine e' sfumato: quanta expertise e' sufficiente?"
+    },
+    {
+      "prompt": "Cos'e' la differenza tra verita' e giustificazione? Una credenza puo' essere giustificata ma falsa? Fai un esempio concreto e spiega il concetto di fallibilismo.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["verita", "giustificazione", "fallibilismo", "credenza"],
+      "structural_conflict": "Il fallibilismo (Peirce) afferma che ogni credenza potrebbe essere falsa anche se ben giustificata. Questo e' liberatorio (non servono certezze assolute) ma destabilizzante (come distinguere conoscenza da opinione fortunata?). L'intero progetto post-Gettier nasce da questa tensione."
+    },
+    {
+      "prompt": "Cos'e' il principio di parsimonia (rasoio di Occam)? Perche' preferiamo la spiegazione piu' semplice? Il rasoio di Occam e' un principio logico, metodologico o metafisico?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["rasoio_occam", "parsimonia", "semplicita", "metodologia"],
+      "structural_conflict": "La semplicita' non e' una proprieta' del mondo ma una preferenza degli scienziati. Non c'e' garanzia che la natura sia semplice. Il rasoio funziona pragmaticamente ma la sua giustificazione e' circolare: preferiamo la semplicita' perche' ha funzionato — induzione sulla meta-regola."
+    },
+    {
+      "prompt": "Cos'e' il bias di conferma? Descrivi l'esperimento di Wason (1960) sul 2-4-6 task e spiega perche' il bias di conferma e' cosi' resistente alla consapevolezza.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["bias_conferma", "wason", "ragionamento", "psicologia_cognitiva"],
+      "structural_conflict": "Nel 2-4-6 task di Wason, circa l'80% dei soggetti cerca solo conferme. Sapere del bias di conferma non lo elimina (effetto bias blind spot, Pronin 2002). La metacognizione e' necessaria ma non sufficiente. Strategie di debiasing richiedono procedure istituzionali, non solo consapevolezza individuale."
+    },
+    {
+      "prompt": "Il problema dell'induzione di Hume: dal fatto che il sole e' sempre sorto non segue logicamente che sorgera' domani. Ogni tentativo di giustificare l'induzione usa l'induzione (circolarita'). Reichenbach propone la giustificazione pragmatica: l'induzione e' la strategia migliore se il mondo e' regolare, e se non e' regolare nessuna strategia funziona. Strawson argomenta che chiedere una giustificazione dell'induzione e' come chiedere una giustificazione della razionalita' — e' un presupposto non giustificabile. Queste 'soluzioni' risolvono il problema o lo aggirano?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["hume", "induzione", "reichenbach", "strawson", "giustificazione_pragmatica"],
+      "structural_conflict": "Reichenbach dimostra che l'induzione e' optimale tra le strategie — ma solo se il mondo ha regolarita'. Se il mondo e' caotico, niente funziona. E' una giustificazione condizionale: l'induzione funziona *se* funziona. Strawson dissolve il problema dichiarandolo insensato — ma questo lascia la scienza senza fondazione."
+    },
+    {
+      "prompt": "Quine in 'Due dogmi dell'empirismo' (1951) attacca la distinzione analitico/sintetico e il riduzionismo verificazionista. L'olismo della conferma che ne risulta — le teorie affrontano l'esperienza come un tutto (web of belief) — ha conseguenze radicali: nessuna proposizione e' immune dalla revisione (nemmeno la logica), nessuna e' determinata solo dall'esperienza. Se Quine ha ragione, il fondazionalismo e' morto. Ma il coerentismo che lo sostituisce non ha il problema di non distinguere sistemi coerenti ma falsi (fantascienza coerente)?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["quine", "due_dogmi", "olismo", "coerentismo", "fondazionalismo", "web_of_belief"],
+      "structural_conflict": "L'olismo quineano elimina il privilegio epistemico di qualsiasi proposizione — incluse le osservazioni. Ma senza un ancoraggio all'esperienza, come evitare il coerentismo narcisistico (un sistema internamente coerente ma completamente scollegato dalla realta')? Quine dice che la periferia del web tocca l'esperienza — ma 'tocca' quanto?"
+    },
+    {
+      "prompt": "Il bayesianesimo epistemologico propone di modellare la credenza razionale come aggiornamento di probabilita' tramite il teorema di Bayes: P(H|E) = P(E|H)P(H)/P(E). Ma il problema dei prior e' fondamentale: da dove vengono le probabilita' iniziali? I soggettivisti dicono 'dalle tue credenze', ma se due scienziati partono con prior molto diversi, il bayesianesimo non garantisce convergenza in tempi ragionevoli. I principi di indifferenza (Keynes, Jaynes) cercano prior 'oggettivi' ma spesso producono paradossi (paradosso di Bertrand). Il bayesianesimo e' un framework epistemologico completo o ha un buco fatale nei prior?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["bayesianesimo", "prior", "aggiornamento", "probabilita_epistemica", "convergenza"],
+      "structural_conflict": "Il bayesianesimo soggettivo e' internamente coerente (Dutch book argument) ma i prior sono arbitrari. Il bayesianesimo oggettivo fissa i prior ma genera paradossi. Il teorema di convergenza (Blackwell-Dubins) vale a lungo termine — ma Keynes: 'a lungo termine siamo tutti morti'. La pratica scientifica non aspetta la convergenza bayesiana."
+    },
+    {
+      "prompt": "L'abduzione (inferenza alla miglior spiegazione, Peirce/Harman) e' il ragionamento piu' usato nella scienza e nella vita quotidiana: 'la miglior spiegazione dei dati e' probabilmente vera'. Ma van Fraassen obietta: perche' la miglior spiegazione disponibile dovrebbe essere vera? La migliore della lista potrebbe essere cattiva in assoluto. E il criterio di 'migliore' (semplicita', potere esplicativo, coerenza) non e' soggettivo? L'abduzione e' un metodo affidabile o un'euristica psicologica senza forza normativa?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["abduzione", "peirce", "harman", "van_fraassen", "inferenza_miglior_spiegazione"],
+      "structural_conflict": "L'abduzione presuppone che le buone spiegazioni siano probabilmente vere — ma questo e' un presupposto metafisico (il mondo e' spiegabile) non giustificabile a priori. Van Fraassen: essere la miglior spiegazione non e' evidenza di verita', solo di virtu' pragmatiche. Ma senza abduzione la scienza crolla — non abbiamo alternative."
+    },
+    {
+      "prompt": "Goldman in 'Epistemology and Cognition' (1986) fonda l'affidabilismo: una credenza e' giustificata se prodotta da un processo cognitivo affidabile (percezione in condizioni normali, ragionamento valido, memoria funzionante). Questo elimina la necessita' di accesso interno alla giustificazione. Ma il problema del demone maligno: un cervello in una vasca con processi identici ai nostri ha credenze tutte false ma prodotte da processi 'affidabili' nel suo ambiente simulato. L'affidabilismo e' una teoria della giustificazione o solo una teoria del funzionamento cognitivo?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["goldman", "affidabilismo", "esternalismo", "demone_maligno", "cervello_vasca"],
+      "structural_conflict": "L'affidabilismo sposta la giustificazione dall'interno (ragioni accessibili) all'esterno (affidabilita' del processo). Ma 'affidabile in quale ambiente?' e' cruciale. Il cervello in vasca ha processi affidabili nel suo mondo simulato ma credenze false nel mondo reale. La relativizzazione all'ambiente salva l'affidabilismo ma a costo di relativizzare la conoscenza."
+    },
+    {
+      "prompt": "La testimonianza e' la fonte primaria della maggior parte delle nostre credenze: crediamo a cio' che ci dicono insegnanti, medici, giornalisti, Wikipedia. Hume in 'Of Miracles' chiede: quando e' razionale credere alla testimonianza? Solo quando l'esperienza passata mostra che i testimoni sono affidabili — giustificazione induttiva. Ma Coady e Reid argomentano che la testimonianza e' una fonte fondamentale (come la percezione): di default crediamo, e solo ragioni specifiche giustificano il dubbio. Nell'era della disinformazione, quale modello e' piu' adeguato: la credulita' di default (Reid) o lo scetticismo di default (Hume)?",
+      "conflict_type": ["values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["testimonianza", "hume", "coady", "reid", "credulita", "disinformazione"],
+      "structural_conflict": "La credulita' di default e' socialmente necessaria (non possiamo verificare tutto) ma vulnerabile alla manipolazione. Lo scetticismo di default e' epistemicamente sicuro ma socialmente paralizzante. La disinformazione algoritmica sfrutta la credulita' di default — ma il rimedio (scetticismo generalizzato) dissolve il tessuto sociale della conoscenza."
+    },
+    {
+      "prompt": "Sosa in 'A Virtue Epistemology' (2007) propone che la conoscenza sia credenza vera che manifesta competenza intellettuale (apt belief). L'analogia con l'arciere: un tiro a segno e' abile (skillful) se preciso perche' l'arciere e' competente. Similmente, una credenza e' conoscenza se vera perche' il soggetto e' epistemicamente competente. Questo risolve i casi Gettier? In un caso Gettier standard, la credenza e' vera ma non *perche'* il soggetto e' competente — e' vera per fortuna. Ma il criterio 'perche' e' causale o controfattuale? E come si misura la competenza epistemica?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["sosa", "virtue_epistemology", "apt_belief", "gettier", "competenza_epistemica"],
+      "structural_conflict": "La virtue epistemology cattura l'intuizione che la conoscenza richiede merito epistemic — ma il 'perche'' e' ambiguo. Pritchard distingue safety e virtue come condizioni indipendenti. Greco propone credit per la verita'. Il dibattito mostra che le intuizioni sulla conoscenza sono multi-dimensionali e nessuna singola condizione le cattura tutte."
+    },
+    {
+      "prompt": "Kuhn distingue scienza normale (puzzle-solving dentro un paradigma) e rivoluzioni scientifiche (cambio di paradigma). Durante la scienza normale, le anomalie sono tollerate. Solo l'accumulo di anomalie persistenti causa la crisi e il cambio. Ma chi decide quando le anomalie sono 'sufficienti'? Non c'e' un algoritmo. Kuhn dice che e' un processo sociologico, non puramente logico. Questo rende il cambio paradigmatico irrazionale? Laudan critica: se la razionalita' e' interna al paradigma, i paradigmi sono auto-validanti. La scienza e' razionale in senso trans-paradigmatico o no?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["kuhn", "scienza_normale", "rivoluzione", "anomalie", "razionalita_scientifica", "laudan"],
+      "structural_conflict": "Kuhn ammette fattori sociologici nel cambio paradigmatico — ma non conclude con l'irrazionalismo. I valori epistemici (accuratezza, semplicita', fecondita') guidano la scelta ma non la determinano. Laudan vuole piu' razionalita'; Feyerabend meno. Il punto e' se 'sotto-determinazione' significhi irrazionalita' o razionalita' non algoritmica."
+    },
+    {
+      "prompt": "Il teorema di Bayes e' spesso presentato come il modello normativo del ragionamento probabilistico. Ma Kahneman e Tversky (1974, euristica della rappresentativita') mostrano che gli umani violano sistematicamente Bayes: ignorano i base rate, confondono P(E|H) con P(H|E), e usano euristiche. Gigerenzer replica: gli umani sono bayesiani se le informazioni sono presentate in formato di frequenze naturali, non di probabilita'. Chi ha ragione? Gli umani sono irrazionali (Kahneman) o razionali in un ambiente ecologico (Gigerenzer)?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["kahneman", "tversky", "gigerenzer", "euristiche", "bayesianesimo", "razionalita_ecologica"],
+      "structural_conflict": "Kahneman mostra bias sistematici con domande in formato probabilistico. Gigerenzer mostra performance quasi-bayesiana con frequenze naturali. La disputa non e' solo empirica ma normativa: l'ambiente 'giusto' per testare la razionalita' e' quello astratto (Kahneman) o quello ecologico (Gigerenzer)? La risposta presuppone una teoria della razionalita'."
+    },
+    {
+      "prompt": "Il realismo scientifico (Boyd, Putnam) afferma che le teorie scientifiche mature sono approssimativamente vere e che le entita' teoriche (elettroni, quark) esistono realmente. L'argomento principale e' il no-miracles argument: il successo predittivo della scienza sarebbe un miracolo se le teorie non fossero almeno approssimativamente vere. Ma la pessimistic meta-induction (Laudan, 1981) risponde: la storia della scienza e' un cimitero di teorie empiricamente di successo ma false (flogisto, etere, caloric). Perche' le nostre teorie attuali dovrebbero essere diverse? Il successo empirico e' evidenza di verita' o solo di adeguatezza empirica?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["realismo_scientifico", "anti_realismo", "no_miracles", "pessimistic_meta_induction", "laudan"],
+      "structural_conflict": "Il no-miracles argument e' un'abduzione: la miglior spiegazione del successo e' la verita' approssimata. Ma van Fraassen: la selezione naturale delle teorie spiega il successo senza la verita' (solo le teorie empiricamente adeguate sopravvivono). La pessimistic induction mostra che il successo non implica verita'. Il realismo strutturale (Worrall) tenta una via media: la struttura matematica e' preservata attraverso i cambi di teoria."
+    },
+    {
+      "prompt": "Due esperti ugualmente qualificati — stessa formazione, stesso accesso ai dati, stessa capacita' analitica — esaminano le stesse evidenze e raggiungono conclusioni opposte su una questione empirica (es: impatto a lungo termine di una politica economica). Il peer disagreement e' evidenza che la questione e' genuinamente indeterminata dai dati (sotto-determinazione), o uno dei due sta necessariamente sbagliando? Christensen (equal weight view) dice di dare peso uguale all'opinione del peer e ridurre la propria confidenza. Kelly (total evidence view) dice che le tue ragioni di primo ordine contano piu' del fatto del disaccordo. Quando il disaccordo tra esperti e' informativo vs quando e' rumore epistemico?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["peer_disagreement", "christensen", "kelly", "equal_weight", "total_evidence", "sotto_determinazione"],
+      "structural_conflict": "L'equal weight view porta allo scetticismo diffuso: su ogni questione controversa dovresti avere credenza 0.5. Il total evidence view ignora che il tuo peer ha le stesse ragioni con conclusione opposta. Weatherson (2007) e altri critici argomentano che l'equal weight view e' auto-confutante se applicata a se stessa (Elga 2010 risponde distinguendo il trattamento del disaccordo sul disaccordo). Il peer disagreement sembra indecidibile al secondo ordine."
+    },
+    {
+      "prompt": "L'epistemologia sociale (Goldman, Kitcher) studia come le istituzioni producono conoscenza. La peer review, la replicazione, e il consenso scientifico sono meccanismi sociali, non individuali. Ma Longino (1990) argomenta che l'oggettivita' scientifica non e' una proprieta' degli individui ma dei processi sociali critici. Se la conoscenza e' socialmente costituita, e' anche socialmente contingente? Le scoperte scientifiche sarebbero diverse se la scienza fosse stata praticata da culture diverse? Il programma forte di Bloor (simmetria: cause sociali per credenze vere e false) e' una posizione epistemologica legittima o auto-confutante?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["epistemologia_sociale", "goldman", "longino", "bloor", "programma_forte", "oggettivita"],
+      "structural_conflict": "Il programma forte tratta le credenze vere e false simmetricamente: entrambe hanno cause sociali. Ma se le cause sociali spiegano tutto, il programma forte e' esso stesso un prodotto sociale — e la sua verita' e' contingente. L'auto-confutazione e' evidente ma Bloor la nega distinguendo livelli. La distinzione regge?"
+    },
+    {
+      "prompt": "Il problema della sotto-determinazione delle teorie (Duhem-Quine): per qualsiasi insieme di dati, esistono infinite teorie logicamente compatibili con quei dati. La scelta tra teorie empiricamente equivalenti richiede criteri extra-empirici (semplicita', eleganza, fecondita'). Ma questi criteri sono estetici, non epistemici. Se due teorie predicono esattamente le stesse osservazioni ma postulano entita' diverse (realismo vs strumentalismo), c'e' un fatto del caso su quale sia vera? O la domanda 'quale e' vera?' e' priva di significato empirico come sosteneva il positivismo logico?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["sotto_determinazione", "duhem_quine", "empirismo", "strumentalismo", "scelta_teoria"],
+      "structural_conflict": "La sotto-determinazione forte (Quine) dice che le teorie sono indeterminate dai dati in linea di principio. La sotto-determinazione debole (Laudan-Leplin) dice che in pratica le teorie si distinguono per conseguenze indirette. Il realista deve mostrare che i criteri extra-empirici tracciano la verita'. L'anti-realista dice che sono preferenze — e la disputa stessa e' sotto-determinata."
+    },
+    {
+      "prompt": "Williamson in 'Knowledge and its Limits' (2000) propone un rovesciamento radicale: la conoscenza e' il concetto epistemologico fondamentale, non la credenza. La credenza e' conoscenza degradata, non la conoscenza una credenza migliorata. Questo dissolve il problema di Gettier (non c'e' niente da 'aggiungere' alla credenza vera giustificata) ma crea un nuovo problema: se la conoscenza e' primitiva, come la studiamo? Non possiamo scomporla in condizioni necessarie e sufficienti. La proposta di Williamson e' un progresso epistemologico o una resa intellettuale — rinunciare all'analisi e chiamarla rivoluzione?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["williamson", "knowledge_first", "analisi_conoscenza", "primitivismo", "gettier"],
+      "structural_conflict": "L'approccio knowledge-first e' potente: spiega la credenza, la giustificazione e l'evidenza in termini di conoscenza. Ma se la conoscenza e' inanalizzabile, l'epistemologia diventa una disciplina che studia relazioni tra concetti inanalizzabili. Il guadagno esplicativo e' reale ma il costo metodologico e' alto."
+    },
+    {
+      "prompt": "L'ingiustizia epistemica (Fricker, 2007): le persone possono essere danneggiate nella loro capacita' di essere conoscitrici. L'ingiustizia testimoniale (non credere a qualcuno per pregiudizio) e l'ingiustizia ermeneutica (non avere i concetti per interpretare la propria esperienza) sono forme di oppressione epistemica. Ma se l'epistemologia tradizionale e' cieca al potere, tutte le nostre teorie della giustificazione sono viziate? L'epistemologia puo' essere 'neutrale' o e' sempre politica? E se e' politica, come distinguerla dall'ideologia?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["fricker", "ingiustizia_epistemica", "testimonianza", "potere", "epistemologia_politica"],
+      "structural_conflict": "Fricker mostra che le strutture di potere influenzano chi viene creduto e quali concetti esistono. Ma se l'epistemologia e' politica, i criteri di verita' sono funzioni del potere? Questo e' il vicolo cieco foucaultiano. La soluzione di Fricker — virtu' della giustizia epistemica — presuppone un soggetto capace di trascendere il proprio posizionamento sociale."
+    },
+    {
+      "prompt": "Il paradosso del lotteria (Kyburg, 1961): sai che un biglietto della lotteria su un milione vincera'. Per ogni singolo biglietto, e' razionale credere che non vincera' (probabilita' 0.999999). Ma se credi che nessun biglietto vincera', hai una credenza inconsistente (sai che uno vincera'). La closure della credenza razionale sotto la congiunzione fallisce: credere P e credere Q non implica credere (P e Q). Questo paradosso sfida la logica della credenza e la relazione tra probabilita' alta e conoscenza. Hawthorne e Williamson usano il paradosso per argomentare che la credenza razionale richiede piu' della probabilita' alta. Cosa esattamente?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["paradosso_lotteria", "kyburg", "hawthorne", "williamson", "credenza_razionale", "closure"],
+      "structural_conflict": "Se la credenza razionale e' soglia probabilistica, il paradosso e' inevitabile. Se la conoscenza richiede safety (Williamson) — non solo alta probabilita' — il paradosso si dissolve (non 'sai' che il biglietto perdera' perche' in mondi vicini vince). Ma la safety esclude troppa conoscenza quotidiana. Ogni soluzione ha un prezzo."
+    },
+    {
+      "prompt": "Craig in 'Knowledge and the State of Nature' (1990) propone una genealogia pragmatica della conoscenza: il concetto di conoscenza e' emerso per identificare buoni informatori. 'S sa che P' significa 'S e' un informatore affidabile riguardo a P'. Questa funzione sociale spiega perche' la conoscenza richiede piu' della credenza vera (vogliamo informatori affidabili, non fortunati). Ma una genealogia pragmatica giustifica il concetto o lo relativizza? Se 'conoscenza' e' uno strumento sociale, ha ancora pretesa di oggettivita'? O la funzione sociale e' precisamente il tipo di ancoraggio che l'epistemologia ha bisogno per evitare l'idealismo?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["craig", "genealogia", "pragmatismo", "funzione_sociale_conoscenza", "informatore"],
+      "structural_conflict": "La genealogia pragmatica spiega perche' il concetto ha la forma che ha — ma non se e' la forma 'giusta'. Un concetto puo' essere socialmente utile e filosoficamente difettoso. Ma se il concetto si adatta alla sua funzione (identificare informatori affidabili), la funzione stessa fornisce il criterio normativo. Il pragmatismo e' una fondazione o una rinuncia alla fondazione?"
+    },
+    {
+      "prompt": "Van Fraassen in 'The Scientific Image' (1980) propone l'empirismo costruttivo: la scienza non mira alla verita' ma all'adeguatezza empirica (salvare i fenomeni). Accettare una teoria non e' credere che sia vera ma credere che sia empiricamente adeguata. Le entita' non osservabili (quarks, fields) sono strumenti utili ma non dobbiamo impegnarci ontologicamente sulla loro esistenza. Ma l'osservabile/non osservabile e' un confine netto o sfumato? Churchland: un telescopio rende osservabile Giove — dove finisce l'osservazione e inizia l'inferenza? Se il confine e' vago, l'empirismo costruttivo crolla.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["van_fraassen", "empirismo_costruttivo", "adeguatezza_empirica", "osservabilita", "churchland"],
+      "structural_conflict": "Van Fraassen traccia il confine dell'osservabilita' biologicamente (cio' che un umano puo' percepire). Churchland mostra che il confine e' tecnologicamente mobile. Maxwell argomenta che la differenza e' di grado, non di tipo. Se non c'e' un confine netto, la distinzione osservabile/teorico non puo' fondare una posizione epistemologica."
+    },
+    {
+      "prompt": "L'epistemologia femminista (Harding, Haraway, Code) argomenta che il soggetto conoscente non e' astratto e universale ma situato: genere, razza, classe influenzano sia cosa si conosce sia come. Harding propone lo standpoint epistemology: le prospettive dei gruppi marginalizzati sono epistemicamente privilegiate perche' vedono sia la realta' dominante sia la propria oppressione. Ma se ogni conoscenza e' situata, lo e' anche l'epistemologia femminista — e la sua pretesa di verita' e' auto-referenzialmente problematica. Lo standpoint epistemology e' una forma di relativismo o un'espansione dell'oggettivita'?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["epistemologia_femminista", "harding", "haraway", "standpoint", "situatedness", "oggettivita"],
+      "structural_conflict": "Lo standpoint epistemology afferma il privilegio epistemico dei marginalizzati — ma se ogni standpoint e' parziale, anche il marginalizzato vede solo una parte. Haraway propone 'saperi situati' — oggettivita' come posizionamento esplicito, non come vista da nessun luogo (Nagel). Ma la rinuncia alla vista da nessun luogo e' una rinuncia all'universalita' — e la scienza senza universalita' e' ancora scienza?"
+    },
+    {
+      "prompt": "Carnap nel Logical Syntax of Language propone il principio di tolleranza: in logica non ci sono morali — chiunque puo' costruire il sistema formale che preferisce. Ma Godel mostra che ogni sistema sufficientemente potente e' incompleto. Tarski mostra che la verita' di un linguaggio non e' definibile in quel linguaggio. Se i fondamenti della matematica e della logica sono indecidibili, la matematica e' inventata o scoperta? Il platonismo matematico (Godel, Hardy) afferma che gli oggetti matematici esistono indipendentemente da noi. Il formalismo (Hilbert) e l'intuizionismo (Brouwer) negano. Chi ha ragione e quali sono le evidenze?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["carnap", "godel", "tarski", "platonismo_matematico", "formalismo", "intuizionismo"],
+      "structural_conflict": "Il platonismo spiega l'oggettivita' della matematica (i teoremi sono scoperti) ma non spiega l'accesso epistemico (come conosciamo entita' astratte — il dilemma di Benacerraf). Il formalismo riduce la matematica a simboli ma non spiega perche' i simboli 'funzionano' nel mondo fisico. L'intuizionismo limita la matematica all'intuitivamente costruibile — escludendo porzioni enormi della matematica classica."
+    },
+    {
+      "prompt": "La tesi di Duhem: un esperimento cruciale (experimentum crucis) e' impossibile perche' ogni test coinvolge ipotesi ausiliarie — se il risultato e' negativo, puoi sempre accusare un'ipotesi ausiliaria. Lakatos mostra storicamente che gli scienziati proteggono il 'nucleo duro' modificando la 'cintura protettiva'. Ma questo rende la scienza empirica un mito? Se nessuna singola osservazione puo' confutare una teoria, in che senso la scienza e' empirica? La risposta standard — i programmi degenerano quando la cintura protettiva cresce — e' un criterio vago. Quanto vago e' accettabile per una filosofia della scienza normativa?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["duhem", "lakatos", "esperimento_cruciale", "nucleo_duro", "cintura_protettiva", "degenerazione"],
+      "structural_conflict": "La tesi di Duhem e' logicamente inattaccabile: non puoi falsificare un'ipotesi isolata. Lakatos offre una via d'uscita pragmatica (programmi progressivi vs degeneranti) ma il criterio non e' algoritmico. In tempo reale, e' impossibile sapere se un programma e' in crisi temporanea o in degenerazione terminale. La razionalita' scientifica richiede tempo — ma la politica scientifica (finanziamenti, carriere) no."
+    },
+    {
+      "prompt": "Il nuovo puzzle dell'induzione di Goodman (1955): definisci 'vlu' come 'verde se osservato prima del 2030, blu se osservato dopo'. Tutti gli smeraldi osservati sono sia verdi che vlu. L'induzione da 'tutti gli smeraldi osservati sono verdi' a 'tutti gli smeraldi sono verdi' e' identica strutturalmente a 'tutti gli smeraldi osservati sono vlu' quindi 'tutti gli smeraldi sono vlu'. Ma la seconda predice che gli smeraldi diventeranno blu nel 2030. Goodman introduce la proiettabilita': solo predicati 'entrenched' sono proiettabili. Ma 'entrenched' e' determinato dall'uso passato — e questo e' circolare (l'induzione giustifica l'induzione). Il riddle e' stato risolto o e' una ferita aperta dell'epistemologia?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["goodman", "grue", "induzione", "proiettabilita", "entrenchment", "new_riddle"],
+      "structural_conflict": "Il riddle mostra che l'induzione richiede piu' della logica: richiede una selezione di predicati 'naturali'. Ma 'naturale' per chi? Per noi — e questo relativizza l'induzione alla nostra storia linguistica. La soluzione naturalista (Lewis: le classi naturali sono quelle con similarita' oggettiva) richiede un realismo metafisico che il riddle stesso mette in dubbio."
+    },
+    {
+      "prompt": "L'epistemologia della disagreement affronta il problema del disaccordo religioso: miliardi di persone intelligenti e sincere credono in religioni incompatibili. Questo e' evidenza che nessuna religione e' vera (argomento dalla diversita', Hick), che ciascuno dovrebbe ridurre la propria confidenza (equal weight view), o che la credenza religiosa non e' epistemica ma fideistica (Kierkegaard)? Plantinga in 'Warranted Christian Belief' argomenta che la credenza religiosa puo' essere properly basic — giustificata senza argomenti, come la percezione. Ma se la credenza islamica e cristiana sono entrambe properly basic e incompatibili, il framework di Plantinga non puo' decidere tra loro. La fede e' una categoria epistemica o extra-epistemica?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["disaccordo_religioso", "plantinga", "hick", "kierkegaard", "credenza_basica", "fede"],
+      "structural_conflict": "Plantinga mostra che la credenza religiosa puo' essere razionale senza argomenti — ma questo vale per ogni religione. L'argomento dalla diversita' suggerisce sospensione del giudizio — ma applica la logica epistemica a un dominio potenzialmente non epistemico. Se la fede e' extra-epistemica, l'epistemologia non ha giurisdizione. Se e' epistemica, il disaccordo e' devastante. La classificazione stessa e' il punto controverso."
+    },
+    {
+      "prompt": "Il problema della demarcazione: cosa distingue la scienza dalla pseudo-scienza? Popper: falsificabilita'. Ma l'astrologia fa predizioni falsificabili (e sono state falsificate) — eppure resta pseudo-scienza. Kuhn: la scienza ha un paradigma, la pseudo-scienza no. Ma questo e' descrittivo, non normativo. Thagard: la pseudo-scienza e' meno progressiva delle alternative disponibili. Laudan (1983) conclude che il problema della demarcazione e' un pseudo-problema — non esiste un criterio unico. Ma se non possiamo distinguere scienza da pseudo-scienza, come giustifichiamo il finanziamento pubblico della ricerca o le politiche basate sulla scienza?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["demarcazione", "popper", "kuhn", "laudan", "pseudo_scienza", "finanziamento_ricerca"],
+      "structural_conflict": "Ogni criterio singolo fallisce: falsificabilita' (troppo stretto), paradigma (descrittivo), progressivita' (relativa). Laudan ha ragione che non c'e' un criterio unico — ma le decisioni politiche (finanziare la medicina o l'omeopatia?) richiedono una demarcazione pratica. La filosofia non riesce a fondare una distinzione che la pratica richiede."
+    },
+    {
+      "prompt": "Zagzebski in 'Virtues of the Mind' (1996) unifica epistemologia e etica nella virtue epistemology: le virtu' intellettuali (curiosita', onesta' intellettuale, apertura mentale, coraggio intellettuale) sono analoghe alle virtu' morali di Aristotele. La conoscenza e' credenza vera prodotta da virtu' intellettuale. Ma Battaly (2008) distingue virtu' reliabiliste (processi affidabili) da virtu' responsabiliste (tratti di carattere). Un computer che produce credenze vere e' 'virtuoso' reliabilisticamente ma non ha tratti di carattere. L'epistemologia della virtu' e' compatibile con la conoscenza artificiale (AI) o implica che solo gli agenti con carattere morale possano conoscere?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["zagzebski", "virtue_epistemology", "virtu_intellettuali", "battaly", "conoscenza_artificiale"],
+      "structural_conflict": "Se la conoscenza richiede virtu' di carattere (responsabilismo), le AI non possono conoscere — ma producono output che usiamo come conoscenza. Se richiede solo processi affidabili (reliabilismo), il concetto di 'virtu'' e' metaforico. La tensione rivela che il concetto di conoscenza e' costruito per agenti umani e si deforma quando esteso alle macchine."
+    },
+    {
+      "prompt": "Il paradosso del prefatore (Makinson, 1965): un autore scrive un libro con 100 affermazioni, ciascuna creduta vera. Nella prefazione scrive: 'certamente alcune affermazioni in questo libro sono false'. Questa e' una credenza ragionevole data la fallibilita' umana. Ma crede ciascuna affermazione e crede che almeno una sia falsa — insieme inconsistente. A differenza del paradosso della lotteria, qui le credenze sono tutte giustificate da evidenze diverse. La consistenza e' un requisito della razionalita'? Foley argomenta di no: la consistenza logica e' un ideale troppo esigente per agenti limitati. Ma senza consistenza, l'epistemologia non diventa 'anything goes'?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["paradosso_prefatore", "makinson", "consistenza", "foley", "razionalita_limitata"],
+      "structural_conflict": "La consistenza e' normativa ma irraggiungibile per agenti finiti. Foley propone che la razionalita' sia coerenza locale, non globale. Ma la coerenza locale permette inconsistenze globali massicce. Christensen propone 'rational dilemmas' — situazioni in cui nessuna credenza e' pienamente razionale. Se i dilemmi razionali esistono, la razionalita' stessa e' incompleta."
+    },
+    {
+      "prompt": "L'argomento del cervello in una vasca (Putnam, 1981): non puoi sapere di non essere un cervello in una vasca stimolato da uno scienziato pazzo, perche' le tue esperienze sarebbero identiche in entrambi i casi. Putnam argomenta che l'ipotesi si auto-confuta: se fossi un cervello in una vasca, le mie parole 'cervello' e 'vasca' non si riferirebbero a cervelli e vasche reali ma agli stimoli — quindi l'ipotesi 'sono un cervello in una vasca' e' necessariamente falsa se enunciata. Questo argomento di esternalismo semantico funziona? O presuppone una teoria del riferimento (causalismo di Kripke-Putnam) che lo scettico non deve accettare?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["putnam", "cervello_vasca", "esternalismo", "scetticismo", "semantica", "kripke"],
+      "structural_conflict": "L'argomento di Putnam e' ingegnoso: usa l'esternalismo semantico per dimostrare che lo scetticismo cartesiano e' auto-confutante. Ma presuppone che il significato sia determinato dalla catena causale — se lo scettico adotta una semantica internalista, l'argomento non funziona. La confutazione dello scetticismo dipende dalla teoria semantica, non dall'epistemologia — il che e' una vittoria parziale."
+    },
+    {
+      "prompt": "Nozick in 'Philosophical Explanations' (1981) propone la condizione di sensitivity (tracking): S sa che P solo se, nel mondo possibile piu' vicino dove P e' falso, S non crederebbe P. Questo risolve i casi Gettier (nei casi Gettier, crederesti P anche se fosse falso). Ma la sensitivity ha un problema con la closure: sai di avere mani (sensitive — senza mani non lo crederesti) ma non sai di non essere un cervello in una vasca (non-sensitive — lo crederesti comunque). Se la conoscenza non e' chiusa sotto implicazione logica nota, puoi sapere P senza sapere le conseguenze ovvie di P. E' accettabile?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["nozick", "sensitivity", "tracking", "closure", "scetticismo", "gettier"],
+      "structural_conflict": "La sensitivity risolve Gettier ma viola la closure — un prezzo altissimo. La closure sembra ovvia: se sai che A e sai che A implica B, sai che B. Negarla significa che puoi sapere di avere mani senza sapere di non essere un cervello stimolato. Sosa e Williamson preferiscono safety (nel mondo vicino, se credi P, P e' vero) che preserva la closure ma ha altri problemi."
+    },
+    {
+      "prompt": "Kuhn e Feyerabend hanno introdotto la 'teoria carichi' (theory-ladenness) dell'osservazione: non esistono osservazioni pure — ogni osservazione e' interpretata alla luce di teorie. L'esempio dell'anatra-coniglio (Jastrow 1899, ripreso da Wittgenstein 1953 e Hanson 1958) illustra il punto: due scienziati con teorie diverse vedono letteralmente cose diverse guardando gli stessi dati. Ma se l'osservazione e' carica di teoria, e la teoria e' testata dall'osservazione, il circolo e' vizioso: la teoria determina le osservazioni che la confermano. Fodor (1984) risponde: i moduli percettivi sono informationally encapsulated — vediamo le stesse cose, le interpretiamo diversamente. La percezione e' modulare o penetrabile dalla teoria? E la risposta conta per la razionalita' scientifica?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["theory_ladenness", "kuhn", "hanson", "fodor", "percezione", "modularita"],
+      "structural_conflict": "Se la percezione e' modulare (Fodor), l'osservazione fornisce dati neutri tra teorie — e la scienza e' razionale. Se e' penetrabile (Churchland, Kuhn), ogni test e' circolare. La ricerca empirica (Firestone e Scholl, 2016) suggerisce che la percezione bassa e' modulare ma l'interpretazione dei dati e' carica di teoria — un compromesso che preserva la razionalita' ma non la neutralita'."
+    },
+    {
+      "prompt": "La spiegazione scientifica: cosa significa 'spiegare'? Il modello D-N di Hempel (1948) dice che spiegare e' dedurre il fenomeno da leggi universali e condizioni iniziali. Ma l'asta della bandiera spiega l'ombra e l'ombra non spiega l'asta — eppure entrambe le deduzioni sono valide (obiezione di Bromberger). Il modello causale di Salmon (1984) dice che spiegare e' identificare i processi causali. Ma la meccanica quantistica ha correlazioni senza cause locali (Bell). Van Fraassen propone il modello pragmatico: la spiegazione e' relativa al contesto e alla domanda. Se la spiegazione e' pragmatica, la scienza non scopre 'perche'' le cose accadono — risponde solo a domande contestuali. Questo e' sufficiente?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["spiegazione", "hempel", "salmon", "van_fraassen", "modello_dn", "causalita", "pragmatismo"],
+      "structural_conflict": "Il modello D-N confonde spiegazione con predizione (sono simmetriche nel modello ma non nella pratica). Il modello causale funziona per la fisica classica ma non per la quantistica. Il modello pragmatico e' flessibile ma svuota il concetto di spiegazione di contenuto oggettivo. 80 anni di filosofia della spiegazione non hanno prodotto un modello soddisfacente."
+    },
+    {
+      "prompt": "L'epistemologia formale usa la logica e la teoria della decisione per modellare la credenza razionale. Il Dutch book argument mostra che le credenze non-probabilistiche permettono scommesse sicuramente perdenti. Ma de Finetti (1937) mostra che le probabilita' sono soggettive — non esiste una distribuzione di probabilita' 'corretta', solo distribuzioni coerenti. Questo e' liberatorio (non serve una realta' probabilistica esterna) o problematico (un agente con prior patologici e' 'razionale' finche' e' coerente)? Joyce (1998) propone una giustificazione non-pragmatica: le probabilita' coerenti sono piu' 'vicine alla verita'' — ma misurare la vicinanza alla verita' presuppone una verita' oggettiva che il soggettivismo nega.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["epistemologia_formale", "dutch_book", "de_finetti", "joyce", "probabilita_soggettiva", "coerenza"],
+      "structural_conflict": "Il Dutch book argument dimostra che l'incoerenza e' irrazionale — ma non dimostra che la coerenza sia razionale. Un agente coerente con prior assurdi (P(sole sorge domani)=0.01) e' formalmente razionale. Joyce tenta di ancorare la coerenza all'accuratezza ma l'accuratezza presuppone probabilita' oggettive — il fondamento che il soggettivismo elimina. La razionalita' formale senza ancoraggio al mondo e' troppo debole."
+    },
+    {
+      "prompt": "Il problema della prova scientifica nel diritto: la corte americana in Daubert v. Merrell Dow (1993) stabilisce 4 criteri per l'ammissibilita' della prova scientifica: falsificabilita', peer review, tasso di errore noto, accettazione generale. Ma la filosofia della scienza mostra che nessuno di questi criteri e' chiaro: la falsificabilita' e' problematica (Duhem-Quine), il peer review non garantisce correttezza (crisi della replicabilita'), il tasso di errore dipende dal prior (paradosso del procuratore), e l'accettazione generale e' un criterio sociologico. I giudici usano una filosofia della scienza semplificata per decidere questioni con conseguenze reali. La semplificazione e' inevitabile nel diritto — ma quanto puo' essere semplificata senza diventare fuorviante?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["daubert", "prova_scientifica", "diritto", "falsificabilita", "paradosso_procuratore", "peer_review"],
+      "structural_conflict": "Il diritto richiede risposte binarie (ammissibile/inammissibile, colpevole/innocente). La scienza produce risposte probabilistiche e provvisorie. Il paradosso del procuratore (confondere P(evidenza|innocenza) con P(innocenza|evidenza)) e' diffuso nelle corti. La traduzione dalla complessita' scientifica alla semplicita' giuridica inevitabilmente distorce — ma non tradurre significa lasciare la scienza fuori dai tribunali."
+    }
+  ]
+}

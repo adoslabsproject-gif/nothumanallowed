@@ -1,0 +1,286 @@
+{
+  "domain": "diplomazia",
+  "description": "Diplomazia, negoziazione internazionale, mediazione, organizzazioni internazionali, soft power, trattati",
+  "prompts": [
+    {
+      "prompt": "Qual è la differenza tra diplomazia bilaterale e diplomazia multilaterale? Quando è preferibile l'una o l'altra?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["bilaterale", "multilaterale", "framework_diplomatico"],
+      "structural_conflict": "La diplomazia bilaterale è più veloce e flessibile ma esclude attori rilevanti. La multilaterale è più inclusiva e legittima ma più lenta e soggetta a veti. La scelta del formato determina chi ha potere nel negoziato."
+    },
+    {
+      "prompt": "Cos'è la diplomazia coercitiva e in cosa differisce dall'ultimatum? Fai un esempio storico di successo e uno di fallimento.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["diplomazia_coercitiva", "ultimatum", "compellence"],
+      "structural_conflict": "La diplomazia coercitiva fallisce in entrambe le direzioni per ragioni diverse: troppa pressione attiva il bias psicologico di 'loss aversion' nell'avversario, rendendo la resistenza razionale anche a costi elevati; troppo poca segnala debolezza e invita il free-riding. Il punto ottimale richiede informazioni perfette sulle soglie decisionali dell'avversario — informazioni che per definizione non sono disponibili, creando un calcolo strategico sotto incertezza radicale."
+    },
+    {
+      "prompt": "Cosa sono le confidence-building measures (CBM) nella diplomazia e perché sono considerate il primo passo in qualsiasi processo di distensione?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["cbm", "distensione", "fiducia", "de_escalation"],
+      "structural_conflict": "Le CBM funzionano solo se entrambe le parti le rispettano. Una violazione distrugge più fiducia di quanta ne creino 10 CBM rispettate. Il processo è asimmetrico: costruire fiducia è lento, distruggerla è istantaneo."
+    },
+    {
+      "prompt": "Spiega il concetto di 'track-two diplomacy' e perché canali non ufficiali possono a volte ottenere risultati che la diplomazia ufficiale non riesce a raggiungere.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["track_two", "canali_non_ufficiali", "backchannel"],
+      "structural_conflict": "La track-two diplomacy crea un paradosso di mandato: le concessioni esplorative funzionano proprio perché non impegnano, ma la non-vincolatività significa che qualsiasi accordo raggiunto può essere disconosciuto quando diventa scomodo. Investire risorse in un canale che produce risultati revocabili è razionale solo se l'alternativa (nessun canale) è peggiore — ma la track-two può anche consumare tempo e buona fede che avrebbero potuto essere investiti in negoziati formali vincolanti."
+    },
+    {
+      "prompt": "Cos'è il principio di reciprocità in diplomazia e perché è considerato il fondamento delle relazioni internazionali?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["reciprocita", "relazioni_internazionali", "norme"],
+      "structural_conflict": "La reciprocità mantiene l'equilibrio ma può escalare sia positivamente che negativamente. Una spirale di reciprocità negativa trasforma concessioni mancate in ritorsioni crescenti. Il primo a rompere il ciclo appare debole."
+    },
+    {
+      "prompt": "Qual è la differenza tra un trattato, un accordo, un memorandum d'intesa (MoU) e una dichiarazione congiunta? Quale ha valore vincolante?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["trattati", "mou", "diritto_internazionale", "vincoli"],
+      "structural_conflict": "La scelta del formato diplomatico è strategica, non tecnica: un trattato vincolante richiede ratifica parlamentare, esponendo il governo a opposizione interna, ma crea obblighi duraturi; un MoU evita il voto parlamentare ma può essere revocato dal prossimo governo. Lo stato che insiste sul trattato segnala impegno serio ma rischia il rigetto; lo stato che preferisce il MoU segnala flessibilità ma anche potenziale inaffidabilità. Il formato rivela l'intenzione — e l'altra parte legge il segnale."
+    },
+    {
+      "prompt": "Cos'è il concetto di 'good offices' nel contesto della mediazione internazionale e come si distingue dalla mediazione vera e propria?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["good_offices", "mediazione", "facilitazione"],
+      "structural_conflict": "Good offices e mediazione creano incentivi opposti per il terzo attore: i good offices preservano la neutralità ma limitano l'influenza, impedendo al facilitatore di guidare il risultato; la mediazione massimizza l'influenza ma espone il mediatore all'accusa di parzialità, potenzialmente invalidando l'intero processo. Se una parte lascia il tavolo accusando il mediatore di bias, il danno è irreversibile — ma se il facilitatore resta passivo, le parti possono non raggiungere mai un accordo da sole."
+    },
+    {
+      "prompt": "Spiega la 'diplomazia del ping pong' tra USA e Cina nel 1971 e perché è considerata un esempio di diplomazia culturale efficace.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["diplomazia_culturale", "usa_cina", "ping_pong", "distensione"],
+      "structural_conflict": "La diplomazia culturale funziona come segnale di apertura quando i canali ufficiali sono bloccati, ma richiede che entrambe le parti siano già disposte al cambiamento. Il ping pong non ha causato la distensione — l'ha resa visibile."
+    },
+    {
+      "prompt": "Un mediatore internazionale deve negoziare un cessate il fuoco tra due parti. Una delle parti ha commesso crimini di guerra documentati con prove video e testimonianze. Negoziare con loro legittima i crimini e offende le vittime. Non negoziare prolunga la guerra e causa stimati 500 civili morti a settimana. Come si bilancia giustizia e pace quando ogni scelta tradisce uno dei due valori?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["cessate_fuoco", "crimini_guerra", "giustizia_vs_pace", "mediazione"],
+      "structural_conflict": "Negoziare con criminali di guerra crea un precedente morale devastante ma salva vite immediate. Rifiutare di negoziare mantiene l'integrità morale ma le 500 vittime settimanali sono il prezzo di quella integrità. Il mediatore deve scegliere quale tradimento è meno inaccettabile."
+    },
+    {
+      "prompt": "Il JCPOA (accordo nucleare iraniano del 2015) è costato circa 9 anni di negoziati tra 7 parti (P5+1 e Iran), dal 2006 al 2015. Gli USA si sono ritirati unilateralmente nel 2018. L'Iran ha ripreso l'arricchimento al 60%. Le altre 5 parti volevano mantenere l'accordo. Come si gestisce un trattato multilaterale quando la potenza più forte si ritira e l'accordo perde il meccanismo di enforcement?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["jcpoa", "iran", "ritiro_unilaterale", "multilateralismo", "enforcement"],
+      "structural_conflict": "Un trattato multilaterale senza la potenza dominante perde credibilità e leva. Le altre parti non possono sostituire le sanzioni americane. L'Iran non ha incentivo a rispettare un accordo che non gli fornisce più i benefici promessi. 9 anni di lavoro diplomatico distrutti da una decisione unilaterale mostrano la fragilità del multilateralismo."
+    },
+    {
+      "prompt": "La Norvegia ha mediato gli Accordi di Oslo del 1993 tra Israele e OLP. 30 anni dopo, il processo di pace è morto, gli insediamenti israeliani sono triplicati, e i due stati non esistono. La Norvegia è stata criticata per aver legittimato un processo che ha dato copertura diplomatica all'espansione israeliana. Può un mediatore essere responsabile del fallimento a lungo termine di un accordo che ha facilitato?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["oslo", "israele_palestina", "mediazione_fallita", "responsabilita_mediatore"],
+      "structural_conflict": "Il mediatore ha l'obbligo di neutralità ma il risultato del suo lavoro ha avvantaggiato strutturalmente una parte. Oslo ha dato l'apparenza di progresso mentre sul terreno la situazione peggiorava. Il mediatore è complice di un fallimento prevedibile o ha fatto il massimo possibile in un contesto impossibile?"
+    },
+    {
+      "prompt": "Due paesi confinanti hanno una disputa territoriale su una regione con 2 milioni di abitanti. Il paese A ha il controllo militare; il paese B ha il diritto legale (sentenza ICJ). Un accordo di scambio territoriale è possibile: il paese A cede la regione in cambio di accesso marittimo e 10 miliardi di dollari in investimenti. Ma i 2 milioni di abitanti non vogliono cambiare sovranità. Come si bilanciano diritto internazionale, realtà militare, economia e volontà popolare?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["disputa_territoriale", "icj", "autodeterminazione", "scambio_territoriale"],
+      "structural_conflict": "Il diritto internazionale dice B ha ragione. La realtà militare dice A ha il potere. L'economia suggerisce un compromesso. I 2 milioni di abitanti hanno un diritto di autodeterminazione che nessuna delle tre logiche considera. Il trattato soddisfa tutti tranne le persone direttamente coinvolte."
+    },
+    {
+      "prompt": "Un ambasciatore scopre che il proprio governo sta pianificando un'azione militare illegale contro un paese dove è accreditato. Ha informazioni che, se rivelate al paese ospitante, impedirebbero l'azione ma tradirebbero il proprio governo. Non fare nulla lo renderebbe complice. Dimettersi silenziosamente non fermerebbe l'azione. Quale dovere prevale: lealtà verso il proprio stato, legalità internazionale, o coscienza personale?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["ambasciatore", "lealta_vs_legalita", "whistleblowing_diplomatico", "coscienza"],
+      "structural_conflict": "L'ambasciatore è simultaneamente rappresentante del proprio stato, soggetto di diritto internazionale, e individuo con una coscienza. Rivelare l'informazione è tradimento. Non rivelarla è complicità. Dimettersi è irrilevante. Ogni scelta distrugge uno dei tre ruoli che è obbligato a ricoprire."
+    },
+    {
+      "prompt": "La Cina ha proposto la Global Security Initiative (GSI) come alternativa all'architettura di sicurezza occidentale. La Russia sostiene l'iniziativa. L'India è ambigua. 60+ paesi del Global South hanno espresso interesse. Se il GSI diventasse un framework parallelo con un proprio meccanismo di mediazione, come cambierebbe la diplomazia globale? L'ONU diventerebbe irrilevante?",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["gsi", "cina", "architettura_sicurezza", "onu", "global_south"],
+      "structural_conflict": "Un framework di sicurezza parallelo riflette il multipolarismo ma frammenta il sistema internazionale. L'ONU è già paralizzata dai veti ma resta l'unica organizzazione universale. Due sistemi paralleli significano due set di regole — e nessun meccanismo per risolvere conflitti tra i due sistemi."
+    },
+    {
+      "prompt": "I negoziati sul clima (COP) hanno prodotto l'Accordo di Parigi nel 2015 con 195 firmatari. Ma le emissioni globali nel 2025 sono più alte del 2015. Il formato COP — 195 paesi, consenso unanime, nessun meccanismo di enforcement — è strutturalmente inadatto? Come si negozia un bene comune globale quando chi inquina di più (Cina 30%, USA 14%, UE 8%) ha potere di veto e il costo lo pagano paesi che emettono meno dell'1%?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["cop", "parigi", "clima", "free_rider", "enforcement", "asimmetria"],
+      "structural_conflict": "Il clima è un bene comune ma i costi della riduzione sono nazionali. Chi emette di più ha meno incentivi a ridurre. Chi subisce di più ha meno potere negoziale. L'unanimità impedisce decisioni vincolanti. Il formato stesso della negoziazione è incompatibile con l'urgenza del problema."
+    },
+    {
+      "prompt": "La Svizzera ha mediato silenziosamente decine di conflitti negli ultimi 50 anni (Iran-USA, Colombia-FARC, Corea del Nord). La sua neutralità è il suo asset diplomatico. Ma se la Svizzera aderisse alle sanzioni UE contro la Russia (come ha parzialmente fatto nel 2022), perderebbe la credibilità di mediatore neutrale. Come si mantiene la neutralità in un mondo dove 'non schierarsi' viene interpretato come schierarsi con l'aggressore?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["svizzera", "neutralita", "mediazione", "sanzioni", "credibilita"],
+      "structural_conflict": "La neutralità è l'asset più prezioso della Svizzera ma mantenerla richiede non prendere posizione su violazioni gravi del diritto internazionale. Aderire alle sanzioni preserva l'integrità morale ma distrugge il ruolo di mediatore. La neutralità funziona solo se è assoluta — ma l'assolutismo morale è impossibile di fronte all'aggressione."
+    },
+    {
+      "prompt": "Nel 2023, l'Arabia Saudita e l'Iran hanno ristabilito relazioni diplomatiche con la mediazione della Cina, escludendo completamente gli USA. È la prima volta che una grande mediazione mediorientale avviene senza Washington. Analizza le implicazioni per il ruolo americano nella diplomazia globale.",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["arabia_saudita", "iran", "cina", "mediazione", "usa", "medio_oriente"],
+      "structural_conflict": "La Cina ha dimostrato capacità di mediazione senza avere le basi militari o i trattati di alleanza che gli USA hanno nella regione. Se la diplomazia non richiede più potere militare, l'intero modello americano di 'sicurezza in cambio di influenza' diventa obsoleto."
+    },
+    {
+      "prompt": "Spiega la dottrina della 'responsibility to protect' (R2P) adottata dall'ONU nel 2005 e perché dopo la Libia del 2011 è considerata politicamente morta.",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["r2p", "libia", "intervento_umanitario", "sovranita"],
+      "structural_conflict": "La R2P era un tentativo di superare la sovranità assoluta per proteggere civili, ma in Libia è stata usata per regime change — tradendo lo spirito dell'intervento. Ora Russia e Cina bloccano qualsiasi invocazione della R2P, e i civili in Siria e Yemen ne pagano il prezzo. L'abuso di un principio lo ha distrutto."
+    },
+    {
+      "prompt": "Un paese africano in guerra civile ha 3 gruppi armati. Il mediatore ONU riesce a far sedere tutti e 3 al tavolo. Il gruppo A (governo) vuole elezioni immediate perché ha il 60% del territorio. Il gruppo B (ribelli) vuole prima il disarmo del governo. Il gruppo C (etnico minoritario con 2 milioni di persone) vuole autonomia regionale che né A né B accettano. Come strutturi il negoziato quando le precondizioni di ogni parte escludono le precondizioni delle altre?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["guerra_civile", "mediazione_tripartita", "precondizioni", "sequencing"],
+      "structural_conflict": "Le precondizioni sono incompatibili: A non disarma prima delle elezioni che vincerebbe, B non vota mentre A è armato, C non accetta nessun accordo senza autonomia che A e B rifiutano. Il mediatore deve trovare un sequencing che soddisfi parzialmente tutti senza che nessuno lasci il tavolo — ma ogni concessione a una parte è percepita come tradimento dalle altre."
+    },
+    {
+      "prompt": "La diplomazia economica è diventata lo strumento principale della politica estera cinese. Con 140+ paesi nella BRI, la Cina offre infrastrutture senza condizioni sui diritti umani. L'Occidente offre meno denaro con più condizioni. Un paese africano con un PIL di 15 miliardi e un debito del 70% riceve due offerte: Cina (porto da 3 miliardi, nessuna condizione, interessi al 2%) e UE (porto da 1.5 miliardi, condizioni di governance e trasparenza, interessi allo 0.5%). Quale offerta serve meglio gli interessi a lungo termine del paese?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["diplomazia_economica", "bri", "condizionalita", "debito", "governance"],
+      "structural_conflict": "L'offerta cinese è più generosa nel breve termine ma il 2% su 3 miliardi per un paese con PIL di 15 miliardi potrebbe diventare insostenibile. L'offerta UE è più piccola ma le condizioni di governance potrebbero migliorare la capacità del paese di gestire il debito. Il country rischia debt trap con la Cina o sviluppo più lento con l'UE."
+    },
+    {
+      "prompt": "Il Trattato INF (Intermediate-Range Nuclear Forces) del 1987 tra USA e URSS ha eliminato un'intera classe di armi nucleari. Gli USA si sono ritirati nel 2019 accusando la Russia di violazioni. Ora entrambi sviluppano nuovi missili a raggio intermedio, e la Cina non è vincolata da alcun trattato. Come si negozia un nuovo trattato di controllo degli armamenti in un mondo tripolare dove una delle tre potenze (Cina) rifiuta di negoziare finché il suo arsenale non è alla pari?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["inf", "controllo_armamenti", "tripolarismo", "cina", "corsa_armamenti"],
+      "structural_conflict": "Un trattato bilaterale USA-Russia è inutile se la Cina non aderisce. La Cina non aderirà finché il suo arsenale è 1/20 di quello USA. Ma aspettare che la Cina raggiunga la parità significa permettere una corsa agli armamenti che il trattato dovrebbe prevenire. Il sequencing è impossibile: nessuno vuole limitarsi per primo."
+    },
+    {
+      "prompt": "Un governo deve decidere se aprire un'ambasciata in un regime autoritario che ha appena represso violentemente proteste uccidendo 200 civili. L'ambasciata permetterebbe di monitorare la situazione, proteggere connazionali residenti, e mantenere canali di comunicazione. Ma l'apertura viene interpretata come legittimazione del regime. Come si bilancia pragmatismo diplomatico e principi?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "medium",
+      "tags": ["riconoscimento", "legittimazione", "pragmatismo", "diritti_umani"],
+      "structural_conflict": "L'ambasciata è uno strumento — non un endorsement — ma viene percepita come tale. Chiuderla è un segnale forte ma elimina ogni influenza e lascia i connazionali senza protezione. La diplomazia richiede relazioni con governi sgradevoli — il costo del purismo è l'irrilevanza."
+    },
+    {
+      "prompt": "Il Consiglio di Sicurezza ONU ha 5 membri permanenti con diritto di veto. Dal 1945, il veto è stato usato 300+ volte, spesso per proteggere alleati da risoluzioni sgradite. La Russia ha posto il veto 30+ volte sulla Siria. Gli USA 40+ volte su Israele. Questo paralizza l'ONU nelle crisi più gravi. Come si riforma il veto senza che i 5 permanenti lo blocchino — dato che la riforma stessa richiede il loro consenso?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["consiglio_sicurezza", "veto", "riforma_onu", "paradosso_riforma"],
+      "structural_conflict": "La riforma del veto richiede il voto di chi ne beneficia — un paradosso strutturale. Nessun membro permanente rinuncerà volontariamente al potere di veto. Alternative come il voto all'Assemblea Generale (Uniting for Peace) mancano di enforcement. L'ONU è paralizzata dal meccanismo che doveva renderla efficace."
+    },
+    {
+      "prompt": "La diplomazia del vaccino durante il COVID ha visto Cina (Sinovac), Russia (Sputnik) e India (Covaxin/Covishield) fornire vaccini a paesi in via di sviluppo mentre l'Occidente accumulava dosi. 130 paesi non avevano ricevuto una singola dose quando USA e UE erano alla terza. Analizza come una crisi sanitaria è diventata uno strumento di soft power e come ha ridisegnato le alleanze nel Global South.",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["diplomazia_vaccino", "covid", "soft_power", "global_south", "disuguaglianza"],
+      "structural_conflict": "L'Occidente ha predicato solidarietà globale mentre accumulava vaccini. Cina e Russia hanno riempito il vuoto con vaccini meno efficaci ma disponibili subito. I paesi del Global South hanno scelto vaccini peggiori da partner 'meno democratici' perché erano gli unici a offirli. La credibilità occidentale di 'leader morale' è stata devastata."
+    },
+    {
+      "prompt": "Il principio di 'constructive ambiguity' nella diplomazia permette di raggiungere accordi dove le parti interpretano il testo in modo diverso. Henry Kissinger lo usava sistematicamente. Ma gli accordi costruiti sull'ambiguità tendono a crollare quando le interpretazioni divergenti emergono. L'ambiguità costruttiva è un asset diplomatico o un debito a lungo termine?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["ambiguita_costruttiva", "kissinger", "interpretazione", "trattati"],
+      "structural_conflict": "L'ambiguità permette l'accordo ora al costo di un conflitto interpretativo futuro. La chiarezza impedisce l'accordo ora ma evita il conflitto futuro. Il diplomatico deve scegliere: un accordo fragile oggi o nessun accordo ma fondamenta solide per domani?"
+    },
+    {
+      "prompt": "Analizza il ruolo della lingua nella diplomazia. Il francese è stata la lingua diplomatica per 300 anni, sostituita dall'inglese dopo il 1945. La Cina spinge per il mandarino nelle istituzioni internazionali. La lingua di negoziazione influenza il contenuto dell'accordo? Chi negozia in una lingua non sua è svantaggiato?",
+      "conflict_type": ["values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["lingua_diplomatica", "potere_culturale", "negoziazione", "traduzione"],
+      "structural_conflict": "Negoziare nella lingua dell'altra parte è uno svantaggio cognitivo e culturale misurabile. La lingua porta con sé categorie concettuali: 'rule of law' non ha equivalente esatto in mandarino. La dominanza dell'inglese è anche la dominanza del framework concettuale anglosassone nella diplomazia globale."
+    },
+    {
+      "prompt": "Il concetto di 'strategic patience' — aspettare che le condizioni maturino prima di agire — è stato usato da Obama verso la Corea del Nord e da molti diplomatici. Ma la Corea del Nord ha usato quel tempo per sviluppare ICBM e testate nucleari. Quando la pazienza strategica diventa inazione strategica? Come si distingue il momento in cui aspettare è saggio dal momento in cui aspettare è negligente?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["pazienza_strategica", "inazione", "timing", "corea_nord"],
+      "structural_conflict": "La pazienza presuppone che il tempo lavori a tuo favore. Se l'avversario usa il tempo per rafforzarsi, la pazienza diventa un regalo strategico. Ma l'impazienza può provocare escalation premature. Il problema è che non puoi sapere in anticipo se il tempo è tuo alleato o tuo nemico."
+    },
+    {
+      "prompt": "Un paese ha 500 connazionali bloccati in uno stato fallito dopo un colpo di stato. L'unico modo per evacuarli è negoziare con la giunta militare che ha preso il potere. Negoziare implica riconoscimento de facto. Non negoziare mette a rischio 500 vite. La giunta chiede il rilascio di 50 milioni di fondi congelati come condizione per l'evacuazione. Pagare finanzia il regime. Non pagare abbandona i cittadini. Come si negozia?",
+      "conflict_type": ["ethical_dilemma", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["evacuazione", "riconoscimento_de_facto", "stato_fallito", "riscatto", "connazionali"],
+      "structural_conflict": "Ogni contatto con la giunta è riconoscimento implicito. Pagare i 50 milioni finanzia il regime e crea un precedente per futuri ricatti. Non pagare abbandona 500 cittadini il cui governo ha il dovere di proteggere. La soluzione ideale (evacuazione senza concessioni) potrebbe non esistere."
+    },
+    {
+      "prompt": "La 'shuttle diplomacy' di Kissinger negli anni '70 ha prodotto il disimpegno militare tra Israele ed Egitto. Il mediatore si muove fisicamente tra le parti che non si parlano. Nell'era della comunicazione istantanea, la shuttle diplomacy è ancora rilevante o è un anacronismo? Cosa aggiunge la presenza fisica del mediatore?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["shuttle_diplomacy", "kissinger", "presenza_fisica", "mediazione"],
+      "structural_conflict": "La shuttle diplomacy concentra un potere asimmetrico nel mediatore: controllando il flusso di informazioni tra le parti, può selezionare cosa rivelare e cosa omettere — un potere che accelera l'accordo ma che, se scoperto, distrugge la fiducia in modo irreparabile. La comunicazione istantanea moderna riduce il vantaggio informativo del mediatore ma non elimina il vantaggio psicologico della presenza fisica. Il dilemma è se la pressione relazionale che il mediatore esercita in persona sia negoziazione legittima o manipolazione."
+    },
+    {
+      "prompt": "L'ASEAN (10 paesi del Sud-Est asiatico) opera per consenso e con il principio di non-interferenza negli affari interni. Quando il Myanmar ha avuto un colpo di stato nel 2021 con migliaia di civili uccisi (oltre 6.000 secondo stime ONU al 2024), l'ASEAN ha emesso un 'five-point consensus' che il Myanmar ha ignorato. L'ASEAN non ha meccanismi di enforcement. Il 'ASEAN Way' è un modello diplomatico efficace o un'abdicazione mascherata da rispetto culturale?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["asean", "non_interferenza", "myanmar", "consensus", "enforcement"],
+      "structural_conflict": "Il principio di non-interferenza protegge la sovranità di tutti i membri ma impedisce l'azione collettiva contro le violazioni più gravi. L'ASEAN Way funziona per questioni commerciali ma fallisce per crisi umanitarie. Il rispetto culturale per la sovranità diventa complicità quando la sovranità viene usata per massacrare civili."
+    },
+    {
+      "prompt": "Dopo la guerra Russia-Georgia del 2008, la Francia ha mediato un cessate il fuoco in 5 giorni. Ma i termini dell'accordo erano ambigui e la Russia ha interpretato una clausola come autorizzazione a mantenere truppe in Ossezia del Sud e Abcasia — occupazione che continua oggi. Il mediatore (Sarkozy) è stato criticato per la fretta. In una crisi con vittime in corso, è meglio un cessate il fuoco imperfetto subito o un accordo migliore tra 3 settimane con 2.000 morti in più?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["georgia", "cessate_fuoco", "ambiguita", "velocita_vs_qualita", "occupazione"],
+      "structural_conflict": "Un cessate il fuoco immediato salva vite ma le ambiguità nel testo permettono alla parte più forte di interpretare l'accordo a suo vantaggio. Aspettare per un accordo migliore costa vite. La Russia ha usato l'ambiguità per legalizzare un'occupazione. Le vite salvate nel 2008 sono state compensate da 16 anni di occupazione?"
+    },
+    {
+      "prompt": "La diplomazia preventiva — intervenire prima che un conflitto esploda — è teoricamente preferibile a quella reattiva. Ma è politicamente difficile: spendere risorse per prevenire qualcosa che potrebbe non accadere è impopolare. Il genocidio in Rwanda nel 1994 (800.000 morti in 100 giorni) poteva essere prevenuto con 5.000 truppe ONU e un costo stimato di 500 milioni. Dopo il genocidio, la comunità internazionale ha speso 4.5 miliardi per i rifugiati. Perché la diplomazia preventiva fallisce sistematicamente nonostante sia più economica?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["diplomazia_preventiva", "rwanda", "genocidio", "costo_inazione", "volonta_politica"],
+      "structural_conflict": "La prevenzione non produce eroi visibili — se funziona, nessuno sa cosa è stato evitato. L'intervento post-crisi è drammatico e visibile. I politici hanno incentivi a reagire, non a prevenire. 500 milioni per prevenire non hanno constituency; 4.5 miliardi per reagire ne hanno perché la crisi è già sui media. L'architettura degli incentivi politici è strutturalmente contraria alla prevenzione."
+    },
+    {
+      "prompt": "Un diplomatico deve negoziare il rilascio di 3 ostaggi con un gruppo terroristico. Il gruppo chiede il rilascio di 150 prigionieri. L'intelligence suggerisce che almeno 20 dei 150 torneranno a combattere e statisticamente causeranno 40-60 vittime nei prossimi 5 anni. Scambiare 3 vite certe oggi con 40-60 vite statistiche domani è un calcolo accettabile? Il valore di una vita presente è superiore a quello di una vita futura e probabilistica?",
+      "conflict_type": ["ethical_dilemma", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["ostaggi", "scambio_prigionieri", "vite_presenti_vs_future", "terrorismo"],
+      "structural_conflict": "Le 3 vite presenti hanno nome e volto — le 40-60 vittime future sono statistiche anonime. Rifiutare lo scambio condanna 3 persone identificabili per proteggere persone non ancora identificate. Accettare crea un incentivo per futuri rapimenti. Il calcolo utilitario è chiaro (non scambiare) ma la morale emotiva è opposta (salvare chi puoi)."
+    },
+    {
+      "prompt": "Analizza il ruolo delle first ladies e dei coniugi dei leader nelle visite di stato. La diplomazia cerimoniale — cene di gala, visite a scuole, foto con bambini — è spesso derisa come superficiale. Ma il programma del coniuge è spesso il canale dove si costruiscono relazioni personali che facilitano la diplomazia 'vera'. Quanto conta il capitale relazionale personale nella diplomazia moderna?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["diplomazia_cerimoniale", "relazioni_personali", "soft_diplomacy", "capitale_relazionale"],
+      "structural_conflict": "La diplomazia cerimoniale sembra irrilevante ma costruisce il tessuto relazionale su cui si basano le decisioni in momenti di crisi. Un leader che ha cenato con un altro leader è statisticamente meno propenso a escalare un conflitto. Ma quantificare questo effetto è impossibile, rendendo la diplomazia cerimoniale perpetuamente sotto-finanziata."
+    },
+    {
+      "prompt": "Il Vaticano ha una delle reti diplomatiche più antiche del mondo — relazioni diplomatiche con 184 paesi. Non ha esercito, economia significativa, o territorio oltre 0.44 km². Eppure media conflitti, facilita canali segreti (USA-Cuba 2014), e influenza 1.4 miliardi di cattolici. Come si costruisce influenza diplomatica senza hard power? Il modello vaticano è replicabile?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["vaticano", "soft_power", "influenza_senza_hard_power", "diplomazia_religiosa"],
+      "structural_conflict": "Il Vaticano dimostra che il soft power puro può funzionare — ma solo con 2.000 anni di storia, 1.4 miliardi di fedeli, e una pretesa di autorità morale universale. Nessun altro attore ha queste condizioni. Il modello funziona perché è unico e non replicabile."
+    },
+    {
+      "prompt": "Dopo il genocidio in Rwanda e la guerra in Bosnia, la comunità internazionale ha creato tribunali penali internazionali (ICTR, ICTY) e poi la Corte Penale Internazionale (ICC). Ma né USA, né Russia, né Cina, né India hanno ratificato lo Statuto di Roma. L'ICC ha giurisdizione solo sui 125 stati parte (al 2025, inclusa l'Ucraina). Come si costruisce giustizia internazionale quando le potenze più forti si auto-escludono?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["icc", "giustizia_internazionale", "statuto_roma", "impunita", "potenze"],
+      "structural_conflict": "La giustizia internazionale funziona solo contro i deboli. Le grandi potenze si auto-escludono e proteggono i propri alleati con il veto al Consiglio di Sicurezza. L'ICC appare come giustizia selettiva — il che mina la legittimità che dovrebbe fondare la sua autorità."
+    },
+    {
+      "prompt": "La diplomazia digitale — Twitter/X dei capi di stato, comunicati via social media, negoziati via video — ha accelerato la comunicazione ma eliminato il buffer temporale che permetteva la riflessione. Un tweet di un presidente può causare una crisi diplomatica in 30 secondi. La velocità della comunicazione è compatibile con la lentezza necessaria alla diplomazia?",
+      "conflict_type": ["prediction_uncertainty", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["diplomazia_digitale", "social_media", "velocita", "escalation"],
+      "structural_conflict": "La diplomazia tradizionale funziona con deliberazione, ambiguità, e tempo per la riflessione. I social media richiedono immediatezza, chiarezza, e reazione istantanea. I due modelli sono incompatibili. La pressione a 'rispondere subito' elimina lo spazio per il compromesso che richiede silenzio e segretezza."
+    },
+    {
+      "prompt": "La Norvegia gestisce un fondo sovrano da oltre 1.9 trilioni di dollari (2024) — il più grande del mondo — con linee guida etiche che vietano investimenti in aziende che violano diritti umani, producono armi nucleari, o causano danni ambientali gravi. Ma il fondo è finanziato interamente dal petrolio norvegese, che contribuisce al cambiamento climatico. La diplomazia norvegese promuove la pace e la sostenibilità mentre il suo modello economico è basato sui fossili. Come si negozia credibilità diplomatica quando la propria base economica contraddice il proprio messaggio?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["norvegia", "fondo_sovrano", "ipocrisia_energetica", "credibilita_diplomatica", "petrolio"],
+      "structural_conflict": "La Norvegia predica sostenibilità ma la sua ricchezza viene dal petrolio. Il fondo etico esclude chi viola i diritti umani ma è finanziato da emissioni di CO2 che minacciano l'intera umanità. La credibilità diplomatica richiede coerenza — ma la coerenza richiederebbe rinunciare alla fonte di ricchezza che rende la Norvegia influente."
+    },
+    {
+      "prompt": "Un piccolo stato di 5 milioni di abitanti è tra due potenze regionali rivali. La potenza A offre un'alleanza militare con garanzia di protezione. La potenza B minaccia ritorsioni economiche se il piccolo stato accetta. Il PIL del piccolo stato dipende per il 35% dal commercio con B e per il 15% da A. La neutralità non è un'opzione perché il territorio è strategico per entrambi. Come negozia un piccolo stato la propria sopravvivenza quando non può dire sì a nessuno e non può dire no a tutti?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["piccolo_stato", "pressione_geopolitica", "neutralita_impossibile", "sopravvivenza"],
+      "structural_conflict": "Accettare l'alleanza con A protegge militarmente ma distrugge il 35% dell'economia. Rifiutare perde la protezione. La neutralità è impossibile perché entrambi la considerano un posizionamento contro di loro. Il piccolo stato non ha leva — solo la capacità di scegliere da chi essere schiacciato."
+    },
+    {
+      "prompt": "Analizza il concetto di 'frozen conflicts' — conflitti non risolti ma non attivi: Transnistria, Nagorno-Karabakh (pre-2023), Cipro Nord, Abcasia, Ossezia del Sud. Questi conflitti 'congelati' spesso servono gli interessi di una potenza esterna che li mantiene come leva. La Russia ha truppe in 4 su 5 di questi conflitti. Come si 'scongela' un conflitto in modo pacifico quando lo status quo beneficia l'attore più forte?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["frozen_conflicts", "transnistria", "status_quo", "leva_geopolitica", "russia"],
+      "structural_conflict": "Un conflitto congelato è uno strumento di controllo: la potenza che lo mantiene può 'scongelarlo' a piacimento come minaccia. Risolvere il conflitto rimuove la leva. Il beneficiario del congelamento non ha incentivo a risolvere. Le vittime del congelamento (popolazioni divise, economie distrutte) non hanno potere per cambiare la situazione."
+    }
+  ]
+}

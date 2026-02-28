@@ -1,0 +1,703 @@
+{
+  "domain": "elettronica",
+  "description": "Elettronica analogica e digitale, progettazione PCB, embedded systems, power electronics, EMC, componentistica",
+  "prompts": [
+    {
+      "prompt": "Qual e' la differenza fondamentale tra un microcontrollore (es. STM32F4) e un microprocessore (es. ARM Cortex-A53)? Un microcontrollore ha Flash, SRAM, periferiche (ADC, timer, UART) integrate on-chip e puo' eseguire codice bare-metal senza memoria esterna, mentre un microprocessore richiede DDR esterna, storage (eMMC/SD), e un OS per funzionare. Quando si sceglie l'uno rispetto all'altro in un progetto embedded?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "microcontrollore",
+        "microprocessore",
+        "stm32",
+        "cortex_a",
+        "architettura"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale reale: la scelta dipende dalla complessita' del task. Se serve un control loop a 10kHz con latenza deterministica, MCU. Se serve elaborazione video, networking stack completo, GUI, MPU. La risposta e' deterministica in base ai requisiti."
+    },
+    {
+      "prompt": "Quando si usa un MOSFET (es. IRLZ44N, Rds_on=22mOhm) rispetto a un BJT (es. TIP120) per switching di un carico DC a 12V/5A? Il MOSFET e' voltage-driven (gate charge ~48nC, nessuna corrente di base a regime), il BJT e' current-driven (richiede Ib≈5mA continui con hFE≥1000, essendo un Darlington). Per switching a bassa frequenza (<1kHz) il BJT e' piu' semplice da pilotare da un GPIO a 3.3V, ma il MOSFET ha perdite in conduzione 10x inferiori. Quali sono i criteri di scelta?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "mosfet",
+        "bjt",
+        "switching",
+        "power_dissipation",
+        "gate_drive"
+      ],
+      "structural_conflict": "Nessun conflitto profondo: il MOSFET e' superiore in quasi tutti gli scenari moderni. Il BJT resta rilevante solo in nicchie specifiche (linear regulation, high-voltage darlington, costo estremo). La risposta e' consolidata."
+    },
+    {
+      "prompt": "In un alimentatore lineare basato su LM7805 che riceve 12V e deve fornire 5V/500mA, la potenza dissipata e' P=(12-5)*0.5=3.5W. Quali sono le regole per il dimensionamento del dissipatore termico? Con Rth_jc=5C/W (junction-to-case) e Rth_ca del dissipatore, come si calcola la temperatura di giunzione per garantire Tj<125C a Ta=40C?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "alimentatore_lineare",
+        "dissipatore",
+        "thermal_management",
+        "lm7805"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale: il calcolo termico e' deterministico. Rth_ja_totale = Rth_jc + Rth_cs + Rth_sa. Con Tj_max=125C e Ta=40C, Rth_ja_max=(125-40)/3.5=24.3C/W. Senza dissipatore Rth_ja=65C/W, serve dissipatore."
+    },
+    {
+      "prompt": "Qual e' la differenza tra comunicazione SPI e I2C per collegare sensori a un microcontrollore? SPI usa 4 fili (MOSI, MISO, SCK, CS), e' full-duplex, raggiunge 50MHz+ ma richiede un CS per ogni slave. I2C usa 2 fili (SDA, SCL), e' half-duplex, raggiunge tipicamente 400kHz (Fast Mode) o 1MHz (Fast Mode Plus), e supporta fino a 127 dispositivi sullo stesso bus. Quando si preferisce l'uno all'altro?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "spi",
+        "i2c",
+        "bus_comunicazione",
+        "sensori",
+        "embedded"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale profondo: SPI per throughput elevato e latenza minima (ADC ad alta velocita', display), I2C per semplicita' e risparmio pin quando il throughput non e' critico. La scelta dipende dai requisiti misurabili."
+    },
+    {
+      "prompt": "Qual e' la differenza tra un regolatore switching buck (es. LM2596, efficienza 85-92%) e un regolatore lineare (es. LM7805, efficienza Vout/Vin) per alimentare un circuito a 3.3V da una batteria a 12V? Il buck ha ripple in uscita (30-50mV tipico), genera EMI, richiede induttore e diodo Schottky. Il lineare ha uscita pulita (<10uV noise), zero EMI generato, ma efficienza solo 27.5% (3.3/12). Per un sistema alimentato a batteria, quando il lineare e' comunque la scelta giusta?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "regolatore_buck",
+        "regolatore_lineare",
+        "efficienza",
+        "batteria",
+        "ripple"
+      ],
+      "structural_conflict": "Nessun conflitto profondo: il lineare resta preferibile quando il carico e' minimo (<10mA, es. reference voltage), il noise e' critico (ADC precision, RF front-end), o il costo BOM deve essere <0.50$. Per carichi >50mA da batteria, lo switching e' quasi sempre obbligatorio."
+    },
+    {
+      "prompt": "Un sensore di temperatura NTC (10kOhm a 25C, B=3950) deve essere letto da un ADC a 12 bit (4096 livelli, Vref=3.3V) tramite un partitore resistivo. Come si sceglie il valore della resistenza di pull-up per massimizzare la risoluzione nell'intervallo 0-100C? Con R_pullup=10kOhm il punto di massima sensibilita' e' a 25C. Con R_pullup=4.7kOhm si sposta verso i 50C. Qual e' il criterio di progetto corretto?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "ntc",
+        "adc",
+        "partitore_resistivo",
+        "sensori_temperatura",
+        "risoluzione"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale complesso: la resistenza di pull-up ottimale e' uguale alla resistenza NTC al centro dell'intervallo di interesse. Per 0-100C, Rntc a 50C e' circa 5.98kOhm (con B=3950, calcolato: 10000 × exp(3950 × (1/323.15 - 1/298.15)) ≈ 5980 Ohm), quindi R_pullup≈6kOhm (valore standard 5.6kOhm o 6.8kOhm) massimizza la sensibilita' nel range. La matematica e' deterministica."
+    },
+    {
+      "prompt": "Come funziona il protocollo CAN bus e perche' e' usato in automotive? Il CAN (Controller Area Network) usa 2 fili differenziali (CANH, CANL), bitrate fino a 1Mbit/s (CAN classico) o 5Mbit/s (CAN FD), arbitraggio non distruttivo basato su priorita' ID, e CRC a 15 bit per error detection. Qual e' il vantaggio rispetto a UART/SPI in un veicolo con 50+ ECU?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "can_bus",
+        "automotive",
+        "protocolli",
+        "comunicazione_differenziale",
+        "ecu"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale: CAN e' lo standard de facto automotive perche' risolve multi-master senza arbitro esterno, ha error detection nativa, e il wiring differenziale a 2 fili riduce il cablaggio rispetto a bus punto-punto. La risposta e' consolidata."
+    },
+    {
+      "prompt": "Cos'e' la diafonia (crosstalk) in un PCB e come si mitigano le emissioni Near-End (NEXT) e Far-End (FEXT)? Se due tracce parallele su un PCB a 4 layer corrono affiancate per 50mm con spacing 0.15mm (6mil) su un laminato FR4 (Er=4.3), il crosstalk puo' raggiungere -20dB a 100MHz. La regola 3W (spacing = 3x larghezza traccia) riduce il coupling a -40dB. Quando questa regola non e' sufficiente e servono guard traces o layer separation?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "pcb",
+        "crosstalk",
+        "integrità_segnale",
+        "regola_3w",
+        "emc"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale profondo: la regola 3W e' sufficiente per segnali <100MHz. Per segnali >500MHz (DDR3/4, SerDes), servono guard traces con via stitching o routing su layer dedicati con piani di riferimento continui. La risposta scala con la frequenza."
+    },
+    {
+      "prompt": "Un dispositivo IoT wearable deve funzionare per 2 anni con una batteria CR2032 (225mAh, 3V). Il microcontrollore (nRF52832) consuma 5.3mA in TX BLE (0dBm, DCDC), 1.9uA in System ON sleep con RTC attivo. Il dispositivo deve trasmettere un pacchetto BLE ogni 10 secondi (TX burst = 3ms) e misurare temperatura ogni minuto (ADC attivo per 500us, consumo 800uA). Calcolo: corrente media = (5.3mA*3ms)/10s + 1.9uA = 1.59uA + 1.9uA = ~3.5uA. Autonomia stimata = 225mAh / 3.5uA = ~7.3 anni teorici, ma in pratica la batteria CR2032 ha autoscarica 1-2%/anno e la capacita' effettiva sotto carico pulsato scende a 180mAh. Come si progetta il power budget corretto includendo tutte le perdite reali (regolatore quiescent, leakage ESD protection, PCB leakage)?",
+      "conflict_type": [
+        "technical_disagreement",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "iot",
+        "power_budget",
+        "ble",
+        "nrf52",
+        "cr2032",
+        "wearable",
+        "battery_life"
+      ],
+      "structural_conflict": "Il calcolo teorico suggerisce autonomia elevata, ma le perdite parassite reali (regolatore LDO quiescent 500nA-2uA, ESD diode leakage 100nA, PCB leakage in ambienti umidi fino a 1uA, aging batteria) riducono l'autonomia reale a 2-4 anni. Il conflitto e' tra il modello ideale e il comportamento reale del sistema."
+    },
+    {
+      "prompt": "Per un prodotto IoT industriale con volume di produzione 50.000 pezzi/anno, serve implementare un algoritmo di signal processing (FFT 1024 punti, filtraggio adattivo, classificazione). Le opzioni: (A) FPGA (Lattice iCE40UP5K) — costo unitario 7-10$, NRE zero (toolchain open-source), parallelismo hardware nativo, ma sviluppo in Verilog richiede 6 mesi e il team ha solo competenze C/embedded; (B) ASIC (via eFabless/Skywater 130nm) — costo unitario 0.30$ a volume, ma NRE 200-500K$ (design + tapeout + testing), time-to-market 18-24 mesi, e un bug nel silicio costa un re-spin da 150K$; (C) MCU dedicato (STM32H7 con DSP instructions) — costo unitario 8$, sviluppo in C (3 mesi), ma consuma 150mW vs 5mW dell'FPGA e 2mW dell'ASIC. A quale volume annuo l'ASIC diventa conveniente rispetto all'FPGA?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "fpga",
+        "asic",
+        "mcu",
+        "nre",
+        "volume_produzione",
+        "iot_industriale",
+        "bom_cost"
+      ],
+      "structural_conflict": "L'FPGA ha NRE zero ma costo unitario elevato. L'ASIC ha costo unitario minimo ma NRE proibitivo sotto 500K pezzi lifetime. L'MCU e' il piu' veloce da sviluppare ma il piu' costoso e power-hungry. Il breakeven ASIC vs FPGA e' a circa (NRE_ASIC) / (costo_FPGA - costo_ASIC) = 350K$ / (7-10$ - 0.30$) = ~37-52K pezzi. Sotto 50K pezzi lifetime, l'ASIC non ha senso economico."
+    },
+    {
+      "prompt": "Un sistema embedded deve acquisire segnali analogici da 8 canali simultaneamente con risoluzione 16 bit e sample rate 100kSPS per canale. Le opzioni: (A) un singolo ADC SAR a 16-bit multiplexato (es. ADS8688, 500kSPS, 8 canali sequenziali) — costo 12$, ma i canali NON sono simultanei (skew fino a 16us tra primo e ultimo canale); (B) 8 ADC SAR individuali (es. ADS8860, 16-bit, 1MSPS ciascuno) — campionamento simultaneo con trigger condiviso, ma costo 8x15$=120$ e PCB piu' complesso con 8 SPI bus; (C) ADC Sigma-Delta a 8 canali simultanei (es. ADS131M08, 24-bit, 32kSPS max) — simultaneo e alta risoluzione, ma sample rate massimo 32kSPS, insufficiente per i 100kSPS richiesti. L'applicazione e' analisi vibrazionale su macchinari rotanti dove la fase relativa tra canali e' critica (errore di fase max 0.1 gradi a 1kHz). Quale architettura ADC?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "adc",
+        "campionamento_simultaneo",
+        "sar_vs_sigma_delta",
+        "analisi_vibrazionale",
+        "fase"
+      ],
+      "structural_conflict": "L'ADC multiplexato e' economico ma lo skew di 16us introduce un errore di fase di 5.76 gradi a 1kHz — 57x il massimo tollerato. Il Sigma-Delta e' simultaneo ma troppo lento. Gli 8 ADC SAR individuali risolvono il problema ma il costo e la complessita' PCB esplodono. Il trade-off e' simultaneita' vs costo vs sample rate."
+    },
+    {
+      "prompt": "Un PCB per un alimentatore switching a 500kHz con corrente di picco 10A deve essere progettato su un laminato FR4 standard. Lo stack-up e' 4 layer: Top (signal+power), L2 (GND), L3 (power plane), Bottom (signal). La traccia dal MOSFET all'induttore porta il loop di corrente ad alta frequenza con di/dt = 10A/50ns = 200A/us. La larghezza della traccia per 10A DC e' 2.5mm (per IPC-2221 con deltaT=20C), ma l'effetto pelle (skin effect) a 500kHz riduce la sezione utile del rame da 35um a ~93um di skin depth. Come si bilancia il routing del power loop per minimizzare l'induttanza parassita del loop senza violare le clearance di sicurezza (minimo 0.5mm per tensioni <50V)?",
+      "conflict_type": [
+        "technical_disagreement",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "pcb",
+        "power_loop",
+        "switching",
+        "skin_effect",
+        "induttanza_parassita",
+        "stack_up"
+      ],
+      "structural_conflict": "Tracce larghe riducono la resistenza DC ma aumentano l'area del loop (e quindi l'induttanza parassita e le emissioni EMI). Tracce strette riducono l'area del loop ma aumentano le perdite resistive. Il compromesso ottimale richiede routing del power loop sul layer Top con return path immediato su L2 (GND), minimizzando l'area del loop a <1cm2."
+    },
+    {
+      "prompt": "Un sistema di controllo motore brushless (BLDC) a 48V/20A per un drone industriale deve scegliere tra: (A) gate driver discreto (es. IR2110 + MOSFET discreti IRFP4568, Rds_on=5.9mOhm) — costo BOM 8$, flessibilita' totale nel dead-time e bootstrap, ma layout PCB critico con loop gate-source < 5mm; (B) modulo IPM integrato (es. Infineon CIPOS Mini, 6 IGBT + driver in un package) — costo 15$, layout semplificato, protezioni integrate (UVLO, overcurrent, overtemp), ma efficienza inferiore del 3-5% a causa degli IGBT vs MOSFET e dead-time fisso a 2.5us; (C) GaN half-bridge integrato (es. EPC2152, Rds_on=~10mOhm per FET (half-bridge 10+10mOhm)) — efficienza massima, switching a 1MHz possibile, ma costo 25$ e il gate drive richiede timing con precisione < 1ns. Il budget BOM totale dell'ESC e' 40$. PWM a 20kHz. Quale soluzione per produzione di 5.000 unita'/anno?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "bldc",
+        "gate_driver",
+        "mosfet_vs_igbt_vs_gan",
+        "drone",
+        "esc",
+        "dead_time"
+      ],
+      "structural_conflict": "I MOSFET discreti hanno efficienza ottimale ma il layout critico aumenta il rischio di oscillazioni parassite e guasti. L'IPM semplifica tutto ma gli IGBT dissipano 3-5% in piu' — critico per un drone dove ogni watt conta sull'autonomia. Il GaN e' il futuro ma costa il 62% del budget BOM totale e il gate drive a sub-nanosecondo e' un rischio di sviluppo."
+    },
+    {
+      "prompt": "Un sistema embedded industriale (PLC custom) deve scegliere il sistema operativo: (A) FreeRTOS — RTOS hard real-time, footprint 10KB RAM, tick a 1ms, task scheduling deterministico, ma nessuno stack TCP/IP integrato (serve lwIP, 40KB aggiuntivi), nessun filesystem, nessuna shell di debug; (B) Zephyr RTOS — footprint minimo < 5KB RAM (fino a ~50KB con stack completo), POSIX-like API, networking stack completo (TCP/IP, BLE, Thread), device tree nativo, ma la curva di apprendimento e' ripida e la documentazione e' frammentata; (C) Embedded Linux (Buildroot/Yocto) — ecosistema completo, driver per tutto, debug con GDB/strace, ma richiede MMU (MPU non sufficiente), boot time 3-8 secondi, footprint minimo 16MB RAM, e la latenza worst-case e' non deterministica (10-50ms con PREEMPT_RT). Il target e' un STM32H7 (1MB SRAM, no MMU) che deve controllare 4 assi servo con loop a 10kHz e comunicare via Ethernet industriale (EtherCAT). Quale OS?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "rtos",
+        "freertos",
+        "zephyr",
+        "embedded_linux",
+        "plc",
+        "ethercat",
+        "real_time"
+      ],
+      "structural_conflict": "L'STM32H7 non ha MMU, quindi Linux e' fisicamente impossibile — ma Linux avrebbe lo stack EtherCAT piu' maturo. FreeRTOS garantisce i 10kHz ma manca l'infrastruttura networking. Zephyr e' il compromesso ma lo stack EtherCAT su Zephyr e' immaturo. Il vincolo hardware (no MMU) elimina la soluzione piu' completa."
+    },
+    {
+      "prompt": "Un progetto deve scegliere il microcontrollore per un dispositivo IoT con WiFi: (A) ESP32-S3 (Xtensa LX7 dual-core 240MHz, 512KB SRAM, WiFi+BLE integrati, costo 2.50$) — ecosistema vasto, ma il WiFi integrato consuma 120-240mA in TX e la certificazione RF e' gia' fatta sul modulo; (B) STM32WB55 (Cortex-M4 64MHz + Cortex-M0+ per radio, 256KB SRAM, solo BLE, costo 5$) — piu' deterministico, lower power BLE (5.2mA TX a 0dBm), ma niente WiFi nativo e servono moduli esterni; (C) nRF9160 (Cortex-M33, LTE-M/NB-IoT integrato, costo 8$) — connettivita' cellulare senza WiFi/gateway, ma costo piano dati 1-3$/mese/dispositivo e latenza 100-500ms. Il dispositivo deve inviare 1KB di dati ogni 5 minuti per 5 anni su batteria 18650 (3000mAh). Quale piattaforma?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "esp32",
+        "stm32",
+        "nrf9160",
+        "iot",
+        "wifi_vs_ble_vs_lte",
+        "battery_life",
+        "connettivita"
+      ],
+      "structural_conflict": "L'ESP32 ha WiFi ma il consumo in TX uccide la batteria in settimane. L'STM32WB ha ottimo low-power BLE ma richiede un gateway — se non c'e' infrastruttura, non funziona. L'nRF9160 e' autonomo ma il costo operativo (piano dati) su 5 anni = 60-180$ per dispositivo supera il costo hardware. Il trade-off e' autonomia energetica vs indipendenza infrastrutturale vs costo operativo."
+    },
+    {
+      "prompt": "Per la protezione ESD di un'interfaccia USB 3.0 (5Gbps) su un dispositivo consumer, bisogna scegliere tra: (A) diodi TVS discreti (es. PESD5V0U2BT, capacita' parassita 2.9pF) — costo 0.05$, ma servono 4 diodi (2 per data pair) e il layout deve minimizzare la stub length a <2mm; (B) array TVS integrato (es. TPD4E05U06, 4 canali, 0.5pF/canale) — costo 0.30$, package compatto, ma la capacita' totale del package e' maggiore di quella dichiarata per canale; (C) common-mode choke + TVS (es. filtro EMI integrato tipo ECMF04-4HSM10) — protezione ESD + filtraggio EMI in un componente, costo 0.80$, ma l'impedenza del choke modifica l'impedenza differenziale della coppia e puo' causare eye diagram degradation. Il prodotto deve passare IEC 61000-4-2 livello 4 (±8kV contact, ±15kV air). Budget ESD per l'intero prodotto: 2$. Quale approccio?",
+      "conflict_type": [
+        "technical_disagreement",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "esd",
+        "usb3",
+        "tvs",
+        "integrita_segnale",
+        "iec_61000",
+        "protezione"
+      ],
+      "structural_conflict": "I TVS discreti sono economici ma il routing PCB con stub <2mm e' difficile e ogni mm extra degrada il segnale a 5Gbps. L'array integrato semplifica il layout ma la capacita' reale del package puo' chiudere l'eye diagram. Il choke+TVS e' la protezione piu' completa ma costa 40% del budget ESD e altera l'impedenza. Il conflitto e' intergrita' del segnale vs livello di protezione ESD vs costo."
+    },
+    {
+      "prompt": "Un dispositivo medicale portatile con ECG a 12 derivazioni deve acquisire segnali con risoluzione < 5uV (il segnale ECG va da 0.1mV a 5mV). L'AFE (Analog Front-End) ha un PGA (Programmable Gain Amplifier) con guadagno 1-12x, seguito da un ADC Sigma-Delta a 24 bit (es. ADS1298, 8 canali simultanei, noise 4uVpp a 250SPS). Il problema: l'offset DC degli elettrodi puo' raggiungere ±300mV (half-cell potential), che con guadagno 12x satura l'ADC (range ±2.4V). Le opzioni: (A) AC-coupling con filtro passa-alto RC a 0.05Hz (C=10uF, R=330kOhm) — elimina il DC ma introduce phase shift sui componenti ECG a bassa frequenza (onda T) e il condensatore ceramico da 10uF ha microfonia; (B) DC-coupling con auto-offset cancellation digitale — preserva la banda DC-to-40Hz ma il range dinamico dell'ADC deve accomodare ±300mV di offset + 5mV di segnale; (C) chopper-stabilized amplifier davanti all'ADC — elimina offset e 1/f noise, ma il chopping a 128kHz genera spikes che vanno filtrati. Quale architettura per un dispositivo certificato IEC 60601?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "ecg",
+        "afe",
+        "adc_sigma_delta",
+        "medicale",
+        "offset_dc",
+        "iec_60601",
+        "chopper"
+      ],
+      "structural_conflict": "L'AC-coupling distorce le forme d'onda ECG diagnostiche (la norma IEC 60601-2-25 richiede risposta piatta da 0.05Hz a 150Hz con fase lineare). Il DC-coupling spreca 95% del range dinamico dell'ADC sull'offset. Il chopper risolve offset e 1/f noise ma introduce artefatti di switching che in un dispositivo diagnostico possono mascherare micro-segnali. Ogni approccio compromette una specifica della norma."
+    },
+    {
+      "prompt": "Un team deve progettare il BMS (Battery Management System) per un pacco batteria Li-ion 14S4P (14 celle in serie, 4 in parallelo, tensione nominale 51.8V, capacita' 14Ah, energia 725Wh) per un e-bike premium. Le opzioni per il cell balancing: (A) balancing passivo (resistori di bypass, dissipano la carica in eccesso come calore) — costo BOM 3$, semplice, ma dissipa fino a 5W durante il bilanciamento e non recupera energia, tempo di bilanciamento 2-4 ore; (B) balancing attivo con flying capacitor (trasferisce carica dalla cella piu' carica alla piu' scarica) — efficienza 85%, costo BOM 15$, tempo 30 minuti, ma il circuito con 14 switch MOSFET + capacitor per cella e' complesso e un guasto di un MOSFET puo' cortocircuitare una cella (rischio incendio); (C) balancing attivo con trasformatore multi-winding — efficienza 92%, costo BOM 25$, puo' bilanciare anche durante la scarica, ma il trasformatore custom per 14 celle e' un componente non-standard (lead time 8 settimane, singolo fornitore). Il prodotto deve rispettare IEC 62133-2 (sicurezza batterie Li-ion) e UN 38.3 (trasporto). Budget BMS totale: 45$.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "bms",
+        "balancing",
+        "li_ion",
+        "ebike",
+        "iec_62133",
+        "sicurezza_batteria"
+      ],
+      "structural_conflict": "Il passivo e' sicuro e economico ma lo spreco energetico e il tempo di bilanciamento degradano l'esperienza utente. Il flying capacitor e' il compromesso ma il rischio di cortocircuito cella (thermal runaway) e' inaccettabile senza protezioni ridondanti che fanno lievitare il costo. Il trasformatore e' la soluzione migliore ma il componente custom da singolo fornitore e' un single point of failure nella supply chain. La certificazione IEC 62133-2 richiede analisi FMEA che penalizza il flying capacitor."
+    },
+    {
+      "prompt": "Un sistema di visione industriale deve elaborare immagini da una camera GigE Vision (2048x1536, 12-bit, 30fps = 1.13Gbps di dati raw). Il processing richiede: blob detection, edge detection (Canny), template matching, e classificazione difetti con CNN leggera (MobileNetV2). Le opzioni per la piattaforma di elaborazione: (A) PC industriale con Intel i5 + GPU discreta (GTX 1650) — processing in <10ms/frame con OpenCV+CUDA, costo 800$, ma ingombro 200x200mm, consumo 65W, ventola obbligatoria; (B) NVIDIA Jetson Orin Nano (40 TOPS AI, 8GB LPDDR5) — processing in ~25ms/frame, costo 200$, formato compatto 70x45mm, consumo 7-15W; (C) FPGA (Xilinx Zynq UltraScale+ ZU3EG, ARM Cortex-A53 + FPGA fabric) — processing pipeline hardware con latenza <1ms/frame, costo 150$ (in volume), consumo 5W, ma lo sviluppo richiede 9-12 mesi per la pipeline HLS e il team non ha esperienza FPGA. Il sistema deve funzionare in un armadio IP54 senza ventilazione forzata (temperatura ambiente fino a 55C). Tempo al mercato: 6 mesi.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "visione_industriale",
+        "fpga_vs_gpu_vs_edge_ai",
+        "jetson",
+        "zynq",
+        "elaborazione_immagini",
+        "thermal"
+      ],
+      "structural_conflict": "Il PC industriale ha le performance ma non entra nell'armadio IP54 a 55C senza ventilazione. Il Jetson e' il compromesso ideale ma 25ms/frame potrebbe non bastare se il nastro trasportatore richiede latenza <5ms. L'FPGA ha latenza sub-millisecondo ma il time-to-market di 9-12 mesi viola il requisito di 6 mesi. Il vincolo termico elimina la soluzione piu' potente, il vincolo temporale elimina la piu' efficiente."
+    },
+    {
+      "prompt": "Un progetto di power supply per un server rack 48V/3kW deve scegliere la topologia del convertitore DC-DC: (A) Full-Bridge Phase-Shifted con ZVS (Zero Voltage Switching) — efficienza 95% a pieno carico, componenti standard, ma il circuito di controllo e' complesso (sincronizzazione 4 MOSFET + timing ZVS) e l'efficienza crolla all'80% sotto il 20% di carico; (B) LLC Resonant Converter — efficienza 97% dal 20% al 100% di carico grazie allo switching risonante (ZVS + ZCS naturale), ma il design del trasformatore risonante e' critico (induttanza di dispersione e magnetizzante devono essere precisamente controllate, tolleranza 2%) e la risposta ai transient di carico e' lenta (50us vs 10us del phase-shifted); (C) DAB (Dual Active Bridge) — bidirezionale nativo (utile per UPS con batteria), efficienza 93%, ma richiede 8 MOSFET e 2 trasformatori, costo BOM 2x rispetto alle altre opzioni. Il server richiede hold-up time di 20ms (capacita' bulk necessaria) e regolazione ±1% sotto step load da 0 a 100% in 1us. Quale topologia?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "power_supply",
+        "dc_dc",
+        "llc_resonant",
+        "full_bridge",
+        "dab",
+        "zvs",
+        "server_rack"
+      ],
+      "structural_conflict": "L'LLC e' la topologia piu' efficiente ma la risposta lenta ai transient viola il requisito di ±1% sotto step load — il server crash se la tensione esce da specifica per >10us. Il Full-Bridge ha risposta veloce ma l'efficienza al 20% di carico (idle server) genera 600W di calore. Il DAB e' overkill a meno che non serva bidirezionalita'. Il conflitto fondamentale e' efficienza steady-state vs risposta ai transienti."
+    },
+    {
+      "prompt": "Un prodotto consumer elettronico (smart speaker) deve passare la certificazione CE (Europa) e FCC (USA). I test pre-compliance mostrano: emissioni condotte (CISPR 32 Class B) a 150kHz-30MHz superano il limite di 6dB nella banda 500kHz-2MHz (causate dallo switching dell'alimentatore a 600kHz); emissioni radiate (CISPR 32 Class B) a 30MHz-1GHz sono conformi tranne un picco a 360MHz che supera di 4dB (causato dalla terza armonica del clock 120MHz del processore). Budget per le fix EMC: 0.80$ di BOM aggiuntivo e 2 settimane di tempo. Opzioni per le condotte: (A) aggiungere un filtro EMI Pi-filter (common mode choke + 2 condensatori Y) sull'ingresso — costo 0.40$, attenua 20dB; (B) ridurre lo slew rate dei MOSFET con resistenza di gate da 10 a 47 Ohm — zero costo aggiuntivo, ma le perdite di switching aumentano del 15%. Opzioni per le radiate a 360MHz: (A) aggiungere uno shield metallico sopra il processore — costo 0.50$, attenua 20dB, ma richiede modifica del tooling plastico (8K$ e 4 settimane); (B) spread spectrum clocking (SSC) ±1% sul clock 120MHz — costo zero (configurazione software), riduce il picco di 6-8dB, ma introduce jitter che degrada la qualita' audio del DAC da 20 bit. Come si risolvono entrambi i problemi nel budget?",
+      "conflict_type": [
+        "technical_disagreement",
+        "risk_assessment",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "emc",
+        "certificazione_ce",
+        "fcc",
+        "cispr_32",
+        "emissioni_condotte",
+        "emissioni_radiate",
+        "filtro_emi"
+      ],
+      "structural_conflict": "Per le condotte: il Pi-filter risolve ma costa meta' del budget. La resistenza di gate e' gratis ma aumenta le perdite termiche. Per le radiate: lo shield risolve ma sfora il budget e il tempo. SSC e' gratuito ma degrada l'audio — inaccettabile per uno smart speaker. Non esiste una combinazione che stia nel budget di 0.80$ e 2 settimane risolvendo entrambi i problemi senza compromessi funzionali."
+    },
+    {
+      "prompt": "Un sistema di telemetria per un satellite CubeSat 3U deve trasmettere dati scientifici in banda S (2.4GHz) con potenza di 1W. Il link budget richiede un amplificatore di potenza (PA) con PAE (Power Added Efficiency) > 40%. Le opzioni: (A) PA LDMOS discreto (es. MW6IC2420N, PAE 50%, costo 15$) — tecnologia matura, ma il bias network e il matching network richiedono componenti SMD 0201 con tolleranza 1% e il PCB deve essere su substrato Rogers RO4003C (Er=3.38, tan_d=0.0027, costo 5x rispetto a FR4); (B) PA GaN MMIC integrato (es. Qorvo TGA2594, PAE 45%, costo 80$) — matching integrato on-chip, PCB su FR4 sufficiente per la board di supporto, ma la qualifica spaziale (radiation hardness, TID > 30krad) non e' disponibile per il componente COTS; (C) PA GaAs (es. Skyworks SE5023L, PAE 38%, costo 3$) — economico, space heritage indiretto (usato in telefoni che sopravvivono a temperature estreme), ma la PAE e' sotto il requisito e il thermal derating a -40C degrada ulteriormente le performance. Il CubeSat ha budget termico limitato (dissipazione max 2.5W totale per il modulo radio) e budget componentistico di 200$ per il modulo TX completo.",
+      "conflict_type": [
+        "technical_disagreement",
+        "risk_assessment",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "rf",
+        "pa",
+        "cubesat",
+        "gan_vs_ldmos_vs_gaas",
+        "space",
+        "link_budget",
+        "thermal"
+      ],
+      "structural_conflict": "L'LDMOS ha la PAE migliore ma il substrato Rogers costa 5x e il budget e' limitato. Il GaN MMIC e' il piu' elegante ma nessuna qualifica spaziale significa rischio di failure da radiazione (SEL, SEU) — un guasto del PA in orbita e' irrecuperabile. Il GaAs e' economico ma la PAE insufficiente significa dissipare 1.63W come calore (vs 1.0W con PAE 50%), superando il budget termico. Il trade-off e' costo vs affidabilita' spaziale vs vincoli termici."
+    },
+    {
+      "prompt": "Un dispositivo medico impiantabile (neurostimolatore) deve operare per 7 anni con una batteria primaria al litio (non ricaricabile, 1.2Ah a 3V). Il circuito genera impulsi di stimolazione programmabili: ampiezza 0.1-10mA, durata 60-450us, frequenza 2-250Hz. Il consumo del circuito di controllo (MCU + telemetria RF) e' 5uA in sleep. Il circuito di stimolazione deve generare tensioni fino a 15V (compliance voltage) da una batteria a 3V usando un boost converter. Le opzioni: (A) boost converter always-on con regolazione lineare dell'uscita — semplice, ma il quiescent current del boost (20uA) consuma piu' dell'intero circuito di controllo; (B) boost on-demand che si accende solo durante l'impulso (duty cycle <1%) — consumo medio 0.5uA dal boost, ma il tempo di settling del boost (500us) e' piu' lungo dell'impulso stesso; (C) pre-charge di un capacitor reservoir con boost lento (10kHz switching per minimizzare EMI) — il capacitor fornisce l'energia dell'impulso, il boost ricarica lentamente tra impulsi, ma il capacitor da 100uF a 15V (11.25mJ) si autoscarica al 5%/mese a 37C. Il dispositivo deve rispettare ISO 14708-3 (neurostimolatori) e la biocompatibilita' del package e' gia' validata (non si puo' cambiare il volume). Ogni uA risparmiato = 4 mesi di vita in piu'.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "impiantabile",
+        "neurostimolatore",
+        "boost_converter",
+        "ultra_low_power",
+        "batteria_primaria",
+        "iso_14708"
+      ],
+      "structural_conflict": "Il boost always-on spreca 4x il consumo del circuito di controllo — inaccettabile per 7 anni. Il boost on-demand non riesce a stabilizzarsi in tempo per impulsi da 60us. Il pre-charge su capacitor e' il compromesso ma l'autoscarica a 37C (temperatura corporea) e la stabilita' della tensione durante l'impulso (droop) degradano la precisione terapeutica. Un errore nel delivery dell'impulso puo' avere conseguenze cliniche."
+    },
+    {
+      "prompt": "Un team deve decidere lo stack-up di un PCB a 6 layer per un sistema mixed-signal con: sezione digitale (FPGA con DDR3-1600, 64 data lines, clock a 800MHz), sezione analogica (ADC 16-bit a 1MSPS, segnali da ±10uV), e sezione power (5 rail di alimentazione: 3.3V, 2.5V, 1.8V, 1.2V, 1.0V). Le opzioni di stack-up: (A) Sig-GND-Sig-Sig-PWR-Sig — buona schermatura per layer 1 e 2, ma i layer interni 3-4 non hanno piano di riferimento continuo e le tracce DDR3 su layer 3 avranno impedenza non controllata; (B) Sig-GND-Sig-PWR-GND-Sig — simmetrico, buon riferimento per layer 1 e 6, ma il core tra L3 e L4 (Sig-PWR) ha accoppiamento capacitivo elevato tra segnali e piano power (noise injection); (C) Sig-GND-PWR-GND-Sig-GND — eccellente per analog (layer 5 tra due GND), ma solo 2 layer di segnale (1 e 5), insufficienti per routare 64 linee DDR3 + 200 pin FPGA. Lo spessore totale deve essere 1.6mm standard. Il laminato e' FR4 (Er=4.3, Dk variation ±10% batch-to-batch).",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "pcb",
+        "stack_up",
+        "mixed_signal",
+        "ddr3",
+        "impedenza_controllata",
+        "analog_digital"
+      ],
+      "structural_conflict": "Lo stack-up A ha abbastanza layer di segnale ma l'impedenza non controllata su L3 causa reflection sulle linee DDR3 a 800MHz. Lo stack-up B e' bilanciato ma il noise del power plane si accoppia ai segnali analogici. Lo stack-up C e' perfetto per l'analogico ma non ha abbastanza layer per il routing digitale. Con solo 6 layer, non si puo' avere simultaneamente schermatura analogica perfetta, impedenza DDR3 controllata, e routing sufficiente. La vera soluzione e' passare a 8 layer — ma il costo PCB raddoppia."
+    },
+    {
+      "prompt": "Un'azienda deve gestire l'obsolescenza di un microcontrollore critico (STM32F103, usato in 15 prodotti, 200K pezzi/anno totali) che ST ha messo in stato 'Not Recommended for New Design' (NRND). Le opzioni: (A) fare uno stock strategico (last-time buy) di 500K pezzi — costo 750K$ (1.50$ × 500K), copre 2.5 anni, ma il capitale e' immobilizzato e dopo 2.5 anni il problema si ripresenta identico; (B) migrare a STM32G0/G4 (pin-to-pin non compatibile, serve redesign PCB + firmware) — costo di migrazione 50K$ per prodotto × 15 prodotti = 750K$, tempo 12-18 mesi, ma il nuovo chip ha feature migliori e sara' supportato per 15+ anni; (C) usare un second source (GD32F103 di GigaDevice, clone cinese pin-to-pin) — costo unitario identico, zero redesign, ma la qualita' del silicio e' incerta (errata sheet con 47 bug noti vs 15 dell'originale ST), la supply chain e' rischiosa (sanzioni geopolitiche su semiconduttori cinesi), e alcuni clienti automotive rifiutano componenti non-IATF 16949. I 15 prodotti hanno ciclo di vita previsto di 10 anni.",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "obsolescenza",
+        "stm32",
+        "lifecycle_management",
+        "second_source",
+        "last_time_buy",
+        "supply_chain"
+      ],
+      "structural_conflict": "Lo stock strategico e' un cerotto che ritarda il problema di 2.5 anni con 750K$ di capitale fermo. La migrazione costa lo stesso ma risolve il problema per 15 anni — pero' blocca 15 team di sviluppo per 12-18 mesi. Il clone GD32 e' gratis come sforzo ma introduce rischi di qualita' e geopolitici non quantificabili. Il trade-off e' costo immediato vs rischio a lungo termine vs interruzione dello sviluppo."
+    },
+    {
+      "prompt": "Un sensore industriale wireless deve operare in un ambiente con forte interferenza elettromagnetica (vicino a saldatrici ad arco, inverter da 50kW, motori a induzione). La comunicazione wireless deve essere affidabile al 99.9% (PER < 0.1%) su distanza 50m in ambiente indoor industriale (metallo, riflessi). Le opzioni: (A) Bluetooth Low Energy 5.0 (2.4GHz, -97dBm sensibilita', 1Mbit/s) — stack consolidato, costo modulo 3$, ma la banda 2.4GHz e' congestionata e le saldatrici generano interferenza broadband fino a 3GHz; (B) Sub-GHz proprietario (868MHz, es. CC1312R con -121dBm sensibilita', 50kbit/s) — penetrazione muri migliore, 24dB di link budget in piu' rispetto a BLE, meno interferenza nella banda, ma protocollo proprietario (no interoperabilita') e bitrate basso; (C) WiFi 6 (2.4/5GHz, OFDMA con resource units dedicati) — infrastruttura esistente, ma consumo 200mA in TX (vs 5.2mA BLE a 0dBm, 15mA Sub-GHz) e in ambiente industriale il multipath a 5GHz e' imprevedibile. Il sensore e' alimentato a batteria (budget energetico 1 trasmissione/minuto per 3 anni su 2xAA).",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "wireless",
+        "ble",
+        "sub_ghz",
+        "wifi6",
+        "interferenza_emi",
+        "industriale",
+        "battery"
+      ],
+      "structural_conflict": "BLE ha il miglior rapporto costo/consumo ma la banda 2.4GHz e' un campo di battaglia in ambiente industriale. Sub-GHz ha il link budget e la robustezza migliori ma il protocollo proprietario crea lock-in. WiFi 6 ha l'infrastruttura ma il consumo uccide la batteria in mesi. Il link budget richiesto per 99.9% affidabilita' in ambiente EMI favorisce Sub-GHz, ma il vincolo di interoperabilita' favorisce BLE/WiFi."
+    },
+    {
+      "prompt": "Un progettista deve scegliere il tipo di condensatore per il filtro di uscita di un regolatore switching buck a 1MHz che alimenta un FPGA (1.0V core, 5A, ripple massimo 10mV). Le opzioni: (A) condensatori ceramici MLCC X5R 22uF/6.3V in package 0805 (ESR 2mOhm, ESL 0.5nH) — performance eccellenti, costo 0.08$, ma la capacita' effettiva a 1.0V DC bias scende del 60% (da 22uF a ~9uF per il derating del dielettrico X5R) e servono microfonia (acoustic noise) e creep distance; (B) condensatori tantalio polimerico 100uF/6.3V (es. Kemet T520, ESR 15mOhm) — capacita' stabile con bias, no microfonia, ma l'ESR 7x piu' alto causa ripple ESR = 5A × 0.015 = 75mV >> 10mV limite; (C) condensatori elettrolitici alluminio polimerico 150uF/6.3V (es. Panasonic SP-Cap, ESR 8mOhm) — compromesso, ma il package e' grande (7x7mm) e la capacita' degrada del 20% a 105C dopo 2000 ore. Quanti condensatori e di che tipo servono per rispettare i 10mV di ripple a 1MHz?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "condensatori",
+        "mlcc",
+        "tantalio",
+        "regolatore_buck",
+        "ripple",
+        "dc_bias_derating"
+      ],
+      "structural_conflict": "Gli MLCC hanno ESR ottimo ma il DC bias derating dimezza la capacita' effettiva — servono il doppio dei pezzi calcolati. I tantalio hanno capacita' stabile ma l'ESR genera ripple 7x oltre il limite. Gli elettrolitici polimerici sono il compromesso ma degradano con temperatura e tempo. La soluzione corretta e' un mix: MLCC per il ripple HF (basso ESR/ESL) + polimerico per la capacita' bulk (stabile con bias). Ma il mix complica il modello di stabilita' del loop di controllo."
+    },
+    {
+      "prompt": "Un inverter fotovoltaico trifase grid-tied da 10kW deve rispettare la normativa IEEE 1547 per l'iniezione di armoniche in rete. Il THD totale della corrente deve essere <5% e ogni singola armonica <3% della fondamentale. L'inverter usa PWM a 20kHz con filtro LCL in uscita. Le opzioni per il controllo: (A) PI controller nel frame rotante dq con feed-forward della tensione di rete — semplice, robusto, ma la reiezione delle armoniche di basso ordine (5a, 7a, 11a, 13a) e' limitata dalla banda del PI (tipicamente 200Hz); (B) PR (Proportional-Resonant) controller con risonatori multipli accordati sulle armoniche 5, 7, 11, 13 — reiezione >40dB alle frequenze target, ma la stabilita' del sistema con 4+ risonatori e' difficile da garantire e il tuning richiede conoscenza precisa della frequenza di rete (variazione ±0.5Hz); (C) deadbeat controller con predizione a un campione — risposta in un solo ciclo di campionamento, THD minimo, ma estremamente sensibile a errori nel modello del filtro LCL (±10% sui componenti causa instabilita') e richiede ADC a 16 bit con sample rate >100kSPS. La rete ha distorsione di tensione del 3% (ambiente industriale). Il costo del controller deve essere <30$ (MCU o DSP).",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "inverter",
+        "fotovoltaico",
+        "thd",
+        "armoniche",
+        "pwm",
+        "lcl_filter",
+        "ieee_1547"
+      ],
+      "structural_conflict": "Il PI e' robusto ma non riesce a rispettare il limite del 3% sulle armoniche basse in presenza di distorsione di rete. Il PR e' efficace ma la stabilita' con 4 risonatori su una rete con frequenza variabile e' un rischio. Il deadbeat e' ottimale ma la sensibilita' ai parametri del filtro LCL (che variano con temperatura e invecchiamento) lo rende fragile in produzione. Il compromesso e' tra robustezza, performance armonica, e sensibilita' parametrica."
+    },
+    {
+      "prompt": "Un dispositivo indossabile per il monitoraggio sportivo deve integrare: accelerometro 3 assi (200Hz), giroscopio 3 assi (200Hz), magnetometro 3 assi (50Hz), barometro (10Hz), PPG (fotopletismografo per heart rate, 100Hz), e temperatura cutanea (1Hz). Le opzioni per l'architettura del sensore: (A) IMU integrata 9-DoF (es. BNO085, accel+gyro+mag con sensor fusion on-chip, costo 8$) + sensori separati per PPG e barometro — riduce il carico sulla MCU, ma il sensor fusion proprietario Bosch e' una black box e il magnetometro integrato ha errore di heading di ±3 gradi (vs ±0.5 gradi con un mag discreto calibrato); (B) tutti i sensori discreti (es. LSM6DSO accel+gyro 3$, LIS3MDL mag 2$, BMP390 baro 2$, MAX30102 PPG 4$) — controllo totale, costo BOM 11$, ma servono 4 bus I2C o SPI, il firmware di sensor fusion va scritto da zero (Madgwick/Mahony filter, 3 mesi di sviluppo), e il consumo totale e' 2mA vs 1.2mA dell'integrato; (C) SoC con sensor hub integrato (es. nRF5340 con sensori collegati al core di rete dedicato) — processing dei sensori sul secondo core senza impattare il main, ma il core di rete ha solo 64KB RAM e le librerie di sensor fusion non entrano. Budget totale sensori: 15$.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "imu",
+        "sensori",
+        "wearable",
+        "sensor_fusion",
+        "ppg",
+        "bom_cost",
+        "firmware"
+      ],
+      "structural_conflict": "L'IMU integrata semplifica enormemente il firmware ma la black box del sensor fusion impedisce di ottimizzare per lo sport specifico (il running ha dinamiche diverse dal cycling). I sensori discreti danno controllo totale ma 3 mesi di sviluppo sensor fusion e consumo superiore. Il sensor hub su SoC e' elegante ma i vincoli di RAM lo rendono impraticabile. Il trade-off e' time-to-market vs controllo algoritmico vs consumo energetico."
+    },
+    {
+      "prompt": "Un sistema di ricarica wireless (WPT - Wireless Power Transfer) per un dispositivo medico indossabile deve trasferire 2W a distanza 5-15mm attraverso la pelle. Lo standard Qi (WPC) opera a 87-205kHz (BPP/EPP) con efficienza dell'80% a 5mm ma crolla al 40% a 15mm. Le opzioni: (A) Qi standard con bobina planare 40mm diametro — ecosistema consolidato, costi bassi, ma l'efficienza a 15mm e' inaccettabile (1.2W dissipati come calore sulla pelle, limite IEC 60601-1: deltaT < 2C su pelle); (B) risonanza magnetica accoppiata a 6.78MHz (A4WP/AirFuel) — efficienza 70% anche a 20mm grazie al Q alto delle bobine risonanti, ma la frequenza piu' alta causa SAR (Specific Absorption Rate) piu' elevato nei tessuti e i limiti ICNIRP per esposizione a 6.78MHz sono 10x piu' stringenti di quelli a 200kHz; (C) accoppiamento induttivo a ultrasuoni (piezoelettrico, 1MHz) — penetra tessuti con efficienza 65%, nessun campo EM (zero SAR concerns), ma la potenza massima trasferibile e' 500mW (insufficiente) e il trasduttore piezo ha biocompatibilita' da validare. Il dispositivo deve operare per 12 ore tra ricariche, la ricarica deve completarsi in <1 ora, la batteria e' 400mAh Li-po.",
+      "conflict_type": [
+        "technical_disagreement",
+        "risk_assessment",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "wireless_power",
+        "qi",
+        "risonanza_magnetica",
+        "medicale",
+        "sar",
+        "iec_60601",
+        "biocompatibilita"
+      ],
+      "structural_conflict": "Qi e' lo standard ma il riscaldamento cutaneo a 15mm viola i limiti medici. La risonanza a 6.78MHz risolve l'efficienza a distanza ma i limiti SAR sui tessuti potrebbero impedire la certificazione medica. Gli ultrasuoni eliminano il problema EMF ma la potenza insufficiente richiede 4+ ore di ricarica (vs 1 ora richiesta). Ogni tecnologia viola almeno uno dei requisiti: efficienza a distanza, sicurezza termica/SAR, potenza sufficiente."
+    },
+    {
+      "prompt": "Un prodotto IoT consumer deve essere certificato per il mercato globale. Le certificazioni richieste: CE (Europa, RED 2014/53/EU), FCC Part 15 (USA), IC (Canada), TELEC (Giappone), KCC (Corea), ANATEL (Brasile). Il modulo radio e' un ESP32-S3 su modulo con antenna PCB integrata. Le opzioni per la strategia di certificazione: (A) certificare il prodotto finito in ogni paese — costo stimato 15K$/regione × 6 regioni = 90K$, tempo 4-6 mesi, ma ogni modifica hardware (anche il colore del case) richiede ri-certificazione; (B) usare un modulo pre-certificato (es. ESP32-S3-WROOM-1) e fare solo la certificazione del prodotto finito come 'intentional radiator with modular approval' — costo 8K$/regione × 6 = 48K$, tempo 2-3 mesi, ma il modulo deve rispettare le condizioni d'uso (antenna gain, ground plane size) altrimenti la pre-certificazione e' invalidata; (C) usare un test lab con mutuo riconoscimento (ILAC MRA) per un'unica campagna di test valida in piu' regioni — costo 30K$ totale, ma non tutti i paesi accettano il mutuo riconoscimento (il Brasile ANATEL richiede test locali, il Giappone TELEC accetta solo lab accreditati MIC). Il time-to-market e' 3 mesi. Budget certificazioni: 50K$.",
+      "conflict_type": [
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "certificazione",
+        "ce",
+        "fcc",
+        "iot",
+        "modulo_rf",
+        "red_directive",
+        "compliance_globale"
+      ],
+      "structural_conflict": "La certificazione per prodotto finito e' la piu' sicura ma sfora il budget di 40K$. Il modulo pre-certificato e' il piu' economico ma qualsiasi deviazione dalle condizioni d'uso (antenna diversa, ground plane <50x50mm) invalida la pre-certificazione — e nel prodotto finito il ground plane e' quasi sempre diverso. Il mutuo riconoscimento riduce i costi ma Brasile e Giappone lo rifiutano, richiedendo comunque test separati. Il budget di 50K$ non copre la certificazione completa in tutte e 6 le regioni con nessuna strategia."
+    },
+    {
+      "prompt": "Un sistema embedded per un robot mobile autonomo deve fondere dati da LiDAR (400K punti/s), 6 telecamere (3MP ciascuna, 30fps), IMU (1kHz), e GPS-RTK (10Hz) per navigazione e obstacle avoidance. La latenza end-to-end dal sensore alla decisione di sterzo deve essere <50ms. Le opzioni di computing: (A) NVIDIA Jetson AGX Orin (275 TOPS AI, 64GB RAM, 60W) — processing completo on-board, ma il consumo di 60W su un robot da 20kg con batteria 500Wh limita l'autonomia a 4 ore (vs 8 ore richieste); (B) split architecture: Jetson Orin Nano (40 TOPS, 15W) on-robot per processing real-time + server edge via 5G per il processing pesante (SLAM, path planning) — consumo 15W, autonomia 8 ore, ma la latenza 5G aggiunge 20-50ms (il budget totale e' 50ms, lasciando 0-30ms per il processing); (C) FPGA (Zynq UltraScale+ con DPU per CNN inference) + MCU hard real-time (STM32H7 per control loop) — consumo 12W, latenza deterministica <10ms, ma lo sviluppo richiede 12-18 mesi e il SLAM su FPGA non ha implementazioni mature. Il robot opera in magazzino (indoor, no GPS, WiFi disponibile). Budget computing: 500$.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "robot",
+        "lidar",
+        "sensor_fusion",
+        "jetson",
+        "fpga",
+        "edge_computing",
+        "autonomia"
+      ],
+      "structural_conflict": "Il Jetson AGX ha le performance ma dimezza l'autonomia. Lo split via 5G ha il consumo giusto ma la latenza della rete mangia tutto il budget temporale — un ritardo di rete di 50ms causa una collisione a 2m/s. L'FPGA ha consumo e latenza ottimali ma il SLAM su FPGA non esiste in forma utilizzabile e il time-to-market e' proibitivo. Il vincolo fondamentale e' che 275 TOPS a 15W non esistono ancora — le leggi della fisica impongono un trade-off energia/performance."
+    },
+    {
+      "prompt": "Un sistema di alimentazione per un LED driver ad alta potenza (100W, 50V/2A) per illuminazione stradale deve garantire power factor > 0.95 (normativa EN 61000-3-2 Class C per illuminazione) e THD corrente < 10%. Le opzioni: (A) PFC (Power Factor Correction) attivo con boost converter a 65kHz (CCM — Continuous Conduction Mode) seguito da un converter LLC per l'isolamento e la regolazione — PF=0.99, THD=3%, efficienza totale 92%, ma 2 stadi di conversione (costo BOM 12$, PCB 80x50mm); (B) single-stage flyback con PFC integrato (es. controller ICL5102 di Infineon) — un solo stadio, costo BOM 6$, PCB 50x35mm, ma PF=0.96 e THD=12% (viola il limite del 10%); (C) PFC valley-fill passivo (4 diodi + 2 condensatori) + flyback — PF=0.92 a pieno carico (OK), costo BOM 4$, semplicissimo, ma PF crolla a 0.75 al 50% di carico (dove l'illuminazione stradale opera per il 60% del tempo con dimming) e il flicker a 100Hz e' percepibile (indice flicker >25%, limite IEEE 1789 e' <10% per applicazioni stradali). Lifetime richiesto: 50.000 ore (MTBF). Temperatura ambiente: -30C a +55C.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "led_driver",
+        "pfc",
+        "power_factor",
+        "illuminazione",
+        "en_61000",
+        "thd",
+        "flicker"
+      ],
+      "structural_conflict": "Il PFC attivo a 2 stadi e' l'unico che rispetta tutte le normative ma il costo BOM e' 3x il valley-fill. Il single-stage flyback e' il compromesso ideale ma il THD al 12% viola EN 61000-3-2 di 2 punti percentuali. Il valley-fill passivo e' il piu' economico ma il PF al 50% di carico e il flicker lo rendono non certificabile. Il dimming (50% carico per il 60% del tempo) e' il killer: tutte le soluzioni degradano a carico parziale."
+    },
+    {
+      "prompt": "Un sistema di sicurezza per un'auto a guida autonoma (ADAS Level 3) richiede un processore che rispetti ASIL-D (ISO 26262, il livello piu' alto di sicurezza funzionale). Le opzioni: (A) processore lockstep dual-core (es. Infineon AURIX TC3xx, 2 core che eseguono lo stesso codice e confrontano i risultati ciclo per ciclo) — ASIL-D nativo, latenza di detection 1 ciclo, ma le performance sono limitate (300MHz, no GPU, no AI accelerator), sufficiente per il control loop ma non per la perception; (B) SoC automotive ad alte performance (es. NVIDIA Orin, 12 ARM Cortex-A78AE + GPU, 275 TOPS) — performance enormi per AI/perception, ASIL-B nativo con meccanismi software per raggiungere ASIL-D decomposition (ASIL-B + ASIL-B = ASIL-D), ma la dimostrazione di compliance ASIL-D via decomposizione richiede 18 mesi di safety analysis e l'OEM potrebbe non accettarla; (C) architettura eterogenea: AURIX per il safety controller + Orin per la perception, con watchdog cross-check — copre tutti i requisiti, ma il costo BOM raddoppia (AURIX 20$ + Orin 200$ = 220$ vs 150$ per Orin solo), il consumo e' 80W, e la comunicazione inter-processore via Ethernet TSN aggiunge 2ms di latenza. Il tempo di reazione del sistema deve essere <100ms dalla detection alla frenata. Budget BOM per il compute module: 180$.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "automotive",
+        "asil_d",
+        "iso_26262",
+        "adas",
+        "lockstep",
+        "safety",
+        "aurix",
+        "orin"
+      ],
+      "structural_conflict": "L'AURIX e' ASIL-D nativo ma non puo' fare AI inference per la perception. L'Orin ha le performance ma la ASIL-D decomposition e' un rischio normativo — se l'ente certificatore non accetta la decomposizione, il progetto si ferma. L'architettura eterogenea e' la piu' sicura ingegneristicamente ma sfora il budget BOM di 40$ e la latenza inter-processore riduce il margine di reazione. In un sistema dove un guasto puo' uccidere, il compromesso economico e' eticamente inaccettabile ma commercialmente necessario."
+    },
+    {
+      "prompt": "Un progettista deve scegliere la tecnologia di isolamento galvanico per un'interfaccia RS-485 industriale che opera in un ambiente con differenza di potenziale tra ground di 500V RMS (impianto industriale con motori di grande potenza). Le opzioni: (A) optocoupler (es. 6N137, 10Mbit/s, isolamento 5kV RMS, costo 0.80$) — tecnologia consolidata da 40 anni, ma il CTR (Current Transfer Ratio) degrada del 50% in 100K ore a 85C (vita utile 11 anni), la velocita' massima e' 10Mbps, e il consumo LED e' 10mA per canale; (B) digital isolator capacitivo (es. Si8641, 150Mbit/s, isolamento 5kV RMS, costo 2$) — nessuna degradazione, velocita' 15x, consumo 2mA, ma la capacita' di isolamento e' 0.5pF/canale e in ambiente con dV/dt > 50kV/us (switching di IGBT) il CMTI — Common Mode Transient Immunity — potrebbe essere insufficiente causando false transizioni; (C) digital isolator magnetico (es. ADuM1201, 1-10Mbit/s, isolamento 2.5kV RMS, costo 1.50$) — CMTI 25kV/us, ma l'isolamento massimo e' 2.5kV (vs 5kV richiesti per 500V RMS con margine di sicurezza) e la suscettibilita' ai campi magnetici esterni (vicino a motori da 50kW) e' un rischio. L'interfaccia RS-485 opera a 1Mbit/s. Lifetime richiesto: 20 anni. Norma: IEC 60664-1.",
+      "conflict_type": [
+        "technical_disagreement",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "isolamento_galvanico",
+        "optocoupler",
+        "digital_isolator",
+        "rs485",
+        "industriale",
+        "cmti",
+        "iec_60664"
+      ],
+      "structural_conflict": "L'optocoupler e' testato da decenni ma degrada nel tempo e dopo 11 anni il CTR potrebbe non garantire il funzionamento — in un impianto con vita attesa 20 anni serve sostituzione preventiva. L'isolatore capacitivo e' moderno ma il dV/dt da IGBT switching puo' causare errori di comunicazione. L'isolatore magnetico ha CMTI ottimo ma l'isolamento di 2.5kV e' insufficiente per 500V RMS (serve 2x+margine). Nessuna tecnologia singola soddisfa tutti i requisiti simultaneamente."
+    },
+    {
+      "prompt": "Un dispositivo di misura di precisione (multimetro da banco 6.5 digit, risoluzione 1uV su range 10V) deve mantenere la calibrazione per 1 anno (specifica: ±(15ppm di lettura + 3ppm di range) a 23C±5C). Il riferimento di tensione interno e' un LTZ1000 (drift 0.05ppm/C, long-term stability 2ppm/anno, costo 30$). Le opzioni per il circuito di condizionamento del riferimento: (A) buffer con OPA189 (offset 3uV max (0.4uV typical), drift 0.005uV/C, 1/f noise corner 0.1Hz) — drift totale del riferimento+buffer = 0.05+0.005ppm/C = 0.055ppm/C, sufficiente, ma il PCB deve avere guard ring e la termocoppia parassite sulle saldature (copper-to-solder = 1-3uV/C) dominano l'errore; (B) chopper-stabilized buffer (es. ADA4522, offset 0.3uV, drift 0.022uV/C max) — drift praticamente zero, ma il chopping genera spikes a 200kHz che devono essere filtrati con RC passa-basso (tau=100ms), rallentando il settling time della misura a 500ms; (C) auto-zero con interruzione periodica (misura con e senza input, sottrae offset) — elimina offset e drift completamente, ma durante la fase di auto-zero (50ms) la misura e' interrotta e la specifica richiede measurement rate di 10 letture/secondo. Il costo totale del modulo di riferimento+condizionamento deve essere <80$.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "misura_precisione",
+        "riferimento_tensione",
+        "ltz1000",
+        "drift",
+        "termocoppia",
+        "chopper"
+      ],
+      "structural_conflict": "Il buffer standard ha drift accettabile ma le termocoppie parassite sulla PCB (1-3uV/C) dominano — bisogna spendere piu' sul layout PCB che sul componente. Il chopper elimina il drift ma la velocita' di misura scende a 2 letture/secondo (vs 10 richieste). L'auto-zero e' la soluzione migliore in teoria ma il 50ms di interruzione con 10 letture/secondo lascia solo 50ms per la misura effettiva — il rapporto segnale/tempo utile e' 50%. Il conflitto e' tra precisione DC, velocita' di misura, e artefatti del circuito di correzione."
+    },
+    {
+      "prompt": "Un progetto embedded mission-critical (controllore per turbina eolica da 2MW) deve scegliere l'architettura di ridondanza del processore. L'availability richiesta e' 99.99% (max 52 minuti di downtime/anno). Le opzioni: (A) single MCU con watchdog esterno e safe state (shutdown controllato) — MTBF del MCU = 500K ore (57 anni), availability 99.97% con MTTR=4 ore (intervento tecnico in campo eolico), costo 20$; (B) dual MCU in hot standby (primary + secondary, switchover automatico in <100ms) — availability 99.9999% teorica, ma il circuito di switchover e' un single point of failure e se la logica di decisione ha un bug, entrambi i processori si fermano; (C) triple modular redundancy (TMR) con voting a maggioranza (3 MCU, 2-out-of-3 decide) — tolleranza a 1 guasto senza interruzione, availability >99.999%, ma costo 3x, consumo 3x, e il voter hardware e' esso stesso un SPOF. La turbina e' offshore (intervento tecnico: 48 ore di attesa per la nave + condizioni meteo). Con MTTR=48 ore, l'availability dell'opzione A scende a 99.45% — ben sotto il requisito.",
+      "conflict_type": [
+        "technical_disagreement",
+        "risk_assessment",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "ridondanza",
+        "tmr",
+        "availability",
+        "mission_critical",
+        "turbina_eolica",
+        "mtbf",
+        "mttr"
+      ],
+      "structural_conflict": "Il single MCU ha MTBF eccellente ma l'MTTR offshore di 48 ore distrugge l'availability. Il dual hot standby risolve l'MTTR ma introduce il SPOF della logica di switchover — un bug software nel monitor causa doppio guasto. Il TMR e' la soluzione corretta ma il voter hardware e' un SPOF e il costo 3x su centinaia di turbine impatta il business case. La vera soluzione e' TMR con voter ridondato (5 MCU total) — ma il costo e la complessita' di certificazione (IEC 61400-1) diventano proibitivi."
+    },
+    {
+      "prompt": "Un team di progettazione PCB deve decidere il materiale del substrato per una scheda RF che opera a 24GHz (radar automotive FMCW). Le opzioni: (A) FR4 standard (Er=4.3, tan_d=0.02 a 1GHz, costo 0.3$/cm2) — economico, supply chain consolidata, ma a 24GHz le perdite dielettriche sono 1.5dB/cm e la variazione di Er batch-to-batch (±10%) causa variazione di impedenza di ±5% (critico per matching network a 24GHz); (B) Rogers RO4350B (Er=3.48, tan_d=0.004, costo 1.5$/cm2) — perdite 0.3dB/cm, Er stabile (±1.5%), ma il costo e' 5x e il procurement ha lead time 8-12 settimane vs 1-2 settimane per FR4; (C) PTFE-based (es. Rogers RT/duroid 5880, Er=2.2, tan_d=0.0009, costo 4$/cm2) — perdite minime 0.1dB/cm, ideale per 24GHz, ma il materiale e' morbido (non supporta pick-and-place standard, delaminazione durante reflow), il costo e' 13x, e la laminazione con prepreg FR4 per i layer digitali (mixed stack-up) richiede processo speciale. Il radar deve avere portata 80m con antenna patch array 4x4 sul PCB. Volume: 100K pezzi/anno per OEM automotive (costo target PCB: 3$).",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "rf",
+        "pcb",
+        "substrato",
+        "rogers",
+        "fr4",
+        "radar_24ghz",
+        "automotive",
+        "fmcw"
+      ],
+      "structural_conflict": "FR4 costa il target ma le perdite a 24GHz riducono la portata del radar da 80m a ~40m — inaccettabile. Rogers RO4350B ha le performance ma il costo del substrato solo e' gia' 50% del budget PCB totale. RT/duroid e' il migliore per RF ma il costo 13x e i problemi di manufacturing lo rendono impossibile a 100K volumi. La soluzione reale e' un mixed stack-up (RF layers su Rogers, digitale su FR4) — ma la co-laminazione e' un processo non standard che pochi fabbricanti supportano ad alto volume."
+    },
+    {
+      "prompt": "Un sistema di energy harvesting deve alimentare un sensore wireless in un ambiente industriale dove l'unica fonte di energia disponibile e' la vibrazione di un compressore (frequenza dominante 50Hz, accelerazione 0.5g RMS). Le opzioni di trasduttore: (A) piezoelettrico (PZT ceramic, es. Mide V25W, 3.5mW a 50Hz/0.5g) — potenza sufficiente, ma l'impedenza d'uscita e' alta (>100kOhm) e il matching con il circuito di power management e' critico, inoltre la ceramica PZT e' fragile e le vibrazioni di shock (fino a 20g) la rompono; (B) elettromagnetico (bobina + magnete, es. Perpetuum PMG17, 5mW a 50Hz/0.5g) — potenza superiore, bassa impedenza (50 Ohm), ma il volume e' 10x maggiore (50cm3 vs 5cm3 del PZT) e la frequenza di risonanza deve matchare ±2Hz la vibrazione target (il compressore varia tra 48-52Hz con il carico); (C) MEMS elettrostatico (es. Wispry MEMS, 0.1mW a 50Hz/0.5g) — miniaturizzato, robusto, ma la potenza e' 35x inferiore al PZT. Il sensore consuma 50uW in media (sleep 98%, TX burst 10mW per 3ms ogni 60s). L'harvester deve funzionare per 15 anni senza manutenzione. Temperatura: -20C a +80C.",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "energy_harvesting",
+        "piezoelettrico",
+        "vibrazione",
+        "sensore_wireless",
+        "power_management",
+        "industriale"
+      ],
+      "structural_conflict": "Il PZT ha la potenza ma la fragilita' della ceramica in ambiente con shock 20g e' un rischio di vita utile. L'elettromagnetico ha potenza e robustezza ma il volume 10x e la sensibilita' alla frequenza (il compressore varia ±2Hz) rendono il tuning critico. Il MEMS e' robusto e miniaturizzato ma 0.1mW sono appena sufficienti per i 50uW medi — zero margine per aging della batteria di backup o variazioni di vibrazione. Il conflitto e' potenza vs robustezza vs dimensioni."
+    },
+    {
+      "prompt": "Un sistema di test in-circuit (ICT) per la produzione di PCB automotive deve verificare 500 nodi di test (resistenze, capacita', cortocircuiti, aperture) su ogni scheda. Il tempo di test massimo e' 5 secondi per scheda (linea di produzione a 720 schede/ora). Le opzioni per il fixture: (A) bed-of-nails con 500 sonde a molla (spring-loaded probes, corsa 2.5mm, forza 100g) — accesso a tutti i nodi, ma la forza totale sul PCB e' 500x100g = 50kg (rischio di flessione del PCB, soprattutto per board sottili 0.8mm), costo fixture 15K$, manutenzione ogni 100K cicli; (B) flying probe (2-4 sonde mobili) — zero costo fixture, nessuna forza sul PCB, ma il tempo di test e' 60-120 secondi per scheda (12-24x il limite) perche' le sonde si muovono fisicamente; (C) boundary scan (JTAG) per i componenti digitali + AOI (Automated Optical Inspection) per i passivi — zero contatto fisico, tempo test 3 secondi, ma il boundary scan non testa i circuiti analogici e l'AOI ha false reject rate del 2-5% (richiede operatore per verifica visiva). La scheda ha 200 componenti digitali (coperti da JTAG) e 300 passivi/connettori (non coperti). Il prodotto e' IATF 16949 (automotive quality management).",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "ict",
+        "test_produzione",
+        "bed_of_nails",
+        "flying_probe",
+        "boundary_scan",
+        "automotive",
+        "iatf_16949"
+      ],
+      "structural_conflict": "Il bed-of-nails e' l'unico che rispetta i 5 secondi ma la forza di 50kg su PCB sottili causa stress meccanico e potenziali micro-fratture sulle saldature BGA — un difetto latente che emerge in campo dopo mesi. Il flying probe e' delicato ma 60+ secondi per scheda e' 12x troppo lento. Il JTAG+AOI e' veloce e non invasivo ma copre solo il 40% dei nodi (200/500) e il false reject del 2-5% richiede un operatore dedicato alla verifica. La qualita' IATF 16949 richiede copertura >98% dei nodi di test."
+    }
+  ]
+}

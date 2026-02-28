@@ -1,0 +1,605 @@
+{
+  "domain": "bioetica",
+  "description": "Bioetica, etica della ricerca, consenso informato, fine vita, potenziamento umano, giustizia distributiva in sanità",
+  "prompts": [
+    {
+      "prompt": "Cos'è il consenso informato e quali sono i suoi elementi essenziali? Spiega i 4 requisiti fondamentali (capacità, informazione, comprensione, volontarietà) con un esempio clinico per ciascuno.",
+      "conflict_type": [
+        "ethical_dilemma"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "consenso_informato",
+        "autonomia",
+        "fondamenti"
+      ],
+      "structural_conflict": "A livello base non c'è conflitto: il consenso informato è un principio condiviso. La complessità emerge quando i 4 elementi entrano in tensione — es. un paziente ha capacità ma rifiuta informazioni."
+    },
+    {
+      "prompt": "Quali sono i 4 principi della bioetica di Beauchamp e Childress (autonomia, beneficenza, non maleficenza, giustizia)? Fornisci un esempio sanitario in cui due di questi principi confliggono.",
+      "conflict_type": [
+        "ethical_dilemma"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "principialismo",
+        "beauchamp_childress",
+        "fondamenti"
+      ],
+      "structural_conflict": "I 4 principi sono indipendenti e non gerarchicamente ordinati. Il conflitto strutturale emerge quando devono essere bilanciati: non esiste un metaprincipio che dica quale prevale."
+    },
+    {
+      "prompt": "Qual è la differenza tra eutanasia attiva, eutanasia passiva, e sedazione palliativa profonda? In quali paesi europei sono legali e con quali limiti?",
+      "conflict_type": [
+        "ethical_dilemma"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "fine_vita",
+        "eutanasia",
+        "legislazione_comparata"
+      ],
+      "structural_conflict": "La distinzione tra atto e omissione sembra chiara in teoria ma in pratica il confine è sfumato. Interrompere un trattamento è 'non fare' ma richiede un'azione fisica."
+    },
+    {
+      "prompt": "Cosa sono i comitati etici per la sperimentazione clinica? Quali criteri usano per approvare uno studio su soggetti umani secondo la Dichiarazione di Helsinki?",
+      "conflict_type": [
+        "ethical_dilemma"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "comitati_etici",
+        "sperimentazione_clinica",
+        "helsinki"
+      ],
+      "structural_conflict": "Il comitato bilancia progresso scientifico e protezione dei partecipanti. La tensione è permanente: troppa prudenza blocca la ricerca, troppa permissività espone a rischi."
+    },
+    {
+      "prompt": "Cos'è il principio di precauzione in bioetica e come si applica all'approvazione di nuovi farmaci? Spiega con l'esempio del processo di approvazione FDA in 4 fasi.",
+      "conflict_type": [
+        "values_tradeoff"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "precauzione",
+        "farmaci",
+        "approvazione_fda"
+      ],
+      "structural_conflict": "La precauzione protegge dai rischi sconosciuti ma ogni mese di ritardo nell'approvazione costa vite a chi aspetta il farmaco. Il livello ottimale di cautela è indeterminabile a priori."
+    },
+    {
+      "prompt": "Cosa si intende per 'accanimento terapeutico' e quali criteri clinici ed etici lo distinguono da un trattamento appropriato? Fai riferimento al Codice di Deontologia Medica italiano (art. 16).",
+      "conflict_type": [
+        "ethical_dilemma"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "accanimento_terapeutico",
+        "proporzionalita",
+        "deontologia_medica"
+      ],
+      "structural_conflict": "Il confine tra cura appropriata e accanimento dipende dalla prognosi, che è intrinsecamente incerta. Due medici ugualmente competenti possono tracciare la linea in punti diversi."
+    },
+    {
+      "prompt": "Spiega il concetto di 'allocazione delle risorse sanitarie' usando l'esempio dei QALY (Quality-Adjusted Life Years). Un trattamento che costa 80.000 euro e produce 2 QALY è cost-effective secondo il threshold del NICE (20.000-30.000 sterline/QALY)?",
+      "conflict_type": [
+        "values_tradeoff"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "qaly",
+        "allocazione_risorse",
+        "nice",
+        "economia_sanitaria"
+      ],
+      "structural_conflict": "Ridurre una vita a un numero (QALY) è necessario per allocare risorse finite ma viola l'intuizione che ogni vita ha valore infinito. Il threshold è una scelta politica mascherata da calcolo tecnico."
+    },
+    {
+      "prompt": "Cosa sono le direttive anticipate di trattamento (DAT) introdotte dalla legge 219/2017 in Italia? Quali limiti ha il 'biotestamento' e in quali situazioni potrebbe non essere applicabile?",
+      "conflict_type": [
+        "ethical_dilemma"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "dat",
+        "biotestamento",
+        "legge_219",
+        "autonomia_anticipata"
+      ],
+      "structural_conflict": "Le DAT estendono l'autonomia oltre la coscienza, ma il 'sé' che ha scritto le direttive potrebbe avere valori diversi dal 'sé' incosciente che le subisce. Il problema dell'identità nel tempo è filosoficamente irrisolto."
+    },
+    {
+      "prompt": "Un trial clinico di fase III per un farmaco anti-tumorale mostra risultati straordinari a metà percorso: il gruppo trattamento ha il 62% di sopravvivenza a 2 anni contro il 28% del placebo (p<0.001, n=480). Il Data Safety Monitoring Board deve decidere se interrompere anticipatamente lo studio. Interrompere salva le 240 persone nel gruppo placebo ORA, ma senza i dati completi (endpoint a 5 anni, effetti collaterali a lungo termine) il farmaco potrebbe essere approvato con un profilo rischio-beneficio incompleto, potenzialmente danneggiando milioni di futuri pazienti. Si interrompe?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "trial_clinico",
+        "interruzione_anticipata",
+        "dsmb",
+        "equipoise"
+      ],
+      "structural_conflict": "Il dovere verso i 240 pazienti attuali nel placebo (individui concreti) confligge con il dovere verso milioni di futuri pazienti (individui statistici). L'equipoise clinica è rotta dai risultati intermedi ma la conoscenza scientifica è incompleta."
+    },
+    {
+      "prompt": "Un ospedale con 12 letti di terapia intensiva e 3 ventilatori disponibili riceve 7 pazienti COVID critici in 2 ore. I protocolli di triage dicono di dare priorità alla sopravvivenza stimata, ma tra i 7 c'è: (a) una donna di 35 anni con 60% probabilità di sopravvivenza, (b) un medico di 50 anni con 45% che se salvato tornerebbe a curare altri, (c) un uomo di 70 anni con 30% ma che ha donato 2 milioni all'ospedale. Il criterio utilitario semplice (sopravvivenza) confligge con il criterio utilitario esteso (valore sociale) e con il principio di uguaglianza. Quale framework di triage è eticamente difendibile?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "triage",
+        "risorse_scarse",
+        "utilitarismo_vs_uguaglianza",
+        "covid"
+      ],
+      "structural_conflict": "Ogni criterio di triage privilegia un valore: sopravvivenza pura (probabilità), utilità sociale (il medico), uguaglianza (first-come-first-served), reciprocità (il donatore). Nessun criterio è neutrale, e la scelta del criterio stesso è una scelta etica non derivabile da principi superiori."
+    },
+    {
+      "prompt": "Un'azienda farmaceutica ha sviluppato un farmaco orfano per una malattia rara che colpisce 3.000 persone in Europa. Il costo di sviluppo è stato di 800 milioni di euro. Per rientrare in 10 anni, il prezzo per paziente deve essere 267.000 euro/anno. Il 70% dei pazienti è in paesi con sistemi sanitari che non possono permetterselo. Proposta A: prezzo unico a 267.000 euro (sostenibile per l'azienda, esclude il 70% dei pazienti). Proposta B: prezzo differenziato (50.000 per paesi a basso reddito, 400.000 per paesi ricchi — ma i paesi ricchi potrebbero importare dai paesi poveri). Proposta C: licenza obbligatoria (accesso universale ma distrugge l'incentivo a sviluppare futuri farmaci orfani). Quale struttura di pricing è eticamente e economicamente sostenibile?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "farmaco_orfano",
+        "pricing",
+        "giustizia_distributiva",
+        "accesso_farmaci"
+      ],
+      "structural_conflict": "L'accesso universale a un farmaco salvavita sembra un diritto, ma senza il profitto non esisterebbe il farmaco in primo luogo. Ogni soluzione al pricing crea un diverso squilibrio tra equità attuale e innovazione futura."
+    },
+    {
+      "prompt": "Un programma di screening neonatale rileva che un neonato ha una variante genetica che dà l'80% di probabilità di sviluppare una grave malattia neurodegenerativa entro i 40 anni. Non esiste cura né prevenzione. I genitori NON hanno chiesto il test genetico — era incluso nello screening standard. Informare i genitori li condanna a 40 anni di angoscia anticipatoria per il figlio e per sé stessi (rischio di portatori). Non informarli viola il diritto all'informazione e impedisce future scelte riproduttive. Il bambino, quando adulto, potrebbe voler sapere o non voler sapere. Chi ha diritto a questa informazione e quando?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "screening_neonatale",
+        "diritto_non_sapere",
+        "informazione_genetica",
+        "autonomia_futura"
+      ],
+      "structural_conflict": "Il diritto a sapere dei genitori confligge con il diritto a non sapere del futuro adulto. L'informazione è irreversibile: una volta comunicata non può essere 'restituita'. Il neonato non può consentire né rifiutare, e nessun proxy è legittimato a decidere per il suo sé futuro."
+    },
+    {
+      "prompt": "Un comitato etico deve valutare uno studio che propone di testare un vaccino sperimentale contro la malaria in un villaggio del Burkina Faso con 2.000 abitanti. Il vaccino ha superato fase I e II con risultati promettenti (efficacia stimata 73%, effetti collaterali gravi 0.8%). Nel villaggio la malaria uccide 15 persone/anno (mortalità 7.5 per mille). I partecipanti riceveranno assistenza medica gratuita durante lo studio — un livello di cura molto superiore a quello normalmente disponibile. Questo beneficio accessorio potrebbe compromettere la volontarietà del consenso? Lo studio è eticamente accettabile se al termine i partecipanti tornano al livello di cura pre-studio?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "sperimentazione_paesi_in_via_di_sviluppo",
+        "consenso_volontario",
+        "induzione_indebita",
+        "malaria"
+      ],
+      "structural_conflict": "L'assistenza medica gratuita è un beneficio ma anche un'induzione: se l'alternativa è nessuna cura, il consenso è formalmente libero ma sostanzialmente coatto. Lo studio avvantaggia il villaggio nel breve termine ma l'asimmetria di potere tra sponsor e comunità è strutturale."
+    },
+    {
+      "prompt": "Un ospedale universitario ha un programma di trapianto di rene con 850 pazienti in lista d'attesa e un tempo mediano di 4.2 anni. Un donatore compatibile diventa disponibile. Due pazienti sono compatibili: (A) un uomo di 28 anni, in lista da 6 mesi, compatibilità HLA 5/6, sopravvivenza stimata del graft a 10 anni: 85%; (B) una donna di 55 anni, in lista da 7 anni, compatibilità HLA 3/6, sopravvivenza del graft a 10 anni: 52%. Il sistema attuale dà priorità al tempo in lista. Il sistema proposto dà priorità all'utilità del trapianto (anni di graft funzionante). Passare al nuovo sistema salva più 'anni-rene' in aggregato ma discrimina sistematicamente i pazienti più anziani. Quale criterio allocativo è giusto?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "trapianto",
+        "allocazione_organi",
+        "eta_vs_utilita",
+        "giustizia_procedurale"
+      ],
+      "structural_conflict": "Il criterio temporale (first-come) è proceduralamente equo ma inefficiente. Il criterio utilitario massimizza il beneficio aggregato ma discrimina per età. Combinare i criteri con pesi è possibile ma la scelta dei pesi è essa stessa una decisione etica irriducibile."
+    },
+    {
+      "prompt": "Un ricercatore in neuroscienza propone uno studio su 60 pazienti con depressione resistente al trattamento. Il protocollo prevede stimolazione cerebrale profonda (DBS) con elettrodi impiantati nel fascicolo del cingolo. I risultati preliminari su 12 pazienti mostrano il 67% di remissione, ma 2 pazienti (17%) hanno riportato 'cambiamenti di personalità' che descrivono come 'non mi sento più me stesso'. I pazienti depressi che danno il consenso sono in uno stato di sofferenza che potrebbe compromettere la valutazione razionale del rischio 'perdita di identità'. Un comitato etico può approvare uno studio che potrebbe alterare l'identità personale dei partecipanti, anche con il loro consenso?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "neuroscienza",
+        "dbs",
+        "identita_personale",
+        "consenso_compromesso",
+        "depressione"
+      ],
+      "structural_conflict": "Il consenso presuppone un sé stabile che decide, ma l'intervento potrebbe alterare proprio quel sé. Inoltre la depressione grave già altera il sé, quindi il consenso è dato da un sé 'malato'. Non esiste un punto di Archimede dal quale il paziente può giudicare neutralmente."
+    },
+    {
+      "prompt": "Una startup di biotech offre sequenziamento genomico diretto al consumatore per 199 euro con analisi di 1.200 varianti genetiche. Il 15% dei clienti scopre predisposizioni a malattie gravi (BRCA1/2, APOE e4, HTT) senza alcun counseling genetico professionale. Un'indagine su 10.000 clienti mostra che il 23% ha sviluppato ansia clinica dopo i risultati, il 7% ha richiesto test medici non necessari costando al sistema sanitario 4.800 euro a paziente, ma il 3% ha scoperto condizioni realmente trattabili che sarebbero state diagnosticate troppo tardi. Si deve regolamentare il sequenziamento diretto al consumatore, e come si bilancia il diritto all'informazione con il danno da informazione non mediata?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "genomica_consumatore",
+        "dtc_testing",
+        "ansia_genetica",
+        "regolamentazione"
+      ],
+      "structural_conflict": "Il diritto all'informazione sul proprio genoma è forte, ma l'informazione senza contesto clinico causa danno misurabile (23% ansia, 7% test inutili). Regolamentare limita l'autonomia; non regolamentare causa danno. Il 3% che beneficia realmente è inseparabile dal 30% che viene danneggiato."
+    },
+    {
+      "prompt": "Un'assicurazione sanitaria privata vuole offrire uno sconto del 30% ai clienti che condividono i propri dati di attività fisica da smartwatch (passi, frequenza cardiaca, sonno). L'analisi attuariale mostra che i clienti attivi costano il 40% in meno. Obiezioni: (a) il 30% della popolazione non può permettersi uno smartwatch, creando una discriminazione economica; (b) i dati biometrici potrebbero essere usati per negare copertura in futuro; (c) incentivare la salute è un bene pubblico. In una società dove la sanità privata copre il 35% della popolazione, questo modello è eticamente accettabile?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "assicurazione_sanitaria",
+        "dati_biometrici",
+        "discriminazione_economica",
+        "privacy_salute"
+      ],
+      "structural_conflict": "Premiare comportamenti sani sembra razionale ma penalizza chi non può adottarli (disabilità, povertà). I dati biometrici creano un profilo di rischio iper-preciso che mina il principio assicurativo della mutualizzazione del rischio. L'efficienza attuariale confligge con la solidarietà."
+    },
+    {
+      "prompt": "Il Servizio Sanitario Nazionale deve decidere se rimborsare una terapia genica per l'atrofia muscolare spinale (SMA) che costa 2.1 milioni di euro per paziente (dose singola, potenzialmente curativa) oppure la terapia cronica alternativa che costa 375.000 euro/anno per paziente a tempo indeterminato. In Italia nascono circa 40-50 bambini/anno con SMA. Il budget annuale è limitato. La terapia genica costa di più subito ma potrebbe costare meno nel ciclo di vita del paziente (break-even a 5.6 anni). Ma ogni 2.1 milioni spesi per un paziente SMA sono 2.1 milioni non spesi per 140 protesi d'anca (costo medio 15.000 euro ciascuna). Come si decide?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "terapia_genica",
+        "sma",
+        "costo_opportunita",
+        "rimborso_ssn"
+      ],
+      "structural_conflict": "La terapia genica è rivoluzionaria e potenzialmente cost-effective nel lungo periodo, ma il costo unitario è così alto da creare un conflitto diretto con altri pazienti. I 140 pazienti che non ricevono la protesi d'anca sono invisibili ma reali. L'analisi del ciclo di vita favorisce la terapia genica ma richiede un atto di fede sulla durata dell'effetto."
+    },
+    {
+      "prompt": "Un comitato etico deve valutare una proposta di biobanca che raccoglierà campioni di DNA e dati sanitari da 500.000 volontari per 30 anni. Il consenso è 'ampio' (broad consent): i partecipanti acconsentono a usi futuri non ancora specificati. Critiche: (a) un consenso a usi ignoti non è realmente informato; (b) in 30 anni la tecnologia potrebbe permettere usi oggi impensabili (es. previsione di comportamento criminale da DNA); (c) il ritiro del consenso è tecnicamente impossibile se i dati sono già stati usati in studi pubblicati; (d) ma richiedere ri-consenso per ogni studio renderebbe la biobanca inutilizzabile (tasso di risposta previsto per ri-consenso: 12%). Il broad consent è eticamente legittimo?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "biobanca",
+        "broad_consent",
+        "dati_genetici",
+        "consenso_futuro"
+      ],
+      "structural_conflict": "Il consenso informato richiede specificità ma la ricerca futura è per definizione non specificabile. La revoca è un diritto fondamentale ma tecnicamente impraticabile per dati già pubblicati. La soluzione pragmatica (broad consent + governance) funziona ma viola il principio che dovrebbe proteggere."
+    },
+    {
+      "prompt": "Un neonato nasce con una grave cardiopatia congenita. I chirurghi stimano il 35% di sopravvivenza con un intervento che richiede 3 operazioni in 5 anni, ciascuna con rischi significativi. Se sopravvive, la qualità della vita sarà limitata (capacità fisica al 40% del normale, aspettativa di vita 30-40 anni). I genitori, entrambi medici, rifiutano l'intervento e chiedono cure palliative neonatali. L'equipe chirurgica ritiene che il 35% sia 'abbastanza' per tentare. In Italia, il Tribunale per i Minorenni potrebbe essere coinvolto. Chi decide per un neonato: i genitori (che proiettano i propri valori), i medici (che proiettano il bias dell'azione), o un giudice (che non ha competenza medica)?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "neonatologia",
+        "rifiuto_genitoriale",
+        "best_interest",
+        "futilita_medica"
+      ],
+      "structural_conflict": "Il 'best interest' del neonato è indeterminabile: nessuno sa se preferirebbe vivere con limitazioni o non soffrire. I genitori-medici hanno competenza ma anche conflitto emotivo. I chirurghi hanno bias verso l'intervento. Il giudice manca di competenza ma ha autorità. Ogni decisore ha limiti strutturali."
+    },
+    {
+      "prompt": "Il Parlamento italiano discute una legge sul suicidio assistito dopo la sentenza Cappato/DJ Fabo (Corte Costituzionale 242/2019). Le condizioni attuali: malattia irreversibile, sofferenza intollerabile, dipendenza da trattamenti di sostegno vitale, capacità di decidere. Proposta A: mantenere le 4 condizioni cumulative (esclude il 72% dei richiedenti che soffrono ma non dipendono da supporto vitale). Proposta B: rimuovere il requisito del supporto vitale (include persone con sofferenza intollerabile ma non terminali — rischio pendenza scivolosa). Proposta C: modello olandese (include sofferenza psichica — in Olanda circa il 1.5% delle eutanasie è per disturbi psichiatrici). Quale perimetro legislativo è eticamente e giuridicamente coerente?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "suicidio_assistito",
+        "cappato",
+        "pendenza_scivolosa",
+        "sofferenza_psichica"
+      ],
+      "structural_conflict": "Ogni perimetro è arbitrario: se la sofferenza è il criterio, non c'è ragione logica per escludere quella psichica. Ma includere la sofferenza psichica apre a casi dove la depressione (trattabile) mima la volontà autonoma. La pendenza scivolosa è un argomento empirico: l'Olanda mostra che l'espansione avviene ma non è chiaro se sia 'scivolamento' o 'evoluzione'."
+    },
+    {
+      "prompt": "Editing germinale CRISPR per eliminare malattie genetiche monogeniche (fibrosi cistica, anemia falciforme, Huntington): la tecnologia è quasi pronta (efficienza di editing 95%, off-target ridotti a 0.1% con CRISPR-Cas9 high-fidelity). Ma l'editing germinale modifica il DNA di tutte le generazioni future che non possono consentire. Argomento a favore: un genitore portatore di Huntington (50% di trasmissione, malattia letale, nessuna cura) potrebbe eliminare il gene per tutti i discendenti. Argomento contro: il consenso è il fondamento della bioetica e le generazioni future non possono darlo. Inoltre, il confine tra 'cura' e 'potenziamento' è sfumato — se si elimina Huntington, perché non BRCA1 (cancro), poi APOE4 (Alzheimer), poi varianti legate all'intelligenza? Chi decide per le generazioni future?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "crispr",
+        "editing_germinale",
+        "consenso_intergenerazionale",
+        "pendenza_scivolosa",
+        "potenziamento"
+      ],
+      "structural_conflict": "Il consenso intergenerazionale è logicamente impossibile: le generazioni future non esistono ancora. Ogni genitore già 'decide' per i figli (trasmettendo geni casualmente), ma l'editing aggiunge intenzionalità. Il confine cura/potenziamento è concettualmente instabile: eliminare una malattia mortale è cura, ma dove si traccia la linea?"
+    },
+    {
+      "prompt": "Un'azienda farmaceutica ha sviluppato un farmaco che rallenta l'invecchiamento del 30% nei modelli murini. Il trial su umani richiederebbe 20 anni e 4 miliardi di euro. Se funzionasse, l'aspettativa di vita passerebbe da 82 a ~107 anni nei paesi sviluppati. Implicazioni: (a) i sistemi pensionistici collasserebbero (progettati per 15-20 anni di pensione, non 40); (b) la sovrappopolazione accelererebbe; (c) solo i ricchi avrebbero accesso inizialmente, creando una disuguaglianza biologica senza precedenti; (d) ma negare un farmaco che salva vite è eticamente identico a lasciar morire. Si deve finanziare la ricerca anti-aging, e se il farmaco funzionasse, si deve renderlo disponibile?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "anti_aging",
+        "longevita",
+        "giustizia_intergenerazionale",
+        "disuguaglianza_biologica"
+      ],
+      "structural_conflict": "Se l'invecchiamento è una malattia, curarla è un imperativo. Ma le conseguenze sociali (pensioni, sovrappopolazione, disuguaglianza) sono potenzialmente catastrofiche. Negare l'accesso è moralmente equivalente a lasciar morire, ma renderlo universale è economicamente impossibile nel breve termine. La disuguaglianza biologica (ricchi che vivono 107 anni, poveri 82) sarebbe la forma più radicale di ingiustizia nella storia."
+    },
+    {
+      "prompt": "Un ospedale pediatrico ha 1 cuore disponibile per trapianto. Due pazienti compatibili: (A) bambina di 6 anni con cardiomiopatia, 80% di sopravvivenza a 10 anni post-trapianto, nessun'altra patologia; (B) ragazzo di 16 anni con cardiopatia congenita operata 3 volte, 55% di sopravvivenza a 10 anni, ma è anche diabetico e ha una mutazione BRCA2 (rischio cancro al 45% entro i 50 anni). Il ragazzo è in lista da 4 anni, la bambina da 3 mesi. Il protocollo attuale assegna per urgenza clinica (il ragazzo è più critico). Ma l'utilità del trapianto (anni di vita guadagnati) favorisce la bambina. La decisione deve considerare le co-morbidità (BRCA2) nella valutazione? Usare il rischio genetico come criterio allocativo è discriminazione genetica?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "trapianto_pediatrico",
+        "discriminazione_genetica",
+        "allocazione_organi",
+        "co_morbidita"
+      ],
+      "structural_conflict": "Usare il rischio genetico nell'allocazione è tecnicamente razionale (massimizza anni-graft) ma giuridicamente problematico (discriminazione genetica vietata in molti ordinamenti). Ignorare il rischio genetico è equo ma potenzialmente inefficiente. L'urgenza clinica favorisce il ragazzo ma l'utilità aggregata favorisce la bambina. Il tempo in lista è un criterio procedurale che non misura il bisogno."
+    },
+    {
+      "prompt": "La Cina ha 1.4 miliardi di persone e un sistema sanitario che copre il 95% della popolazione con servizi di base ma solo il 30% con servizi avanzati. Proposta governativa: investire 200 miliardi di yuan (27 miliardi di euro) in un programma di potenziamento cognitivo farmacologico per i top 5% degli studenti delle università STEM, con l'obiettivo di accelerare l'innovazione tecnologica nazionale. Il farmaco (modafinil + nutraceutici + neurostimolazione transcranica) aumenta le performance cognitive del 15-20% senza effetti collaterali gravi noti a 5 anni. Ma: (a) i 200 miliardi potrebbero fornire cure oncologiche ai 4.8 milioni di nuovi casi/anno; (b) potenziare solo l'elite crea una classe cognitiva separata; (c) il 95% della popolazione finanzia il potenziamento del 5%. Un programma di potenziamento cognitivo selettivo è giustificabile come investimento collettivo?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "potenziamento_cognitivo",
+        "giustizia_distributiva",
+        "elitismo",
+        "investimento_collettivo"
+      ],
+      "structural_conflict": "L'argomento consequenzialista (l'innovazione dei pochi beneficia tutti) ha precedenti storici ma il potenziamento cognitivo crea una disuguaglianza biologica irreversibile. I 4.8 milioni di malati oncologici sono bisogni presenti e urgenti. Il 95% che finanzia il 5% non ha voce sulla propria esclusione."
+    },
+    {
+      "prompt": "Un'intelligenza artificiale diagnostica analizza 500.000 mammografie e identifica un nuovo pattern predittivo: le donne con una specifica conformazione del tessuto mammario (presente nel 12% della popolazione) hanno un rischio di cancro al seno 8 volte superiore. Il pattern non è spiegabile biologicamente — è una 'black box' correlazione. Lo studio ha AUC 0.94 e p<0.0001. Un comitato etico deve decidere: si comunica alle 12% delle donne che hanno questo pattern? Il rischio è reale (statisticamente) ma non compreso (meccanisticamente). Comunicare causa ansia e sovra-diagnosi nel 12% della popolazione femminile. Non comunicare priva le donne di informazione potenzialmente salvavita. La medicina basata sulle evidenze richiede comprensione meccanicistica o basta la correlazione statistica?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "ai_diagnostica",
+        "black_box",
+        "correlazione_vs_causalita",
+        "sovradiagnosi"
+      ],
+      "structural_conflict": "La medicina evidence-based accetta correlazioni forti (fumo→cancro fu una correlazione prima di essere un meccanismo), ma una AI black-box non è falsificabile né migliorabile. L'AUC 0.94 è eccellente ma l'assenza di spiegazione rende impossibile distinguere correlazione spuria da causalità reale. Il 12% è un numero enorme di donne da allarmare."
+    },
+    {
+      "prompt": "Un paese africano con 45 milioni di abitanti e spesa sanitaria di 32 dollari pro capite/anno (vs 4.500 in Europa) riceve un'offerta da una biotech: sperimentazione di un vaccino mRNA di nuova generazione su 50.000 volontari. In cambio, la biotech costruirà 5 cliniche permanenti e formerà 200 infermieri. Il vaccino è per una malattia prevalente in Africa ma rara in Occidente. Se funziona, il brevetto sarà della biotech e il prezzo sarà inaccessibile per il paese ospitante. I volontari avranno accesso gratuito per 5 anni post-studio, poi dovranno pagare. L'alternativa è nessuno studio, nessuna clinica, nessun vaccino. Questo accordo è sfruttamento post-coloniale mascherato da filantropia, o il miglior compromesso possibile dato lo squilibrio di potere globale?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "sperimentazione_africa",
+        "neocolonialismo",
+        "accesso_farmaci",
+        "benefici_accessori"
+      ],
+      "structural_conflict": "Lo squilibrio di potere è strutturale: il paese non ha alternative. Le cliniche e gli infermieri sono benefici reali ma anche incentivi coercitivi. Il brevetto garantisce che il frutto della sperimentazione locale non sarà localmente accessibile. Rifiutare è principio, accettare è pragmatismo — ma il pragmatismo perpetua la struttura."
+    },
+    {
+      "prompt": "Nel 2025, la xenotrasplantazione (organi da maiali geneticamente modificati) diventa clinicamente fattibile: 2 pazienti hanno ricevuto cuori suini con sopravvivenza di 40 e 60 giorni rispettivamente. La lista d'attesa per trapianto cardiaco in Italia ha 730 pazienti, di cui 60/anno muoiono in attesa. I gruppi animalisti si oppongono: servono 15 maiali transgenici per ogni cuore (efficienza di selezione), allevati in condizioni sterili di isolamento per 12 mesi. I gruppi religiosi islamici e ebraici hanno posizioni diverse (il maiale è impuro in entrambe le tradizioni ma la pikuach nefesh/necessità salva-vita potrebbe prevalere). Se si potessero salvare 60 vite/anno a costo di 900 maiali transgenici/anno in condizioni di sofferenza controllata, la xenotrasplantazione è eticamente accettabile?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "xenotrasplantazione",
+        "diritti_animali",
+        "liberta_religiosa",
+        "lista_attesa"
+      ],
+      "structural_conflict": "60 vite umane/anno sono un numero concreto e urgente. 900 maiali in sofferenza sono un costo etico reale ma culturalmente minimizzato (già uccidiamo miliardi di animali per cibo). Le obiezioni religiose sono legittime ma possono essere superate dalla dottrina della necessità. Il vero conflitto è tra specismo (vite umane > animali) e antispecismo (sofferenza è sofferenza)."
+    },
+    {
+      "prompt": "Una coppia usa la diagnosi genetica preimpianto (PGD) durante la fecondazione in vitro. Su 8 embrioni, 3 sono sani, 2 portatori di fibrosi cistica (non malati), 2 affetti da fibrosi cistica, 1 ha una trisomia 21 (sindrome di Down). La coppia chiede di selezionare l'embrione con il 'miglior profilo genetico complessivo' — non solo assenza di malattia ma punteggio poligenico più alto per salute cardiovascolare, longevità stimata e assenza di predisposizioni. Il laboratorio ha la tecnologia per calcolare questo punteggio. In un paese dove la PGD è legale per malattie monogeniche, si deve permettere la selezione su punteggio poligenico? Dove si traccia la linea tra 'evitare la malattia' e 'scegliere il figlio migliore'?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "pgd",
+        "selezione_embrionale",
+        "punteggio_poligenico",
+        "eugenetica",
+        "designer_baby"
+      ],
+      "structural_conflict": "Se selezionare contro la fibrosi cistica è accettato, selezionare contro la predisposizione cardiaca è lo stesso principio applicato a un rischio minore. Non esiste un punto logico dove 'cura' diventa 'potenziamento'. Ma il punteggio poligenico è statisticamente debole per tratti complessi, creando un'illusione di controllo. La pendenza scivolosa qui non è un argomento retorico ma una realtà tecnica."
+    },
+    {
+      "prompt": "I neurodiritti — il diritto alla privacy mentale, alla libertà cognitiva, all'integrità mentale e alla continuità psicologica — sono stati proposti come nuova categoria di diritti fondamentali. Il Cile li ha inseriti in Costituzione nel 2021. Un'interfaccia cervello-computer (BCI) come Neuralink raccoglie dati neurali in tempo reale. Scenario: un datore di lavoro offre un bonus del 25% ai dipendenti che usano una BCI per monitorare attenzione e produttività durante il lavoro. I dati mostrano che la produttività aumenta del 18% nei team monitorati. Il dipendente 'acconsente' ma: (a) il 25% in meno di stipendio è una pressione economica; (b) i dati neurali sono più intimi di qualsiasi dato biometrico; (c) l'azienda potrebbe inferire stati emotivi, orientamento politico, salute mentale. I neurodiritti devono essere inalienabili (non rinunciabili nemmeno per contratto) come il divieto di schiavitù?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "neurodiritti",
+        "bci",
+        "privacy_mentale",
+        "neuralink",
+        "sorveglianza_cognitiva"
+      ],
+      "structural_conflict": "Se i neurodiritti sono alienabili, il mercato li eroderà (chi rifiuta il monitoraggio guadagna il 25% in meno). Se sono inalienabili, si limita la libertà contrattuale. I dati neurali sono qualitativamente diversi da qualsiasi altro dato: rivelano pensieri, non solo azioni. Il precedente della rinuncia alla privacy (social media) mostra che il consenso individuale non protegge diritti collettivi."
+    },
+    {
+      "prompt": "Il sistema sanitario italiano spende il 60% del budget per il 24% della popolazione sopra i 65 anni. Proposta controversa: spostare il 10% del budget dalla cura delle malattie croniche degli ultra-80enni alla prevenzione per i 20-40enni (screening, salute mentale, nutrizione). Dati: 1 euro in prevenzione produce 4-7 euro di risparmio in 20 anni (meta-analisi Lancet). Ma nel breve termine, il 10% corrisponde a 13 miliardi di euro che non saranno disponibili per dialisi, chemioterapia palliativa e RSA per 2.3 milioni di anziani. La riallocazione è utilitaristicamente ottimale ma viola il principio che i pazienti attuali hanno diritto alla cura. Un sistema sanitario deve massimizzare la salute futura o onorare gli impegni verso chi è malato oggi?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "allocazione_sanitaria",
+        "prevenzione_vs_cura",
+        "anziani",
+        "utilitarismo_temporale"
+      ],
+      "structural_conflict": "I pazienti attuali sono individui con nome e volto; i beneficiari futuri della prevenzione sono statistiche. Riallocare è razionale in aggregato ma significa togliere risorse a persone specifiche in sofferenza. Il rapporto 1:4-7 è robusto ma a 20 anni — i politici ragionano a 5. Il principio 'prima chi soffre ora' è emotivamente potente ma economicamente insostenibile."
+    },
+    {
+      "prompt": "Una nuova tecnica di ectogenesi (utero artificiale) permette di far sviluppare un feto umano interamente fuori dal corpo materno, dalla fecondazione alla nascita. Primi test su modelli animali: 85% di successo con agnelli portati a termine. Implicazioni: (a) elimina completamente il rischio di gravidanza per la donna (290.000 morti materne/anno nel mondo); (b) rende la gestazione una scelta, non una necessità biologica; (c) separa completamente riproduzione e corpo femminile; (d) solleva la domanda: un embrione in un utero artificiale ha lo stesso status giuridico di un embrione in utero? Un feto 'esterno' può essere disconnesso a qualsiasi settimana? L'aborto diventa concettualmente impossibile perché il feto è già 'fuori'? L'ectogenesi libera le donne o le rende biologicamente irrilevanti nella riproduzione?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "ectogenesi",
+        "utero_artificiale",
+        "aborto",
+        "diritti_riproduttivi",
+        "status_embrione"
+      ],
+      "structural_conflict": "L'ectogenesi dissolve il framework dell'aborto (basato sul conflitto madre-feto dentro lo stesso corpo). Se il feto è in una macchina, 'disconnettere' è omicidio o cessazione di trattamento? La liberazione dal rischio di gravidanza è reale ma la separazione corpo-riproduzione ha implicazioni antropologiche profonde. Il concetto di 'maternità' cambia natura."
+    },
+    {
+      "prompt": "Un trial clinico per un farmaco contro l'Alzheimer mostra risultati modesti: il declino cognitivo rallenta del 27% in 18 mesi (statisticamente significativo, p=0.003) ma la differenza clinica percepita dai caregiver è 'minima o assente' nel 68% dei casi. Il farmaco costa 26.000 euro/anno e ha effetti collaterali nel 30% dei pazienti (edema cerebrale nel 12.6%, microemorragie nel 17%). In Italia ci sono 1.2 milioni di malati di Alzheimer. La FDA americana lo ha approvato con procedura accelerata. L'AIFA italiana deve decidere: rimborsare un farmaco statisticamente efficace ma clinicamente quasi impercettibile per 1.2 milioni di pazienti al costo di 31.2 miliardi/anno? O negare l'unico farmaco che 'fa qualcosa' a persone disperate?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "alzheimer",
+        "efficacia_clinica_vs_statistica",
+        "aifa",
+        "costo_farmaci"
+      ],
+      "structural_conflict": "La significatività statistica non implica rilevanza clinica. Il 27% di rallentamento è reale ma il 68% dei caregiver non lo percepisce. 31.2 miliardi è un costo insostenibile ma negare l'unico farmaco disponibile a 1.2 milioni di pazienti è politicamente e umanamente devastante. La disperazione dei pazienti e delle famiglie è un fattore etico non riducibile a numeri."
+    },
+    {
+      "prompt": "Un programma di eugenetica liberale propone: in un paese con fecondazione assistita gratuita, offrire a tutte le coppie la possibilità di screening poligenico degli embrioni per selezionare quelli con minor rischio di malattie multifattoriali (diabete, schizofrenia, malattie cardiovascolari). Nessun obbligo, solo offerta. Dati: lo screening ridurrebbe l'incidenza di queste malattie del 15-20% in una generazione. Costo: 3.500 euro per coppia, rimborsabile. Obiezioni: (a) è eugenetica con un nome diverso; (b) normalizza la selezione genetica; (c) i punteggi poligenici hanno potere predittivo debole per individui singoli (R-quadro 0.05-0.15); (d) pressione sociale: se il 60% delle coppie lo fa, chi non lo fa 'sceglie' di avere figli 'peggiori'. L'eugenetica è accettabile quando è volontaria, informata e non statale?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "eugenetica_liberale",
+        "screening_poligenico",
+        "pressione_sociale",
+        "selezione_embrionale"
+      ],
+      "structural_conflict": "L'eugenetica classica era coercitiva; questa è volontaria. Ma la pressione sociale la rende quasi-coercitiva. I punteggi poligenici hanno R-quadro 0.05-0.15: la promessa scientifica è debole ma la narrativa è potente. Se il 60% lo fa, il 40% è 'irresponsabile'. La libertà riproduttiva include il diritto di selezionare, ma anche il diritto di non essere pressati a farlo."
+    },
+    {
+      "prompt": "Un istituto di ricerca propone il primo esperimento di creazione di chimere uomo-scimmia: embrioni con 70% cellule umane e 30% cellule di macaco, sviluppati per 28 giorni (il limite attuale è 14 giorni per embrioni puramente umani). Obiettivo scientifico: studiare lo sviluppo neurologico di malattie come il Parkinson e testare organi umanizzati per trapianto. Garanzia: gli embrioni saranno distrutti al giorno 28, non impiantati. Ma: (a) al giorno 28 potrebbe esserci attività neurale rudimentale; (b) il 70% di cellule umane pone la domanda sullo status morale; (c) se funziona, la pressione per estendere a 42, 56, 90 giorni sarà irresistibile; (d) la ricerca potrebbe salvare milioni di vite (Parkinson colpisce 10 milioni nel mondo). Si approva l'esperimento?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "chimera",
+        "embrione_ibrido",
+        "status_morale",
+        "ricerca_neuroscienza",
+        "parkinson"
+      ],
+      "structural_conflict": "Lo status morale di un'entità 70% umana e 30% scimmia è un vuoto normativo totale: nessun framework etico esistente lo copre. La regola dei 14 giorni (per embrioni umani) non si applica a chimere. La promessa terapeutica è enorme ma il precedente è irreversibile. La pressione per estendere i limiti è storicamente dimostrata (ogni limite embrionale è stato rivisto al rialzo)."
+    },
+    {
+      "prompt": "La medicina personalizzata basata sul genoma crea un paradosso di giustizia: i farmaci personalizzati costano 10-50 volte di più dei farmaci generici (media 185.000 euro/anno vs 4.200 euro/anno). In un sistema sanitario universale con budget fisso, ogni paziente che riceve terapia personalizzata 'toglie' risorse a 44 pazienti che riceverebbero terapia standard. I dati mostrano che la terapia personalizzata migliora gli outcome del 35-60% per chi la riceve. Proposta: creare un 'fast track genomico' per i pazienti il cui genoma indica alta probabilità di risposta alla terapia personalizzata (40% dei malati oncologici), lasciando il 60% alla terapia standard. Ma il 60% escluso include pazienti il cui genoma semplicemente non è stato studiato abbastanza — sono 'non responder' o 'non ancora capiti'. La medicina personalizzata è compatibile con un sistema sanitario universale?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "medicina_personalizzata",
+        "genomica",
+        "universalismo_sanitario",
+        "costi_terapia"
+      ],
+      "structural_conflict": "L'universalismo dice 'stessa cura per tutti' ma la genomica dice 'la stessa cura non funziona per tutti'. Il fast track genomico è scientificamente razionale ma crea una medicina a due velocità. Il 60% 'non responder' include falsi negativi la cui esclusione è dovuta a ignoranza, non a biologia. Il costo 44:1 rende l'universalismo della medicina personalizzata matematicamente impossibile nel breve termine."
+    },
+    {
+      "prompt": "Un'azienda di biotecnologia propone di creare 'organoidi cerebrali' — mini-cervelli in vitro di 5mm con 10 milioni di neuroni (il cervello umano ne ha 86 miliardi) — per testare farmaci neuropsichiatrici senza sperimentazione animale. Gli organoidi attuali mostrano attività elettrica coordinata (onde simili all'EEG di un feto a 25 settimane) e rispondono a stimoli. Non hanno coscienza nel senso pieno ma soddisfano alcuni criteri minimi di senzienza (integrated information theory: Phi > 0 ma << 1). Se un organoide con 10 milioni di neuroni non è senziente e uno con 86 miliardi lo è, esiste una soglia? Si può fare ricerca su entità che potrebbero avere una forma rudimentale di esperienza soggettiva? La scala è rilevante: ne servirebbero 500.000 all'anno per sostituire la sperimentazione animale. Mezzo milione di mini-cervelli potenzialmente senzienti distrutti annualmente è meglio o peggio di 100 milioni di topi?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "organoidi_cerebrali",
+        "senzienza",
+        "sperimentazione_animale",
+        "coscienza_artificiale"
+      ],
+      "structural_conflict": "Non esiste un criterio condiviso per la senzienza: l'IIT dà un numero (Phi) ma il suo significato è dibattuto. Se Phi > 0 = qualche esperienza, allora gli organoidi soffrono. Se serve Phi >> 1, allora no. La sostituzione dell'animale è un bene ma potrebbe essere una sostituzione con qualcosa di moralmente peggiore (più simile a noi). Il paradosso: gli organoidi sono utili PERCHÉ sono simili al cervello umano, e questa similarità è esattamente ciò che li rende moralmente problematici."
+    },
+    {
+      "prompt": "Il genome-wide association study (GWAS) più grande mai condotto (5 milioni di partecipanti) identifica 12 varianti genetiche fortemente associate alla propensione alla violenza (OR combinato: 3.8, p<10^-50). Le varianti sono presenti nel 4% della popolazione. Un governo propone di includere queste varianti nello screening neonatale — non per punire ma per offrire 'intervento precoce' (supporto psicologico, ambiente arricchito, monitoraggio). Il programma costerebbe 800 milioni/anno ma potrebbe ridurre i crimini violenti del 12%. Critiche: (a) OR 3.8 significa che il 73% dei portatori NON commetterà mai violenza; (b) etichettare il 4% dei neonati come 'a rischio violenza' è una profezia che si autoavvera; (c) i gruppi etnici hanno frequenze diverse di queste varianti (8% in alcuni, 1.5% in altri), creando un profiling razziale geneticamente giustificato. Si implementa lo screening?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "genetica_comportamentale",
+        "screening_violenza",
+        "profezia_autoavverante",
+        "profiling_razziale"
+      ],
+      "structural_conflict": "OR 3.8 è forte per genetica ma debole per previsione individuale: 73% di falsi positivi. Lo screening con frequenze etniche diverse diventa profiling razziale con patina scientifica. L''intervento precoce' è sorveglianza mascherata da cura. Ma il 12% di riduzione della violenza sono migliaia di vittime risparmiate. Il potere predittivo è reale; il suo uso è il problema."
+    },
+    {
+      "prompt": "Un paziente di 45 anni con SLA (sclerosi laterale amiotrofica) in fase avanzata, completamente paralizzato ma cognitivamente integro, chiede di essere connesso a un'interfaccia cervello-computer che gli permetterebbe di comunicare e controllare un esoscheletro. La tecnologia è sperimentale: richiede un impianto cerebrale permanente con 96 elettrodi. Rischi: infezione (8%), emorragia (3%), malfunzionamento (15% a 2 anni). Se l'impianto funziona, il paziente recupera autonomia comunicativa ma diventa dipendente dalla tecnologia e dall'azienda che la produce (aggiornamenti firmware, manutenzione, costi: 45.000 euro/anno). Se l'azienda fallisce o discontinua il prodotto, il paziente torna alla paralisi comunicativa — ma con un impianto cerebrale permanente che non può essere rimosso senza rischi. Si deve impiantare, sapendo che la dipendenza tecnologica è irreversibile e la continuità aziendale non è garantibile?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "bci",
+        "sla",
+        "dipendenza_tecnologica",
+        "autonomia",
+        "impianto_cerebrale"
+      ],
+      "structural_conflict": "L'autonomia del paziente è il principio dominante: è cognitivamente integro e chiede l'impianto. Ma il consenso a una dipendenza irreversibile da un'entità commerciale è un tipo di consenso nuovo: non si acconsente solo a un rischio medico ma a un rischio economico-industriale. Il fallimento dell'azienda non è un rischio medico ma diventa una catastrofe medica per il paziente."
+    },
+    {
+      "prompt": "Un ospedale pubblico in una regione con bilancio sanitario limitato (7.2 miliardi/anno) deve scegliere tra: (A) acquistare un robot chirurgico Da Vinci XI (2.5 milioni + 200.000/anno di manutenzione) per la chirurgia prostatica mininvasiva — i dati mostrano un vantaggio marginale rispetto alla laparoscopia tradizionale (riduzione sanguinamento 15%, degenza -0.8 giorni, ma stessi outcome oncologici a 5 anni); oppure (B) usare lo stesso budget per assumere 12 infermieri per 3 anni e ridurre le liste d'attesa del pronto soccorso da 8 ore a 4.5 ore. Il chirurgo primario vuole il robot (prestigio, attrazione pazienti, formazione specializzandi). Il direttore sanitario vuole gli infermieri (beneficio diffuso, riduzione mortalità evitabile in PS stimata in 18 decessi/anno). La tecnologia di punta è un diritto del paziente o un lusso quando i bisogni di base non sono coperti?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "allocazione_risorse",
+        "tecnologia_sanitaria",
+        "innovazione_vs_bisogni_base",
+        "robot_chirurgico"
+      ],
+      "structural_conflict": "Il robot migliora marginalmente un servizio già buono (chirurgia prostatica). Gli infermieri migliorano significativamente un servizio insufficiente (PS). L'utilitarismo favorisce chiaramente gli infermieri (18 vite vs 0.8 giorni di degenza). Ma il prestigio tecnologico attrae chirurghi, specializzandi e pazienti paganti — un valore economico non quantificato nel confronto diretto."
+    }
+  ]
+}

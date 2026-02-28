@@ -1,0 +1,286 @@
+{
+  "domain": "database_systems",
+  "description": "Scelte architetturali di database, SQL vs NoSQL, scaling, consistency vs availability, modelli di dati, migration strategies, performance tuning",
+  "prompts": [
+    {
+      "prompt": "Un impianto industriale genera 50TB/anno di dati da 10.000 sensori IoT (temperatura, pressione, vibrazione) con frequenza di campionamento 1Hz. Servono query su finestre temporali (ultimi 30 min, ultima settimana) e aggregazioni (media oraria, picchi giornalieri). Le opzioni: (A) TimescaleDB su PostgreSQL — SQL familiare, hypertables con compression 10:1, ma il clustering multi-nodo è stato deprecato e per dataset molto grandi serve tuning avanzato; (B) InfluxDB — nativo time-series, retention policies automatiche, ma InfluxQL è limitato e la versione clustered è solo enterprise a 120K$/anno; (C) ClickHouse — velocissimo in lettura analitica (100x PostgreSQL su aggregazioni), ma UPDATE/DELETE sono implementati come mutazioni (ALTER TABLE ... UPDATE/DELETE) che riscrivono intere parti dati — anche con le recenti lightweight deletes restano inadatti a workload OLTP, e il team non ha esperienza. Budget: 40K€/anno. Quale scegli e perché le altre due sono sbagliate per questo caso specifico?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["time_series", "iot", "scalabilita", "postgresql_vs_influx_vs_clickhouse"],
+      "structural_conflict": "TimescaleDB è il più flessibile ma il single-node ha limiti pratici intorno ai 50-100TB e il clustering multi-nodo è stato deprecato. InfluxDB è nativo time-series ma il lock-in enterprise è un rischio. ClickHouse è il più veloce ma le mutazioni (che riscrivono intere parti dati) lo rendono inadatto a workload OLTP e la mancanza di esperienza nel team è un rischio operativo reale. Il budget elimina le opzioni enterprise."
+    },
+    {
+      "prompt": "Un e-commerce con 5M di prodotti e 200K ordini/giorno deve gestire il catalogo prodotti. Ogni prodotto ha attributi diversi per categoria (vestiti: taglia/colore/materiale; elettronica: voltaggio/connettori/peso; alimentari: allergeni/scadenza/temperatura). Le opzioni: (A) PostgreSQL con JSONB per attributi variabili — flessibile, ma le query su attributi specifici dentro JSONB sono 5-10x più lente di colonne native; (B) MongoDB — schema flessibile nativo, ma le transazioni multi-documento (necessarie per ordine + inventario) sono lente e il team è tutto SQL; (C) PostgreSQL con EAV (Entity-Attribute-Value) — normalizzato, ma le query richiedono N JOIN e diventano illeggibili. Il 60% delle query sono ricerche filtrate per attributi. Quale modello di dati scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["schema_design", "jsonb_vs_eav", "catalogo_prodotti", "query_performance"],
+      "structural_conflict": "JSONB sacrifica performance per flessibilità. MongoDB sacrifica transazioni ACID per schema flexibility. EAV è normalizzato ma illeggibile. Il 60% delle query è su attributi variabili — il che favorisce MongoDB/JSONB ma le transazioni ordine+inventario favoriscono PostgreSQL."
+    },
+    {
+      "prompt": "Un sistema bancario legacy su Oracle Database (licenza 800K€/anno) deve essere migrato. Le opzioni: (A) PostgreSQL — open source, maturo, ma manca il RAC (Real Application Clusters) e le stored procedures Oracle (3.000 PL/SQL procedures) devono essere riscritte; (B) CockroachDB — distribuito nativo, wire-compatible PostgreSQL, ma è un prodotto giovane per il settore bancario e la compliance richiede audit trail certificati che CockroachDB non ha; (C) restare su Oracle ma negoziare — il vendor offre 30% di sconto se si firmano 5 anni. La migrazione a PostgreSQL è stimata in 18 mesi e 2M€. Le 3.000 stored procedures sono documentate al 15%. Cosa raccomandi?",
+      "conflict_type": ["technical_disagreement", "risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["migrazione_database", "oracle_vs_postgresql", "legacy", "stored_procedures", "compliance_bancaria"],
+      "structural_conflict": "PostgreSQL è il futuro ma la migrazione è rischiosa (3.000 SP documentate al 15%). CockroachDB risolve il distributed ma non ha le certificazioni bancarie. Oracle costa troppo ma funziona. La migrazione è un investimento di 2M€ che potrebbe fallire. Lo sconto Oracle è un golden handcuffs."
+    },
+    {
+      "prompt": "Qual è il modo corretto di gestire i contatori in un database relazionale? Esempio: il conteggio dei 'like' di un post in un social network con 10M di utenti attivi. Aggiornare un campo denormalizzato `likes_count` nella tabella `posts` ad ogni voto causa lock contention sotto carico (1000 voti/secondo sullo stesso post virale). Calcolare il COUNT(*) dalla tabella `votes` ad ogni lettura è O(n) e inaccettabile. Usare Redis come cache del conteggio introduce inconsistenza temporale. Quali sono le soluzioni architetturali corrette e quali trade-off comportano?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["contatori", "denormalizzazione", "lock_contention", "caching"],
+      "structural_conflict": "Nessun conflitto strutturale profondo: la soluzione standard è write-behind con batch update + cache. Ma l'easy qui insegna al modello che non tutto richiede deliberazione — ci sono pattern consolidati."
+    },
+    {
+      "prompt": "Un'applicazione SaaS multi-tenant con 500 clienti deve decidere l'architettura di isolamento dati. Opzione A: un database per tenant (500 database separati) — isolamento perfetto, backup/restore granulare, ma 500 connection pool, schema migration × 500, costi infrastrutturali 3x. Opzione B: schema separato per tenant nello stesso database — buon isolamento, migration più semplice, ma la gestione operativa di PostgreSQL si complica con centinaia di schemi (migration, monitoring, connection routing) e pg_dump è monolitico. Opzione C: tabelle condivise con colonna `tenant_id` e RLS (Row-Level Security) — efficiente, un solo schema, ma un bug nel RLS espone i dati di tutti i tenant e il noisy neighbor è un problema reale. L'applicazione gestisce dati sanitari (HIPAA). Quale scegli?",
+      "conflict_type": ["technical_disagreement", "risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["multi_tenancy", "isolamento_dati", "RLS", "HIPAA", "saas"],
+      "structural_conflict": "Database-per-tenant è il più sicuro ma operativamente insostenibile a 500. Schema-per-tenant è un compromesso ma la complessità operativa cresce significativamente con centinaia di schemi. Shared con RLS è efficiente ma un singolo bug espone tutto — inaccettabile per HIPAA. La compliance sanitaria elimina l'opzione più efficiente."
+    },
+    {
+      "prompt": "Un data warehouse su Redshift costa 45K$/mese e le query analitiche più complesse impiegano 8-15 minuti. L'azienda valuta il passaggio a BigQuery (pay-per-query). Il volume è 200TB con 500 query analitiche/giorno. Le query sono molto varie: dal semplice aggregato (2 secondi su BQ) al JOIN di 15 tabelle con window functions (45 secondi su BQ, 12 minuti su Redshift). Su BigQuery, il costo stimato è 30-80K$/mese a seconda dell'uso, ma la variabilità rende il budget imprevedibile. Redshift ha costo fisso. Il team ha 3 anni di esperienza su Redshift e zero su BigQuery. Migri o ottimizzi?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["data_warehouse", "redshift_vs_bigquery", "costo_variabile_vs_fisso", "migrazione"],
+      "structural_conflict": "BigQuery è più veloce ma il costo è imprevedibile. Redshift è lento ma prevedibile. L'esperienza del team è un asset su Redshift e un debito su BigQuery. Ottimizzare Redshift ha un ceiling; migrare a BigQuery ha un rischio di costo."
+    },
+    {
+      "prompt": "Quando si deve usare un indice B-tree vs un indice GIN su PostgreSQL per una colonna JSONB?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["indici", "postgresql", "jsonb", "btree_vs_gin"],
+      "structural_conflict": "Nessun conflitto reale: B-tree per accesso a chiavi specifiche con operatore `->`, GIN per ricerche generiche con `@>` o `?`. La risposta è deterministica in base al pattern di query."
+    },
+    {
+      "prompt": "Un sistema di prenotazione aerea deve garantire che lo stesso posto non venga venduto a due passeggeri (double booking). Il database è PostgreSQL distribuito su 3 nodi con streaming replication asincrona. Sotto carico (Black Friday: 50K prenotazioni/minuto), la replication lag raggiunge 200ms. Un utente legge da una replica che il posto è libero, ma è stato venduto 100ms fa sul primary. Soluzioni: (A) tutte le letture sul primary — elimina il problema ma il primary va in overload; (B) SELECT ... FOR UPDATE con lock esplicito — funziona ma serializza tutto e il throughput crolla; (C) passare a replication sincrona — elimina il lag ma la latenza di ogni write raddoppia; (D) SERIALIZABLE isolation level — corretto ma causa serialization failures con retry rate significativo (15%+ sotto alta contesa). Quale soluzione è corretta per questo carico specifico?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["concorrenza", "double_booking", "replication_lag", "isolation_level"],
+      "structural_conflict": "Ogni soluzione risolve il double booking ma degrada qualcos'altro. Primary-only non scala. FOR UPDATE serializza. Sincrona rallenta tutto. SERIALIZABLE ha serialization failures con retry significativi sotto contesa. Il trade-off è tra correttezza e throughput — e per le prenotazioni aeree, la correttezza è non negoziabile."
+    },
+    {
+      "prompt": "Un social network con 500M di relazioni di amicizia deve implementare la query 'amici in comune'. Graph database (Neo4j) esegue la query in 5ms ma costa 200K$/anno per il cluster e il team non ha esperienza con Cypher. PostgreSQL con recursive CTE esegue la stessa query in 800ms su dati caldi (cache) e 4s su dati freddi. Una tabella denormalizzata `mutual_friends` pre-calcolata risponde in 2ms ma richiede 3TB di storage e aggiornamento batch ogni 15 minuti (stale data). Il feature budget per questa funzionalità è 50K$/anno. Quale approccio è corretto?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "resource_allocation"],
+      "difficulty": "medium",
+      "tags": ["graph_database", "neo4j_vs_postgresql", "denormalizzazione", "amici_in_comune"],
+      "structural_conflict": "Neo4j è la soluzione corretta dal punto di vista tecnico ma il budget e l'esperienza lo escludono. PostgreSQL è lento per questo pattern. La denormalizzazione è veloce ma stale e costosa in storage. Il budget forza un compromesso tecnico."
+    },
+    {
+      "prompt": "Qual è la differenza tra soft delete (colonna `deleted_at`) e hard delete (DELETE FROM) e quando si usa ciascuno?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["soft_delete", "hard_delete", "pattern", "gdpr"],
+      "structural_conflict": "Nessun conflitto strutturale: soft delete per audit trail e undo, hard delete per GDPR compliance e performance. La scelta dipende dal contesto legale e funzionale."
+    },
+    {
+      "prompt": "Un'applicazione finanziaria elabora 2M di transazioni/giorno e deve mantenere un audit trail immutabile per 7 anni (regolamentazione). Il database attuale è PostgreSQL 16 con 4TB di dati. La tabella audit cresce di 500GB/anno. Le opzioni: (A) partizionamento per mese con tablespace su storage economico (S3 via pg_tier) — economico ma le query cross-partizione sono lente; (B) archivio separato su Apache Iceberg/Parquet — ottimo per analytics, ma l'audit trail deve essere queryable in real-time per ispezioni regolatorie; (C) event sourcing nativo — l'audit è il modello stesso, ma richiede riscrittura completa dell'applicazione (stima 12 mesi); (D) Append-only table + materialized view per lo stato corrente — elegante ma le materialized views con 4TB sono lente da refreshare. Quale architettura adotti per i prossimi 7 anni?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["audit_trail", "compliance_finanziaria", "partizionamento", "event_sourcing", "data_lifecycle"],
+      "structural_conflict": "Il partizionamento è economico ma degrada le query regolatorie. Iceberg non è real-time. Event sourcing è la soluzione corretta ma costa 12 mesi di riscrittura. Materialized views non scalano a 4TB. Ogni soluzione sacrifica o il costo, o la performance, o il tempo di implementazione."
+    },
+    {
+      "prompt": "Come si implementa la paginazione corretta in un'API REST su PostgreSQL: OFFSET/LIMIT vs cursor-based pagination?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["paginazione", "cursor", "offset", "api_design"],
+      "structural_conflict": "Minimo: OFFSET è O(n) e instabile con INSERT concorrenti. Cursor-based è O(1) e stabile. La risposta è quasi sempre cursor per dataset grandi, OFFSET per admin panel piccoli."
+    },
+    {
+      "prompt": "Un sistema di messaggistica real-time (tipo Slack) con 100K utenti concorrenti deve scegliere il database per i messaggi. Requisiti: ordinamento cronologico garantito, ricerca full-text, lettura degli ultimi 50 messaggi per canale in <10ms, 10K messaggi/secondo in scrittura. Le opzioni: (A) Cassandra — scrittura velocissima, partizionato per channel_id, ma la ricerca full-text richiede un indice esterno (Elasticsearch); (B) PostgreSQL + pg_trgm — tutto in uno, ma 10K write/s su single-node è al limite e il full-text search di PostgreSQL è più lento di Elasticsearch; (C) ScyllaDB + Elasticsearch — performante ma due sistemi da mantenere in sync con eventual consistency; (D) MongoDB con Atlas Search — buon compromesso ma il lock-in cloud è totale. Budget operativo: 2 DevOps. Quale scegli e come gestisci le debolezze?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["messaggistica", "cassandra_vs_postgresql", "full_text_search", "write_throughput"],
+      "structural_conflict": "Nessun database singolo soddisfa tutti i requisiti. La combinazione di due sistemi risolve tutto ma raddoppia la complessità operativa con solo 2 DevOps. MongoDB Atlas risolve l'operativo ma crea lock-in. PostgreSQL è il più semplice ma ha il ceiling di performance più basso."
+    },
+    {
+      "prompt": "Un'azienda ha un PostgreSQL con una tabella `orders` di 2 miliardi di righe (800GB). Le query di reporting mensile impiegano 45 minuti. Il DBA propone di partizionare per mese (range partitioning su `created_at`). Il tech lead propone di migrare il reporting su un data warehouse separato (dbt + BigQuery). Il CTO dice 'basta aggiungere più indici'. Chi ha ragione e perché gli altri due hanno torto?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["partizionamento", "data_warehouse", "indici", "scaling_verticale"],
+      "structural_conflict": "Gli indici non risolvono scan sequenziali su 800GB. Il partizionamento riduce lo scan ma non elimina la complessità delle query analitiche. Il data warehouse è la soluzione corretta per il reporting ma aggiunge un sistema. Il CTO ha torto tecnicamente ma la sua soluzione è la più economica a breve."
+    },
+    {
+      "prompt": "Un sistema di gaming online deve mantenere una classifica (leaderboard) in tempo reale per 10M di giocatori. Le operazioni: inserimento punteggio (100K/s), query 'qual è la mia posizione?' (50K/s), query 'top 100' (10K/s). Le opzioni: (A) Redis Sorted Set — O(log N) per insert e rank, ma 10M entries × ~100-150 bytes (skiplist overhead + score + member) = ~1-1.5GB in RAM, e Redis è single-thread; (B) PostgreSQL con indice B-tree su `score` — rank richiede COUNT(*) WHERE score > X che è O(n); (C) ClickHouse con materialized view — velocissimo in lettura ma non è real-time (delay di secondi). Per un gioco competitivo, un ritardo di 5 secondi nel rank è accettabile?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["leaderboard", "redis", "sorted_set", "real_time", "gaming"],
+      "structural_conflict": "Redis è la soluzione standard ma single-thread limita il throughput. PostgreSQL è troppo lento per rank. ClickHouse è quasi-real-time. La domanda 'il ritardo è accettabile' dipende dal contesto di gioco e non ha risposta tecnica pura."
+    },
+    {
+      "prompt": "Qual è la differenza tra una foreign key e un indice, e quando una foreign key crea automaticamente un indice?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["foreign_key", "indice", "postgresql", "fondamentali"],
+      "structural_conflict": "Nessuno: in PostgreSQL le FK NON creano indici automaticamente (a differenza di MySQL). Risposta deterministica."
+    },
+    {
+      "prompt": "Un sistema ERP (Enterprise Resource Planning) con 20 anni di storia ha 4.000 tabelle in un database Oracle da 12TB. La migrazione a cloud è stata approvata. Le opzioni: (A) lift-and-shift su Oracle Cloud — minimo rischio, ma il costo è 2x rispetto ad AWS/Azure perché Oracle cloud pricing è premium; (B) migrazione a PostgreSQL su AWS RDS — 60% di risparmio, ma le 4.000 tabelle includono 800 viste materializzate con logica Oracle-specific, 200 trigger complessi, e 50 procedure con DBMS_SCHEDULER. Stima: 24 mesi, 5M€; (C) riscrittura su microservizi con database poliglotta — soluzione 'corretta' ma stima 4 anni e 20M€ con alto rischio di fallimento; (D) Aurora PostgreSQL compatible — compromesso, compatibilità al 95%, ma il 5% mancante è nei trigger e nelle viste materializzate che sono critici. Sei il CTO: quale strategia a 5 anni?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["migrazione_erp", "legacy", "oracle_to_postgresql", "cloud", "rischio_progettuale"],
+      "structural_conflict": "Lift-and-shift funziona ma non risolve il vendor lock-in. PostgreSQL è il futuro ma 24 mesi e 5M€ con 4.000 tabelle è una stima ottimistica. I microservizi sono la soluzione teoricamente corretta ma il rischio di fallimento del progetto è altissimo. Aurora copre il 95% ma il 5% mancante è nel codice più critico."
+    },
+    {
+      "prompt": "Un database PostgreSQL in produzione ha un deadlock ricorrente che si verifica 2-3 volte al giorno su due transazioni che aggiornano le stesse righe in ordine opposto. La soluzione standard è ordinare gli update per primary key. Ma le due transazioni vengono da microservizi diversi che non possono coordinarsi sull'ordine. Le opzioni: (A) advisory locks — risolve il deadlock ma introduce un point of contention globale; (B) retry automatico con backoff esponenziale — accetta il deadlock e gestisce il retry, ma 2-3 retry/giorno con backoff possono causare timeout; (C) SERIALIZABLE isolation level — previene il deadlock ma causa serialization failures su altre transazioni; (D) ridisegnare lo schema per eliminare la condivisione della risorsa. Quale approccio è corretto per un sistema che non può avere downtime?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["deadlock", "concorrenza", "advisory_locks", "microservizi"],
+      "structural_conflict": "Il retry è la soluzione più pragmatica ma non elegante. Gli advisory locks risolvono ma aggiungono complessità. SERIALIZABLE cambia il comportamento di tutto il sistema. Ridisegnare lo schema è la soluzione corretta ma richiede tempo. 2-3 deadlock/giorno non sono un'emergenza — il perfetto è nemico del buono."
+    },
+    {
+      "prompt": "Spiega la differenza tra un indice clustered e un indice non-clustered in SQL Server. PostgreSQL ha l'equivalente?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["indici", "clustered", "sql_server", "postgresql"],
+      "structural_conflict": "Nessuno: SQL Server ha clustered index che ordina fisicamente i dati. PostgreSQL usa heap tables + CLUSTER command per ordinamento one-time. Risposta fattuale."
+    },
+    {
+      "prompt": "Un sistema di e-health deve memorizzare i dati clinici di 50M di pazienti con accesso rigorosamente controllato. Ogni record ha una struttura diversa (esami del sangue hanno campi diversi da una TAC, diversi da una visita oculistica). Requisiti: (a) ogni record deve essere cifrato at-rest con chiave per-paziente, (b) ricerca full-text su note mediche (cifrate), (c) audit trail immutabile di ogni accesso, (d) compliance GDPR con right-to-erasure. La cifratura per-paziente rende impossibile la ricerca full-text (non puoi indicizzare dati cifrati con chiavi diverse). Le opzioni: (A) cifratura a livello di tablespace (una chiave per tutti) — indicizzabile ma se la chiave è compromessa, tutti i dati sono esposti; (B) cifratura per-paziente con searchable encryption (schema crittografico che permette ricerca su ciphertext) — sicuro ma sperimentale e 100x più lento; (C) tokenizzazione delle note con indice separato non cifrato dei token — veloce ma i token possono rivelare informazioni. Il right-to-erasure GDPR conflligge con l'audit trail immutabile. Come risolvi tutti i requisiti?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["cifratura", "searchable_encryption", "GDPR", "audit_trail", "e_health"],
+      "structural_conflict": "Cifratura e ricercabilità sono in opposizione fondamentale. L'audit immutabile confligge con il diritto alla cancellazione. La cifratura per-paziente è la più sicura ma rende impossibili le query aggregate. La searchable encryption esiste ma non è production-ready. I requisiti stessi sono contraddittori."
+    },
+    {
+      "prompt": "Un'azienda vuole implementare Change Data Capture (CDC) per sincronizzare il database operazionale PostgreSQL con un data warehouse. Le opzioni: (A) Debezium con Kafka Connect — maturo, ma richiede un cluster Kafka (overhead operativo significativo per un team di 3 persone); (B) PostgreSQL logical replication + custom consumer — nativo, nessuna dipendenza esterna, ma fragile e richiede gestione manuale dello schema evolution; (C) AWS DMS — managed, ma lock-in AWS e latenza di 5-30 secondi; (D) pg_notify + applicazione custom — real-time ma non garantisce delivery e non scala. Il team ha 3 persone. Il volume è 5K changes/second. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["cdc", "debezium", "kafka", "replication", "team_piccolo"],
+      "structural_conflict": "Debezium+Kafka è la soluzione enterprise ma il team di 3 non può gestire un cluster Kafka. La logical replication nativa è fragile. DMS è managed ma lock-in. pg_notify non è affidabile. Il vincolo del team piccolo elimina la soluzione tecnicamente migliore."
+    },
+    {
+      "prompt": "Cos'è un indice GiST in PostgreSQL e quando lo useresti rispetto a un indice B-tree?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["indici", "gist", "btree", "postgresql", "geospaziale"],
+      "structural_conflict": "Nessuno: GiST per dati multi-dimensionali (geometria, range, full-text), B-tree per confronti scalari. Risposta deterministica."
+    },
+    {
+      "prompt": "Un sistema di raccomandazione deve servire 'prodotti simili' in <50ms per un e-commerce con 20M di prodotti. Ogni prodotto ha un embedding vettoriale di 768 dimensioni. Le opzioni: (A) pgvector su PostgreSQL — integrato, ma la ricerca ANN (Approximate Nearest Neighbor) con HNSW su 20M di vettori a 768 dim richiede ~60-80GB di indice in RAM (dipende da m e efConstruction); (B) Pinecone — managed, veloce, ma costo variabile in base a query volume (storage ~20$/mese per 20M vettori a 768 dim, ma le read/write unit fanno salire il totale a 200-500+$/mese a seconda dell'uso) e lock-in totale; (C) Milvus self-hosted — performante, open source, ma complessità operativa e il team non ha esperienza; (D) Qdrant — leggero, Rust-based, ma giovane e community piccola; (E) ridurre la dimensionalità a 256 con PCA e usare pgvector — meno RAM ma perdita di qualità del 12% nelle raccomandazioni. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "resource_allocation"],
+      "difficulty": "hard",
+      "tags": ["vector_database", "pgvector", "embedding", "raccomandazione", "HNSW"],
+      "structural_conflict": "pgvector è integrato ma 60GB di RAM è un investimento. Pinecone funziona ma il lock-in e il costo variabile (che scala con il volume di query) sono significativi. Milvus/Qdrant sono open ma aggiungono un sistema. La riduzione PCA perde qualità. Il trade-off è tra integrazione, costo, complessità operativa, e qualità delle raccomandazioni."
+    },
+    {
+      "prompt": "Un database PostgreSQL con 500GB di dati ha un recovery time objective (RTO) di 5 minuti e un recovery point objective (RPO) di 0 (zero data loss). Le opzioni: (A) streaming replication sincrona con failover automatico (Patroni) — RPO=0, RTO<30s, ma ogni write ha latenza doppia e serve un terzo nodo per evitare split-brain; (B) pg_basebackup + WAL archiving su S3 — RPO dipende dalla frequenza di archiving (tipicamente 5 min), RTO=15-30 min per restore; (C) EDB Postgres Distributed (BDR) — multi-master active-active, RPO=0, RTO=0, ma licenza 50K$/anno e complessità di conflict resolution. Budget: 30K$/anno per infrastruttura. Come raggiungi RPO=0 + RTO<5min?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["disaster_recovery", "RPO", "RTO", "replication", "patroni"],
+      "structural_conflict": "Patroni è la soluzione standard e raggiunge l'obiettivo, ma richiede 3 nodi e la replication sincrona dimezza il throughput di scrittura. WAL archiving è economico ma non raggiunge RPO=0. BDR è la soluzione enterprise ma supera il budget. La domanda è se il business può davvero permettersi RPO=0 o se RPO=5min è accettabile."
+    },
+    {
+      "prompt": "Un sistema CQRS (Command Query Responsibility Segregation) separa i modelli di lettura e scrittura. Il modello di scrittura usa PostgreSQL (normalizzato, ACID). Il modello di lettura usa Elasticsearch (denormalizzato, veloce). La sincronizzazione avviene tramite eventi Kafka. Quando un utente crea un ordine, l'ordine è immediatamente visibile nel modello di scrittura ma appare in Elasticsearch con un ritardo di 200-500ms. Il frontend mostra 'Ordine creato!' ma se l'utente refresha la pagina, l'ordine non c'è ancora perché la lettura va su Elasticsearch. Come risolvi questa inconsistenza senza eliminare i benefici del CQRS?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["cqrs", "eventual_consistency", "read_your_writes", "UX"],
+      "structural_conflict": "Read-your-writes è risolvibile (redirect al write model per l'utente che ha appena scritto) ma complica il routing. L'eventual consistency è il compromesso fondamentale del CQRS. Eliminarla elimina i benefici. Il problema è fondamentalmente UX, non tecnico — e le soluzioni tecniche inquinano l'architettura."
+    },
+    {
+      "prompt": "Quando conviene usare una vista materializzata rispetto a una cache applicativa (es. Redis) per dati aggregati?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["materialized_view", "cache", "redis", "aggregazione"],
+      "structural_conflict": "Minimo: materialized view per aggregazioni complesse rinfrescate periodicamente, cache per dati ad alto accesso con TTL. Ma il boundary è sfumato quando il refresh della MV è frequente."
+    },
+    {
+      "prompt": "Un sistema di logging centralizzato riceve 500GB/giorno di log da 200 microservizi. I log devono essere ricercabili per 30 giorni, archiviabili per 1 anno. Le opzioni: (A) Elasticsearch — standard de facto, ma 500GB/giorno × 30 giorni = 15TB di indici, che richiede un cluster da 20+ nodi; (B) Loki (Grafana) — non indicizza il contenuto (solo i label), usa storage a oggetti (S3), 10x più economico, ma le ricerche full-text richiedono scan e sono lente (secondi); (C) ClickHouse — velocissimo su query analitiche, compressione 10:1, ma non è progettato per log search e manca l'integrazione nativa con i dashboard. Il team ha già Grafana. Budget infrastruttura: 8K€/mese. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "resource_allocation"],
+      "difficulty": "medium",
+      "tags": ["logging", "elasticsearch_vs_loki", "osservabilita", "costo_storage"],
+      "structural_conflict": "Elasticsearch è lo standard ma troppo costoso per 500GB/giorno. Loki è economico ma la ricerca è lenta. ClickHouse è veloce e compatto ma non è un log system. Il budget di 8K€/mese esclude Elasticsearch enterprise. Il trade-off è tra velocità di ricerca e costo."
+    },
+    {
+      "prompt": "Un database PostgreSQL con una tabella `events` ha 3 miliardi di righe. Una query di reporting deve calcolare il numero di eventi unici per utente per giorno degli ultimi 90 giorni. La query con COUNT(DISTINCT user_id) GROUP BY date richiede 25 minuti perché fa un sequential scan su 3B di righe anche con indice su date (la cardinalità è troppo alta per l'indice). Le opzioni: (A) HyperLogLog (approssimazione) — errore del 2% ma risponde in 2 secondi con pre-aggregazione; (B) partition pruning per mese + parallel query — scende a 5 minuti ma non a secondi; (C) materialized view rinfrescata ogni ora — risposta istantanea ma dati stale; (D) columnar extension (citus columnar / pg_analytics) — compressione 10x e scan colonnare, ma cambia il storage engine. Il reporting è per un dashboard CFO che deve essere 'live'. Quanto 'live' è davvero necessario?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["query_optimization", "hyperloglog", "count_distinct", "materialized_view", "approssimazione"],
+      "structural_conflict": "Il COUNT(DISTINCT) esatto su 3B righe è intrinsecamente lento. HyperLogLog è la soluzione elegante ma l'approssimazione potrebbe non essere accettata dal CFO. La materialized view è stale ma il CFO nota davvero la differenza tra 'live' e 'aggiornato ogni ora'? La domanda tecnica nasconde una domanda di business."
+    },
+    {
+      "prompt": "Un sistema finanziario deve implementare il pattern Saga per transazioni distribuite su 4 microservizi: Ordine → Pagamento → Inventario → Spedizione. Se il pagamento fallisce dopo che l'ordine è stato creato, serve una compensazione. Se l'inventario fallisce dopo che il pagamento è stato processato, serve un refund. Le opzioni: (A) Saga orchestrata (un orchestratore centrale coordina i passi) — semplice da debuggare ma single point of failure; (B) Saga coreografata (ogni servizio emette eventi e il successivo reagisce) — resiliente ma difficile da tracciare e debuggare; (C) Two-Phase Commit (2PC) distribuito — garantisce atomicità ma blocca le risorse durante il commit e non scala. Il sistema deve gestire 5K transazioni/secondo. Quale pattern scegli e come gestisci le compensazioni parziali?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["saga", "transazioni_distribuite", "compensazione", "microservizi", "2pc"],
+      "structural_conflict": "L'orchestratore è semplice ma fragile. La coreografia è resiliente ma indebuggabile. Il 2PC è corretto ma non scala. A 5K tx/s il 2PC è eliminato. Le compensazioni parziali (refund dopo pagamento ma prima della spedizione) sono il vero problema: come gestisci il caso in cui il refund stesso fallisce?"
+    },
+    {
+      "prompt": "Come funziona il VACUUM in PostgreSQL e perché è necessario? Qual è la differenza tra VACUUM e VACUUM FULL?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["vacuum", "postgresql", "mvcc", "bloat"],
+      "structural_conflict": "Nessuno: VACUUM recupera spazio da tuple morte (MVCC), VACUUM FULL riscrive la tabella con lock esclusivo. Risposta deterministica."
+    },
+    {
+      "prompt": "Un'azienda di genomica deve memorizzare e queryare 500 milioni di varianti genetiche (SNP) per 100.000 pazienti. Ogni variante ha: cromosoma, posizione, allele reference, allele variant, qualità, frequenza nella popolazione. Le query tipiche: 'trova tutte le varianti nel gene BRCA1 per il paziente X' e 'quanti pazienti hanno la variante rs12345'. La matrice completa è 500M varianti × 100K pazienti = 50 trilioni di celle potenziali (ma sparse al 99.9%). Le opzioni: (A) PostgreSQL con tabella sparsa (solo varianti presenti) — 50B di righe, partizionato per cromosoma; (B) HBase/Bigtable — nativo per dati sparsi wide-column, ma complessità operativa; (C) formato VCF su storage a oggetti (S3) con Apache Hail per le query — standard di settore genomico ma non real-time; (D) ClickHouse con array columns — compatto e veloce su aggregazioni genomiche. Il team è di bioinformatici, non DBA. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["genomica", "dati_sparsi", "wide_column", "bioinformatica", "scala_trilioni"],
+      "structural_conflict": "La scala è il vincolo dominante: 50 trilioni di celle potenziali. PostgreSQL non regge 50B righe in una sola installazione. HBase/Bigtable gestiscono la scala ma il team non è operativo. VCF+Hail è lo standard di settore ma non è real-time. ClickHouse è veloce ma non è lo standard genomico. Il team di bioinformatici non è un team di infrastruttura."
+    },
+    {
+      "prompt": "Un database PostgreSQL ha un indice B-tree su una colonna `status` che ha solo 3 valori possibili: 'pending' (1%), 'active' (95%), 'archived' (4%). Le query filtrano quasi sempre per `status = 'pending'`. L'indice B-tree è inefficiente perché il 95% delle righe ha lo stesso valore e il query planner fa sequential scan. Come ottimizzi? Spiega perché un partial index è la soluzione e quando invece non lo è.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["partial_index", "low_cardinality", "query_optimization", "postgresql"],
+      "structural_conflict": "Minimo: partial index WHERE status = 'pending' è la soluzione corretta. Ma se i pattern di query cambiano (es. futuro filtro su 'archived'), servono indici multipli. Risposta quasi deterministica."
+    },
+    {
+      "prompt": "Un sistema di content management per un giornale online deve supportare la struttura articolo con: testo, immagini inline, video embedded, tabelle, citazioni, link a fonti, autori multipli, tags, categorie gerarchiche, e versioning (ogni modifica crea una nuova versione). Le opzioni di modello dati: (A) PostgreSQL relazionale classico (15 tabelle normalizzate) — corretto ma complesso, 6 JOIN per caricare un articolo; (B) PostgreSQL con JSONB (2 tabelle: articoli con contenuto JSONB + versioni) — semplice, flessibile, ma niente referential integrity sugli oggetti interni; (C) PostgreSQL + ltree per le categorie gerarchiche e JSONB per il contenuto — ibrido ma aumenta la complessità cognitiva; (D) MongoDB — il documento IS l'articolo, naturale per CMS, ma le query cross-articolo (es. 'tutti gli articoli dell'autore X nella categoria Y') richiedono aggregation pipeline complesse. Il team è di 4 dev full-stack, nessun DBA. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["cms", "modello_dati", "jsonb_vs_relazionale", "versioning", "team_piccolo"],
+      "structural_conflict": "Il modello relazionale è il più corretto ma con 6 JOIN per articolo e un team senza DBA è insostenibile. JSONB sacrifica l'integrità referenziale. MongoDB è il fit naturale per un CMS ma le query cross-documento sono dolorose. Il team piccolo è il vincolo che elimina le soluzioni più eleganti."
+    },
+    {
+      "prompt": "Un sistema di prenotazioni deve implementare la 'disponibilità' di risorse (stanze d'hotel, posti a teatro, slot di appuntamento). Il problema è il 'range overlap': verificare se un intervallo temporale è già occupato. Su PostgreSQL, si può usare: (A) range type con exclusion constraint — elegante e corretto ma supportato solo su GiST e non funziona con partizionamento; (B) due colonne `start_at`/`end_at` con CHECK constraint e query WHERE NOT EXISTS (overlap condition) — universale ma error-prone e richiede lock FOR UPDATE; (C) tabella 'slots' pre-generata (un record per ogni slot di 15 minuti) — semplice, niente overlap da verificare, ma 96 record/giorno × 365 giorni × 1000 risorse = 35M righe/anno. Quale approccio è corretto per un sistema con 1000 risorse e 50K prenotazioni/giorno?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["range_overlap", "prenotazioni", "exclusion_constraint", "slot_model"],
+      "structural_conflict": "L'exclusion constraint è la soluzione più elegante ma non funziona con partizionamento (necessario per performance). I due campi sono universali ma il lock FOR UPDATE serializza le prenotazioni sulla stessa risorsa. Gli slot pre-generati sono semplici ma producono milioni di righe inutili. Ogni soluzione ha un difetto pratico."
+    },
+    {
+      "prompt": "Un'azienda deve scegliere tra SQLite e PostgreSQL per un'applicazione desktop che funziona offline e si sincronizza con un server quando online. SQLite è embedded, niente server, perfetto per offline-first. Ma la sincronizzazione bidirezionale SQLite↔PostgreSQL è un incubo: conflitti, schema drift, merge strategy. Le alternative: (A) SQLite + custom sync protocol — flessibile ma costoso da sviluppare; (B) CRDTs (Conflict-free Replicated Data Types) con automerge — elegante ma cambia radicalmente il modello dati; (C) PouchDB/CouchDB — sync nativo bidirezionale, ma il modello documento non è relazionale; (D) PowerSync/ElectricSQL — sync PostgreSQL↔SQLite automatico, ma prodotti giovani con rischio di abbandono. L'applicazione gestisce dati medici. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["offline_first", "sincronizzazione", "sqlite", "crdt", "dati_medici"],
+      "structural_conflict": "SQLite è perfetto per offline ma la sync è un problema non risolto in modo generale. I CRDTs risolvono i conflitti ma forzano un modello dati diverso. PouchDB risolve la sync ma non è relazionale. I nuovi prodotti (PowerSync) sono promettenti ma immaturi. I dati medici richiedono correttezza assoluta — i CRDTs garantiscono convergenza ma non necessariamente correttezza semantica."
+    },
+    {
+      "prompt": "Un sistema deve implementare soft-multitenancy su PostgreSQL: i dati di tenant diversi sono nella stessa tabella ma ogni tenant vede solo i propri dati. L'implementazione usa RLS (Row-Level Security) con `current_setting('app.tenant_id')`. Il problema: un bug nell'applicazione dimentica di impostare `app.tenant_id` prima di una query, e la query restituisce dati di TUTTI i tenant. Come rendi il sistema fail-safe in modo che un bug applicativo NON possa mai esporre dati cross-tenant? Elenca tutte le strategie difensive e i loro costi.",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["multi_tenancy", "rls", "fail_safe", "sicurezza_dati"],
+      "structural_conflict": "RLS con default-deny (nessuna riga se tenant non impostato) è la base. Ma serve anche: ruolo DB senza BYPASSRLS, middleware che imposta tenant SEMPRE, test automatici, audit. Ogni layer aggiunge sicurezza e complessità. Il conflitto è tra paranoia difensiva (giusta) e velocity di sviluppo."
+    },
+    {
+      "prompt": "Un database PostgreSQL deve gestire dati con TTL (Time-To-Live): i record devono essere automaticamente eliminati dopo N giorni. Le opzioni: (A) pg_cron job che esegue DELETE WHERE created_at < now() - interval — semplice ma il DELETE di milioni di righe blocca il database; (B) partizionamento per giorno con DROP PARTITION — istantaneo e non blocca, ma richiede partizionamento che complica le query; (C) colonna `expires_at` con filtro applicativo (non cancella mai, filtra nelle query) — niente blocchi ma il database cresce senza fine; (D) archivio automatico su tabella cold storage prima del delete — preserva i dati ma raddoppia la complessità. Il volume è 100M di righe/giorno con TTL di 7 giorni (700M righe attive). Quale approccio?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["TTL", "partizionamento", "data_lifecycle", "DELETE_performance"],
+      "structural_conflict": "DROP PARTITION è la soluzione corretta per 700M righe ma il partizionamento impatta tutte le query. Il DELETE di milioni di righe è inaccettabile. Il filtro applicativo è un hack che accumula debito tecnico. L'archivio è corretto ma complessifica. La soluzione 'giusta' (partizionamento) ha un costo architetturale che molti team sottovalutano."
+    },
+    {
+      "prompt": "Un'applicazione ha bisogno sia di ricerca full-text che di database relazionale. Le opzioni: (A) PostgreSQL con tsvector e GIN index — tutto in uno, ma la rilevanza (ranking) è meno sofisticata di Elasticsearch e la configurazione delle lingue è manuale; (B) PostgreSQL + Elasticsearch — il migliore di entrambi ma due sistemi da sincronizzare (consistency) e da operare; (C) PostgreSQL + pg_search (ParadeDB) — tsvector migliorato con BM25, un solo sistema, ma è un'estensione giovane; (D) Meilisearch — typo-tolerant, velocissimo, facile, ma non supporta query booleane complesse e non è un database. Il volume è 5M di documenti con 20K query/giorno. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["full_text_search", "elasticsearch", "tsvector", "meilisearch"],
+      "structural_conflict": "PostgreSQL tsvector è 'good enough' per molti casi ma la rilevanza non è al livello di Elasticsearch. Elasticsearch è lo standard ma aggiunge un sistema. ParadeDB è promettente ma immaturo. Meilisearch è il migliore per UX ma non è un database. A 5M documenti e 20K query/giorno, la domanda è se 'good enough' è davvero abbastanza."
+    },
+    {
+      "prompt": "Spiega il teorema CAP con un esempio concreto. Un database può essere simultaneamente Consistent, Available, e Partition-tolerant?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["CAP", "teorema", "consistenza", "disponibilita"],
+      "structural_conflict": "Nessuno: no, non può. In caso di network partition, devi scegliere tra C e A. Risposta deterministica con esempio classico."
+    },
+    {
+      "prompt": "Un sistema IoT raccoglie dati da 100.000 dispositivi, ognuno che invia un messaggio JSON ogni 5 secondi. Il payload medio è 500 byte. Totale: 20K messaggi/secondo, 10MB/s, ~860GB/giorno. I dati devono essere queryabili per analytics (aggregazioni per dispositivo/tempo) e per monitoring real-time (ultimo valore di ogni sensore). Le opzioni: (A) TimescaleDB con hypertable compressa — buona per time-series ma 860GB/giorno con retention 30 giorni = 26TB senza compressione; (B) Apache Kafka + ksqlDB per stream processing real-time + ClickHouse per analytics — potente ma 3 sistemi; (C) QuestDB — ottimizzato per IoT ingest (fino a 4M rows/s), ma giovane e community piccola; (D) InfluxDB 3.0 (Apache Arrow based) — promettente ma versione 3.0 è giovane. Il team ha 2 persone. Come scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["iot", "time_series", "ingest_rate", "analytics", "team_piccolo"],
+      "structural_conflict": "Il volume (860GB/giorno) elimina le soluzioni semplici. Kafka+ClickHouse è l'architettura corretta ma 3 sistemi con 2 persone è insostenibile. TimescaleDB è il compromesso più gestibile ma la compressione e il retention management richiedono tuning. QuestDB e InfluxDB 3.0 sono scommesse su prodotti giovani. Il team di 2 è il vincolo che domina ogni scelta tecnica."
+    }
+  ]
+}

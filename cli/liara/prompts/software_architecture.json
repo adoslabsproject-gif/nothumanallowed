@@ -1,0 +1,286 @@
+{
+  "domain": "software_architecture",
+  "description": "Scelte architetturali software: monolith vs microservices, sync vs async, event-driven vs request-response, CQRS, DDD, hexagonal, clean architecture, serverless vs containers, API design, backwards compatibility, tech debt, migration strategies, build vs buy",
+  "prompts": [
+    {
+      "prompt": "Una startup con 3 sviluppatori deve lanciare un MVP di un marketplace B2B entro 4 mesi. Il CTO propone di partire subito con microservizi (7 servizi: auth, catalogo, ordini, pagamenti, notifiche, search, analytics) per 'non dover riscrivere dopo'. Il lead dev propone un monolite modulare in Next.js con separazione a livello di moduli. Il budget cloud e' 500$/mese. Quale approccio e' corretto per un team di 3 persone con deadline a 4 mesi?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["monolith_vs_microservices", "mvp", "startup", "team_size"],
+      "structural_conflict": "Microservizi per 3 sviluppatori con deadline a 4 mesi e' over-engineering: 7 servizi significano 7 deployment pipeline, service discovery, distributed tracing, e il costo operativo supera il beneficio. Il monolite modulare preserva la possibilita' di estrarre servizi dopo, senza pagare il costo distributivo ora."
+    },
+    {
+      "prompt": "Qual e' la differenza tra comunicazione sincrona (REST/gRPC) e asincrona (message queue) tra servizi, e quando si usa ciascuna?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["sync_vs_async", "rest", "grpc", "message_queue", "pattern_base"],
+      "structural_conflict": "Minimo conflitto strutturale: sincrona quando serve risposta immediata (query utente, validazione), asincrona quando il risultato puo' essere differito (email, notifiche, processing). La risposta e' deterministica in base al requisito di latenza e accoppiamento."
+    },
+    {
+      "prompt": "Quando ha senso usare un API Gateway (es. Kong, Traefik) rispetto a esporre direttamente i servizi? Un progetto con 4 microservizi e 10K utenti/giorno ha bisogno di un gateway?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["api_gateway", "kong", "traefik", "microservizi"],
+      "structural_conflict": "Poco conflitto: a 10K utenti/giorno con 4 servizi, un reverse proxy (nginx/Caddy) con routing basico basta. Un API Gateway full (Kong, rate limiting, auth plugin, analytics) diventa necessario quando i servizi superano 8-10, i consumer sono multipli (web, mobile, partner), o servono policy di sicurezza centralizzate."
+    },
+    {
+      "prompt": "Un team di 5 backend developer deve scegliere il pattern per il nuovo servizio di notifiche: REST con polling, WebSocket bidirezionale, o Server-Sent Events (SSE). L'applicazione e' un dashboard analytics con 2.000 utenti concorrenti che ricevono aggiornamenti ogni 5-30 secondi. Il frontend e' React con Next.js. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["websocket", "sse", "polling", "real_time", "notifiche"],
+      "structural_conflict": "Polling spreca banda con 2.000 utenti e aggiornamenti frequenti. WebSocket bidirezionale e' overkill per un flusso server-to-client unidirezionale (il client non invia dati in tempo reale). SSE e' la scelta corretta: unidirezionale server→client, reconnection nativa, funziona con HTTP/2, e Next.js lo supporta nativamente."
+    },
+    {
+      "prompt": "Cosa significa 'separation of concerns' applicata all'architettura software e come si traduce in pratica nella struttura di un progetto backend?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["separation_of_concerns", "clean_architecture", "layered_architecture"],
+      "structural_conflict": "Nessun conflitto reale: routes (HTTP) → controllers (orchestrazione) → services (business logic) → repositories (data access). Il principio e' universalmente accettato. Le varianti (hexagonal, onion, clean) differiscono nei dettagli ma convergono sul concetto di layer con dipendenze unidirezionali."
+    },
+    {
+      "prompt": "Quando e' corretto usare un monorepo (Turborepo, Nx) rispetto a repository separati per ogni servizio? Un'azienda con 12 sviluppatori su 3 progetti (frontend Next.js, backend API, libreria condivisa) sta decidendo.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["monorepo", "turborepo", "nx", "repository_strategy"],
+      "structural_conflict": "Con 12 dev su 3 progetti con una libreria condivisa, il monorepo e' la scelta corretta: dependency management unificato, CI atomica, refactoring cross-progetto. Repository separati introdurrebbero versioning della libreria, pubblicazione su npm privato, e disallineamento di versioni. Il monorepo diventa problematico sopra i 50+ dev con team autonomi."
+    },
+    {
+      "prompt": "Un team vuole adottare REST o GraphQL per la nuova API pubblica. L'API servira' un'app mobile (bandwith limitata, molte viste con dati aggregati da 3-4 entita'), una SPA React, e partner esterni (50 aziende con integrazioni). Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["rest_vs_graphql", "api_design", "mobile", "partner"],
+      "structural_conflict": "GraphQL risolve l'over-fetching per il mobile e la SPA, ma i 50 partner esterni hanno bisogno di un'API stabile con versionamento chiaro — GraphQL senza governance diventa un vettore di query N+1 e denial-of-service. La soluzione 'due API' (REST per partner, GraphQL per client interni) sembra ovvia ma raddoppia la superficie di manutenzione. Un singolo GraphQL con query complexity limiting e' piu' elegante ma i partner devono adottare un paradigma nuovo. Il conflitto e' tra i bisogni incompatibili di 3 consumer diversi, non risolvibili con una singola tecnologia."
+    },
+    {
+      "prompt": "Qual e' la differenza tra un evento di dominio (domain event) e un comando (command) in un'architettura event-driven? Quando usare l'uno o l'altro?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["domain_events", "commands", "event_driven", "cqrs"],
+      "structural_conflict": "Minimo: un comando esprime un'intenzione ('CreaOrdine') ed e' diretto a un singolo handler che puo' rifiutarlo. Un evento esprime un fatto gia' accaduto ('OrdineCreato') ed e' broadcast a N subscriber che non possono rifiutarlo. La confusione tra i due e' comune ma la distinzione e' ben definita nella letteratura DDD."
+    },
+    {
+      "prompt": "Un'azienda e-commerce con 15 sviluppatori ha un monolite Django da 5 anni (300K LoC). Le deploy sono settimanali perche' ogni change richiede test di regressione completa (4 ore di CI). Il team vuole estrarre il modulo 'pagamenti' come primo microservizio. Ma il modulo pagamenti ha 47 import diretti da altri moduli (ordini, utenti, catalogo, promozioni). L'estrazione e' stimata in 3 mesi. Alternativa: investire 1 mese in modularizzazione interna (dependency inversion, interface segregation) per ridurre la CI a 45 minuti con test paralleli per modulo. Quale approccio e' corretto come primo passo?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["monolith_extraction", "microservices_migration", "modularizzazione", "coupling"],
+      "structural_conflict": "Estrarre un microservizio con 47 dipendenze cross-modulo senza prima risolvere il coupling significa creare un distributed monolith — il peggiore dei due mondi (latenza di rete + coupling logico). La modularizzazione interna prima e' il prerequisito, ma il team vuole il 'risultato visibile' del microservizio. Il conflitto e' tra fare la cosa corretta (modularizzare) e fare la cosa che sembra progresso (estrarre)."
+    },
+    {
+      "prompt": "Un sistema di ride-sharing deve processare 200K eventi GPS/secondo (posizione driver in tempo reale). L'architettura attuale usa REST endpoint che riceve la posizione, scrive su PostgreSQL, e triggera un calcolo di matching driver-passenger. La latenza end-to-end e' 2.5 secondi e deve scendere sotto i 200ms. Il team propone tre opzioni: (A) Kafka + consumer per disaccoppiare ingestion da processing; (B) Redis Streams come buffer leggero + worker pool; (C) gRPC bidirezionale con stream persistente per ogni driver. Team: 8 backend dev, 2 con esperienza Kafka, 0 con gRPC streaming. Quale architettura adotti?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["event_streaming", "kafka", "redis_streams", "grpc", "real_time", "gps"],
+      "structural_conflict": "Kafka e' la soluzione enterprise corretta per 200K eventi/s ma richiede cluster dedicato, schema registry, e monitoring — overhead operativo significativo per 8 dev. Redis Streams e' piu' semplice ma non ha le garanzie di durabilita' di Kafka (se Redis crasha, eventi persi). gRPC bidirezionale e' il piu' efficiente per connessioni persistenti ma nessuno nel team lo conosce. Il trade-off e' tra affidabilita' (Kafka), semplicita' (Redis), e performance (gRPC)."
+    },
+    {
+      "prompt": "Un SaaS B2B per la gestione documentale serve 200 aziende clienti. Il backend e' un monolite Node.js. Il team vuole implementare CQRS (Command Query Responsibility Segregation) per migliorare le performance di lettura (dashboard con aggregazioni pesanti su 50M documenti). Ma il team di 6 dev non ha mai implementato CQRS e non ha event store. Opzione A: CQRS completo con event sourcing, proiezioni materializzate, e eventual consistency. Opzione B: CQRS 'light' — stesso database, read model come materialized views PostgreSQL refreshate ogni 5 minuti. Opzione C: niente CQRS, ottimizzare le query con indici composti, partizionamento, e caching Redis. Quale e' la scelta corretta?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["cqrs", "event_sourcing", "materialized_views", "performance", "team_experience"],
+      "structural_conflict": "CQRS completo con event sourcing e' architetturalmente corretto ma richiede competenze che il team non ha — il rischio di implementazione errata e' altissimo (eventual consistency bugs, proiezioni non allineate). CQRS light con materialized views e' un compromesso pragmatico ma i 5 minuti di stale data possono essere inaccettabili. Ottimizzare senza CQRS potrebbe bastare per il carico attuale. Il conflitto e' tra purismo architetturale e pragmatismo operativo."
+    },
+    {
+      "prompt": "Un'azienda fintech deve esporre un'API a 150 partner bancari. L'API deve essere backwards-compatible per almeno 3 anni (contrattuale). Il team deve scegliere la strategia di versionamento: (A) URL versioning (/v1/, /v2/) — semplice ma forza i partner a migrare endpoint per endpoint; (B) header versioning (Accept: application/vnd.api+json;version=2) — pulito ma piu' complesso da implementare e testare; (C) versionamento per campo con evoluzione additiva (solo nuovi campi, mai rimuovere) — nessuna versione esplicita ma il payload cresce nel tempo. Il contratto prevede SLA 99.95% e latenza < 200ms. Quale scegli per un'API che deve vivere 3+ anni?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["api_versioning", "backwards_compatibility", "fintech", "api_design", "partner"],
+      "structural_conflict": "URL versioning e' il piu' esplicito ma richiede di mantenere N codebase parallele. Header versioning e' elegante ma errori di routing sono invisibili. Evoluzione additiva non rompe mai ma genera bloat e confusione semantica dopo 3 anni. Per 150 partner con SLA contrattuale, la scelta sbagliata costa milioni in penali."
+    },
+    {
+      "prompt": "Un team di 10 dev sta progettando un sistema di gestione ordini per una catena di 80 ristoranti. Devono decidere se usare un'architettura event-driven (ogni azione e' un evento: 'OrdineCreato', 'OrdinePagato', 'OrdinePreparato', 'OrdineConsegnato') o request-response tradizionale (API REST con stato gestito nel database). Il sistema deve gestire 5.000 ordini/ora nei picchi e integrarsi con 4 sistemi esterni (POS, cucina display, delivery, fatturazione). Quale approccio architetturale e' corretto?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["event_driven", "request_response", "ordini", "integrazione_sistemi"],
+      "structural_conflict": "Request-response e' piu' semplice da implementare e debuggare, ma l'integrazione con 4 sistemi esterni diventa un web di chiamate sincrone con failure cascade. Event-driven disaccoppia naturalmente i consumer (POS, cucina, delivery) ma introduce complessita' di ordering, idempotenza, e eventual consistency. A 5.000 ordini/ora il volume non giustifica Kafka, ma le 4 integrazioni giustificano il disaccoppiamento."
+    },
+    {
+      "prompt": "Un'applicazione enterprise ha 3 ambienti (dev, staging, prod). Il team vuole adottare Infrastructure as Code. Opzioni: (A) Terraform — standard de facto, HCL, stato remoto, dichiarativo con ciclo plan/apply, drift detection manuale via 'terraform plan' (automatizzato solo in Terraform Cloud/Enterprise); (B) Pulumi — linguaggio reale (TypeScript), type-safe, ma ecosistema piu' piccolo e lock-in sulla CLI Pulumi; (C) AWS CDK — TypeScript, strettamente integrato con AWS, ma vincola al cloud provider AWS per sempre. L'azienda usa AWS oggi ma sta valutando un possibile spostamento a GCP tra 2 anni per ragioni di costo. Team: 10 dev, tutti TypeScript, nessuna esperienza HCL. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["iac", "terraform", "pulumi", "aws_cdk", "cloud_portabilita"],
+      "structural_conflict": "Terraform e' multi-cloud ma il team non conosce HCL — curva di apprendimento significativa. Pulumi e' TypeScript (familiar) e multi-cloud ma ecosistema piu' piccolo e dependency sulla Pulumi CLI. CDK e' il piu' produttivo per AWS ma se la migrazione a GCP avviene in 2 anni, tutto va riscritto. Il conflitto e' tra produttivita' immediata (CDK), portabilita' futura (Terraform), e developer experience (Pulumi)."
+    },
+    {
+      "prompt": "Un'azienda con un monolite PHP Laravel da 8 anni (450K LoC, 200 tabelle, 40 sviluppatori) vuole modernizzare. Il CTO propone lo Strangler Fig Pattern: nuovi feature in microservizi Node.js/Go, il monolite viene progressivamente svuotato. Il VP Engineering propone un Big Rewrite in un nuovo monolite Go con architettura esagonale. Dati: il monolite genera 15M$/anno di revenue, il tasso di fallimento dei Big Rewrite e' storicamente alto (Netscape, Borland dBase, ecc.) secondo la letteratura di settore, e il team perde 2 dev/mese a causa del debito tecnico. Il budget e' 2M$ su 18 mesi. Quale strategia adotti?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["strangler_fig", "big_rewrite", "legacy_modernization", "php_to_go", "migration"],
+      "structural_conflict": "Il Big Rewrite ha un tasso storico di fallimento molto alto (la letteratura cita Netscape, Borland dBase, e altri casi celebri) ma il monolite sta causando emorragia di talenti (2 dev/mese = ~24 dev in 12 mesi, catastrofico). Lo Strangler Fig e' piu' sicuro ma richiede mantenere due stack (PHP + Node/Go) per anni — il costo operativo e' enorme con 40 dev. Il conflitto e' tra rischio catastrofico (rewrite) e morte lenta (status quo con strangler incompleto)."
+    },
+    {
+      "prompt": "Un team deve decidere dove eseguire i background job di un'applicazione: (A) in-process con una libreria (BullMQ nel processo Node.js) — semplice ma un job che crasha porta giu' tutta l'API; (B) worker separato nello stesso codebase (processo Node.js dedicato) — isolato ma duplica il deployment; (C) AWS Lambda triggered da SQS — serverless, scaling automatico, ma cold start di 200-500ms (Node.js, fino a 1.2-5s per Java senza SnapStart) e limite di 15 minuti. I job sono: invio email (10K/giorno), generazione PDF (500/giorno, 30 secondi ciascuno), e un job di riconciliazione finanziaria notturno (4 ore di esecuzione). Quale architettura?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["background_jobs", "bullmq", "lambda", "worker", "serverless"],
+      "structural_conflict": "In-process e' semplice ma pericoloso (un PDF che OOM crasha l'API). Lambda scala perfettamente per email e PDF ma il job di 4 ore supera il limite di 15 minuti. Worker separato gestisce tutto ma richiede infrastruttura dedicata. Nessuna singola soluzione copre tutti e 3 i tipi di job — serve un approccio ibrido, ma l'ibrido aumenta la complessita'."
+    },
+    {
+      "prompt": "Un sistema di gestione logistica deve decidere tra architettura a servizi con orchestrazione (un servizio 'Saga Orchestrator' coordina il flusso ordine→magazzino→spedizione→fatturazione) e coreografia (ogni servizio reagisce agli eventi degli altri senza coordinatore centrale). Il flusso ha 7 step con 3 possibili punti di compensazione (rollback). Il team e' composto da 12 dev con esperienza in REST ma zero in saga pattern. Il sistema deve processare 35.000 ordini/giorno. Orchestrazione o coreografia?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["saga_pattern", "orchestrazione", "coreografia", "distributed_transactions", "logistica"],
+      "structural_conflict": "L'orchestrazione centralizza la logica di flusso (facile da capire e debuggare) ma il Saga Orchestrator diventa un single point of failure e un bottleneck. La coreografia distribuisce la responsabilita' (resiliente) ma con 7 step e 3 compensazioni il flusso diventa impossibile da seguire senza distributed tracing avanzato. 12 dev senza esperienza in saga rischiano di implementare male entrambi."
+    },
+    {
+      "prompt": "Un'applicazione SaaS deve implementare feature flags per il rollout graduale. Opzioni: (A) build vs buy — implementare un sistema custom con tabella PostgreSQL (flag_name, enabled, percentage, user_segment) e cache Redis; (B) usare LaunchDarkly (SaaS, $10-12/service connection/mese con piano Foundation, Enterprise da 20-120K$/anno a seconda del volume, SDK nativo, targeting avanzato); (C) usare Unleash self-hosted (open source, nessun costo SaaS, ma va mantenuto). Il team ha 20 dev, deploya 15 volte/giorno, e ha bisogno di targeting per tenant (200 tenant con rollout diversi). Il budget e' limitato (startup Serie A, burn rate alto). Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["feature_flags", "build_vs_buy", "launchdarkly", "unleash", "rollout"],
+      "structural_conflict": "Custom e' economico ma il targeting per 200 tenant con percentuali diverse richiede una mini-piattaforma (UI admin, audit trail, SDK client) — 2+ mesi di sviluppo. LaunchDarkly funziona subito ma il costo scala rapidamente (Enterprise da 20-120K$/anno) ed e' significativo per una startup in Serie A. Unleash e' gratuito ma richiede hosting, monitoring, e manutenzione — costo nascosto in ore dev. Il conflitto e' tra costo monetario (LaunchDarkly), costo di sviluppo (custom), e costo operativo (Unleash)."
+    },
+    {
+      "prompt": "Un sistema bancario deve scegliere tra Clean Architecture (use cases espliciti, dependency inversion, entities pure) e Hexagonal Architecture (ports and adapters, domain al centro). Il team di 25 dev e' diviso: 10 vogliono Clean Architecture perche' 'Uncle Bob l'ha definita bene', 15 vogliono Hexagonal perche' 'e' la stessa cosa ma con nomi piu' chiari'. Il progetto e' un core banking con 150 use case previsti, integrazioni con 8 sistemi esterni (SWIFT, SEPA, KYC provider, credit scoring, ecc.), e requisito di testabilita' al 90% coverage. Qual e' la differenza reale e quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["clean_architecture", "hexagonal", "ports_adapters", "banking", "team_alignment"],
+      "structural_conflict": "Clean Architecture e Hexagonal condividono il principio fondamentale (domain al centro, dipendenze verso l'interno) e differiscono principalmente nella nomenclatura. La vera questione non e' quale sia 'migliore' ma quale il team intero puo' applicare consistentemente. Con 25 dev divisi, il rischio e' che meta' scriva in uno stile e meta' in un altro — l'inconsistenza e' peggiore della scelta 'sbagliata'. Il conflitto e' quasi interamente sociale (allineamento del team), non computazionale."
+    },
+    {
+      "prompt": "Un'azienda deve scegliere tra Domain-Driven Design (DDD) con bounded context, aggregati, e event storming, oppure un approccio CRUD tradizionale con service layer per un gestionale HR (gestione dipendenti, buste paga, ferie, presenze). Il dominio ha 15 entita' principali con regole di business moderate (calcolo ferie residue, validazione turni, workflow approvazioni). Il team e' di 8 dev junior-mid con 0 esperienza DDD. Il progetto deve essere in produzione in 6 mesi. DDD o CRUD?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["ddd", "crud", "bounded_context", "team_experience", "gestionale"],
+      "structural_conflict": "DDD e' potente per domini complessi ma 8 dev senza esperienza lo implementeranno male — aggregati sbagliati, bounded context troppo grandi, e il progetto slittera' oltre i 6 mesi. CRUD con service layer e' 'meno elegante' ma il team lo padroneggia. Il dominio HR ha complessita' moderata, non estrema. Il conflitto e' tra fare la cosa 'giusta' architetturalmente e fare la cosa che il team puo' effettivamente consegnare."
+    },
+    {
+      "prompt": "Un team deve decidere se usare un BFF (Backend for Frontend) pattern. L'applicazione ha 3 client: web SPA (React), app mobile iOS/Android, e un client API per partner B2B. Attualmente c'e' una singola API REST che serve tutti e 3. Il web ha bisogno di dati aggregati (dashboard con 6 entita' in una chiamata), il mobile ha bisogno di payload minimali (bandwidth), i partner hanno bisogno di un'API stabile con versionamento. Il team e' di 12 dev (4 frontend, 4 mobile, 4 backend). Serve un BFF per client o basta l'API unica?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["bff", "backend_for_frontend", "api_aggregation", "mobile", "partner_api"],
+      "structural_conflict": "L'API unica costringe a compromessi: payload troppo grandi per il mobile, troppo frammentati per il web, troppo instabili per i partner. 3 BFF risolvono i bisogni specifici ma triplicano il codice backend e richiedono coordinamento tra 3 team. GraphQL come 'BFF universale' risolve web e mobile ma non i partner (che vogliono REST stabile). Il conflitto e' tra specificita' (3 BFF), universalita' (GraphQL), e semplicita' (API unica con compromessi)."
+    },
+    {
+      "prompt": "Un'azienda di food delivery deve decidere come gestire la configurazione condivisa tra 15 microservizi (feature flags, endpoint di terze parti, soglie di rate limiting, parametri di business). Opzioni: (A) config centralizzata con Consul/etcd — dynamic reload senza redeploy, ma aggiunge un componente critico (se Consul crasha, nessun servizio legge la config) e richiede sidecar per il watch; (B) variabili d'ambiente con redeploy — semplice, immutabile, ma cambiare una soglia di rate limiting richiede CI/CD pipeline completa per 15 servizi (20 minuti); (C) database PostgreSQL come config store con cache locale + polling ogni 30 secondi — nessun componente aggiuntivo, ma 15 servizi che pollano ogni 30 secondi e il rischio di config inconsistente durante il rollout (servizio A ha la nuova config, servizio B ancora la vecchia per 30 secondi). Il sistema gestisce 50K ordini/giorno e le soglie di rate limiting cambiano 3 volte al giorno. Quale approccio?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["config_management", "consul", "etcd", "feature_flags", "microservizi", "dynamic_config"],
+      "structural_conflict": "Consul/etcd e' la soluzione enterprise ma un SPOF in piu' per un sistema gia' distribuito — la complessita' operativa e' significativa per un team che gestisce food delivery. Env vars con redeploy e' il piu' sicuro (immutabile) ma 20 minuti per cambiare una soglia 3 volte al giorno e' inaccettabile operativamente. PostgreSQL come config store e' pragmatico ma la finestra di inconsistenza di 30 secondi tra servizi puo' causare comportamenti divergenti durante le ore di punta."
+    },
+    {
+      "prompt": "Un sistema di e-commerce internazionale deve decidere l'architettura per gestire i prezzi in 35 valute con tassi di cambio che variano ogni 5 minuti. Opzione A: salvare i prezzi in una sola valuta (EUR) e convertire al volo — semplice ma la conversione su 50M di prodotti per ogni request e' costosa. Opzione B: pre-calcolare i prezzi in tutte le 35 valute ogni 5 minuti (50M x 35 = 1.75B record da aggiornare) — veloce in lettura ma l'aggiornamento batch e' massiccio. Opzione C: caching ibrido con conversione lazy e invalidazione ogni 5 minuti. Il catalogo ha 50M prodotti e il sistema serve 100K request/minuto. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["pricing", "multi_currency", "caching", "batch_processing", "ecommerce"],
+      "structural_conflict": "Conversione al volo e' corretta ma CPU-intensive a 100K req/min su 50M prodotti. Pre-calcolo e' veloce in lettura ma aggiornare 1.75B record ogni 5 minuti richiede infrastruttura dedicata e i prezzi sono stale fino al prossimo batch. Caching ibrido e' elegante ma la cache invalidation per 50M prodotti x 35 valute e' un problema di coordinamento distribuito non banale."
+    },
+    {
+      "prompt": "Un team di 30 sviluppatori lavora su un'applicazione con 12 microservizi. Il VP Engineering propone di adottare un service mesh (Istio) per gestire mTLS tra servizi, circuit breaking, retry, e observability. Il team lead si oppone: 'Istio aggiunge ~1.7-2.7ms di latenza per hop al p90-p99 (i due sidecar proxy secondo i benchmark ufficiali Istio 1.16+), richiede un team dedicato per la gestione, e abbiamo gia' circuit breaker nel codice applicativo'. Il sistema attuale ha 8 hop massimi per una request, latenza p99 di 180ms (target 200ms), e 3 incidenti/mese causati da cascading failure tra servizi. Budget infrastruttura: 25K$/mese. Istio si' o no?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["service_mesh", "istio", "mtls", "circuit_breaking", "observability", "latenza"],
+      "structural_conflict": "Istio risolve i 3 incidenti/mese (circuit breaking uniforme, mTLS automatico, distributed tracing) ma aggiunge ~14-22ms di latenza totale (~1.7-2.7ms al p99 per hop x 8 hop) — consumando parte del budget di latenza residuo. I circuit breaker nel codice funzionano ma sono inconsistenti tra 12 servizi e 30 dev. Il conflitto e' tra affidabilita' operativa (Istio) e budget di latenza (gia' al 90% del target, con ~14-22ms aggiuntivi che potrebbero superarlo)."
+    },
+    {
+      "prompt": "Un'azienda SaaS con 500K utenti ha accumulato 3 anni di debito tecnico. Il tech debt e' distribuito: 40% nel data layer (query N+1, mancanza di indici, ORM mal configurato), 30% nel business logic layer (duplicazione, nessun test), 20% nell'infrastruttura (deploy manuali, no IaC), 10% nel frontend (bundle 4MB, no code splitting). Il management concede il 20% del tempo di ogni sprint (1 giorno su 5) per ridurre il tech debt. Come allochi questo budget limitato per massimizzare l'impatto? Da dove inizi?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "resource_allocation"],
+      "difficulty": "hard",
+      "tags": ["tech_debt", "prioritizzazione", "roi", "team_allocation"],
+      "structural_conflict": "Il 20% di ogni sprint e' troppo poco per affrontare tutto simultaneamente ma troppo per ignorarlo. Il data layer (40%) ha il ROI piu' alto (performance percepita) ma richiede migrazione dati rischiosa. Il business logic (30%) previene bug futuri ma non ha impatto immediato visibile. L'infrastruttura (20%) accelera tutto il resto ma il management non ne vede il valore. Il conflitto e' tra impatto immediato (data layer), sicurezza futura (business logic), e velocita' del team (infrastruttura)."
+    },
+    {
+      "prompt": "Un sistema di trading finanziario ad alta frequenza deve processare 500K ordini/secondo con latenza massima di 50 microsecondi per la validazione. L'architettura attuale e' Java su JVM con GC pause che causano spike di latenza a 200ms (inaccettabile). Il team propone: (A) riscrivere il path critico in Rust (zero GC, deterministic latency) — 12 mesi di sviluppo, il team non conosce Rust; (B) restare su Java con Azul Zing JVM (pauseless GC, latenza < 1ms) — costo licenza 150K$/anno ma zero riscrittura; (C) architettura ibrida con il matching engine in C++ e il resto in Java — sfrutta librerie HFT esistenti ma introduce FFI overhead e complessita' di build. Il sistema genera 50M$/anno di revenue. Quale architettura scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["hft", "latenza", "rust", "java", "gc_pause", "trading"],
+      "structural_conflict": "Rust elimina il GC ma 12 mesi di riscrittura con un team senza esperienza e' un rischio enorme su un sistema che genera 50M$/anno. Azul Zing risolve immediatamente ma 150K$/anno e' un vendor lock-in e non elimina il GC, lo mitiga. C++ ibrido e' provato in HFT ma FFI bridge Java-C++ e' un incubo di debugging e memory safety. Il conflitto e' tra soluzione definitiva (Rust), soluzione immediata (Zing), e soluzione provata ma complessa (C++)."
+    },
+    {
+      "prompt": "Un'azienda con 50 microservizi deve decidere la strategia di deployment: (A) Kubernetes con Helm charts — standard de facto, auto-scaling, self-healing, ma richiede un team platform di 3-4 persone e il cluster costa 15K$/mese; (B) AWS ECS Fargate — serverless containers, zero gestione cluster, ma vendor lock-in AWS e meno flessibilita' nel networking; (C) deploy su VM con PM2/systemd — semplice, economico (5K$/mese), ma scaling manuale e nessun self-healing. Il team totale e' 35 dev di cui 0 con esperienza Kubernetes. Il sistema serve 2M di utenti con picchi 3x durante eventi. Cosa scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "resource_allocation"],
+      "difficulty": "hard",
+      "tags": ["kubernetes", "ecs", "fargate", "deployment", "container_orchestration", "scaling"],
+      "structural_conflict": "Kubernetes e' lo standard ma 0 esperienza nel team e 50 servizi da migrare significa 6+ mesi di curva di apprendimento con rischio di incidenti in produzione. ECS Fargate elimina la gestione cluster ma con 50 servizi il costo Fargate e' 2-3x rispetto a K8s self-managed e il lock-in AWS e' permanente. VM con PM2 funziona oggi ma i picchi 3x senza auto-scaling significano over-provisioning costante o downtime durante i picchi. Il conflitto e' tra correttezza (K8s), praticita' (ECS), e economia (VM)."
+    },
+    {
+      "prompt": "Un sistema legacy di una compagnia assicurativa (COBOL su mainframe, 40 anni di vita, 8M di polizze attive) deve essere modernizzato. Il mainframe costa 3M$/anno di licenza IBM e il pool di sviluppatori COBOL disponibili si dimezza ogni 5 anni (eta' media: 58 anni). Opzioni: (A) re-platforming — convertire COBOL in Java automaticamente con tool (Micro Focus, AWS Mainframe Modernization) — tempi rapidi ma il codice generato e' illeggibile e non manutenibile; (B) re-engineering — riscrivere da zero in Java/Kotlin con DDD, bounded context derivati da domain analysis delle polizze — 3 anni, 5M$, rischio altissimo; (C) encapsulation — wrappare il mainframe con API REST, nuovi servizi intorno, e migrazione graduale su 10 anni. Le 8M polizze hanno 2.000 regole di business encodate in COBOL che nessun documento descrive completamente. Quale strategia?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["legacy_modernization", "cobol", "mainframe", "replatforming", "reengineering", "assicurazioni"],
+      "structural_conflict": "Re-platforming automatico produce codice Java che nessuno capisce — sostituisce un problema (COBOL illeggibile) con un altro (Java generato illeggibile). Re-engineering e' la soluzione corretta ma 2.000 regole di business non documentate rendono impossibile una specifica completa — il rischio di perdere logica critica e' reale. Encapsulation e' la piu' sicura ma 10 anni significano che il pool COBOL sara' quasi estinto prima della fine. Il conflitto e' tra velocita' (re-platform), correttezza (re-engineering), e sicurezza (encapsulation) — tutte con difetti fatali."
+    },
+    {
+      "prompt": "Un sistema IoT industriale raccoglie dati da 50.000 sensori in 12 fabbriche distribuite in 4 continenti. Ogni fabbrica ha connettivita' variabile (da fibra 1Gbps a 4G instabile con 30% packet loss). Il sistema deve: (1) processare dati localmente per allarmi real-time (< 100ms), (2) sincronizzare con il cloud per analytics globali, (3) funzionare offline fino a 72 ore. Opzioni: (A) edge computing puro — processamento locale + sync batch — ma la logica di business e' duplicata tra edge e cloud; (B) cloud-first con buffer locale — logica centralizzata, edge come cache — ma dipende dalla connettivita'; (C) CRDT-based sync con logica distribuita — convergenza senza conflitti, ma CRDT per dati numerici di sensori e' overkill e la complessita' implementativa e' enorme. Team: 15 dev, 2 con esperienza edge. Budget: 800K$/anno. Quale architettura?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["edge_computing", "iot", "offline_first", "crdt", "sync", "distributed"],
+      "structural_conflict": "Edge puro risolve latenza e offline ma duplicare la business logic tra edge e cloud e' un incubo di manutenzione per 12 fabbriche. Cloud-first e' elegante ma con 30% packet loss su 4G l'allarme real-time < 100ms e' impossibile via cloud. CRDT e' matematicamente corretto per la sincronizzazione ma implementare CRDT custom per 50.000 sensori con 2 dev esperti e' un suicidio tecnico. Il conflitto e' tra latenza (edge), semplicita' (cloud), e correttezza (CRDT) — con la connettivita' variabile come vincolo eliminante."
+    },
+    {
+      "prompt": "Un'azienda media (200 dipendenti, 30M$ revenue) deve scegliere tra: (A) costruire internamente un sistema di autenticazione e autorizzazione (RBAC/ABAC, MFA, SSO, audit log) con un team di 4 dev in 6 mesi; (B) adottare Auth0 (3.500$/mese, 100K utenti, feature complete ma vendor lock-in e privacy concern per dati sanitari); (C) adottare Keycloak self-hosted (open source, nessun costo licenza, ma richiede 1 dev dedicato alla manutenzione e l'UI admin e' datata). Il sistema gestisce dati sanitari (HIPAA) e deve supportare SSO con 15 identity provider dei clienti (Active Directory, Okta, Google Workspace). Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["build_vs_buy", "auth", "auth0", "keycloak", "hipaa", "sso"],
+      "structural_conflict": "Costruire internamente con 4 dev in 6 mesi un sistema auth HIPAA-compliant con SSO per 15 IdP e' una sottostima grave — i sistemi auth hanno superficie di attacco enorme e 6 mesi non bastano. Auth0 e' feature-complete ma i dati sanitari su un SaaS terzo possono violare HIPAA se non si firma un BAA (Business Associate Agreement) e il costo scala con gli utenti. Keycloak e' self-hosted (HIPAA-friendly) ma la manutenzione e' un costo nascosto costante. Il conflitto e' tra sicurezza (non costruire auth da soli), compliance (self-hosted per HIPAA), e costo (Auth0 scala)."
+    },
+    {
+      "prompt": "Un'applicazione di video streaming serve 5M di utenti con 200.000 stream concorrenti. L'architettura deve gestire: transcodifica video (CPU-intensive), distribuzione CDN, player adattivo (HLS/DASH), e sistema di raccomandazione. Il team di 20 dev deve decidere tra: (A) tutto su Kubernetes con GPU node per transcodifica — unificato ma i GPU node costano 10x e sono sprecati per i servizi non-GPU; (B) architettura ibrida con transcodifica su Lambda/Fargate spot + servizi su K8s — ottimizza costi ma due piattaforme da gestire; (C) managed services (AWS MediaConvert + CloudFront + ECS) — zero gestione ma il costo per 200K stream concorrenti e' 120K$/mese e il lock-in e' totale. Budget: 80K$/mese. Quale architettura?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "resource_allocation"],
+      "difficulty": "hard",
+      "tags": ["video_streaming", "transcodifica", "kubernetes", "gpu", "cdn", "managed_services"],
+      "structural_conflict": "K8s unificato spreca GPU per i servizi non-GPU e il costo esplode. L'ibrido ottimizza i costi ma la complessita' operativa di due piattaforme con 20 dev e' significativa. Managed services supera il budget di 50% (120K vs 80K) e il lock-in rende impossibile negoziare. Il conflitto e' tra semplicita' operativa (managed, ma costoso), ottimizzazione costi (ibrido, ma complesso), e unificazione (K8s, ma spreco GPU)."
+    },
+    {
+      "prompt": "Un team sta progettando un sistema di pagamento che deve essere PCI-DSS compliant. Il lead architect propone di tokenizzare i dati delle carte in un vault dedicato (microservizio isolato con HSM, network segmentation, audit totale) e che il resto dell'applicazione usi solo token. Il CTO propone di usare Stripe come processore e non toccare mai i dati delle carte — 'Stripe gestisce PCI, noi non dobbiamo certificarci'. Ma il business richiede: (1) supporto per 8 payment processor in 12 paesi con fallback automatico, (2) stored cards per recurring billing di 500K subscriber, (3) reporting finanziario con dati di transazione completi. Con Stripe-only, il multi-processor e' impossibile. Con vault custom, la certificazione PCI-DSS Level 1 costa 200K$/anno. Quale architettura di pagamento?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["payment", "pci_dss", "tokenizzazione", "stripe", "multi_processor", "compliance"],
+      "structural_conflict": "Stripe-only elimina PCI ma vincola a un singolo processor — impossibile con il requisito di 8 processor in 12 paesi. Vault custom abilita multi-processor ma PCI-DSS Level 1 a 200K$/anno e' un costo fisso significativo e un singolo errore di sicurezza puo' costare milioni. Un orchestratore di pagamento (tipo Spreedly) potrebbe mediare ma aggiunge un altro intermediario con i suoi costi e rischi. Il conflitto e' tra semplicita' (Stripe), controllo (vault), e flessibilita' (orchestratore) — con PCI come vincolo non negoziabile."
+    },
+    {
+      "prompt": "Un sistema distribuito con 20 microservizi deve garantire consistenza dei dati tra servizi. L'ordine di un e-commerce tocca: inventario, pagamento, spedizione, notifiche, loyalty points. Oggi la consistenza e' gestita con 2-Phase Commit (2PC) distribuito via database — ma il 2PC blocca tutti i servizi in caso di failure di uno, causando 5 incidenti/mese con downtime medio di 15 minuti. Il team propone di passare a eventual consistency con saga pattern + outbox pattern + CDC (Change Data Capture). Ma il business dice: 'Non possiamo vendere un prodotto non disponibile, la consistenza deve essere immediata'. Il volume e' 100K ordini/giorno. Come risolvi il conflitto tra il business che vuole strong consistency e l'architettura che richiede eventual consistency per scalare?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["distributed_consistency", "saga", "2pc", "outbox", "cdc", "eventual_consistency"],
+      "structural_conflict": "2PC garantisce consistenza ma causa 5 incidenti/mese — il costo del downtime supera il beneficio della consistenza. Eventual consistency con saga elimina i blocchi ma il business ha ragione: vendere un prodotto out-of-stock distrugge la fiducia del cliente. Il compromesso e' check sincrono solo per l'inventario (il servizio critico) e asincrono per il resto — ma questo crea un'architettura ibrida che e' piu' difficile da ragionare. Il conflitto e' genuino: la consistenza distribuita perfetta non esiste (CAP theorem)."
+    },
+    {
+      "prompt": "Un team di 40 dev deve decidere il linguaggio per un nuovo microservizio critico (sistema antifrode real-time, 50K transazioni/secondo, latenza p99 < 10ms). I candidati: (A) Go — compilato, GC leggero, goroutines per concorrenza, il 60% del team lo conosce; (B) Rust — zero GC, performance deterministiche, ma solo 3 dev nel team lo conoscono e il time-to-market raddoppia; (C) Java con GraalVM native image — ecosistema maturo, il 90% del team lo conosce, ma le native image hanno limiti (no reflection dinamica, build lenti). Il servizio deve essere in produzione in 4 mesi e sara' mantenuto per 10+ anni. Quale linguaggio?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["linguaggio", "go_vs_rust_vs_java", "antifrode", "latenza", "team_competenze"],
+      "structural_conflict": "Go bilancia performance e produttivita' ma il GC puo' causare spike di latenza sopra 10ms sotto carico estremo. Rust garantisce latenza deterministica ma 3 dev non bastano per un servizio critico in 4 mesi — e il bus factor e' 3. Java e' il piu' produttivo per il team ma GraalVM native ha limiti reali e il GC di Java e' peggiore di Go per p99 a 10ms. Il conflitto e' tra performance pura (Rust), produttivita' del team (Java), e compromesso ottimale (Go) — su un servizio che deve durare 10 anni."
+    },
+    {
+      "prompt": "Un'azienda ha deciso di adottare serverless (AWS Lambda) per tutti i nuovi servizi. Dopo 12 mesi, 45 Lambda functions servono 80 endpoint. I problemi emersi: (1) cold start comunque percepibile sulle Lambda (200-500ms per Node.js, fino a 5s per Java senza SnapStart; l'overhead VPC con Hyperplane ENI e' ora sotto i 100ms ma non eliminato); (2) costo diventato 3x rispetto a ECS Fargate per i servizi con traffico costante (30K invocazioni/minuto); (3) debugging distribuito quasi impossibile (log frammentati tra 45 funzioni); (4) limite di 15 minuti blocca 3 workflow di data processing. Il team propone di tornare a container per tutto. Il CTO vuole mantenere serverless. Il costo attuale e' 35K$/mese, la stima su ECS e' 12K$/mese. La migrazione e' stimata in 4 mesi. Migri o ottimizzi Lambda?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["serverless", "lambda", "container", "ecs", "cold_start", "costi", "migrazione"],
+      "structural_conflict": "Lambda e' ottimale per traffico sporadico ma 30K invocazioni/minuto e' traffico costante — il modello di pricing penalizza il throughput costante. Il cold start con VPC e' mitigato da Hyperplane ENI (sotto 1s) ma non eliminato, e provisioned concurrency costa quasi quanto un container. Migrare tutto a ECS risparmia 23K$/mese ma 4 mesi di migrazione costano ~250K$ in ore dev. Il conflitto e' tra costo operativo (Lambda costoso), costo di migrazione (ECS richiede 4 mesi), e l'architettura ibrida (alcune Lambda, alcuni container) che aggiunge complessita'."
+    },
+    {
+      "prompt": "Un'azienda di telemedicina deve decidere l'architettura per il sistema di videochiamata medico-paziente. Requisiti: latenza < 150ms, registrazione video per conformita' legale, supporto fino a 4 partecipanti (medico, paziente, specialista, interprete), crittografia end-to-end (HIPAA), e funzionamento su reti instabili (pazienti in aree rurali con 3G). Opzioni: (A) WebRTC peer-to-peer con TURN server — latenza minima ma la registrazione server-side richiede un SFU, e P2P con 4 partecipanti su 3G e' instabile; (B) SFU centralizzato (Mediasoup/Janus) self-hosted — controllo totale, registrazione nativa, ma infrastruttura complessa e latenza dipende dalla posizione del server; (C) API managed (Twilio Video / Vonage) — funziona subito ma 0.004$/partecipante/minuto × 100K visite/mese = 48K$/mese, e i dati transitano su server terzi (HIPAA concern). Budget: 15K$/mese. Team: 12 dev, 0 con esperienza WebRTC. Quale scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "resource_allocation"],
+      "difficulty": "hard",
+      "tags": ["webrtc", "telemedicina", "hipaa", "sfu", "twilio", "video_streaming"],
+      "structural_conflict": "WebRTC P2P non funziona con 4 partecipanti su 3G (mesh topology = 6 stream per client). SFU self-hosted e' la soluzione corretta ma 0 dev con esperienza WebRTC e un SFU richiede media server engineering specializzato. Twilio supera il budget di 3x e i dati su server terzi richiedono BAA specifico per HIPAA. Il conflitto e' tra correttezza tecnica (SFU), competenze del team (nessuna), e costo (Twilio troppo caro) — con HIPAA come vincolo che elimina le scorciatoie."
+    },
+    {
+      "prompt": "Un sistema di gestione flotte per 10.000 veicoli deve tracciare posizione GPS in tempo reale, calcolare percorsi ottimali, e prevedere manutenzione. L'architettura attuale e' un monolite Python/Django con PostGIS che funziona ma la latenza di aggiornamento mappa e' 30 secondi (target: 3 secondi). Il team di 8 dev propone di riscrivere tutto in Go con architettura a microservizi (ingestione GPS, routing engine, ML prediction, dashboard). Il budget e' 400K$ totali e il sistema deve continuare a funzionare durante la migrazione (10.000 veicoli in strada non possono fermarsi). Riscrivi o ottimizzi?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["fleet_management", "rewrite_vs_optimize", "gps", "real_time", "python_to_go"],
+      "structural_conflict": "La riscrittura in Go riduce la latenza ma 400K$ per 8 dev con sistema in produzione che non puo' avere downtime e' un budget stretto — la dual-running di vecchio e nuovo sistema raddoppia i costi operativi durante la migrazione. Ottimizzare Django (caching aggressivo, WebSocket per push, worker dedicato per GPS ingestione) potrebbe portare a 5 secondi senza riscrittura totale. Ma il ceiling di Python per 10.000 aggiornamenti GPS/secondo e' reale. Il conflitto e' tra il limite strutturale di Python (non risolvibile con ottimizzazione) e il rischio della riscrittura con budget limitato."
+    },
+    {
+      "prompt": "Un'azienda healthcare deve scegliere la strategia di testing per un sistema che calcola dosaggi farmacologici. Un errore nel calcolo puo' uccidere un paziente. L'attuale coverage e' al 45% con test unitari. Il team propone: (A) portare coverage al 95% con unit + integration test — richiede 3 mesi e 200K$ ma non testa il sistema end-to-end; (B) property-based testing con generazione automatica di input (QuickCheck/fast-check) — trova edge case che i test manuali non trovano ma il team non ha esperienza; (C) formal verification con TLA+ o Alloy per i calcoli critici — matematicamente provata, ma solo 1 dev al mondo nel team ha competenze di formal methods e il costo e' 6 mesi; (D) mutation testing per validare che i test esistenti catturino realmente i bug. Il sistema ha 150 formule farmacologiche con 20 parametri ciascuna. Quale strategia di quality assurance adotti?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["testing", "healthcare", "formal_verification", "property_based_testing", "safety_critical"],
+      "structural_conflict": "95% unit test coverage non garantisce correttezza (puo' avere 95% coverage e 0% delle edge case farmacologiche testate). Property-based testing e' potente per trovare edge case ma definire le proprieta' corrette per 150 formule richiede domain expertise farmacologica, non solo dev. Formal verification e' l'unica garanzia matematica ma 1 dev con 150 formule e' un collo di bottiglia di 6+ mesi. Mutation testing valida i test ma non ne crea di nuovi. Per un sistema safety-critical, nessun singolo approccio basta — ma combinarli tutti supera il budget."
+    },
+    {
+      "prompt": "Un'applicazione multi-regione (EU, US, Asia) deve rispettare la data residency: i dati degli utenti EU devono restare in EU (GDPR), i dati US in US, i dati Asia in Asia. Ma il sistema ha entita' globali (catalogo prodotti, configurazioni, prezzi) che devono essere consistenti ovunque. L'architettura attuale e' un singolo database PostgreSQL in EU con replica read-only in US (latenza cross-region: 120ms). Il business vuole espandersi in Asia (aggiungendo 200ms di latenza da EU). Opzioni: (A) CockroachDB multi-region con geo-partitioning — risolve data residency nativamente ma il costo e' 5x PostgreSQL e la migrazione da PG richiede 6 mesi; (B) 3 database PostgreSQL indipendenti con sync selettiva (solo dati globali sincronizzati, dati utente locali) — economico ma la logica di routing e sync e' custom e fragile; (C) un database per regione con API gateway che indirizza in base alla residency — semplice nel routing ma il join cross-regione per reporting globale diventa impossibile. Il reporting globale serve al C-level ogni giorno. Quale architettura?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["multi_region", "data_residency", "gdpr", "cockroachdb", "geo_partitioning", "compliance"],
+      "structural_conflict": "CockroachDB risolve il problema ma 5x il costo e 6 mesi di migrazione sono significativi. 3 PostgreSQL con sync custom funziona in teoria ma la sincronizzazione selettiva tra 3 database e' un distributed systems problem che il 99% dei team implementa con bug. API gateway per routing e' semplice ma il reporting cross-regione per il C-level richiede un data warehouse separato con ETL — aggiungendo un altro sistema. Il conflitto e' tra soluzione nativa (CockroachDB, costoso), soluzione custom (3 PG, fragile), e soluzione con workaround (gateway + data warehouse, complesso)."
+    },
+    {
+      "prompt": "Un team ha ereditato un sistema con 30 microservizi che comunicano tramite REST sincrono. Il grafo delle dipendenze ha cicli (A chiama B, B chiama C, C chiama A) e la failure di un singolo servizio causa cascading failure che abbatte il 70% del sistema. Il team ha due proposte: (A) introdurre un event bus (Kafka/RabbitMQ) e convertire tutte le comunicazioni in asincrono — elimina i cicli ma richiede ripensare 30 servizi e la transizione sara' graduale (mesi con sistema ibrido sync+async); (B) spezzare i cicli senza cambiare paradigma — estrarre le dipendenze circolari in servizi intermedi, aggiungere circuit breaker e retry, mantenere REST. Il sistema serve 1M utenti e non puo' avere downtime durante la migrazione. 18 dev disponibili. Quale approccio?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["microservizi", "cicli_dipendenze", "event_bus", "cascading_failure", "migrazione"],
+      "structural_conflict": "L'event bus risolve i cicli strutturalmente (comunicazione disaccoppiata) ma la transizione ibrida sync+async e' il periodo piu' pericoloso — un errore nella migrazione puo' causare data loss o inconsistenza. Spezzare i cicli con REST mantiene il paradigma noto (18 dev sanno REST) ma non risolve il problema alla radice — un circuit breaker mitiga ma non elimina la cascading failure. Il conflitto e' tra soluzione definitiva (event bus) con alto rischio transitorio e soluzione parziale (REST refactoring) con basso rischio ma risultato incompleto."
+    }
+  ]
+}

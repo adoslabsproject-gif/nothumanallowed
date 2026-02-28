@@ -1,0 +1,286 @@
+{
+  "domain": "crisis_management",
+  "description": "Gestione delle crisi, comunicazione di crisi, business continuity, reputation management, incident response",
+  "prompts": [
+    {
+      "prompt": "Cos'e' un piano di continuita' operativa (BCP) e quali sono i suoi 5 elementi fondamentali? Spiega la differenza tra BCP e disaster recovery plan con un esempio concreto.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["bcp", "disaster_recovery", "continuita_operativa", "definizioni"],
+      "structural_conflict": "Nessun conflitto strutturale. Domanda definitoria con applicazione pratica."
+    },
+    {
+      "prompt": "Cosa si intende per 'crisis communication' e quali sono le 3 fasi della comunicazione di crisi secondo il modello di Coombs (SCCT)? Fornisci un esempio per ciascuna fase.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["crisis_communication", "coombs", "scct", "tre_fasi"],
+      "structural_conflict": "Nessun conflitto strutturale. Domanda su framework accademico consolidato."
+    },
+    {
+      "prompt": "Spiega la differenza tra incidente, emergenza e crisi in un contesto aziendale. A quale livello di escalation si attiva il crisis management team e chi ne fa parte tipicamente?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["escalation", "incidente_vs_crisi", "crisis_team", "definizioni"],
+      "structural_conflict": "Nessun conflitto strutturale. Domanda classificatoria con struttura organizzativa."
+    },
+    {
+      "prompt": "Cos'e' un'analisi di impatto aziendale (BIA) e come si calcola il Recovery Time Objective (RTO) e il Recovery Point Objective (RPO)? Fornisci un esempio numerico per un'azienda e-commerce con fatturato di 50.000 euro/giorno.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["bia", "rto", "rpo", "ecommerce", "analisi_impatto"],
+      "structural_conflict": "Nessun conflitto strutturale. Domanda tecnica con calcolo concreto."
+    },
+    {
+      "prompt": "Quali sono i 5 errori piu' comuni nella comunicazione di crisi? Per ciascuno, fornisci un esempio reale di un'azienda che lo ha commesso e le conseguenze che ha subito.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["errori_comunicazione", "casi_studio", "lezioni_apprese"],
+      "structural_conflict": "Nessun conflitto strutturale. Domanda analitica su best practice con casi studio."
+    },
+    {
+      "prompt": "Cos'e' il 'dark site' nella comunicazione di crisi digitale? Descrivi come si prepara, cosa deve contenere, e in quali circostanze si attiva. Fornisci un esempio di struttura per un'azienda di trasporto aereo.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["dark_site", "comunicazione_digitale", "preparazione_crisi", "aviazione"],
+      "structural_conflict": "Nessun conflitto strutturale. Domanda tecnica su strumento specifico di crisis communication."
+    },
+    {
+      "prompt": "Spiega il modello delle '4R' del crisis management (Reduction, Readiness, Response, Recovery). Per ciascuna fase, indica 3 azioni concrete che un'azienda manifatturiera con 500 dipendenti dovrebbe implementare.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["4r", "modello_crisi", "manifatturiero", "azioni_concrete"],
+      "structural_conflict": "Nessun conflitto strutturale. Domanda su framework con applicazione settoriale."
+    },
+    {
+      "prompt": "Cosa si intende per 'stakeholder mapping' in un contesto di crisi? Descrivi la matrice potere/interesse e spiega come cambia la priorita' degli stakeholder quando un'azienda farmaceutica affronta un richiamo di prodotto.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["stakeholder_mapping", "matrice_potere_interesse", "farmaceutico", "richiamo"],
+      "structural_conflict": "Nessun conflitto strutturale. Domanda su strumento analitico con applicazione specifica."
+    },
+    {
+      "prompt": "Un'azienda alimentare scopre che un lotto di prodotti (180.000 confezioni gia' distribuite in 2.400 punti vendita) potrebbe contenere un contaminante batteriologico. Le analisi di laboratorio non sono conclusive e ci vorranno 48 ore per il risultato definitivo. Ritirare immediatamente costa 15M euro e causa panico tra i consumatori. Aspettare 48 ore rischia che consumatori mangino il prodotto contaminato. Non c'e' ancora nessun caso di malattia segnalato. La probabilita' di contaminazione e' stimata al 35%. Cosa si fa nelle prime 2 ore?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["contaminazione_alimentare", "recall", "principio_precauzione", "48_ore"],
+      "structural_conflict": "Le 48 ore di analisi sono un vuoto informativo. Il 35% di probabilita' non e' ne' certo ne' trascurabile. Ritirare a 15M e' un costo enorme se il prodotto e' sicuro. Non ritirare e' un rischio inaccettabile se il prodotto e' contaminato. Le 180.000 confezioni sono gia' distribuite — il richiamo non raggiungera' il 100% dei consumatori. Le prime 2 ore definiscono tutto."
+    },
+    {
+      "prompt": "Un incendio divampa in uno stabilimento chimico alla periferia di una citta' di 85.000 abitanti. Le sostanze coinvolte potrebbero rilasciare diossina. Le rilevazioni ambientali richiedono 6 ore. Il vento soffia verso il centro citta'. Il sindaco deve decidere se ordinare l'evacuazione di 15.000 persone nella zona sottovento. Evacuare costa 2.3M euro e crea panico. Non evacuare rischia l'esposizione a diossina. I vigili del fuoco dicono 'probabilmente sotto controllo entro 3 ore'. Il 'probabilmente' e' un 70%. Cosa decide il sindaco e come comunica alla popolazione?",
+      "conflict_type": ["risk_assessment", "strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["incendio_chimico", "evacuazione", "diossina", "decisione_sotto_incertezza"],
+      "structural_conflict": "Il 70% di 'sotto controllo' significa 30% di fuori controllo. Le 6 ore di rilevazioni sono un vuoto decisionale. Evacuare 15.000 persone e' un'operazione massiva che crea panico e ingorghi. Non evacuare e scoprire diossina e' un disastro sanitario e politico. Il sindaco non ha competenze chimiche e deve fidarsi dei vigili del fuoco che dicono 'probabilmente'. La comunicazione alla popolazione deve essere chiara senza causare panico."
+    },
+    {
+      "prompt": "Un ospedale scopre che un chirurgo ha operato con credenziali falsificate per 3 anni. Ha eseguito 847 interventi. Non risultano complicanze anomale nelle statistiche. I pazienti non sanno nulla. L'ospedale deve: (a) informare tutti gli 847 pazienti (panico, cause legali, danno reputazionale), (b) informare solo quelli con potenziali complicanze (scelta eticamente discutibile), (c) non informare nessuno perche' non ci sono stati danni (illegale). La stampa non sa ancora nulla. L'ordine dei medici e' stato avvertito. Come si gestisce questa crisi?",
+      "conflict_type": ["values_tradeoff", "risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["credenziali_false", "ospedale", "pazienti", "obbligo_informativo"],
+      "structural_conflict": "Gli 847 pazienti hanno diritto di sapere che sono stati operati da un non-qualificato. Ma informarli causa panico, ansia post-traumatica, e un'ondata di cause legali anche se gli interventi sono andati bene. L'assenza di complicanze non significa assenza di rischio futuro. Non informare e' illegale e moralmente inaccettabile. L'informazione selettiva crea un criterio arbitrario. Ogni scelta ha conseguenze legali, etiche e operative diverse."
+    },
+    {
+      "prompt": "Un attacco ransomware ha criptato il 78% dei sistemi IT di un'azienda logistica con 3.200 dipendenti. I criminali chiedono 4.5M euro in Bitcoin entro 72 ore. L'azienda perde 800.000 euro/giorno di operativita'. I backup esistono ma il ripristino richiede 12-15 giorni. Pagare il riscatto non garantisce il ripristino (il 30% delle aziende che paga non riceve la chiave). Le forze dell'ordine sconsigliano di pagare. I clienti stanno cancellando contratti. L'assicurazione cyber copre solo 2M euro. Cosa si fa nelle prime 24 ore?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["ransomware", "cybersecurity", "riscatto", "business_continuity"],
+      "structural_conflict": "Pagare finanzia il crimine e non garantisce il risultato (30% non riceve la chiave). Non pagare costa 800K/giorno per 12-15 giorni (circa 10-12M euro totali). L'assicurazione copre solo 2M. Le forze dell'ordine hanno l'interesse pubblico, l'azienda ha l'interesse della sopravvivenza. I 3.200 dipendenti rischiano il posto se l'azienda non si riprende. Le 72 ore creano un countdown psicologico."
+    },
+    {
+      "prompt": "Un aereo con 189 passeggeri della tua compagnia aerea e' appena precipitato. Non ci sono sopravvissuti. Le cause sono sconosciute. I familiari stanno arrivando in aeroporto. I media stanno convergendo. I social media stanno esplodendo con teorie (terrorismo, guasto meccanico, errore pilota). Hai 500 dipendenti in stato di shock. La tua flotta ha altri 84 aerei dello stesso modello. Descrivi minuto per minuto le prime 6 ore di gestione della crisi: chi chiami, cosa comunichi, a chi, in che ordine, e quali decisioni prendi sulla flotta.",
+      "conflict_type": ["strategy_choice", "risk_assessment", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["disastro_aereo", "vittime", "familiari", "flotta", "prime_ore"],
+      "structural_conflict": "Le prime 6 ore definiscono la percezione per decenni. I familiari vogliono informazioni che non hai. I media vogliono risposte che non puoi dare. I 500 dipendenti sono vittime emotive. Gli 84 aerei dello stesso modello potrebbero dover restare a terra (costo enorme) senza sapere se c'e' un difetto sistematico. Ogni parola detta dal CEO sara' analizzata in tribunale per i prossimi 10 anni. Il silenzio e' inaccettabile. La speculazione e' pericolosa."
+    },
+    {
+      "prompt": "Un dipendente di una banca pubblica su social media un video in cui si vede il CEO della banca fare commenti sessisti durante una cena aziendale privata. Il video e' stato visto 8 milioni di volte in 18 ore. Il CEO e' in carica da 12 anni e sotto la sua guida la banca ha raddoppiato i profitti. Il 64% dei dipendenti lo stima come leader. Ma il video e' inequivocabile. Le associazioni femministe chiedono le dimissioni. I grandi clienti corporate stanno chiamando per capire la posizione della banca. Il CdA si riunisce tra 4 ore. Cosa deve decidere e come comunica?",
+      "conflict_type": ["values_tradeoff", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["ceo_scandal", "sessismo", "viralita", "governance", "dimissioni"],
+      "structural_conflict": "Il CEO ha raddoppiato i profitti — rimuoverlo ha un costo economico reale. Ma il video e' inequivocabile — difenderlo e' impossibile. Le dimissioni volontarie proteggono il brand. Le dimissioni forzate proteggono i valori. Nessuna azione protegge il CEO e la banca contemporaneamente. Il dipendente che ha filmato ha violato la privacy ma il contenuto e' di interesse pubblico. Il CdA deve decidere tra lealta' al leader e integrita' dell'istituzione."
+    },
+    {
+      "prompt": "Una piattaforma di e-commerce (12 milioni di utenti, 45.000 venditori) subisce un data breach che espone nomi, email, indirizzi e ultimi 4 numeri di carta di credito di 3.8 milioni di utenti. Il GDPR impone notifica al Garante entro 72 ore. La piattaforma ha 72 ore anche per: capire l'estensione del danno, notificare gli utenti, preparare la comunicazione pubblica, e implementare le contromisure. Il breach e' avvenuto tramite un fornitore terzo. La piattaforma aveva un audit di sicurezza aggiornato che dava 'rischio basso'. Come strutturi le 72 ore?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["data_breach", "gdpr", "72_ore", "fornitore_terzo", "notifica"],
+      "structural_conflict": "Le 72 ore sono un vincolo legale simultaneo a un vincolo operativo. Notificare gli utenti prima di capire l'estensione rischia di dare informazioni sbagliate. Capire l'estensione prima di notificare rischia di violare i termini GDPR. Il fornitore terzo complica la responsabilita'. L'audit 'rischio basso' crea un problema di credibilita' — come era possibile? La comunicazione deve bilanciare trasparenza, calma, e urgenza."
+    },
+    {
+      "prompt": "Un'azienda di trasporti pubblici deve gestire uno sciopero selvaggio: il 70% dei conducenti ha smesso di lavorare senza preavviso alle 7:30 del mattino. 450.000 pendolari sono bloccati. I social media esplodono con rabbia. Il sindaco accusa l'azienda. I sindacati accusano il management di 'condizioni inumane'. I media nazionali mandano le telecamere. L'azienda ha 2 ore per comunicare un piano a pendolari, istituzioni, media e dipendenti — 4 audience diverse con 4 messaggi diversi. Come strutturi la comunicazione?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["sciopero", "trasporto_pubblico", "multi_audience", "comunicazione_urgente"],
+      "structural_conflict": "I pendolari vogliono sapere come tornare a casa. Le istituzioni vogliono un capro espiatorio. I media vogliono il conflitto. I dipendenti in sciopero vogliono essere ascoltati. Dire ai pendolari 'stiamo risolvendo' senza un piano concreto e' vuoto. Dare ragione ai sindacati aliena le istituzioni. Dare torto ai sindacati escala lo sciopero. Ogni messaggio destinato a un'audience sara' letto dalle altre 3."
+    },
+    {
+      "prompt": "Un hotel a 5 stelle (220 camere, tasso di occupazione 87%) ha un caso confermato di legionella nell'impianto idrico. Ci sono 184 ospiti attualmente nell'hotel. La bonifica richiede la chiusura dell'impianto idrico per 72 ore. Non si puo' tenere aperto l'hotel senza acqua. Spostare 184 ospiti in altri hotel nella stessa citta' e' possibile ma costoso (stimati 280.000 euro). Non comunicare la legionella e chiudere per 'manutenzione' e' illegale. Comunicare la legionella genera panico e richieste di rimborso. Il paziente e' in ospedale ma stabile. Come gestisci le prossime 12 ore?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["legionella", "hotel", "evacuazione_ospiti", "salute_pubblica"],
+      "structural_conflict": "La legionella e' un obbligo di notifica sanitaria. Nasconderla e' illegale. Comunicarla ai 184 ospiti genera panico e richieste di rimborso/risarcimento. Lo spostamento costa 280K ma e' necessario. La reputazione dell'hotel sara' associata alla legionella per mesi. Ma gestire bene la crisi (trasparenza, ospitalita' alternativa, follow-up medico) puo' trasformare il danno in prova di serieta'. Il paziente stabile e' un dato positivo da comunicare correttamente."
+    },
+    {
+      "prompt": "Un CEO di un'azienda quotata in borsa (capitalizzazione 2.8 miliardi) muore improvvisamente di infarto a 54 anni. Non esiste un piano di successione formalizzato. Il mercato aprira' tra 14 ore. L'azienda ha un CFO competente ma sconosciuto al mercato, un COO carismatico ma controverso, e un presidente del CdA che ha 78 anni. Il titolo potrebbe perdere fino al 15% all'apertura (420M di capitalizzazione). I clienti enterprise (che rappresentano il 60% dei ricavi) avevano un rapporto personale col CEO. Come gestisci le 14 ore prima dell'apertura dei mercati?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["morte_ceo", "successione", "mercati_finanziari", "key_person_risk"],
+      "structural_conflict": "Le 14 ore sono un countdown verso l'apertura dei mercati. Non avere un piano di successione e' una negligenza governance ma ora e' un fatto. Il CFO e' competente ma i mercati reagiscono al carisma. Il COO e' carismatico ma controverso. Nominare un CEO ad interim nelle prossime 14 ore e' precipitoso ma non nominarlo e' peggio. I clienti enterprise perderanno fiducia se non ricevono rassicurazioni personali prima che la notizia diventi pubblica."
+    },
+    {
+      "prompt": "Un'azienda di giocattoli scopre che un prodotto venduto per bambini 3-6 anni contiene una piccola parte che puo' staccarsi e causare soffocamento. Sono state vendute 520.000 unita' in 14 paesi. Nessun incidente e' ancora avvenuto. La probabilita' statistica di soffocamento e' 1 su 180.000. Ma quel '1' e' un bambino. Il richiamo globale costa 42M euro. Il prodotto genera il 18% dei ricavi annuali dell'azienda. L'ufficio legale dice che il rischio e' 'accettabile' dal punto di vista normativo. Cosa decidi e come comunichi?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["sicurezza_bambini", "recall_globale", "rischio_accettabile", "soffocamento"],
+      "structural_conflict": "1 su 180.000 e' statisticamente basso ma moralmente inaccettabile quando si tratta di bambini. L'ufficio legale dice 'accettabile' — ma un singolo caso trasformerebbe l'azienda nel mostro che sapeva e non ha agito. I 42M sono il 18% dei ricavi — non richiamarlo e' una scommessa sulla vita di un bambino. Richiamarlo e' economicamente devastante. Ma Johnson & Johnson con il Tylenol ha dimostrato che il recall proattivo puo' rafforzare il brand."
+    },
+    {
+      "prompt": "Una fabbrica tessile di un noto brand italiano crolla in Bangladesh, uccidendo 47 operai. L'azienda non e' proprietaria della fabbrica — e' un subcontractor del subcontractor (terzo livello di supply chain). L'azienda non sapeva dell'esistenza di quella specifica fabbrica. Ma etichette con il logo del brand sono state trovate tra le macerie. I media titolano 'Brand X uccide 47 operai'. L'azienda e' legalmente non responsabile ma moralmente? Come gestisci le prime 48 ore sapendo che la verita' legale e la percezione pubblica sono completamente divergenti?",
+      "conflict_type": ["values_tradeoff", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["supply_chain", "bangladesh", "crollo", "responsabilita_indiretta"],
+      "structural_conflict": "L'azienda non sapeva — ma avrebbe dovuto sapere? La distanza nella supply chain non elimina la responsabilita' morale. La risposta legale ('non eravamo coinvolti') e' vera ma suona come scaricamento di responsabilita'. La risposta empatica ('ci assumiamo la responsabilita'') ha implicazioni legali enormi. Le 47 vittime rendono qualsiasi risposta corporativa inadeguata. Il precedente Rana Plaza dimostra che la percezione vince sulla legalita'."
+    },
+    {
+      "prompt": "Un'universita' italiana scopre che un professore ordinario (30 anni di servizio, 3 libri pubblicati, mentor di 200+ studenti) ha plagiato sistematicamente per 15 anni. 12 dei suoi 45 paper pubblicati contengono plagi significativi. 6 tesi di dottorato supervisionate da lui potrebbero essere invalidate. I 6 dottorandi ora sono professionisti affermati. Invalidare le tesi distrugge le loro carriere per colpa del professore. Non invalidarle lascia credenziali accademiche non valide in circolazione. Come gestisci questa crisi istituzionale?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["plagio_accademico", "tesi_dottorato", "integrita_accademica", "danni_collaterali"],
+      "structural_conflict": "L'integrita' accademica richiede la correzione del record. Ma i 6 dottorandi sono vittime, non complici. Invalidare le loro tesi punisce le vittime. Non invalidarle lascia credenziali false nel sistema. Il professore ha 30 anni di servizio — quanti altri lavori sono contaminati? L'universita' ha fallito nel controllo per 15 anni. La soluzione deve proteggere le vittime senza compromettere l'integrita'."
+    },
+    {
+      "prompt": "Una citta' costiera di 120.000 abitanti riceve un allarme tsunami con probabilita' del 40% entro le prossime 4 ore. L'evacuazione completa richiede 3 ore e ha un costo stimato di 8.5M euro (spostamento, strutture di accoglienza, perdita economica). L'ultimo allarme tsunami (5 anni fa) si rivelo' un falso allarme e la popolazione protesto' violentemente per i disagi. Se l'allarme e' falso di nuovo, la credibilita' del sistema di allerta crolla e la prossima volta nessuno evacuera'. Se l'allarme e' reale e non evacui, le vittime potenziali sono migliaia. Come decide il sindaco?",
+      "conflict_type": ["risk_assessment", "prediction_uncertainty", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["tsunami", "evacuazione", "falso_allarme", "credibilita_sistema", "boy_who_cried_wolf"],
+      "structural_conflict": "Il 40% non e' ne' probabile ne' improbabile. L'evacuazione costa 8.5M e 3 ore. Non evacuare rischia migliaia di vite. Il precedente del falso allarme ha eroso la fiducia. Un secondo falso allarme la distrugge. Ma un mancato allarme reale e' catastrofico. Il paradosso del 'ragazzo che gridava al lupo' e' strutturale: ogni falso allarme rende il prossimo allarme reale piu' letale."
+    },
+    {
+      "prompt": "Un'azienda farmaceutica scopre che un suo farmaco best-seller (2.1 miliardi di vendite/anno, usato da 14 milioni di pazienti) ha un effetto collaterale non emerso nei trial clinici: aumenta del 18% il rischio di ictus nei pazienti over-65. I pazienti over-65 sono il 43% degli utilizzatori (6 milioni di persone). Ritirare il farmaco immediatamente lascia 14 milioni di pazienti senza terapia — l'alternativa e' il 30% meno efficace. Comunicare il rischio causa panico e interruzioni non controllate della terapia (potenzialmente piu' pericolose dell'effetto collaterale stesso). Come si gestisce?",
+      "conflict_type": ["values_tradeoff", "risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["effetto_collaterale", "farmaco_bestseller", "over65", "ritiro_vs_mantenimento"],
+      "structural_conflict": "Il 18% di aumento del rischio ictus e' significativo ma il farmaco e' efficace. Ritirarlo lascia 14 milioni senza terapia. L'alternativa e' il 30% meno efficace — quindi causa piu' morti per la malattia di base. Comunicare il rischio potrebbe causare interruzioni spontanee della terapia che sono PIU' pericolose dell'effetto collaterale. Non comunicare e' illegale e immorale. La soluzione richiede una comunicazione calibrata al millimetro."
+    },
+    {
+      "prompt": "Un impianto nucleare ha avuto un malfunzionamento che ha causato un rilascio limitato di radiazioni. I livelli misurati sono 3x sopra la norma ma 50x sotto la soglia di pericolo per la salute. L'IAEA classifica l'evento come INES 2 (incidente). La popolazione nel raggio di 20 km (85.000 persone) non e' in pericolo secondo i dati tecnici. Ma la parola 'nucleare' genera panico irrazionale. I media titolano 'fuga radioattiva'. La popolazione gia' protesta per la chiusura dell'impianto. Il governo deve comunicare. Come bilanci la verita' tecnica ('nessun pericolo') con la percezione pubblica ('Chernobyl')?",
+      "conflict_type": ["strategy_choice", "values_tradeoff", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["nucleare", "percezione_rischio", "comunicazione_tecnica", "panico"],
+      "structural_conflict": "La verita' tecnica dice 'nessun pericolo'. La percezione pubblica dice 'Chernobyl'. Comunicare in modo rassicurante sembra cover-up. Comunicare i numeri tecnici non viene capito. Ammettere il malfunzionamento alimenta il panico. Minimizzare erode la fiducia. L'INES 2 e' un dato oggettivo ma la popolazione non conosce la scala INES. Il precedente Fukushima ha dimostrato che la comunicazione sbagliata causa piu' danni dell'evento stesso."
+    },
+    {
+      "prompt": "Un'azienda di ride-sharing scopre che uno dei suoi autisti ha commesso un'aggressione sessuale durante una corsa. La vittima ha denunciato alla polizia e ha contattato i media. L'azienda ha 15 milioni di utenti, il 62% donne. Il caso e' il terzo in 18 mesi. L'azienda aveva implementato nuove misure di sicurezza dopo il secondo caso. Le misure funzionano (3 casi su 45 milioni di corse = 0.000007%) ma '3 aggressioni' e' il titolo dei giornali. La vittima chiede un risarcimento di 2M euro e cambiamenti strutturali. Come gestisci questa crisi ripetuta?",
+      "conflict_type": ["values_tradeoff", "strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["sicurezza_utenti", "aggressione", "ride_sharing", "crisi_ripetuta"],
+      "structural_conflict": "Lo 0.000007% e' statisticamente insignificante ma la terza aggressione in 18 mesi e' un pattern narrativo. Le misure di sicurezza funzionano ma non al 100% — e il 100% e' impossibile. Il 62% di utenti donne e' il target piu' vulnerabile alla percezione di insicurezza. Pagare i 2M sembra un'ammissione di colpa. Non pagare sembra indifferenza. Le misure strutturali richieste sono implementabili ma non possono garantire zero incidenti."
+    },
+    {
+      "prompt": "Una catena di supermercati (450 punti vendita, 18.000 dipendenti) viene colpita da un attacco informatico che rende inutilizzabili le casse. Nessun negozio puo' vendere. Il ripristino richiede 36-48 ore. L'azienda perde 4.2M euro/giorno. I prodotti freschi (valore 6M euro) scadranno entro 24 ore. I 18.000 dipendenti non possono lavorare ma devono essere pagati. I clienti stanno andando alla concorrenza. Dopo 48 ore, quanti clienti non torneranno? Descrivi il piano operativo per le 48 ore di fermo.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["attacco_informatico", "retail", "perdite_operative", "prodotti_deperibili"],
+      "structural_conflict": "Le 48 ore di fermo costano 8.4M in mancate vendite piu' 6M in prodotti scaduti. I 18.000 dipendenti inattivi ma pagati costano circa 1.2M. La concorrenza acquisira' clienti abitudinari — la ricerca mostra che il 15-20% non torna dopo un'interruzione prolungata. Ma il vero costo e' la percezione di vulnerabilita': se puo' succedere una volta, puo' succedere ancora. Le casse manuali sono una soluzione parziale ma lenta."
+    },
+    {
+      "prompt": "Un'azienda cosmetica lancia un prodotto sbiancante per la pelle in Africa. Il prodotto e' legale, testato, efficace. Ma un'ondata di critiche lo accusa di promuovere il colorismo e lo 'skin bleaching'. Un hashtag di boicottaggio raggiunge 2.8 milioni di post. Il prodotto genera 120M euro/anno in quel mercato — il 22% dei ricavi totali. I focus group pre-lancio non avevano rilevato il problema. La crisi e' culturale, non tecnica: il prodotto funziona, ma il messaggio e' tossico. Come risponde l'azienda?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["colorismo", "skin_bleaching", "crisi_culturale", "boicottaggio"],
+      "structural_conflict": "Il prodotto e' legale e funziona. La domanda di mercato esiste (120M/anno). Ma il messaggio implicito ('la pelle chiara e' meglio') e' colonialista. Ritirare il prodotto rispetta i valori ma cede 120M e 22% dei ricavi. Rinominarlo e' cosmetico (letteralmente). Mantenerlo e' insostenibile sotto 2.8M di post critici. La crisi rivela un problema sistemico dell'industria, non solo dell'azienda. Ma l'azienda e' il bersaglio visibile."
+    },
+    {
+      "prompt": "Un ponte autostradale gestito dalla tua concessionaria mostra segni di degrado strutturale. L'ingegnere capo dice: 'probabilita' di cedimento entro 5 anni: 2.3%. Entro 10 anni: 11.7%'. Il ponte e' attraversato da 42.000 veicoli/giorno. La chiusura immediata per ristrutturazione dura 18 mesi e crea un caos viabilistico in una regione intera (deviazione di 45 km). Il costo della ristrutturazione e' 380M euro. Un monitoraggio continuo con sensori (costo 12M/anno) permetterebbe di chiudere con 48 ore di preavviso in caso di degrado improvviso. Ma il precedente Ponte Morandi dimostra che il monitoraggio puo' fallire. Cosa decidi?",
+      "conflict_type": ["risk_assessment", "values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["infrastruttura", "ponte", "sicurezza_stradale", "ponte_morandi", "probabilita"],
+      "structural_conflict": "Il 2.3% in 5 anni sembra basso ma su 42.000 veicoli/giorno e' una roulette russa. Il Ponte Morandi ha dimostrato che il monitoraggio non e' infallibile. Chiudere per 18 mesi e' un disastro economico e logistico per la regione. Il monitoraggio continuo e' un compromesso razionale ma se il ponte crolla durante il monitoraggio, la concessionaria e' criminalmente responsabile perche' sapeva. La decisione e' presa post-Morandi — il contesto culturale non perdona."
+    },
+    {
+      "prompt": "Il CEO di un'azienda di energia rinnovabile viene arrestato per frode fiscale (evasione di 28M euro). L'azienda e' quotata in borsa, ha 2.400 dipendenti, e contratti pubblici per 450M euro. Il CEO e' il fondatore, possiede il 34% delle azioni, ed e' il volto pubblico dell'azienda. L'arresto avviene di venerdi' sera — il mercato apre lunedi'. Hai 60 ore. I contratti pubblici hanno una clausola di 'buona condotta'. La frode e' personale, non aziendale. Ma la percezione e' 'azienda verde guidata da un evasore'. Come gestisci il weekend?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["arresto_ceo", "frode_fiscale", "quotata_borsa", "contratti_pubblici", "60_ore"],
+      "structural_conflict": "Le 60 ore sono un countdown verso l'apertura dei mercati. La frode e' personale ma i contratti pubblici hanno la clausola di buona condotta. L'azienda e' 'verde' guidata da un 'evasore' — la dissonanza narrativa e' devastante. Il 34% di azioni del CEO crea un problema di governance: chi lo sostituisce? Il mercato potrebbe punire il titolo fino al 20%. I dipendenti sapranno dall'arresto prima della comunicazione ufficiale. L'azienda e' vittima ma sara' trattata come complice."
+    },
+    {
+      "prompt": "Un treno ad alta velocita' con 640 passeggeri si ferma in una galleria per un guasto tecnico. La temperatura interna sale a 38 gradi. Non c'e' areazione. Non c'e' copertura telefonica. Il treno potrebbe ripartire in 2 ore o richiedere evacuazione a piedi (1.2 km in galleria, al buio, con bambini e anziani). L'evacuazione a piedi ha rischi: panico, cadute, problemi respiratori per anziani. Aspettare 2 ore rischia colpi di calore. I passeggeri non sanno nulla. Il macchinista ha comunicazioni solo con la centrale. Come gestisci la crisi dal centro operativo e cosa comunica il macchinista ai 640 passeggeri?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["treno_bloccato", "galleria", "calore", "evacuazione", "comunicazione_passeggeri"],
+      "structural_conflict": "Aspettare 2 ore a 38 gradi rischia colpi di calore. Evacuare 640 persone a piedi in galleria rischia panico e incidenti. Non comunicare ai passeggeri crea ansia e comportamenti irrazionali (tentativo di forzare le porte). Comunicare la verita' ('non sappiamo quando ripartiremo') crea panico. Le 2 ore sono una stima — potrebbe volerci piu' tempo. Il centro operativo deve decidere senza vedere la situazione."
+    },
+    {
+      "prompt": "Un produttore di latte per neonati riceve 3 segnalazioni in 5 giorni da ospedali diversi: neonati con sintomi gastrointestinali gravi dopo aver consumato lo stesso lotto. Le analisi sul lotto sono in corso (risultati in 72 ore). Il lotto contiene 2.1 milioni di confezioni distribuite in 8 regioni. I 3 casi potrebbero essere coincidenze (la gastroenterite neonatale ha un tasso base del 4%). Ma sono tutti dallo stesso lotto. Ritirare 2.1 milioni di confezioni di latte per neonati crea panico nei genitori e scarsita' sugli scaffali. Non ritirare rischia la salute dei neonati. Il regolatore non ha ancora imposto il richiamo. Cosa fai?",
+      "conflict_type": ["values_tradeoff", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["latte_neonati", "richiamo_precauzionale", "neonati", "coincidenza_vs_contaminazione"],
+      "structural_conflict": "Si tratta di neonati — la soglia di rischio accettabile e' essenzialmente zero. Ma 3 casi su 2.1 milioni con un tasso base del 4% potrebbe essere coincidenza. Ritirare crea panico nei genitori e scarsita' di un prodotto essenziale. Non ritirare e scoprire contaminazione e' catastrofico. Le 72 ore di attesa delle analisi sono un periodo in cui altri neonati consumano il lotto. Il principio di precauzione si scontra con il principio di proporzionalita'."
+    },
+    {
+      "prompt": "Una compagnia assicurativa scopre che un suo dirigente ha venduto per 2 anni polizze vita a clienti anziani con Alzheimer che non potevano comprendere i contratti. Ha generato 8.4M euro di commissioni fraudolente. I clienti truffati sono 340, eta' media 78 anni, molti senza familiari che li tutelino. La compagnia ha scoperto la frode internamente. Nessun esterno sa ancora nulla. Denunciare il dirigente e' obbligatorio. Ma comunicare proattivamente ai 340 clienti apre un fronte legale da 25M euro di risarcimenti. Aspettare che i clienti scoprano da soli e' piu' economico ma moralmente devastante. Come agisci?",
+      "conflict_type": ["values_tradeoff", "strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["frode_assicurativa", "anziani_vulnerabili", "disclosure_proattiva", "costo_morale"],
+      "structural_conflict": "I 340 anziani sono stati truffati da un rappresentante dell'azienda. L'azienda non ha orchestrato la frode ma ha fallito nel controllarla. Comunicare proattivamente costa 25M ma e' moralmente corretto. Aspettare e' piu' economico ma trasforma l'azienda da vittima a complice. I 340 clienti con Alzheimer potrebbero non scoprirlo mai — il che rende il non-agire ancora piu' cinico. La denuncia penale e' obbligatoria, ma la comunicazione ai clienti e' una scelta."
+    },
+    {
+      "prompt": "Un terremoto di magnitudo 6.2 ha colpito una citta' di 180.000 abitanti. Il bilancio provvisorio e' di 45 morti e 1.200 feriti. Il 30% degli edifici ha subito danni. Il sindaco deve tenere una conferenza stampa ogni 6 ore. La popolazione vuole sapere se gli edifici rimanenti sono sicuri. I tecnici dicono: 'servono 15 giorni per le verifiche'. Ma 126.000 persone vivono in quegli edifici e vogliono sapere ORA se possono rientrare. Dire 'non sappiamo' causa panico e fuga. Dire 'probabilmente sicuro' crea responsabilita' se un edificio crolla nel post-sisma. Come comunica il sindaco?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["terremoto", "agibilita_edifici", "comunicazione_emergenza", "15_giorni"],
+      "structural_conflict": "I 15 giorni di verifica sono un tempo tecnico non comprimibile. Le 126.000 persone non possono vivere per strada per 15 giorni. Ma farle rientrare senza verifiche le espone al rischio sismico residuo. Il sindaco non ha competenze tecniche per decidere. Dire 'non sappiamo' e' onesto ma inutile. Dare indicazioni provvisorie ('gli edifici in muratura restino fuori, il cemento armato post-1970 e' probabilmente sicuro') crea responsabilita' se la regola generale non vale per uno specifico edificio."
+    },
+    {
+      "prompt": "Un'azienda di biotecnologia scopre che il suo vaccino in fase di distribuzione (gia' somministrato a 1.8 milioni di persone) ha un'efficacia del 52% invece del 78% dichiarato nei trial. L'errore e' statistico — i trial avevano un campione insufficiente per una variante emergente. Il vaccino non e' pericoloso, solo meno efficace. Ma 1.8 milioni di persone credono di essere protette al 78% e si comportano di conseguenza. Comunicare la ridotta efficacia potrebbe causare il rifiuto di TUTTI i vaccini (effetto no-vax). Non comunicare e' una violazione del consenso informato. Come gestisci la comunicazione?",
+      "conflict_type": ["values_tradeoff", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["vaccino", "efficacia_ridotta", "consenso_informato", "effetto_novax"],
+      "structural_conflict": "L'1.8 milioni di vaccinati ha dato consenso basato su dati ora sbagliati. Il 52% e' comunque meglio di 0% ma il gap percepito da 78% e' enorme. Comunicare male alimenta la narrazione no-vax e compromette TUTTA la campagna vaccinale. Non comunicare viola il consenso informato e, se emerge, distrugge la fiducia nelle istituzioni sanitarie. Il paradosso: la trasparenza potrebbe uccidere piu' persone della mancanza di trasparenza (se causa il rifiuto vaccinale di massa)."
+    },
+    {
+      "prompt": "Un'azienda di costruzioni scopre, durante la ristrutturazione di una scuola elementare, che la struttura ha amianto non dichiarato. La scuola ha 420 bambini e 45 insegnanti. L'esposizione prolungata all'amianto causa mesotelioma. La rimozione richiede 4 mesi e la chiusura totale della scuola. Non esiste un edificio alternativo nel comune — i bambini dovrebbero essere distribuiti in 6 scuole nel raggio di 20 km. Il sindaco vuole 'rimuovere silenziosamente durante l'estate'. L'estate e' tra 3 mesi. 3 mesi di esposizione aggiuntiva sono rischiosi? Le concentrazioni di fibre nell'aria sono sotto la soglia normativa ma sopra quella raccomandata dall'OMS. Cosa si fa?",
+      "conflict_type": ["values_tradeoff", "risk_assessment", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["amianto", "scuola", "bambini", "soglia_oms", "chiusura_vs_attesa"],
+      "structural_conflict": "Le concentrazioni sono sotto la soglia normativa italiana ma sopra quella OMS. Chiudere subito per 4 mesi disperde 420 bambini in 6 scuole distanti. Aspettare 3 mesi espone i bambini per altri 3 mesi. Il sindaco vuole minimizzare il disagio ma il rischio e' reale. I genitori non sanno e hanno diritto di sapere. Ma comunicare 'amianto a scuola' genera panico. Il gap tra norma italiana e raccomandazione OMS crea un'ambiguita' decisionale."
+    },
+    {
+      "prompt": "Un'azienda tech italiana (800 dipendenti) scopre che un suo senior engineer ha inserito una backdoor nel software usato da 200 clienti corporate, incluse 3 banche e 2 ospedali. La backdoor e' attiva da 8 mesi. Non risulta che sia stata sfruttata, ma non si puo' escluderlo. L'engineer e' gia' stato licenziato e denunciato. I 200 clienti devono essere informati? La legge dice si' per le banche (normativa bancaria) e per gli ospedali (dati sanitari). Per gli altri 195 clienti il quadro e' ambiguo. Informarli tutti rischia un esodo di clienti (stimato 35%). Non informarli e scoprirlo da terzi e' catastrofico. Come gestisci i prossimi 7 giorni?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["backdoor", "software", "clienti_corporate", "disclosure", "fiducia"],
+      "structural_conflict": "Le 5 aziende regolamentate (banche + ospedali) devono essere informate per legge. I 195 rimanenti sono in un'area grigia. Informarli tutti e' trasparente ma rischia il 35% di esodo. Non informarli e' rischioso perche' la backdoor potrebbe essere stata sfruttata senza saperlo. L'engineer licenziato potrebbe parlare con i media o vendere l'informazione. Ogni giorno che passa senza informare i clienti aumenta il danno se la notizia esce. I 7 giorni sono il tempo massimo prima che la notizia trapeli."
+    },
+    {
+      "prompt": "Un festival musicale con 35.000 partecipanti affronta un'allerta meteo: temporale violento previsto tra 2 ore con probabilita' del 65%. L'evacuazione completa richiede 90 minuti. Se il temporale arriva, fulmini e strutture metalliche (palchi, torri luci) creano rischio mortale. L'ultimo festival evacuato (2022, similare) ha avuto 47 feriti durante l'evacuazione stessa (calca, cadute). Evacuare troppo presto (se il temporale non arriva) costa 2M euro al promoter e 35.000 persone furiose. Evacuare troppo tardi rischia vite. Non evacuare e' un azzardo. Come decide il responsabile sicurezza?",
+      "conflict_type": ["risk_assessment", "prediction_uncertainty", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["festival", "allerta_meteo", "evacuazione_massa", "calca", "timing"],
+      "structural_conflict": "Il 65% di probabilita' e' alto ma non certo. L'evacuazione stessa e' pericolosa (47 feriti nel precedente). I 90 minuti richiesti lasciano margine zero se il temporale accelera. Non evacuare e' un azzardo su 35.000 vite. Evacuare per nulla distrugge la credibilita' e costa 2M. Il responsabile sicurezza ha responsabilita' penale in entrambi i casi: se non evacua e qualcuno muore, o se evacua e qualcuno muore nella calca."
+    },
+    {
+      "prompt": "Una piattaforma di social media italiana (4.2 milioni di utenti) scopre che un utente sta livestreaming un tentativo di suicidio. Il video ha gia' 12.000 spettatori. Rimuovere il video potrebbe impedire l'intervento dei soccorsi che stanno usando il feed per localizzare la persona. Non rimuoverlo espone 12.000 persone (inclusi minori) a un contenuto traumatico e potrebbe generare effetto imitativo (effetto Werther). La polizia chiede di mantenere il feed attivo per 10 minuti per la geolocalizzazione. I 10 minuti sono un'eternita' online. Come decide il content moderation team?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["suicidio_livestream", "content_moderation", "effetto_werther", "salvataggio_vs_esposizione"],
+      "structural_conflict": "Mantenere il video attivo salva potenzialmente una vita (geolocalizzazione per i soccorsi) ma espone 12.000 spettatori a un trauma. Rimuoverlo protegge gli spettatori ma ostacola il salvataggio. I 10 minuti richiesti dalla polizia vedranno il numero di spettatori crescere esponenzialmente. L'effetto Werther e' documentato: la visibilita' di suicidi aumenta i tentativi imitativi. Ma questo caso specifico potrebbe terminare con un salvataggio, che avrebbe l'effetto opposto."
+    },
+    {
+      "prompt": "Un datacenter che ospita i sistemi di 340 clienti (inclusi 2 ospedali e 1 piattaforma di emergenza 118) subisce un allagamento. Il 40% dei server e' compromesso. I sistemi degli ospedali sono nel 40% compromesso. I pazienti in terapia intensiva dipendono dai sistemi di monitoraggio collegati. Il datacenter ha un sito di disaster recovery ma il failover richiede 4 ore. In quelle 4 ore, gli ospedali devono passare a procedure manuali. Il personale medico non e' stato formato sulle procedure manuali da 6 anni. Come gestisci le 4 ore e come comunichi ai 340 clienti che il 60% di loro e' salvo ma il 40% no?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["datacenter", "disaster_recovery", "ospedali", "failover", "vite_umane"],
+      "structural_conflict": "Le 4 ore di failover sono un tempo tecnico ma i pazienti in terapia intensiva non possono aspettare 4 ore di procedure manuali senza training recente. La comunicazione ai 340 clienti deve essere simultanea ma i 2 ospedali e il 118 hanno priorita' assoluta. Dire al 40% compromesso 'stiamo lavorando' mentre il 60% e' operativo crea un'asimmetria informativa. Gli ospedali potrebbero richiedere trasferimento pazienti — un'operazione rischiosa in se'."
+    },
+    {
+      "prompt": "Un'esplosione in un deposito di fuochi d'artificio illegale nella periferia di una citta' di 250.000 abitanti ha causato 8 morti e 45 feriti. Il sindaco sapeva dell'esistenza del deposito (segnalazione dei vigili urbani 6 mesi fa) ma non aveva agito. Un giornalista ha il documento della segnalazione. Il sindaco ha 3 ore prima di una conferenza stampa in cui il giornalista fara' la domanda. Ammettere di aver saputo e' un'ammissione di responsabilita' penale (omissione di atti d'ufficio). Negare sara' smentito dal documento. Dare le dimissioni e' ammettere la colpa. Non dare le dimissioni e' arroganza di fronte a 8 morti. Cosa dice il sindaco in conferenza stampa?",
+      "conflict_type": ["values_tradeoff", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["omissione", "responsabilita_politica", "conferenza_stampa", "documento_prova"],
+      "structural_conflict": "Il sindaco ha una responsabilita' oggettiva documentata. Le 3 ore non bastano per una strategia legale completa. Ammettere e' penalmente pericoloso. Negare e' impossibile (il documento esiste). Le dimissioni sono un atto politico che precede il processo. Non dimettersi insulta le 8 vittime. Ogni parola in conferenza stampa sara' usata in tribunale. L'avvocato dira' 'non parlare', l'etica dice 'assumi responsabilita'', la politica dice 'gestisci la narrativa'."
+    }
+  ]
+}

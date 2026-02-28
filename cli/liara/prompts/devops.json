@@ -1,0 +1,286 @@
+{
+  "domain": "devops",
+  "description": "Scelte infrastrutturali, CI/CD, orchestrazione container, IaC, monitoring, logging, cloud cost optimization, disaster recovery, SLA/SLO/SLI, incident management, platform engineering, developer experience",
+  "prompts": [
+    {
+      "prompt": "Qual è lo scopo di un health check endpoint in un servizio deployato su Kubernetes? Spiegare la differenza tra liveness probe, readiness probe e startup probe, e quando usare ciascuna.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["kubernetes", "health_check", "probes", "reliability"],
+      "structural_conflict": "Nessun conflitto strutturale reale: le tre probe hanno scopi distinti e ben documentati. Liveness rileva deadlock (restart), readiness controlla se il pod può ricevere traffico, startup gestisce avvii lenti. La risposta è deterministica."
+    },
+    {
+      "prompt": "Un team di 4 sviluppatori ha un'applicazione monolitica Python che deploya manualmente via SSH su 2 server. Il deploy richiede 45 minuti e fallisce 1 volta su 5. Devono introdurre CI/CD. Opzioni: (A) GitHub Actions con deploy via SSH — minimo cambiamento, ma non risolve il problema della riproducibilità; (B) GitHub Actions + Docker + Docker Compose — containerizza l'app, deploy consistente, ma il team non conosce Docker; (C) GitLab CI/CD self-hosted — più controllo, ma aggiunge infrastruttura da mantenere per un team di 4. Budget: 500€/mese. Quale approccio è corretto?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["ci_cd", "github_actions", "docker", "small_team"],
+      "structural_conflict": "Il team è piccolo e il budget limitato. GitHub Actions + SSH è il più veloce da implementare ma perpetua il problema. Docker risolve la riproducibilità ma introduce una curva di apprendimento. GitLab self-hosted aggiunge complessità operativa sproporzionata per 4 persone."
+    },
+    {
+      "prompt": "Cos'è la differenza tra deploy blue-green, canary release e rolling update? Per un'API REST stateless con 10 pod su Kubernetes e zero downtime come requisito, quale strategia è la scelta di default più sicura?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["deployment_strategies", "kubernetes", "zero_downtime"],
+      "structural_conflict": "Per un servizio stateless con 10 pod, rolling update è il default naturale di Kubernetes. Le alternative richiedono infrastruttura aggiuntiva (blue-green: doppio cluster; canary: service mesh o ingress controller avanzato) che non si giustificano per il caso base."
+    },
+    {
+      "prompt": "Un'azienda con 3 ambienti (dev, staging, prod) gestisce la configurazione infrastrutturale con script Bash. Ogni ambiente ha 5 server EC2, un RDS, un bucket S3 e un load balancer. Vogliono passare a Infrastructure as Code. Il team ha esperienza Python ma non conosce né HCL né Go. Devono scegliere tra Terraform e Pulumi. Quale è la scelta corretta per questo contesto?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["iac", "terraform", "pulumi", "infrastruttura"],
+      "structural_conflict": "Terraform ha un ecosistema più maturo e più documentazione, ma HCL è un linguaggio nuovo da imparare. Pulumi usa Python (che il team già conosce) ma ha un ecosistema più giovane e meno examples. Per 15 server e 3 ambienti, la complessità è bassa e il fattore decisivo è la produttività del team."
+    },
+    {
+      "prompt": "Qual è la differenza tra un Secret di Kubernetes e un ConfigMap? In quali casi è corretto usare l'uno o l'altro? Un Secret Kubernetes è sufficiente per gestire credenziali di produzione o serve un tool dedicato come HashiCorp Vault?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["kubernetes", "secrets_management", "vault", "sicurezza"],
+      "structural_conflict": "I Secret Kubernetes sono codificati base64, non criptati a riposo di default. Per ambienti non-produzione sono accettabili; per produzione con requisiti di compliance, un secrets manager esterno è necessario. La risposta dipende dal livello di sicurezza richiesto."
+    },
+    {
+      "prompt": "Un team di 6 sviluppatori lavora su un monorepo con 3 servizi Node.js. Ogni push su main triggera la CI che builda e testa TUTTI e 3 i servizi, anche se la modifica ha toccato solo un file di un servizio. La pipeline CI impiega 18 minuti. Come si ottimizza la pipeline per eseguire solo build e test dei servizi effettivamente modificati?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["ci_cd", "monorepo", "pipeline_optimization", "build_cache"],
+      "structural_conflict": "La soluzione standard è path filtering (changed files detection) + build caching. Strumenti come Turborepo o Nx risolvono nativamente il problema per monorepo Node.js. Non c'è un conflitto reale — il pattern è consolidato."
+    },
+    {
+      "prompt": "Perché il principio di immutabilità delle immagini Docker è fondamentale in produzione? Un team propone di fare `docker exec` in produzione per applicare hotfix urgenti anziché rebuilddare e redeployare l'immagine. Spiegare perché questa pratica è pericolosa e quale è l'alternativa corretta.",
+      "conflict_type": ["risk_assessment"],
+      "difficulty": "easy",
+      "tags": ["docker", "immutabilita", "hotfix", "best_practice"],
+      "structural_conflict": "Nessun conflitto reale: docker exec in produzione rompe la riproducibilità, l'auditabilità e il rollback. L'alternativa è sempre rebuild + redeploy con pipeline accelerata. Il trade-off tempo di fix vs sicurezza ha una risposta chiara."
+    },
+    {
+      "prompt": "Un team di 3 ingegneri SRE vuole introdurre SLO (Service Level Objectives) per un'API che serve 50M request/giorno. L'API ha latenza p50 di 45ms e p99 di 800ms. Il business richiede un uptime del 99.9%. Quali SLI (Service Level Indicators) devono misurare, come definire gli SLO correttamente, e qual è l'error budget mensile in minuti e in richieste fallite?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["slo", "sli", "sla", "error_budget", "reliability"],
+      "structural_conflict": "La definizione di SLI/SLO è un processo ben documentato (Google SRE book). L'error budget per 99.9% è ~43.2 minuti/mese o ~50K richieste/giorno fallite. Il conflitto è minimo: la scelta degli SLI giusti (latenza, availability, correctness) dipende dal business, non da un trade-off tecnico."
+    },
+    {
+      "prompt": "Un'azienda e-commerce con 120K ordini/giorno su AWS spende 85K$/mese. Il breakdown: 35K$ su EC2 (80 istanze, di cui 30 sono idle il 70% del tempo), 20K$ su RDS Multi-AZ, 15K$ su data transfer, 15K$ su EBS/S3. Il CTO chiede di ridurre del 40% senza degradare performance. Opzioni: (A) migrare le 30 istanze idle a Spot Instances — risparmio 60-70% ma rischio interruzione; (B) rightsizing + Reserved Instances 1 anno — risparmio 30-40% garantito ma lock-in; (C) migrare a Graviton (ARM) — risparmio 20% su compute ma richiede testing di compatibilità; (D) implementare autoscaling aggressivo con scale-to-zero notturno. L'e-commerce ha picchi Black Friday 10x e picchi diurni 3x rispetto alla notte. Quale combinazione di strategie è corretta?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["cloud_cost_optimization", "aws", "spot_instances", "reserved_instances", "autoscaling"],
+      "structural_conflict": "Spot Instances risparmiano di più ma sono rischiose per workload stateful. Reserved Instances sono sicure ma vincolano per 1 anno e non coprono i picchi. Graviton è un risparmio certo ma richiede validazione. Autoscaling risolve il waste notturno ma non il costo base diurno. Nessuna singola strategia raggiunge il -40% richiesto senza combinare approcci."
+    },
+    {
+      "prompt": "Un'azienda con 50 microservizi su Kubernetes (EKS) deve scegliere la strategia di monitoring. Opzione A: stack self-hosted Prometheus + Grafana + Loki + Tempo — costo infrastrutturale ~8K$/mese, 2 FTE per mantenere, ma nessun vendor lock-in e pieno controllo. Opzione B: Datadog con APM, logs e infra — ~25K$/mese per 50 servizi e 200 host, ma zero manutenzione e correlazione automatica tra metriche, log e trace. Opzione C: AWS CloudWatch + X-Ray — ~12K$/mese, integrazione nativa EKS, ma dashboard limitate e vendor lock-in AWS. Il team SRE è di 4 persone. MTTR attuale: 45 minuti. Target MTTR: 15 minuti.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["monitoring", "prometheus", "datadog", "cloudwatch", "observability", "mttr"],
+      "structural_conflict": "Prometheus è economico ma richiede 2 FTE su un team di 4 (50% del team solo su monitoring). Datadog costa 3x ma riduce il MTTR grazie alla correlazione automatica. CloudWatch è il compromesso ma ha dashboard inferiori. Il trade-off è costo operativo vs costo monetario, e per raggiungere MTTR 15 min serve correlazione forte tra segnali."
+    },
+    {
+      "prompt": "Un team di 8 sviluppatori con 12 microservizi deve scegliere la strategia GitOps per i deployment su Kubernetes. Opzione A: ArgoCD con un repository di manifesti separato (app-of-apps pattern) — separation of concerns, audit trail, ma doppio PR per ogni feature (codice + manifesti). Opzione B: FluxCD con manifesti nello stesso repo del codice — workflow più semplice, ma il repo diventa un mix di codice applicativo e configurazione infrastrutturale. Opzione C: Helm charts in un chart repository centralizzato con ArgoCD — riusabilità, ma complessità dei template Helm e versioning dei chart. Deploy frequency target: 10 deploy/giorno.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["gitops", "argocd", "fluxcd", "helm", "kubernetes", "deployment"],
+      "structural_conflict": "ArgoCD + repo separato è il gold standard per audit e compliance ma raddoppia il friction per ogni deploy. FluxCD in-repo è più veloce ma mescola concerns. Helm è riusabile ma i template diventano illeggibili. Con 10 deploy/giorno, il friction del doppio PR è un problema reale di developer experience."
+    },
+    {
+      "prompt": "Un'azienda SaaS con 99.95% SLA deve implementare disaster recovery. L'applicazione è su AWS eu-west-1 (Irlanda): 3 EKS cluster, PostgreSQL RDS Multi-AZ, Redis ElastiCache, S3. RPO richiesto: 5 minuti. RTO richiesto: 30 minuti. Opzioni: (A) pilot light in eu-central-1 (Francoforte) — infrastruttura minima sempre accesa, scale-up in caso di failover, costo +15% ma RTO ~45 min; (B) warm standby — replica attiva al 30% della capacità, costo +35% ma RTO ~15 min; (C) multi-region active-active — zero RTO, ma costo +80%, complessità di data sync cross-region e il team non ha mai gestito un setup active-active. Il database ha 2TB con 5K write/secondo.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["disaster_recovery", "rto", "rpo", "multi_region", "aws", "failover"],
+      "structural_conflict": "Pilot light è economico ma non rispetta l'RTO di 30 min (stimato 45 min). Warm standby rispetta RTO e RPO ma costa +35%. Active-active ha zero downtime ma raddoppia quasi il costo e la complessità di sync cross-region con 5K write/sec è enorme. Il conflitto è tra il costo del DR e il costo di un'ora di downtime (che per un SaaS 99.95% è ~22 minuti/mese di error budget)."
+    },
+    {
+      "prompt": "Un team di 15 sviluppatori ha un monolite Java (Spring Boot) che deploya 1 volta a settimana con 2 ore di downtime per release. Vogliono passare a microservizi. Il monolite ha 800K righe di codice, 45 entità di dominio fortemente accoppiate, e un database Oracle condiviso. Opzioni: (A) strangler fig pattern — estrai un servizio alla volta, coesistenza col monolite per 18-24 mesi, costo di mantenere entrambi i sistemi; (B) big bang rewrite — 6 mesi di feature freeze, riscrivi tutto in microservizi, deploy unico, ma il business non accetta feature freeze; (C) modular monolith prima — decomposizione interna in moduli con API boundary, poi estrazione graduale, 12 mesi di refactoring prima di avere un singolo microservizio. La pressione business è forte: il competitor rilascia feature settimanali.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["microservizi", "monolite", "strangler_fig", "migrazione", "architettura"],
+      "structural_conflict": "Strangler fig è il pattern corretto ma richiede 18-24 mesi di doppia manutenzione. Big bang è impossibile (feature freeze rifiutato). Modular monolith è il più sicuro ma non produce risultati visibili per 12 mesi. La pressione competitiva richiede velocità ma la migrazione richiede prudenza — le due forze sono strutturalmente opposte."
+    },
+    {
+      "prompt": "Un'azienda con 30 sviluppatori gestisce 25 repository Git separati, ciascuno con la propria pipeline CI/CD. Ogni servizio ha versioni diverse di Node.js (da 16 a 22), dipendenze duplicate, e configurazioni CI/CD copiate e divergenti. Il 20% del tempo degli sviluppatori è speso in manutenzione CI/CD cross-repo. Proposta: migrare tutto a un monorepo con Nx o Turborepo. Rischi: Git performance su repo >5GB, CI che richiede hardware più potente, blame e ownership meno chiari. È la scelta giusta o ci sono alternative migliori?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["monorepo", "polyrepo", "nx", "turborepo", "developer_experience"],
+      "structural_conflict": "Il monorepo centralizza la governance e riduce il 20% di waste, ma introduce problemi di scala (Git, CI) e richiede tooling sofisticato. Il polyrepo mantiene l'isolamento ma perpetua la divergenza. La vera alternativa è un polyrepo con shared CI templates e dependency management centralizzato, che però richiede discipline che il team non ha dimostrato."
+    },
+    {
+      "prompt": "Un team di 5 persone gestisce un cluster Kubernetes di 40 nodi su GKE per un'applicazione con 20 microservizi. Le risorse sono sempre overprovisionate: i pod richiedono 2x la CPU e 3x la RAM che effettivamente usano (requests molto alti rispetto all'usage reale). Il costo mensile è 35K$. Abbassare i requests rischia OOMKill sotto picchi improvvisi. Mantenere l'overprovision costa 15K$/mese in più. Come si affronta correttamente il rightsizing dei pod Kubernetes senza rischiare instabilità?",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["kubernetes", "rightsizing", "resource_management", "vpa", "cost_optimization"],
+      "structural_conflict": "Requests troppo alti = spreco. Requests troppo bassi = OOMKill e CPU throttling. VPA (Vertical Pod Autoscaler) automatizza ma può causare restart in produzione. Goldilocks/kubecost analizzano ma le raccomandazioni sono basate su dati storici che non catturano i picchi futuri. Il conflitto è tra risparmio e stabilità, senza dati perfetti sui picchi futuri."
+    },
+    {
+      "prompt": "Un'azienda fintech deve scegliere dove ospitare la propria infrastruttura. Opzioni: (A) cloud pubblico AWS — scalabilità infinita, pay-as-you-go, ma i dati bancari sono soggetti a regolamentazione che richiede residenza dati in Italia e audit fisico dei datacenter; (B) on-premise in datacenter certificato Tier III — compliance totale, latenza minima al core banking, ma CapEx di 500K€ e 3 FTE per gestirlo; (C) cloud privato (OpenStack su hardware dedicato in datacenter italiano) — compromesso, ma OpenStack è complesso e richiede competenze rare. Il team attuale è di 4 SRE con esperienza solo AWS. Traffico: 10K transazioni/minuto con picchi a 50K.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["on_premise", "cloud", "compliance", "fintech", "data_residency"],
+      "structural_conflict": "AWS è il più capace tecnicamente ma la compliance sulla residenza dati limita le region disponibili (Milano) e l'audit fisico non è garantito. On-premise garantisce compliance ma il team non ha competenze e il CapEx è alto. OpenStack è il compromesso ma è notoriamente complesso. Il team ha skill solo cloud — qualsiasi opzione non-cloud richiede assunzioni o formazione."
+    },
+    {
+      "prompt": "Un platform team di 3 ingegneri deve costruire un Internal Developer Platform (IDP) per 60 sviluppatori su 8 team. Obiettivo: self-service per creare ambienti, deployare, e monitorare senza ticket ops. Opzioni: (A) Backstage (Spotify) — framework open-source, plugin ecosystem, ma richiede 6+ mesi di customizzazione e un team dedicato; (B) Humanitec o Port — platform-as-a-service commerciali, pronti in settimane, ma 50-100K$/anno e dipendenza dal vendor; (C) soluzione custom con CLI interna + Terraform modules + ArgoCD templates — massima flessibilità ma 12+ mesi di sviluppo e mantenimento perpetuo. Gli sviluppatori oggi aspettano in media 3 giorni per un ambiente di staging.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["platform_engineering", "idp", "backstage", "developer_experience", "self_service"],
+      "structural_conflict": "Backstage è il gold standard ma richiede un investimento di 6+ mesi da un team di 3 (100% capacity per mesi). Le soluzioni commerciali sono veloci ma costose e creano dipendenza. La soluzione custom è la più flessibile ma il costo di manutenzione perpetua è insostenibile per 3 persone. Il costo di 3 giorni di attesa × 60 sviluppatori è enorme — ma qualsiasi soluzione richiede tempo per materializzarsi."
+    },
+    {
+      "prompt": "Un'azienda vuole implementare multi-cloud (AWS + GCP) per evitare vendor lock-in. L'applicazione attuale è su AWS con 15 servizi, 4 database RDS, ElastiCache, SQS, e Lambda. Il CTO argomenta che il rischio di un outage AWS totale giustifica il costo. Il team SRE argomenta che multi-cloud raddoppia la complessità operativa (2 IAM, 2 networking models, 2 monitoring stack) e richiede un abstraction layer che limita l'uso dei servizi managed. Il budget per il porting è 300K$ e 6 mesi. È una decisione giusta?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["multi_cloud", "vendor_lock_in", "aws", "gcp", "portabilita"],
+      "structural_conflict": "Il multi-cloud elimina il rischio di vendor lock-in ma introduce complessità operativa enorme. I servizi managed (RDS, SQS, Lambda) non hanno equivalenti 1:1 su GCP — il porting richiede riscritture. L'abstraction layer (es. Kubernetes + Crossplane) riduce il lock-in ma impedisce di usare le feature avanzate di ogni cloud. Il rischio di un outage AWS totale è statisticamente bassissimo (>99.99% region availability) — il costo del multi-cloud potrebbe non giustificare il rischio eliminato."
+    },
+    {
+      "prompt": "Un team di 10 sviluppatori deploya 5 volte al giorno su un cluster Kubernetes. I log sono distribuiti tra 40 pod e 3 namespace. Attualmente usano `kubectl logs` manualmente. Devono implementare log aggregation centralizzata. Opzioni: (A) EFK stack (Elasticsearch + Fluentd + Kibana) — standard de facto, potente, ma Elasticsearch richiede 3 nodi dedicati (12 vCPU, 48GB RAM, 1TB SSD) e tuning costante; (B) Loki + Grafana — leggero, non indicizza il contenuto dei log (solo label), costo storage 5x inferiore, ma le ricerche full-text sono lente; (C) CloudWatch Logs con Container Insights — zero infrastruttura, ma 0.50$/GB ingerito e i log sono 200GB/mese = 100$/mese ma le query sono limitate. Volume: 200GB/mese di log, retention richiesta: 90 giorni.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["logging", "elk", "loki", "cloudwatch", "log_aggregation", "kubernetes"],
+      "structural_conflict": "EFK è il più potente per search ma richiede risorse dedicate significative (3 nodi = ~2K$/mese solo per Elasticsearch). Loki è 5x più economico ma le ricerche full-text su 200GB sono lente — e durante un incident, la velocità di ricerca è critica. CloudWatch è economico ma le query sono limitate e il lock-in è totale. Il trade-off è potenza di ricerca vs costo infrastrutturale."
+    },
+    {
+      "prompt": "Un'azienda con 200 sviluppatori ha Terraform state files gestiti localmente da ogni team. Ci sono 8 team che modificano l'infrastruttura indipendentemente. Negli ultimi 3 mesi ci sono stati 4 incidenti dovuti a state corruption e 2 a modifiche concorrenti. Devono centralizzare la gestione dello state. Opzioni: (A) Terraform Cloud — state remoto, locking, run history, ma con il modello RUM (Resources Under Management) a ~$0.00014/risorsa/ora, con 400 risorse costa ~$350-400/mese = ~4.2K$/anno; (B) S3 + DynamoDB per state locking — gratis (quasi), ma nessuna UI, nessun run audit trail, e ogni team deve configurare il backend; (C) Spacelift o env0 — orchestrazione Terraform completa, policy-as-code, ma vendor lock-in e 60-100K$/anno. La compliance richiede audit trail di ogni modifica infrastrutturale.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["terraform", "state_management", "iac", "compliance", "audit"],
+      "structural_conflict": "S3+DynamoDB è quasi gratis ma non ha audit trail nativo — e la compliance lo richiede. Terraform Cloud ha audit trail ma il costo scala con le risorse gestite. Spacelift/env0 hanno tutto ma costano di più e creano lock-in. La compliance rende la soluzione gratis insufficiente, ma il budget per le soluzioni pagate deve essere giustificato."
+    },
+    {
+      "prompt": "Un team SRE gestisce un incidente P1 (servizio completamente down) per un'API che serve 500K utenti. L'MTTR medio attuale è 90 minuti. Il postmortem rivela che il 60% del tempo è speso in diagnosis (capire cosa è rotto), non in fix. Vogliono implementare un incident management framework. Opzioni: (A) PagerDuty + Datadog con runbook automatici — correlazione alert→dashboard→runbook, ma richiede 3 mesi di setup e i runbook devono essere scritti per ogni failure mode; (B) Grafana OnCall + incident.io — open-source + SaaS per coordination, ma manca la correlazione automatica di PagerDuty; (C) processo manuale migliorato con post-incident review strutturati e tabletop exercises mensili — zero costo tool, ma dipende dalla disciplina del team. Target: MTTR < 30 minuti.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["incident_management", "mttr", "pagerduty", "runbook", "sre"],
+      "structural_conflict": "PagerDuty + runbook automatici riducono il tempo di diagnosis ma richiedono 3 mesi di investimento upfront e manutenzione continua dei runbook. Grafana OnCall è economico ma la correlazione manuale non riduce abbastanza il tempo di diagnosis. Il processo manuale è gratis ma l'MTTR dipende dalla disciplina — e sotto stress (P1 alle 3 di notte) la disciplina crolla."
+    },
+    {
+      "prompt": "Un cluster Kubernetes in produzione con 60 nodi e 150 pod ha subito 3 outage negli ultimi 2 mesi causati da misconfiguration: un developer ha deployato un pod con `privileged: true`, un altro ha esposto un servizio interno con `LoadBalancer` anziché `ClusterIP`, un terzo ha dimenticato i resource limits causando un node OOM. Il team vuole implementare policy enforcement. Opzioni: (A) OPA/Gatekeeper — standard CNCF, Rego language, ma la curva di apprendimento di Rego è ripida; (B) Kyverno — policy in YAML nativo, più semplice, ma meno potente di OPA per policy complesse; (C) Pod Security Standards (PSS) built-in di Kubernetes — zero tool aggiuntivi, ma solo 3 profili predefiniti (privileged, baseline, restricted) e nessuna customizzazione. Servono almeno 25 policy custom.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["kubernetes", "policy_enforcement", "opa", "kyverno", "sicurezza"],
+      "structural_conflict": "OPA è il più potente ma Rego è un linguaggio logico che pochi developer comprendono — le policy diventano unmaintainable. Kyverno è YAML-native e accessibile ma non gestisce policy complesse (cross-resource validation). PSS è troppo limitato per 25 policy custom. Il trade-off è potenza vs accessibilità — e le policy che nessuno capisce sono peggio di nessuna policy."
+    },
+    {
+      "prompt": "Un team di 12 sviluppatori ha un'applicazione containerizzata con 8 microservizi. Devono decidere l'orchestratore di container per produzione. Opzioni: (A) EKS (Kubernetes managed su AWS) — standard industria, massima flessibilità, ma il team non ha esperienza K8s e la curva di apprendimento è 3-6 mesi, costo cluster ~300$/mese + EC2 per i nodi; (B) ECS Fargate — serverless container, zero gestione nodi, più semplice, ma meno flessibile (no DaemonSet, no custom scheduler, no service mesh nativo), costo 20-30% superiore a EC2 per workload steady-state; (C) Docker Compose su EC2 con deploy script custom — il team lo conosce già, costo minimo, ma zero self-healing, zero auto-scaling, zero rolling update nativo. SLA richiesto: 99.9%.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["kubernetes", "ecs", "fargate", "container_orchestration", "team_skill"],
+      "structural_conflict": "EKS è il più capace ma il team non ha esperienza — e Kubernetes mal configurato è peggio di Docker Compose. Fargate è semplice ma costa di più e manca di funzionalità avanzate. Docker Compose non garantisce 99.9% senza self-healing. Il gap di competenza del team è il vero vincolo — la scelta migliore dipende da quanto tempo hanno per imparare prima del go-live."
+    },
+    {
+      "prompt": "Un'azienda ha 15 microservizi che comunicano via REST sincrono. Sotto carico (100K request/min), il failure di un singolo servizio causa cascade failure su 8 servizi dipendenti (domino effect). L'MTTR per cascade failure è 2 ore. Proposta A: implementare circuit breaker pattern (Hystrix/Resilience4j) — limita il blast radius ma ogni servizio deve essere modificato. Proposta B: service mesh (Istio/Linkerd) — circuit breaking, retry, timeout a livello di infrastruttura senza modificare il codice, ma aggiunge latenza di 2-5ms per hop e 30% di overhead memoria per i sidecar proxy. Proposta C: passare a comunicazione asincrona con event bus (Kafka/RabbitMQ) per i flow non-critici — elimina il coupling temporale ma richiede riscrittura architetturale. I 15 servizi hanno latenza target p99 < 200ms.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["microservizi", "circuit_breaker", "service_mesh", "istio", "resilienza", "cascade_failure"],
+      "structural_conflict": "Circuit breaker in-code richiede modifiche a 15 servizi ma è chirurgico. Service mesh è trasparente ma aggiunge latenza (2-5ms × N hop può superare i 200ms target per catene lunghe) e memoria. Kafka elimina il coupling ma riscrivere 15 servizi per event-driven è un progetto da 6+ mesi. Il vincolo p99 < 200ms limita sia il service mesh (latenza) sia l'event bus (latenza asincrona). Nessuna soluzione singola risolve tutto."
+    },
+    {
+      "prompt": "Un'azienda con 300 sviluppatori, 80 microservizi e 4 cluster Kubernetes (dev, staging, prod-eu, prod-us) deve decidere come gestire i deployment manifest. Attualmente ogni team ha i propri Helm chart, con 80 chart separati che hanno configurazioni duplicate al 70%. Ogni upgrade di una dipendenza comune (es. sidecar di logging) richiede PR su 80 repository. Proposta A: chart library centralizzata — un base chart con values.yaml per servizio, riduce duplicazione ma diventa un bottleneck se il platform team (3 persone) è il collo di bottiglia per ogni modifica. Proposta B: Kustomize con overlays — elimina il templating di Helm, base + patch per ambiente, ma perde il versioning semantico dei chart. Proposta C: CUE o Jsonnet per generare manifesti — type-safe, composable, ma linguaggio nuovo che 300 sviluppatori devono imparare.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["kubernetes", "helm", "kustomize", "manifest_management", "platform_engineering", "scala"],
+      "structural_conflict": "Il chart library centralizzato riduce duplicazione ma crea un single point of failure organizzativo (3 persone per 80 team). Kustomize elimina la complessità di Helm ma perde il versioning dei chart. CUE/Jsonnet è il più corretto tecnicamente ma l'adozione da parte di 300 sviluppatori è irrealistica a breve termine. Il conflitto è tra centralizzazione (efficienza) e autonomia dei team (velocità) — e a 300 sviluppatori, entrambe sono necessarie."
+    },
+    {
+      "prompt": "Un'azienda SaaS con 99.99% SLA (4.3 minuti di downtime/mese) deve implementare zero-downtime database migration per PostgreSQL. Il database ha 500GB, 15K query/secondo, e le migration richiedono ALTER TABLE su tabelle da 200M+ righe. Opzioni: (A) `ALTER TABLE ... ADD COLUMN` con default — PostgreSQL 11+ è instant per NOT NULL con default, ma ALTER TABLE con constraint validation su 200M righe acquista un ACCESS EXCLUSIVE lock per secondi; (B) expand-and-contract pattern con tabelle shadow — zero lock, ma raddoppia lo storage temporaneamente e richiede trigger per sync, il trigger aggiunge 10-15% overhead su ogni write; (C) gh-ost o pg-repack — tool che copiano la tabella in background, ma a 15K query/sec il catch-up phase può non convergere mai se il write rate supera la copia; (D) online schema change con logical replication — crea una replica con il nuovo schema e fa switchover, ma richiede downtime di 2-3 secondi per lo switchover. Il 4.3 minuti/mese di error budget è già consumato all'80% dal normale tasso di errore.",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["database_migration", "postgresql", "zero_downtime", "schema_change", "sla"],
+      "structural_conflict": "ALTER TABLE instant funziona per ADD COLUMN con default ma non per constraint validation su tabelle grandi. Expand-contract è zero lock ma l'overhead dei trigger a 15K q/s è misurabile. gh-ost/pg-repack potrebbe non convergere a write rate elevato. Logical replication switchover richiede 2-3 secondi di downtime — che consuma metà dell'error budget rimanente. Con 99.99% SLA e error budget quasi esaurito, OGNI opzione è rischiosa."
+    },
+    {
+      "prompt": "Un'azienda con 100 sviluppatori ha adottato Terraform per IaC 2 anni fa. Lo state è in S3 con locking DynamoDB. Hanno 400 risorse AWS gestite da Terraform. Il problema: `terraform plan` impiega 8 minuti perché Terraform interroga l'API AWS per ogni risorsa. Un `terraform apply` che modifica 2 risorse richiede 12 minuti. I developer evitano Terraform e creano risorse manualmente dalla console, causando drift. Proposta A: spezzare il monolite Terraform in 20 workspace/state separati — plan più veloce ma le dipendenze cross-state richiedono `terraform_remote_state` e diventano fragili. Proposta B: migrare a Pulumi con parallelismo nativo — più veloce, ma migrare 400 risorse ha rischio di state corruption. Proposta C: migrare a OpenTofu + Terragrunt con orchestrazione parallela — compatibile con HCL esistente, ma aggiunge layer di complessità. Il drift dalla console è il problema urgente.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["terraform", "iac", "drift", "pulumi", "terragrunt", "state_management"],
+      "structural_conflict": "Spezzare lo state risolve la lentezza ma introduce dipendenze fragili cross-state. Pulumi è più veloce ma migrare 400 risorse è ad alto rischio. Terragrunt risolve l'orchestrazione ma è un layer in più. Nessuna soluzione affronta il problema culturale: i developer creano risorse dalla console perché Terraform è troppo lento. La soluzione tecnica senza cambiamento di processo è insufficiente."
+    },
+    {
+      "prompt": "Un'azienda media (500 dipendenti, 40 sviluppatori) ha tutta l'infrastruttura su AWS. Il board chiede una strategia di exit per ridurre la dipendenza da AWS dopo il recente aumento dei prezzi del 15%. L'infrastruttura usa: EKS, RDS PostgreSQL, ElastiCache Redis, SQS, SNS, Lambda (200 funzioni), DynamoDB (3 tabelle critiche), S3 (50TB), CloudFront, Route53, Cognito. Stimare il costo e la fattibilità di una migrazione a GCP o Azure, identificando quali servizi sono portabili (settimane), quali richiedono riscrittura (mesi), e quali sono trap di vendor lock-in praticamente irreversibili.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["vendor_lock_in", "cloud_migration", "aws", "gcp", "azure", "portabilita"],
+      "structural_conflict": "EKS→GKE è portabile (settimane). RDS PostgreSQL→Cloud SQL è portabile (giorni). Ma Lambda (200 funzioni) non ha equivalente 1:1, DynamoDB richiede riscrittura verso Bigtable o Firestore con modello dati diverso, Cognito→Firebase Auth richiede migrazione utenti. SQS/SNS→Pub/Sub è fattibile ma i consumer devono essere riscritti. Il costo reale della migrazione è 12-18 mesi e 1-2M$ — potenzialmente superiore al risparmio dal 15% di aumento prezzi. Il board potrebbe non capire che vendor lock-in non è binario."
+    },
+    {
+      "prompt": "Un sistema di pagamenti elabora 50K transazioni/ora con un SLA di 99.999% (5.2 minuti/anno di downtime). Il deploy attuale è blue-green con switch DNS (TTL 60s). Il problema: durante lo switch, il 5% dei client ha cache DNS vecchia e continua a colpire l'ambiente old per 60-300 secondi. Per un sistema di pagamenti, questo significa transazioni perse o duplicate. Opzioni: (A) ridurre il TTL DNS a 5 secondi — riduce il gap ma aumenta il carico DNS e alcuni resolver ignorano TTL bassi; (B) passare a weighted routing con traffic shift graduale 1%→5%→25%→100% — canary-like, ma richiede load balancer Layer 7 con session affinity per non rompere transazioni in-flight; (C) implementare graceful drain con dual-write — entrambi gli ambienti accettano traffico durante la transizione e scrivono sullo stesso database, ma il dual-write introduce rischi di race condition; (D) connection draining al livello del load balancer con timeout di 5 minuti — le connessioni esistenti completano, le nuove vanno al new, ma 5 minuti di drain significano 5 minuti di doppia infrastruttura sotto carico.",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["deployment", "blue_green", "dns", "pagamenti", "zero_downtime", "alta_affidabilita"],
+      "structural_conflict": "DNS TTL basso non è rispettato da tutti i resolver — il problema non è eliminabile a livello DNS. Weighted routing è sofisticato ma le transazioni in-flight possono essere interrotte durante il shift. Dual-write risolve la transizione ma introduce race condition su un sistema di pagamenti — inaccettabile. Connection draining è il più sicuro ma richiede doppia infrastruttura per 5 minuti. Con 99.999% SLA, ogni opzione che introduce anche 10 secondi di rischio è un problema."
+    },
+    {
+      "prompt": "Un'azienda healthcare con dati HIPAA-compliant ha un cluster Kubernetes di 25 nodi con 60 microservizi. Il team security richiede: encryption at rest, encryption in transit (mTLS), network segmentation, audit logging di ogni accesso, e vulnerability scanning continuo. Opzioni: (A) Istio service mesh per mTLS + Falco per runtime security + Trivy per image scanning — stack open-source completo ma 3 tool da mantenere, Istio aggiunge complessità operativa enorme (CRD, sidecar injection, certificate rotation); (B) Cilium con WireGuard per encryption + Tetragon per runtime observability — più leggero di Istio (eBPF, no sidecar), ma meno maturo per mTLS e il team non conosce eBPF; (C) AWS App Mesh + GuardDuty + Inspector — managed, zero manutenzione, ma vendor lock-in e copertura meno profonda. La compliance richiede report di audit trimestrali con evidence di ogni controllo.",
+      "conflict_type": ["technical_disagreement", "risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["kubernetes", "sicurezza", "service_mesh", "istio", "cilium", "hipaa", "compliance"],
+      "structural_conflict": "Istio è il più completo per mTLS e audit ma la complessità operativa è nota per causare outage se mal configurato — un rischio per un sistema healthcare. Cilium è più performante (eBPF) ma meno maturo per certificate management e il team non ha skill eBPF. App Mesh è managed ma il vendor lock-in è problematico per compliance che richiede portabilità. La compliance HIPAA richiede evidence specifiche che ogni soluzione genera in formato diverso — e il report trimestrale deve essere consistente."
+    },
+    {
+      "prompt": "Un'azienda con 50 sviluppatori ha un sistema CI/CD su Jenkins self-hosted (2 controller, 15 agent). Jenkins è lento (build medie 25 minuti, coda media 10 minuti), instabile (3 outage/mese del controller), e il Jenkinsfile è diventato 800+ righe di Groovy spaghetti per ogni progetto. Il team vuole migrare. Opzioni: (A) GitHub Actions — hosted, YAML-based, marketplace di action, ma i runner hosted sono lenti per build Java (4 vCPU) e i self-hosted runner richiedono gestione; (B) GitLab CI/CD — più potente di GitHub Actions per pipeline complesse (DAG, child pipelines), ma richiede migrare anche i repository da GitHub a GitLab; (C) Dagger — pipeline as code in Go/Python/TypeScript, eseguibile ovunque, ma progetto giovane e il team deve imparare un nuovo framework; (D) Buildkite — agent self-hosted, UI cloud, scala bene, ma 15$/utente/mese (piano Standard) e le pipeline sono YAML/Bash. Vincolo: 50 build/giorno, build media target 10 minuti, budget 3K$/mese.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["ci_cd", "jenkins", "github_actions", "gitlab", "migrazione", "build_performance"],
+      "structural_conflict": "Vincolo budget come hard constraint: 3K$/mese = 36K$/anno. Buildkite: 15$/utente × 50 = 750$/mese + runner self-hosted. GitHub Actions: free per public, ma self-hosted runner per build Java pesanti ha costo infra simile a Jenkins. GitLab: migrazione repo = switching cost non-monetario enorme (50 dev × N giorni di disruption). Dagger: rischio di adozione tecnologia immatura in team di 50. Il problema reale e che il MOTIVO della migrazione (Jenkinsfile 800 righe di Groovy spaghetti) non e risolto dal cambio di tool — e risolto dalla riscrittura delle pipeline, che e necessaria con qualsiasi tool. Il costo della migrazione domina il costo del tool."
+    },
+    {
+      "prompt": "Un team gestisce un'applicazione distribuita su 3 region AWS (us-east-1, eu-west-1, ap-southeast-1) con utenti globali. Il database primario è Aurora PostgreSQL in us-east-1 con read replica in eu-west-1. Le write devono andare al primary (us-east-1), causando 120ms di latenza per gli utenti europei e 250ms per quelli asiatici. Il 40% del traffico è write. Opzioni: (A) Aurora Global Database con write forwarding — le write da eu-west-1 vengono inoltrate a us-east-1, latenza invariata ma trasparente all'applicazione; (B) CockroachDB multi-region con write regionali — ogni region scrive localmente, replica asincrona, ma eventual consistency per letture cross-region; (C) application-level sharding per region — ogni region ha il proprio database master, ma gli utenti che viaggiano tra regioni perdono la consistenza; (D) CRDT-based sync con DynamoDB Global Tables — write locali ovunque, conflict resolution automatica, ma il modello dati deve essere ripensato completamente per CRDT. Il sistema gestisce ordini e-commerce — le write duplicate o perse significano ordini duplicati o persi.",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["multi_region", "database", "latenza", "consistency", "aurora", "global_distribution"],
+      "structural_conflict": "Violazione del teorema CAP con vincoli business: il sistema richiede simultaneamente Consistency (ordini non duplicati/persi), Availability (bassa latenza globale) e Partition Tolerance. Aurora write forwarding mantiene C e P ma sacrifica A (120-250ms). CockroachDB offre A e P ma la consistency e eventual per read cross-region — un utente potrebbe vedere ordine 'non confermato' per secondi. CRDT sacrifica strong consistency: l'operazione 'crea ordine' non e commutativa (due ordini simultanei dallo stesso utente con ultimo articolo in stock generano conflitto non risolvibile automaticamente). Il 40% write rate e la variabile critica: sotto il 10% write, la replica asincrona basta; al 40%, ogni soluzione introduce un trade-off osservabile dall'utente."
+    },
+    {
+      "prompt": "Un'azienda con 200 sviluppatori e 120 microservizi deve standardizzare l'observability. Attualmente: 30% dei servizi usa structured logging (JSON), 40% usa testo libero, 30% non ha logging consistente. Le metriche sono in Prometheus per 50 servizi, StatsD per 20, e 50 non espongono metriche. I trace sono assenti. Proposta: adottare OpenTelemetry come standard unico per logs, metriche e trace. Il rollout richiede modifiche a 120 servizi, formazione di 200 sviluppatori, e migrazione dei backend. Stimare il costo e il piano di rollout realistico, considerando che il team platform è di 5 persone e non si può fermare lo sviluppo feature.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["observability", "opentelemetry", "logging", "metriche", "tracing", "rollout"],
+      "structural_conflict": "OpenTelemetry è lo standard corretto ma il rollout su 120 servizi con 5 persone è un progetto da 12-18 mesi. Forzare l'adozione simultanea ferma lo sviluppo feature. L'adozione graduale crea un periodo lungo di dual-stack (vecchio + OTel) che raddoppia la complessità di debug. La formazione di 200 sviluppatori richiede contenuti, tempo, e follow-up. Il conflitto è tra la correttezza della soluzione (standard unico) e la realtà operativa (120 servizi da migrare senza fermare il business)."
+    },
+    {
+      "prompt": "Un team SRE gestisce un cluster Kubernetes che serve 500K request/secondo con latenza p99 < 100ms. Devono implementare autoscaling. L'HPA (Horizontal Pod Autoscaler) basato su CPU è insufficiente: la CPU rimane al 30% durante i picchi di traffico perché l'applicazione è I/O-bound (database wait). Opzioni: (A) HPA basato su metriche custom (request rate da Prometheus) — scala sulla metrica giusta ma il feedback loop è 30-60 secondi, durante i quali il traffico aumenta del 300%; (B) KEDA (Kubernetes Event Driven Autoscaling) con trigger su queue length/request rate — più reattivo, ma aggiunge un componente critico nel path di scaling; (C) predictive autoscaling basato su pattern storici (AWS Predictive Scaling o custom ML) — pre-scala prima dei picchi, ma i picchi imprevedibili (viral event) non sono catturati; (D) overprovision fisso al 200% con VPA per ottimizzare le risorse per pod — semplice, ma spreco del 100% di risorse durante il baseline. I picchi sono: 3x diurno prevedibile + 10x eventi virali imprevedibili 2-3 volte/mese.",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["kubernetes", "autoscaling", "hpa", "keda", "scaling", "performance"],
+      "structural_conflict": "HPA custom è la scelta naturale ma il feedback loop di 30-60s è troppo lento per picchi 10x. KEDA è più reattivo ma è un single point of failure per lo scaling. Predictive funziona per i picchi diurni (3x) ma non per i virali (10x). Overprovision è l'unico che gestisce i picchi istantanei ma spreca il 100%. Il conflitto fondamentale è che i picchi prevedibili e imprevedibili richiedono strategie diverse — e nessuna singola soluzione copre entrambi."
+    },
+    {
+      "prompt": "Un'azienda con 40 sviluppatori ha un ambiente di sviluppo locale che richiede: PostgreSQL, Redis, Elasticsearch, Kafka, 5 microservizi backend, e un frontend. Il `docker-compose up` impiega 8 minuti e consuma 12GB di RAM. Il 30% dei bug report si chiude con 'works on my machine'. Opzioni: (A) remote development environment (Gitpod/Codespaces) — ambiente identico per tutti, ma latenza di rete per l'IDE e costo 25$/dev/mese; (B) Tilt o Skaffold con cluster Kubernetes locale (Minikube/Kind) — hot-reload in cluster, ma richiede 16GB+ RAM e Kubernetes locale è instabile su macOS; (C) Dev Container con VS Code — Dockerfile per ambiente, riproducibile, ma ogni dev ha la propria build e i container grandi sono lenti; (D) Telepresence — connette il laptop al cluster staging remoto, intercetta il traffico di un servizio, ma il debug è complicato e la rete aziendale ha restrizioni. Il 60% dei dev usa macOS con 16GB RAM, il 40% Linux con 32GB.",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["developer_experience", "ambiente_sviluppo", "docker", "gitpod", "remote_dev"],
+      "structural_conflict": "Gitpod/Codespaces elimina 'works on my machine' ma la latenza di rete degrada l'esperienza IDE — e il 60% del team su macOS 16GB non può correre Kubernetes locale. Tilt/Skaffold richiede RAM che il 60% non ha. Dev Containers sono riproducibili ma non eliminano il problema (build diverse). Telepresence è elegante ma le restrizioni di rete e la complessità di debug lo rendono fragile. Il vincolo hardware (60% su 16GB) elimina le soluzioni che richiedono cluster locale."
+    },
+    {
+      "prompt": "Una startup con 15 sviluppatori e 10 microservizi deve scegliere la piattaforma per il deployment. Attualmente usano Heroku ($2.5K/mese) ma stanno superando i limiti (dyno max 1GB RAM, cold start, no websocket persistente). Opzioni: (A) migrare a AWS EKS — massima flessibilità, ma richiede almeno 1 SRE dedicato e 3 mesi di setup; (B) Fly.io — deploy semplice come Heroku, edge computing, ma piattaforma giovane con outage recenti e supporto enterprise limitato; (C) Railway/Render — PaaS moderni, via di mezzo tra Heroku e AWS, ma pricing opaco sopra certi volumi e feature enterprise mancanti; (D) AWS ECS Fargate — serverless container senza gestire nodi, ma il networking è più complesso di Heroku e il cold start persiste. La startup ha Series A, 18 mesi di runway, e non può assumere un SRE a tempo pieno.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["paas", "heroku", "fly_io", "startup", "platform_choice", "ecs"],
+      "structural_conflict": "EKS è il futuro ma 1 SRE dedicato per 15 dev è il 7% del headcount solo per infra — e il runway di 18 mesi non permette investimenti a lungo termine. Fly.io è il più simile a Heroku ma gli outage recenti sono un red flag per una startup che non può permettersi downtime. Railway/Render sono PaaS moderni ma il pricing opaco è una bomba a orologeria. Fargate risolve la RAM ma non il cold start. Il vincolo 'no SRE dedicato' elimina EKS, ma nessun PaaS sostituisce completamente la flessibilità di K8s."
+    },
+    {
+      "prompt": "Un team deve implementare secrets rotation automatica per un'applicazione con 30 microservizi su Kubernetes. I secret attuali sono: 5 database password, 3 API key di terze parti, 2 certificati TLS, 8 service-to-service token. La rotation attuale è manuale (ogni 90 giorni, spesso in ritardo). Un audit di sicurezza ha richiesto rotation automatica ogni 30 giorni. Opzioni: (A) HashiCorp Vault con dynamic secrets — genera credenziali temporanee on-demand, TTL 24h, ma aggiunge un componente critico nel path di autenticazione (se Vault è down, nessun servizio si autentica); (B) AWS Secrets Manager con rotation Lambda — managed, rotation automatica per RDS, ma solo AWS e non copre API key di terze parti; (C) External Secrets Operator (ESO) + Vault/AWS SM — sincronizza secret esterni in Kubernetes Secret, ma i Kubernetes Secret sono base64 non criptati in etcd; (D) Sealed Secrets + GitOps — secret criptati nel repo Git, ma la rotation richiede commit + deploy per ogni rotazione. Le API key di terze parti non supportano rotation automatica (cambio manuale nel portale).",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["secrets_management", "vault", "rotation", "sicurezza", "kubernetes"],
+      "structural_conflict": "Vault dynamic secrets è la soluzione architettualmente corretta ma introduce un SPOF critico — Vault down = tutti i servizi down. AWS SM è managed ma non copre le API key di terze parti (che per definizione non supportano rotation automatica). ESO sincronizza ma i secret in etcd restano in chiaro. Sealed Secrets richiede deploy per ogni rotation. Il vincolo delle API key di terze parti che non supportano auto-rotation rende impossibile una soluzione 100% automatica — il audit richiede qualcosa che il vendor non supporta."
+    },
+    {
+      "prompt": "Un'azienda con 60 microservizi su Kubernetes deve implementare una strategia di testing per le pipeline CI/CD. Attualmente i test sono: unit test (80% coverage, 5 minuti), integration test (30% coverage, 25 minuti con Docker Compose), e zero end-to-end test. Il 40% dei bug in produzione sono dovuti a interazioni tra servizi che nessun test cattura. Proposta A: contract testing con Pact — verifica le interfacce tra servizi senza deployment reale, veloce, ma non testa il comportamento end-to-end. Proposta B: ambiente di staging con tutti i 60 servizi deployati e test E2E con Playwright/Cypress — cattura i bug di interazione ma l'ambiente costa 8K$/mese e i test sono flaky (30% false positive). Proposta C: test in produzione con feature flag e traffic mirroring — testa con traffico reale ma un bug nel mirror path può impattare la produzione. Il time-to-deploy target è 30 minuti dalla merge alla produzione.",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["testing", "ci_cd", "contract_testing", "e2e", "staging", "quality"],
+      "structural_conflict": "Contract testing è veloce e cattura breaking changes di interfaccia ma non i bug di comportamento (il contratto è rispettato ma la logica è sbagliata). Staging E2E cattura i bug reali ma 30% di flakiness significa che gli sviluppatori ignorano i fallimenti — e 8K$/mese per un ambiente che produce risultati inaffidabili è uno spreco. Testing in produzione è il più realistico ma il rischio è proporzionale alla criticità del sistema. Il target di 30 minuti time-to-deploy rende i test E2E di 25+ minuti un bottleneck strutturale."
+    },
+    {
+      "prompt": "Un'azienda con infrastruttura Kubernetes su AWS (EKS) deve implementare network security. Il cluster ha 80 pod in 5 namespace (frontend, backend, data, monitoring, system). Attualmente tutti i pod possono comunicare con tutti — un pod compromesso ha accesso laterale a tutto il cluster. Opzioni: (A) Kubernetes NetworkPolicy con CNI Calico — L3/L4 policy, namespace isolation, ma non ispeziona il traffico L7 (un pod può chiamare qualsiasi endpoint HTTP di un altro pod autorizzato); (B) Istio AuthorizationPolicy — L7 policy (path, method, header), mTLS automatico, ma aggiunge sidecar a tutti i pod (30% overhead memoria, 2ms latenza) e la complessità di Istio è nota; (C) Cilium con L7 policy eBPF — in-kernel, no sidecar, performance migliore, ma richiede kernel ≥5.10 e il team non ha esperienza eBPF; (D) AWS Security Groups for Pods — nativo EKS, familiare, ma limiti di 50 regole per SG e non supporta L7 filtering. La compliance richiede micro-segmentazione con logging di ogni connessione negata.",
+      "conflict_type": ["technical_disagreement", "risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["kubernetes", "network_security", "network_policy", "istio", "cilium", "micro_segmentazione"],
+      "structural_conflict": "NetworkPolicy Calico è il più semplice ma L3/L4 non basta se la compliance richiede micro-segmentazione L7. Istio è completo ma l'overhead operativo è enorme per 80 pod (sidecar injection, certificate management, debugging mTLS). Cilium è il futuro (eBPF, no sidecar) ma la maturità L7 è inferiore a Istio e richiede competenze rare. AWS SG for Pods è familiare ma il limite di 50 regole è insufficiente per 80 pod con micro-segmentazione. La compliance richiede L7 — eliminando le opzioni L3/L4 pure."
+    },
+    {
+      "prompt": "Un team DevOps gestisce 15 microservizi con 45 container image. Ogni merge su main triggera un build Docker. Il registry (ECR) contiene 12.000 immagini per un totale di 3TB. Il costo storage ECR è 300$/mese e in crescita. Le build Docker impiegano in media 8 minuti (multistage, npm install, Go compile). Opzioni per ottimizzare: (A) lifecycle policy ECR per eliminare immagini >30 giorni non taggate — riduce storage ma il rollback a versioni vecchie diventa impossibile; (B) distroless/scratch base images — riduce dimensione immagine del 60-80% ma il debugging in produzione diventa impossibile (no shell, no tools); (C) build cache con BuildKit + cache mount S3 — riduce build time a 2 minuti ma la cache invalidation è fragile; (D) Kaniko per build in-cluster senza Docker daemon — più sicuro ma 2x più lento di Docker BuildKit. Il team fa rollback alla versione precedente 2-3 volte/mese e il debugging in produzione richiede `docker exec` 5-6 volte/mese.",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["docker", "container_image", "build_optimization", "ecr", "distroless", "ci_cd"],
+      "structural_conflict": "Lifecycle policy riduce i costi ma impedisce rollback (necessario 2-3 volte/mese). Distroless riduce la dimensione ma impedisce il debugging in produzione (necessario 5-6 volte/mese). BuildKit cache riduce il build time ma la cache invalidation errata produce immagini stale. Kaniko è più sicuro ma più lento. I vincoli operativi reali (rollback frequente, debugging in prod) eliminano le soluzioni più aggressive."
+    }
+  ]
+}

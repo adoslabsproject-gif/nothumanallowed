@@ -1,0 +1,598 @@
+{
+  "domain": "sostenibilita",
+  "description": "Sostenibilità, ESG, economia circolare, SDGs, reporting di sostenibilità, greenwashing, transizione giusta",
+  "prompts": [
+    {
+      "prompt": "Cosa sono gli SDGs (Sustainable Development Goals) e quanti sono? Elenca le 5 aree tematiche principali (le '5 P') e spiega perché gli obiettivi sono interconnessi tra loro.",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "SDGs",
+        "agenda_2030",
+        "5P"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale rilevante. Domanda conoscitiva diretta."
+    },
+    {
+      "prompt": "Cos'è il reporting ESG e quali sono i tre pilastri (Environmental, Social, Governance)? Qual è la differenza tra lo standard GRI e lo standard SASB?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "ESG",
+        "reporting",
+        "GRI",
+        "SASB"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale rilevante. Domanda comparativa di framework."
+    },
+    {
+      "prompt": "Cos'è il greenwashing e come si distingue da una comunicazione ambientale legittima? Elenca almeno 5 indicatori (red flags) che suggeriscono greenwashing.",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "greenwashing",
+        "comunicazione_ambientale",
+        "red_flags"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale rilevante. Domanda definitoria con applicazione pratica."
+    },
+    {
+      "prompt": "Cos'è l'economia circolare e quali sono le differenze rispetto al semplice riciclo? Spiega il modello delle '9R' (Refuse, Rethink, Reduce, Reuse, Repair, Refurbish, Remanufacture, Repurpose, Recycle).",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "economia_circolare",
+        "9R",
+        "modelli_produttivi"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale rilevante. Domanda su framework gerarchico."
+    },
+    {
+      "prompt": "Cos'è la doppia materialità (double materiality) nella CSRD europea? Perché è diversa dalla materialità finanziaria tradizionale e cosa implica per le aziende che devono fare reporting di sostenibilità?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "doppia_materialita",
+        "CSRD",
+        "reporting"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale rilevante. Domanda su evoluzione normativa."
+    },
+    {
+      "prompt": "Cosa si intende per 'transizione giusta' (just transition) e perché è un concetto centrale nell'Accordo di Parigi? Chi sono i soggetti più vulnerabili in una transizione energetica?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "transizione_giusta",
+        "accordo_di_parigi",
+        "vulnerabilita"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale rilevante. Domanda concettuale con risvolto sociale."
+    },
+    {
+      "prompt": "Cos'è la tassonomia europea delle attività sostenibili e quali sono i 6 obiettivi ambientali che definisce? Perché il nucleare e il gas naturale inclusi nella tassonomia hanno generato controversie?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "tassonomia_EU",
+        "nucleare",
+        "gas_naturale",
+        "controversie"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale rilevante. Domanda conoscitiva con cenno a dibattito."
+    },
+    {
+      "prompt": "Cos'è l'analisi del ciclo di vita (LCA) di un prodotto e quali sono le fasi principali secondo lo standard ISO 14040? Fai un esempio concreto applicato a una maglietta di cotone.",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "LCA",
+        "ISO_14040",
+        "ciclo_di_vita",
+        "tessile"
+      ],
+      "structural_conflict": "Nessun conflitto strutturale rilevante. Domanda metodologica con esempio applicativo."
+    },
+    {
+      "prompt": "Un'azienda tessile può rendere la supply chain 100% sostenibile (cotone biologico, tinture atossiche, energia rinnovabile, salari living wage) ma il costo del prodotto finale aumenta del 35%. I sondaggi mostrano che il 72% dei consumatori dichiara di preferire prodotti sostenibili, ma i dati di vendita rivelano che nel 78% dei casi scelgono il prodotto più economico quando la differenza di prezzo supera il 15%. Il concorrente principale produce in Bangladesh a costo 60% inferiore con standard ambientali minimi. Chi deve pagare il costo della transizione: il consumatore, l'azienda (riducendo i margini dal 22% all'8%), o lo Stato (con incentivi fiscali)?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "supply_chain_sostenibile",
+        "costo_sostenibilita",
+        "gap_intenzione_azione",
+        "concorrenza_sleale"
+      ],
+      "gold": true,
+      "structural_conflict": "I consumatori mentono sistematicamente nelle surveys (72% vs 78% gap). L'azienda non può pagare da sola senza fallire (margine dal 22% all'8% con concorrente a -60%). Lo Stato può incentivare ma crea una distorsione e non è scalabile. Il problema è strutturale: il mercato globale premia chi esternalizza i costi ambientali e sociali. La sostenibilità 100% è impossibile senza cambiare le regole del gioco."
+    },
+    {
+      "prompt": "Un fondo pensione pubblico da 85 miliardi di euro gestisce i risparmi di 3.2 milioni di lavoratori. Il comitato etico propone di disinvestire completamente dai combustibili fossili (attualmente 12% del portafoglio, rendimento medio 8.4%/anno). L'alternativa green ha un rendimento medio del 5.9%/anno. La differenza di rendimento costerebbe ai pensionati circa 2.1 miliardi di euro in 10 anni, equivalenti a una riduzione della pensione media di 55€/mese. I lavoratori non sono stati consultati. Il fondo ha un dovere fiduciario verso i pensionati. È etico ridurre le pensioni di 3.2 milioni di persone per una scelta ambientale che non hanno fatto?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "disinvestimento_fossile",
+        "dovere_fiduciario",
+        "pensioni",
+        "etica_finanziaria"
+      ],
+      "structural_conflict": "Il dovere fiduciario impone di massimizzare il rendimento per i beneficiari. Il disinvestimento è moralmente motivato ma economicamente costoso. I pensionati non hanno scelto la politica ESG. I 55€/mese sono poco per chi guadagna 3.000€ ma molto per chi ne guadagna 800€. Il fondo è 'troppo grande per essere etico' senza conseguenze reali sulle persone."
+    },
+    {
+      "prompt": "Un'azienda alimentare multinazionale pubblica il suo primo report di sostenibilità. Il report mostra: emissioni Scope 1+2 ridotte del 40% in 5 anni (vero), ma Scope 3 (supply chain) aumentate del 15% (menzionato in una nota a pagina 87). L'azienda ha spostato la produzione in outsourcing, trasferendo le emissioni dalla propria contabilità a quella dei fornitori. Le emissioni totali effettive sono aumentate del 3%. L'azienda ha tecnicamente ragione sui propri numeri. È greenwashing o reporting legittimo?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "scope_3",
+        "outsourcing_emissioni",
+        "reporting",
+        "greenwashing_tecnico"
+      ],
+      "structural_conflict": "L'azienda rispetta formalmente gli standard di reporting ma manipola il perimetro. Lo Scope 3 è la maggioranza delle emissioni per un'azienda alimentare ma è volontario in molti framework. La riduzione del 40% è vera ma fuorviante. Il lettore medio del report non arriva a pagina 87. La legalità e l'onestà divergono."
+    },
+    {
+      "prompt": "Una catena di fast fashion vende 850 milioni di capi/anno e lancia una 'collezione sostenibile' che rappresenta il 4% della produzione. La collezione usa cotone riciclato e packaging biodegradabile. Contemporaneamente, il modello di business core (96% della produzione) si basa su 52 collezioni/anno, prezzi bassissimi, e obsolescenza rapida. L'azienda investe 20M€/anno in marketing della linea sostenibile e 800M€/anno nella produzione standard. La collezione sostenibile è un passo nella direzione giusta o è greenwashing strutturale? Dove si traccia il confine?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "fast_fashion",
+        "greenwashing",
+        "collezione_sostenibile",
+        "modello_business"
+      ],
+      "structural_conflict": "Il 4% sostenibile serve come marketing per il 96% insostenibile. Ma anche il 4% rappresenta 34 milioni di capi con impatto minore. Criticare la collezione sostenibile disincentiva qualsiasi tentativo. Approvarla legittima un modello di business strutturalmente insostenibile. Il greenwashing non è binario ma graduale — e il gradiente è tutto."
+    },
+    {
+      "prompt": "Una miniera di cobalto in Congo impiega 8.000 persone a salari locali (4-6$/giorno), fornisce il 15% del cobalto mondiale per le batterie di veicoli elettrici e smartphone. Un audit rivela: lavoro minorile nel 12% delle operazioni artigianali collegate, nessun equipaggiamento di sicurezza, e contaminazione da cobalto nella falda acquifera locale. Un boicottaggio ridurrebbe la domanda e chiuderebbe la miniera. Senza la miniera, le famiglie dei minatori non hanno alternative economiche. Comprare il cobalto è essere complici. Non comprarlo è condannare alla fame. Come si struttura una supply chain etica che non abbandoni chi ne dipende?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "cobalto",
+        "supply_chain",
+        "lavoro_minorile",
+        "boicottaggio_vs_engagement"
+      ],
+      "structural_conflict": "Il boicottaggio è moralmente pulito per chi lo fa ma catastrofico per chi lo subisce. L'engagement (restare e migliorare) è lento e può essere usato come scusa per non cambiare. I 4-6$/giorno sono sfruttamento per standard occidentali ma il miglior reddito disponibile per quelle famiglie. La supply chain 'etica' richiede investimenti che nessun singolo attore può fare. Il problema è sistemico ma le soluzioni sono individuali."
+    },
+    {
+      "prompt": "L'UE introduce la CBAM (Carbon Border Adjustment Mechanism) che impone un prezzo del carbonio sui prodotti importati. Un'acciaieria africana esporta in Europa 500.000 tonnellate/anno di acciaio con intensità carbonica doppia rispetto alla media UE. La CBAM le costerà 45M€/anno. L'azienda impiega 6.000 persone in un paese dove il PIL pro capite è 1.800€/anno. Non ha accesso a tecnologie verdi. L'UE dice: 'è per il clima'. Il paese africano dice: 'è protezionismo verde'. Chi ha ragione e come si progetta un meccanismo che sia climaticamente efficace senza essere neocoloniale?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "CBAM",
+        "protezionismo_verde",
+        "neocolonialismo",
+        "commercio_internazionale"
+      ],
+      "structural_conflict": "La CBAM è climaticamente coerente (evita il carbon leakage) ma colpisce chi ha meno responsabilità storica per le emissioni. L'Africa ha emesso il 3% delle emissioni globali cumulative. L'accesso alle tecnologie verdi dipende da investimenti che richiedono capitali che questi paesi non hanno. Il clima è globale ma i costi della transizione sono locali e asimmetrici."
+    },
+    {
+      "prompt": "Un gruppo bancario decide di non finanziare più progetti legati al carbone. Tre mesi dopo, una centrale a carbone in un paese in via di sviluppo che serve 4 milioni di persone chiede un prestito di 200M€ per un ammodernamento che ridurrebbe le emissioni del 30% e le polveri sottili del 60%. Senza il prestito, la centrale continuerà a operare con la tecnologia attuale, più inquinante. Il rifiuto di finanziare 'qualsiasi carbone' è più sostenibile del finanziare un miglioramento significativo? L'assolutismo ESG può essere controproducente?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "finanza_sostenibile",
+        "carbone",
+        "assolutismo_ESG",
+        "ammodernamento"
+      ],
+      "structural_conflict": "La policy 'zero carbone' è comunicativamente chiara ma operativamente cieca. L'ammodernamento ridurrebbe i danni reali del 30-60% ma 'finanziare il carbone' è inaccettabile per gli stakeholder ESG. Il risultato è che la centrale resta più inquinante di quanto potrebbe essere. L'assolutismo protegge la reputazione della banca a scapito dell'ambiente reale."
+    },
+    {
+      "prompt": "Un'azienda cosmetica certifica i suoi prodotti come 'cruelty-free' e 'vegan'. Ma il 40% degli ingredienti sono derivati petrolchimici (non di origine animale ma non sostenibili), i packaging sono in plastica vergine, e la supply chain logistica produce 12.000 tCO2/anno. L'azienda rispetta tutte le certificazioni che dichiara. Ma un'azienda può essere 'etica' su una dimensione (animali) e totalmente insostenibile su un'altra (clima, rifiuti)? Le certificazioni parziali informano o confondono il consumatore?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "certificazioni_parziali",
+        "cruelty_free",
+        "incoerenza_sostenibilita",
+        "cosmetica"
+      ],
+      "structural_conflict": "Le certificazioni sono per definizione parziali — coprono un aspetto specifico. Ma il consumatore le interpreta come giudizio olistico. L'azienda è 'onesta' (non dichiara cosa non ha) ma 'disonesta' (lascia inferire una sostenibilità che non ha). Il sistema delle certificazioni crea incentivi a ottimizzare le dimensioni visibili e ignorare le altre."
+    },
+    {
+      "prompt": "Una città di 200.000 abitanti vuole raggiungere carbon neutrality entro il 2040. Il piano prevede l'acquisto di 2.3 milioni di crediti di carbonio (offset) per compensare le emissioni residue non eliminabili (il 35% del totale). I crediti provengono da progetti di riforestazione in Indonesia. Un'analisi indipendente mostra che il 45% dei progetti di offset forestali non genera la riduzione dichiarata (problema di 'addizionalità'). La città dichiara 'carbon neutral' nel 2040 ma in realtà le emissioni fisiche sono calate solo del 65%. È carbon neutrality reale o contabile?",
+      "conflict_type": [
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "carbon_offset",
+        "carbon_neutrality",
+        "addizionalita",
+        "contabilita_climatica"
+      ],
+      "structural_conflict": "La carbon neutrality contabile soddisfa gli impegni politici ma non il clima fisico. Gli offset sono un meccanismo legittimo ma con problemi strutturali di addizionalità. Il 45% di progetti non funzionanti è una media — i crediti specifici di questa città potrebbero essere tra il 55% che funziona o il 45% che no. Il concetto stesso di 'compensazione' presuppone un'equivalenza tra emissione locale e assorbimento remoto che è fisicamente discutibile."
+    },
+    {
+      "prompt": "Un'azienda tecnologica con 50.000 dipendenti pubblica un ambizioso obiettivo: net-zero entro il 2030. Per raggiungerlo, pianifica di trasferire i data center in Islanda (energia geotermica) e alimentare gli uffici con PPA (Power Purchase Agreement) solari. Ma i suoi prodotti (smartphone) hanno un'impronta carbonica lifecycle di 70 kgCO2 ciascuno, e ne vende 80 milioni/anno: 5.6 milioni di tCO2 solo dai prodotti venduti. Il net-zero aziendale esclude le emissioni di utilizzo dei prodotti venduti (parte dello Scope 3 categoria 11). L'azienda è net-zero nei propri confini ma causa 5.6 MtCO2/anno fuori dai propri confini. Ha senso il net-zero se il confine è scelto dall'azienda stessa?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "net_zero",
+        "scope_3_categoria_11",
+        "confine_contabile",
+        "tecnologia"
+      ],
+      "structural_conflict": "L'azienda sceglie il confine che la rende net-zero. Lo Scope 3 categoria 11 (uso dei prodotti venduti) è la maggioranza dell'impronta ma è 'fuori dai confini'. L'Islanda e i PPA sono investimenti reali ma spostano l'attenzione dal problema principale. Il net-zero è un concetto significativo solo se il confine è definito in modo onesto — ma chi definisce 'onesto'?"
+    },
+    {
+      "prompt": "Un fondo di investimento ESG (12 miliardi AUM) esclude dal portafoglio tutte le aziende con più di 5% di ricavi da armamenti. Un'azienda aerospaziale che produce anche droni per la difesa sviluppa la migliore tecnologia di monitoraggio satellitare per la deforestazione al mondo — tecnologia usata da 34 paesi per proteggere le foreste. L'azienda ha il 7% di ricavi da difesa. Il fondo la esclude automaticamente. Il filtro ESG protegge i valori del fondo ma impedisce di finanziare un'innovazione ambientale critica. I filtri binari (soglie rigide) sono compatibili con la complessità del mondo reale?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "filtri_ESG",
+        "soglie_rigide",
+        "dual_use",
+        "innovazione_ambientale"
+      ],
+      "structural_conflict": "Il filtro al 5% è chiaro e applicabile ma cieco al contesto. La tecnologia anti-deforestazione è un contributo ambientale straordinario ma il 7% da difesa la rende 'non investibile'. Ammorbidire il filtro apre la porta a eccezioni infinite. Mantenerlo rigido sacrifica l'impatto reale per la purezza del portafoglio. L'ESG come checklist vs l'ESG come valutazione di impatto."
+    },
+    {
+      "prompt": "Un comune italiano adotta un Piano d'Azione per l'Energia Sostenibile (PAESC) con obiettivo -40% emissioni al 2030. I dati al 2025 mostrano: emissioni calate del 28% rispetto al baseline ma il 90% della riduzione viene dalla chiusura di una singola fabbrica (delocalizzata in Turchia), non da politiche climatiche. Le emissioni pro-capite dei cittadini sono invariate. Il sindaco presenta il -28% come successo della politica ambientale comunale. I numeri sono corretti ma la narrazione è falsa. È accettabile contabilizzare una riduzione dovuta a deindustrializzazione come progresso climatico?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "contabilita_emissioni",
+        "deindustrializzazione",
+        "narrazione_vs_realta",
+        "PAESC"
+      ],
+      "structural_conflict": "I numeri sono tecnicamente corretti: le emissioni nel territorio comunale sono calate del 28%. Ma la causa è la delocalizzazione, non la transizione. Le emissioni esistono ancora, sono solo altrove. Il sindaco non mente ma inganna. Il framework contabile territoriale incentiva a spostare le emissioni, non a ridurle. Il successo contabile è un fallimento climatico."
+    },
+    {
+      "prompt": "Un'azienda alimentare scopre che il 22% del cibo che produce viene sprecato nella filiera distributiva. Può ridurre lo spreco al 5% investendo 35M€ in packaging innovativo (atmosfera modificata + sensori IoT), ma il nuovo packaging è in plastica multistrato non riciclabile e aumenta i rifiuti di packaging del 180%. L'alternativa è mantenere il packaging attuale (carta riciclabile) e accettare il 22% di spreco alimentare. Lo spreco di cibo genera 8.400 tCO2eq/anno, il packaging aggiuntivo ne genererebbe 1.200 tCO2eq/anno. Numericamente la plastica vince. Ma la plastica è il nemico pubblico n.1 nella percezione dei consumatori. Cosa scegli?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "spreco_alimentare",
+        "packaging",
+        "plastica_vs_spreco",
+        "percezione_pubblica"
+      ],
+      "structural_conflict": "La matematica climatica dice plastica (1.200 < 8.400 tCO2eq). La percezione pubblica dice carta. Lo spreco alimentare è invisibile, la plastica è visibile. Scegliere la plastica è razionale ma comunicativamente suicida. Scegliere la carta è popolare ma climaticamente peggiore. Il gap tra razionalità ambientale e percezione pubblica è il vero problema."
+    },
+    {
+      "prompt": "Un paese africano ricco di foreste tropicali (45 milioni di ettari, il 70% del territorio) è sotto pressione internazionale per non deforestare. Le foreste assorbono 800 milioni di tCO2/anno, un servizio ecosistemico globale. Ma il paese ha un PIL pro capite di 890€/anno e il 55% della popolazione vive sotto la soglia di povertà. Convertire 5 milioni di ettari in agricoltura genererebbe 2.8 miliardi di €/anno e sfamerebbe 12 milioni di persone. I pagamenti REDD+ offrono 5$/tCO2 conservata — molto meno del valore agricolo del terreno. Il mondo chiede la conservazione ma non la paga a prezzo pieno. Chi ha il diritto morale di chiedere a un paese povero di rinunciare allo sviluppo per il bene del pianeta?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "REDD+",
+        "deforestazione",
+        "sviluppo_vs_conservazione",
+        "giustizia_climatica"
+      ],
+      "structural_conflict": "Il servizio ecosistemico è globale ma il costo opportunità è locale. I 5$/tCO2 REDD+ sono una frazione del valore agricolo del terreno. I paesi ricchi hanno deforestato i propri territori 200 anni fa per svilupparsi. Chiedere ai paesi poveri di non farlo è giusto per il clima ma ipocrita per la storia. Il pagamento equo per il servizio ecosistemico sarebbe di ordini di grandezza superiore a quanto offerto."
+    },
+    {
+      "prompt": "Un'azienda di moda di lusso brucia 12 tonnellate di invenduto/anno (valore retail: 38M€) per proteggere il brand da vendite discount. La legislazione francese vieta la distruzione di invenduti tessili dal 2025. L'azienda propone: (a) donare a ONG con clausola che i capi vengano distribuiti solo in paesi dove il brand non è presente, (b) riciclare la fibra in materiale isolante (distruggendo il valore dei capi), (c) vendere a outlet con brand rimosso. L'opzione più sostenibile (donazione) è quella che l'azienda accetta di meno. L'opzione che l'azienda preferisce (riciclo in fibra) distrugge il 95% del valore materiale. Come si bilancia protezione del brand e sostenibilità?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "invenduto_tessile",
+        "distruzione_merce",
+        "lusso",
+        "economia_circolare"
+      ],
+      "structural_conflict": "Il brand ha valore economico reale che la donazione erode. Ma bruciare 38M€ di capi è uno scandalo etico e ambientale. La donazione con clausola geografica è un compromesso ma tratta i paesi poveri come 'zone sicure' dove il brand non conta — il che è paternalistico. Il riciclo in fibra è tecnicamente circolare ma distrugge il 95% del valore. Ogni opzione sacrifica qualcosa."
+    },
+    {
+      "prompt": "Un cantiere navale deve costruire 6 navi cargo. Opzione A: motori a GNL (Gas Naturale Liquefatto), -25% CO2 rispetto al diesel marino ma con emissioni di metano (slip) che riducono il beneficio climatico reale a -8% su un orizzonte di 20 anni (il metano ha GWP100 = 28). Opzione B: motori dual-fuel ammoniaca/diesel, -70% CO2 ma l'ammoniaca è tossica (IDLH = 300 ppm, concentrazioni di 2.500-4.500 ppm letali in 30 minuti), la filiera di approvvigionamento non esiste ancora, e un incidente potrebbe uccidere l'equipaggio. Opzione C: diesel tradizionale con scrubber, nessun rischio tecnologico ma zero progresso climatico. Le navi avranno una vita operativa di 25 anni. Quale tecnologia scegli per navi che opereranno fino al 2050?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "trasporto_marittimo",
+        "GNL",
+        "ammoniaca",
+        "decarbonizzazione_shipping"
+      ],
+      "structural_conflict": "Il GNL sembra verde ma il methane slip lo rende quasi inutile climaticamente. L'ammoniaca è efficace ma pericolosa e la filiera non esiste. Il diesel è sicuro ma il mondo del 2050 non lo accetterà. Le navi vivranno 25 anni — la scelta di oggi determina le emissioni di un quarto di secolo. La tecnologia 'giusta' del 2050 non esiste ancora nel 2025."
+    },
+    {
+      "prompt": "Un supermercato introduce un sistema di etichettatura dell'impronta carbonica su tutti i 12.000 prodotti. Dopo 12 mesi, i dati mostrano: le vendite di prodotti a bassa impronta sono aumentate del 3.2%, quelle ad alta impronta sono calate dell'1.8%. Ma il 65% dei consumatori dichiara di non capire l'etichetta. Il sistema costa 2.4M€/anno per il calcolo LCA e la stampa. Un'associazione di produttori locali protesta: i loro formaggi artigianali hanno un'impronta più alta dei formaggi industriali (piccola scala = meno efficiente) e le vendite sono calate del 14%. L'etichetta è accurata ma non racconta tutta la storia (tradizione, economia locale, benessere animale). Come si migliora un sistema che funziona poco e danneggia chi non dovrebbe danneggiare?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "etichettatura_carbonica",
+        "LCA",
+        "produttori_locali",
+        "semplificazione_eccessiva"
+      ],
+      "structural_conflict": "L'impronta carbonica è un indicatore singolo che riduce la sostenibilità a un numero. I formaggi artigianali sono 'peggiori' per il carbonio ma 'migliori' per economia locale, biodiversità, benessere animale. L'etichetta informa ma deforma. Aggiungere più indicatori confonde ulteriormente il 65% che già non capisce. La semplificazione necessaria per comunicare è la stessa che distorce la realtà."
+    },
+    {
+      "prompt": "Un'azienda automobilistica produce 2 milioni di veicoli/anno. Il CEO annuncia che dal 2030 produrrà solo veicoli elettrici. Ma: (a) il 60% dei veicoli venduti va in mercati dove la rete elettrica è a carbone (l'auto elettrica emette più di un diesel moderno in quei paesi), (b) la supply chain delle batterie genera 8.2 tCO2 per batteria prodotta, (c) il riciclo delle batterie esauste non è economicamente sostenibile sotto l'80% di scala industriale, e la scala attuale è al 23%. L'annuncio 'solo elettrico dal 2030' è un impegno climatico reale o un posizionamento di mercato che ignora le esternalità scomode?",
+      "conflict_type": [
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "veicoli_elettrici",
+        "mix_energetico",
+        "riciclo_batterie",
+        "impegni_climatici"
+      ],
+      "structural_conflict": "L'auto elettrica è più pulita solo dove l'elettricità è pulita — e il 60% del mercato dell'azienda non lo è. L'impegno 'solo elettrico' è locale ma le conseguenze sono globali. La produzione di batterie ha un debito carbonico che si ripaga in 3-8 anni di uso con energia pulita. Il riciclo a fine vita non funziona ancora a scala. L'annuncio è vero nel 2030 ma forse falso nel 2045 quando le batterie saranno da smaltire."
+    },
+    {
+      "prompt": "Una multinazionale del caffè compra il 100% del suo caffè da piccoli produttori certificati Fairtrade. Il prezzo Fairtrade è di 1.80$/libbra quando il mercato è a 1.20$/libbra — un premio del 50%. Ma un'analisi della supply chain mostra che del premium di 0.60$/libbra: 0.22$ va ai costi di certificazione, 0.18$ a intermediari locali certificati, e solo 0.20$ arriva effettivamente al produttore. Il produttore riceve 1.40$/libbra invece di 1.80$. La certificazione costa di più di quanto trasferisce. L'azienda può comprare direttamente al produttore a 1.60$/libbra (più del Fairtrade effettivo) ma perderebbe il logo Fairtrade sulla confezione. Il logo vale più del beneficio reale?",
+      "conflict_type": [
+        "values_tradeoff",
+        "ethical_dilemma"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "fairtrade",
+        "certificazione",
+        "supply_chain",
+        "logo_vs_impatto"
+      ],
+      "structural_conflict": "Il sistema Fairtrade ha costi di transazione che assorbono il 67% del premium. L'acquisto diretto è più efficiente ma invisibile al consumatore. Il logo Fairtrade vende; l'impatto reale no. Abbandonare il Fairtrade per fare meglio senza certificazione è razionale ma il consumatore non lo crederà. La certificazione è diventata un business che si autogiustifica."
+    },
+    {
+      "prompt": "Una regione con 15 centrali a carbone deve chiuderne 12 entro il 2035 per rispettare il piano climatico nazionale. Le centrali impiegano 18.000 persone in 8 comuni dove sono il primo datore di lavoro. Il piano di transizione prevede: (a) 800M€ per riqualificazione dei lavoratori in rinnovabili, (b) esenzioni fiscali per attirare nuove industrie, (c) pensionamento anticipato per i lavoratori over 55. I dati dalle transizioni passate (UK, Germania) mostrano che solo il 35-40% dei lavoratori riqualificati trova un lavoro con salario comparabile entro 5 anni. Il 25% esce permanentemente dal mercato del lavoro. Come si progetta una transizione che non crei una 'rust belt verde'?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "transizione_giusta",
+        "carbone",
+        "riqualificazione",
+        "rust_belt"
+      ],
+      "structural_conflict": "I dati storici dicono che le transizioni giuste funzionano per il 35-40% dei lavoratori. Per il 25% che esce dal mercato del lavoro, non c'è 'transizione' — c'è abbandono. Gli 800M€ sono un investimento enorme ma i precedenti mostrano risultati modesti. La transizione è necessaria per il clima ma potenzialmente devastante per le comunità. 'Giusto' è un aggettivo che promette qualcosa che i dati non supportano."
+    },
+    {
+      "prompt": "Un brand di arredamento promuove una sedia in 'plastica oceanica riciclata' a 189€. L'analisi LCA rivela: la sedia contiene il 12% di plastica effettivamente raccolta dall'oceano (45g), il resto è plastica riciclata terrestre e plastica vergine. La raccolta di plastica oceanica costa 8 volte più della plastica riciclata standard. Una sedia identica in plastica riciclata al 100% (terrestre) costerebbe 89€ e avrebbe la stessa impronta ambientale. La 'storia' della plastica oceanica giustifica il prezzo doppio? Il consumatore paga per l'impatto reale o per la narrazione?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "plastica_oceanica",
+        "narrazione_marketing",
+        "premium_verde",
+        "impatto_reale"
+      ],
+      "structural_conflict": "La plastica oceanica ha un impatto narrativo enorme ma fisico minimo (45g su una sedia). La raccolta oceanica è reale e utile ma marginale nel prodotto. Il consumatore paga 100€ extra per 45g di storia. La plastica riciclata terrestre ha lo stesso beneficio ambientale ma zero appeal emotivo. Il marketing della sostenibilità e la sostenibilità reale sono ormai completamente disaccoppiati."
+    },
+    {
+      "prompt": "Una banca introduce un 'mutuo verde' con tasso scontato dello 0.3% per edifici con classe energetica A o superiore. Dopo 2 anni, i dati mostrano che il 78% dei beneficiari sono famiglie con reddito superiore a 60.000€/anno (le uniche che possono permettersi case in classe A). Le famiglie con reddito sotto 30.000€ vivono in edifici classe E-G e pagano bollette energetiche 3 volte superiori ma non hanno accesso né al mutuo verde né ai fondi per l'efficientamento. La politica green della banca sta ampliando il divario energetico. Come si riprogetta un prodotto finanziario verde che non sia regressivo?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "finanza_verde",
+        "disuguaglianza_energetica",
+        "mutuo_verde",
+        "regressivita"
+      ],
+      "structural_conflict": "Lo sconto va a chi già vive in case efficienti e ha redditi alti. Chi ha più bisogno (classe E-G, redditi bassi) è escluso. La politica green della banca è tecnicamente corretta (incentiva l'efficienza) ma socialmente regressiva. Estendere il mutuo a classi energetiche basse (per la riqualificazione) aumenta il rischio creditizio. La sostenibilità e l'equità sociale sono in tensione strutturale."
+    },
+    {
+      "prompt": "Un comune installa 5.000 pannelli solari sui tetti degli edifici pubblici, producendo 4.2 GWh/anno e risparmiando 1.8M€/anno in bollette. Il progetto è finanziato con un leasing da 25 anni con un'azienda privata che mantiene la proprietà dei pannelli. Dopo 8 anni, l'azienda fallisce. I pannelli hanno una vita residua di 17 anni ma contengono cadmio e piombo che richiedono smaltimento speciale (costo stimato: 3.2M€). Il contratto di leasing prevedeva che lo smaltimento fosse a carico dell'azienda. Chi paga adesso? Il comune beneficia dell'energia ma non ha budget per lo smaltimento. Lasciare i pannelli sul tetto senza manutenzione è un rischio ambientale crescente.",
+      "conflict_type": [
+        "risk_assessment",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "fotovoltaico",
+        "fine_vita",
+        "leasing_energetico",
+        "fallimento",
+        "smaltimento"
+      ],
+      "structural_conflict": "Il beneficio (energia) è stato goduto ma il costo (smaltimento) è rimasto senza pagatore. Il modello di leasing esternalizzava il rischio ma il fallimento lo ha ri-internalizzato. I pannelli funzionano ancora ma chi li mantiene? Rimuoverli costa 3.2M€, lasciarli è un rischio. Il solare è 'verde' solo se il ciclo di vita completo è gestito — e qui non lo è."
+    },
+    {
+      "prompt": "L'industria della carne produce il 14.5% delle emissioni globali di gas serra. Un governo propone una 'tassa sulla carne' di 2€/kg per internalizzare i costi ambientali. I modelli prevedono una riduzione del consumo del 15-20%. Ma: (a) la carne è la principale fonte proteica per il 30% delle famiglie a basso reddito, (b) il settore zootecnico impiega 420.000 persone nel paese, (c) le alternative vegetali costano già di meno ma non vengono scelte per ragioni culturali. La tassa è regressiva (colpisce di più i poveri in proporzione al reddito). Un'esenzione per redditi bassi eliminerebbe il 40% dell'effetto della tassa. Come si progetta una tassa ambientale sulla carne che funzioni senza essere ingiusta?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "tassa_carne",
+        "emissioni_zootecnia",
+        "regressivita_fiscale",
+        "cultura_alimentare"
+      ],
+      "structural_conflict": "La tassa funziona economicamente (riduce il consumo) ma è socialmente regressiva. L'esenzione per i poveri risolve l'equità ma dimezza l'efficacia. Le alternative vegetali sono economiche ma il rifiuto è culturale, non economico. I 420.000 lavoratori del settore non hanno colpa ma pagano le conseguenze. La tassa internalizza un costo ambientale reale ma distribuisce il peso in modo iniquo."
+    },
+    {
+      "prompt": "Un'azienda di moda sostenibile comunica: 'compensiamo il 100% delle nostre emissioni'. Analizzando, emerge che: emissioni dichiarate Scope 1+2 = 4.200 tCO2/anno, offset acquistati = 4.200 crediti. Ma le emissioni Scope 3 (materiali, trasporti, uso, fine vita) = 145.000 tCO2/anno — il 97% del totale. L'azienda compensa il 3% delle emissioni reali ma dichiara il 100%. Ogni affermazione è tecnicamente vera (compensa il 100% di Scope 1+2). Ma il consumatore capisce '100% delle emissioni totali'. Serve una regolamentazione che obblighi a includere lo Scope 3 nelle dichiarazioni di compensazione? O lo Scope 3 è troppo incerto per essere regolamentato?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "compensazione_emissioni",
+        "scope_3",
+        "comunicazione_ingannevole",
+        "regolamentazione"
+      ],
+      "structural_conflict": "L'azienda è in un grey area: non mente ma comunica in modo strutturalmente fuorviante. Lo Scope 3 è il 97% ma è anche il più incerto (margine ±40%). Regolamentare lo Scope 3 obbligherebbe a dichiarare numeri incerti come certi. Non regolamentarlo permette di ignorare il 97% dell'impatto. Il problema è che la contabilità del carbonio è stata progettata per le aziende, non per i consumatori."
+    },
+    {
+      "prompt": "Un paese insulare del Pacifico (180.000 abitanti) è responsabile dello 0.0003% delle emissioni globali ma rischia di scomparire per l'innalzamento del mare entro 60 anni. Chiede ai paesi del G20 un risarcimento di 8 miliardi di dollari per (a) adattamento infrastrutturale, (b) possibile trasferimento della popolazione. I paesi del G20 offrono 200M$ in 'aiuti climatici'. Il debito climatico storico (emissioni cumulative) è un criterio legittimo per determinare la responsabilità? Se sì, come si calcola e chi lo impone? Se no, quale alternativa esiste per chi subisce i danni del clima senza averli causati?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "loss_and_damage",
+        "giustizia_climatica",
+        "stati_insulari",
+        "debito_climatico"
+      ],
+      "structural_conflict": "La causalità storica è chiara (G20 = 80% emissioni cumulative) ma non esiste un meccanismo legale vincolante. 200M$ vs 8 miliardi richiesti: un divario di 40x che riflette il gap di potere negoziale. Lo 0.0003% di emissioni del paese insulare rende assurda qualsiasi nozione di co-responsabilità. Il diritto internazionale non ha strumenti per il risarcimento climatico. La giustizia climatica è un principio senza enforcement."
+    },
+    {
+      "prompt": "Un grande retailer introduce il concetto di 'budget di carbonio personale' per i clienti: ogni acquisto mostra le emissioni e un contatore indica quanto del budget annuo sostenibile (2.3 tCO2/anno per persona) è stato consumato. Dopo 6 mesi, il 92% dei clienti supera il budget annuo entro aprile. La reazione è: 35% ignorano il contatore, 28% si sentono in colpa ma non cambiano comportamento, 22% cambiano parzialmente gli acquisti, 15% abbandonano il negozio (perché si sentono giudicati). Il sistema riduce le emissioni totali del 4.7% ma perde il 15% dei clienti. Continuare, modificare o abbandonare il sistema?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "budget_carbonio",
+        "nudging",
+        "comportamento_consumatore",
+        "sostenibilita_retail"
+      ],
+      "structural_conflict": "Il sistema funziona moderatamente (-4.7%) ma aliena i clienti più sensibili (15% persi). La colpa senza cambiamento (28%) è il peggior risultato possibile: disagio senza beneficio. Il budget di 2.3 tCO2 è impossibile da rispettare con gli acquisti attuali — il sistema rivela un'insostenibilità strutturale del sistema produttivo, non del consumatore. Colpevolizzare l'individuo per un problema sistemico è efficace al margine ma ingiusto nella sostanza."
+    },
+    {
+      "prompt": "Un impianto chimico in una zona industriale italiana ha un permesso ambientale integrato (AIA) che scade tra 2 anni. L'azienda chiede il rinnovo proponendo investimenti di 15M€ per ridurre le emissioni di COV (composti organici volatili) del 55%. Ma l'analisi di rischio aggiornata con le nuove linee guida ISPRA mostra che anche dopo la riduzione del 55%, il rischio cancerogeno per i residenti nel raggio di 500 metri (1.200 persone) resterebbe a 1.2×10⁻⁴ (il limite accettabile è 1×10⁻⁶). Per raggiungere il limite servirebbero 85M€ di investimenti, insostenibili per l'azienda (fatturato: 120M€/anno, utile: 5M€/anno). L'AIA può essere rinnovata sapendo che il rischio resta sopra soglia?",
+      "conflict_type": [
+        "risk_assessment",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "AIA",
+        "rischio_cancerogeno",
+        "COV",
+        "soglie_rischio"
+      ],
+      "structural_conflict": "Il rischio a 1.2×10⁻⁴ è 120 volte il limite accettabile. L'investimento da 15M€ è significativo ma insufficiente. L'investimento sufficiente (85M€) è incompatibile con la sopravvivenza dell'azienda. Non rinnovare l'AIA chiude l'azienda. Rinnovarla accetta consapevolmente un rischio 120x superiore alla soglia per 1.200 persone. Il gap tra norma e fattibilità economica non ha soluzione che soddisfi entrambi."
+    },
+    {
+      "prompt": "Una cooperativa agricola di 120 aziende chiede la certificazione B Corp. Supera tutti i criteri tranne uno: il 45% delle aziende usa lavoratori stagionali migranti con contratti a 5€/ora (legale nel paese, sotto il living wage di 9€/ora). La cooperativa può certificarsi escludendo quelle 45% aziende dal perimetro di certificazione (le restanti 55% superano tutti i criteri). L'esclusione dal perimetro è permessa dallo standard. Ma il 45% escluso continuerà a vendere con il brand cooperativo. La certificazione parziale è onesta? Lo standard che permette l'esclusione è adeguato?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "B_Corp",
+        "perimetro_certificazione",
+        "lavoro_migrante",
+        "living_wage"
+      ],
+      "structural_conflict": "Lo standard permette l'esclusione — il problema è nel sistema, non nell'azienda. Ma il consumatore vede 'B Corp' e assume che l'intera cooperativa rispetti i criteri. Il 45% escluso beneficia dell'immagine senza rispettare lo standard. Costringere l'inclusione del 45% farebbe fallire la certificazione per tutti, eliminando anche l'incentivo al miglioramento per il 55% virtuoso."
+    },
+    {
+      "prompt": "Un grande gruppo energetico pubblica un piano di transizione che prevede investimenti di 15 miliardi in rinnovabili entro il 2035, ma contemporaneamente investe 8 miliardi in nuove esplorazioni di gas naturale. L'azienda dice: 'il gas è il combustibile-ponte necessario per la transizione'. I climatologi dicono che qualsiasi nuova infrastruttura fossile è incompatibile con il 1.5°C. Gli azionisti attivisti chiedono l'uscita totale dal gas. Gli azionisti istituzionali (fondi pensione) chiedono rendimenti stabili che solo il gas garantisce nel breve termine. L'azienda può essere contemporaneamente in transizione e in espansione fossile? Dov'è il confine tra strategia di transizione e strategia di greenwashing?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "combustibile_ponte",
+        "gas_naturale",
+        "transizione_energetica",
+        "greenwashing_aziendale"
+      ],
+      "structural_conflict": "Il gas come 'ponte' è una narrazione che giustifica investimenti fossili ma la scienza dice che il ponte è già troppo lungo. I 15 miliardi in rinnovabili sono reali ma gli 8 miliardi in gas li contraddicono. Gli azionisti istituzionali hanno bisogno di rendimenti che le rinnovabili non garantiscono ancora. L'azienda è intrappolata tra la narrativa ESG e la realtà finanziaria. Il confine tra transizione e greenwashing è nella proporzione degli investimenti — ma chi decide quale proporzione è 'onesta'?"
+    },
+    {
+      "prompt": "Un'università pubblica italiana con 35.000 studenti vuole raggiungere la carbon neutrality del campus entro il 2030. L'audit energetico mostra: 18.000 tCO2/anno di emissioni, di cui il 45% da riscaldamento (edifici degli anni '60), il 30% da mobilità studenti (85% auto private), e il 25% da elettricità e IT. Il retrofitting degli edifici costa 120M€ (budget disponibile: 30M€). La mobilità dipende dalla mancanza di trasporto pubblico (responsabilità del comune, non dell'università). L'elettricità verde via PPA costa il 18% in più. L'università può controllare solo il 25% delle proprie emissioni. Dichiarare 'carbon neutral' agendo solo su ciò che controlla è legittimo? E come si finanzia il retrofitting con un budget 4 volte insufficiente?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "campus_carbon_neutral",
+        "retrofitting",
+        "mobilita_studenti",
+        "scope_operativo"
+      ],
+      "structural_conflict": "L'università controlla direttamente solo il 25% delle emissioni. Il 45% dipende da edifici che non può permettersi di riqualificare. Il 30% dipende dal comune (trasporti). Dichiarare carbon neutrality sullo scope controllabile è formalmente possibile ma sostanzialmente fuorviante. Il gap tra budget (30M€) e necessità (120M€) non è colmabile con risorse proprie. La carbon neutrality istituzionale è un obiettivo che nessun singolo attore può raggiungere da solo."
+    },
+    {
+      "prompt": "Una compagnia aerea europea introduce un programma di 'volo a emissioni zero' dove i passeggeri possono pagare un supplemento di 45€ per volo corto e 180€ per volo lungo per finanziare la produzione di SAF (Sustainable Aviation Fuel). Dopo 18 mesi, solo il 2.3% dei passeggeri aderisce. Il SAF prodotto con quei fondi copre lo 0.04% del cherosene usato dalla compagnia. Il marketing del programma costa 8M€/anno. Il programma è una foglia di fico o un primo passo necessario? Il fatto che il 97.7% rifiuti di pagare prova che la sostenibilità aerea volontaria è impossibile, e che serve un obbligo (blending mandate) invece dell'opt-in?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "SAF",
+        "aviazione_sostenibile",
+        "volontarieta_vs_obbligo",
+        "comportamento_consumatore"
+      ],
+      "structural_conflict": "Il 2.3% di adesione dimostra che la volontarietà non funziona per costi significativi. Ma il programma genera consapevolezza e crea un mercato iniziale per il SAF. Il marketing costa più di quanto il programma produca. L'alternativa (blending mandate) funziona ma aumenta i prezzi per tutti, incluso chi non può permetterselo. La sostenibilità volontaria è un esperimento fallito che però genera i dati per giustificare l'obbligo."
+    }
+  ]
+}

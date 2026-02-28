@@ -1,0 +1,286 @@
+{
+  "domain": "ai_ml",
+  "description": "Architetture di modelli, fine-tuning vs RAG, bias e fairness, MLOps, deployment, AI safety, costi di training e inferenza, edge AI, federated learning, interpretabilità, dati sintetici, open-source vs proprietari",
+  "prompts": [
+    {
+      "prompt": "Quando conviene usare la regressione logistica invece di una random forest per un task di classificazione binaria con 10.000 campioni e 15 feature numeriche?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["classificazione", "regressione_logistica", "random_forest", "feature_engineering"],
+      "structural_conflict": "Nessun conflitto reale: con 10K campioni e feature numeriche, la regressione logistica è preferibile se la relazione è lineare e servono coefficienti interpretabili; random forest se ci sono interazioni non lineari. La risposta dipende dal contesto d'uso ma i criteri sono chiari."
+    },
+    {
+      "prompt": "Qual è la differenza fondamentale tra apprendimento supervisionato e non supervisionato, e quando si sceglie l'uno rispetto all'altro?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["supervised", "unsupervised", "fondamenti_ml", "clustering"],
+      "structural_conflict": "Nessun conflitto strutturale: supervisionato richiede label e ottimizza una funzione di perdita su target noti, non supervisionato scopre strutture latenti senza label. La scelta è determinata dalla disponibilità di dati etichettati."
+    },
+    {
+      "prompt": "Un dataset di 50.000 immagini mediche ha il 5% di positivi (lesioni maligne) e il 95% di negativi. Se il modello predice sempre 'negativo', ha accuracy del 95%. Perché l'accuracy è una metrica sbagliata qui e quali metriche dovresti usare?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["class_imbalance", "metriche", "precision_recall", "f1_score", "medical_ai"],
+      "structural_conflict": "Nessun conflitto: in presenza di class imbalance estremo, accuracy è fuorviante. Precision, recall, F1, AUC-PR sono le metriche corrette. Il trade-off precision/recall dipende dal costo relativo di falsi positivi vs falsi negativi."
+    },
+    {
+      "prompt": "Un junior data scientist propone di normalizzare le feature PRIMA di fare il train/test split. Perché questo è un errore metodologico e qual è la procedura corretta?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["data_leakage", "preprocessing", "train_test_split", "normalizzazione"],
+      "structural_conflict": "Nessun conflitto reale: normalizzare prima dello split causa data leakage perché le statistiche del test set influenzano il training. La procedura corretta è fit_transform sul training set e solo transform sul test set, usando una Pipeline."
+    },
+    {
+      "prompt": "Un team ha un modello XGBoost con AUC 0.92 su un task di credit scoring. Il business chiede 'perché questo cliente è stato rifiutato?'. Come rispondi al requisito di interpretabilità senza sacrificare le performance?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["interpretabilita", "xgboost", "shap", "credit_scoring"],
+      "structural_conflict": "Il conflitto è minimo: SHAP values su XGBoost sono ben supportati e forniscono spiegazioni locali per ogni predizione. La risposta standard è SHAP con waterfall plot. Il vero trade-off emerge solo se il regolatore richiede un modello intrinsecamente interpretabile."
+    },
+    {
+      "prompt": "Qual è la differenza tra un embedding denso (Word2Vec, 300 dim) e un embedding sparse (TF-IDF, 50.000 dim) per la ricerca semantica su un corpus di 1M di documenti?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["embeddings", "word2vec", "tfidf", "ricerca_semantica"],
+      "structural_conflict": "Nessun conflitto strutturale profondo: embedding densi catturano similarità semantica, sparse catturano corrispondenza lessicale esatta. Per ricerca semantica il denso è superiore. La risposta è consolidata nel campo."
+    },
+    {
+      "prompt": "Un modello di sentiment analysis deve essere deployato. Le opzioni sono: (A) batch inference ogni 6 ore su tutti i nuovi dati, o (B) real-time inference con latenza <100ms per messaggio. Il volume è 500.000 messaggi/giorno. Quando scegli batch vs real-time?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["batch_vs_realtime", "inference", "deployment", "latenza"],
+      "structural_conflict": "Il conflitto è limitato: se il business non ha bisogno di risposte immediate (report giornalieri), batch è più economico e semplice. Se servono alert in tempo reale (crisi reputazionale), real-time è necessario. La decisione dipende dal caso d'uso, non dalla tecnologia."
+    },
+    {
+      "prompt": "Perché il dropout funziona come regolarizzazione nelle reti neurali, e come si sceglie il dropout rate per un modello con 4 hidden layers da 512 neuroni ciascuno su un dataset di 100.000 campioni?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["dropout", "regolarizzazione", "overfitting", "reti_neurali"],
+      "structural_conflict": "Nessun conflitto strutturale: il dropout crea un ensemble implicito di sottoreti. Il rate tipico è 0.2-0.5. Con 100K campioni e 4×512, il rischio di overfitting è reale e dropout 0.3-0.5 è appropriato. La risposta è empirica ma con range consolidati."
+    },
+    {
+      "prompt": "Un'azienda di e-commerce vuole implementare raccomandazioni personalizzate. Ha 2M di utenti, 500K prodotti, e una matrice utente-prodotto sparsa al 99.8%. Le opzioni: (A) collaborative filtering classico (ALS, SVD) — semplice, maturo, ma soffre di cold start per nuovi utenti e la sparsità degrada la qualità; (B) un modello deep learning (two-tower con embedding 128-dim, 50M parametri) — gestisce cold start con feature utente/prodotto, ma richiede 4 GPU A100 per il training (15K$/mese su cloud) e 6 mesi di sviluppo; (C) un sistema ibrido con content-based per cold start + collaborative per utenti storici — più complesso da mantenere, due pipeline separate, ma copre entrambi i casi. Il budget è 8K$/mese per infrastruttura ML. Quale approccio scegli?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["recommender_systems", "collaborative_filtering", "deep_learning", "cold_start", "budget"],
+      "structural_conflict": "ALS è dentro budget ma la sparsità del 99.8% ne degrada la qualità. Il modello deep learning è superiore ma il budget non copre 4×A100. L'ibrido è il compromesso ma raddoppia la complessità operativa. Il vincolo di budget forza un trade-off tra qualità e sostenibilità."
+    },
+    {
+      "prompt": "Un team deve decidere se fare fine-tuning di un modello 7B (Mistral 7B) oppure usare RAG con un modello 70B (Llama 2 70B) per rispondere a domande su documentazione tecnica interna di 50.000 pagine. Il fine-tuning costa 5.000$ di compute e richiede 2 settimane, ma l'inferenza costa 0.002$/query. RAG con il 70B non richiede training ma costa 0.05$/query. Il volume è 10.000 query/giorno. Dopo 6 mesi, quale approccio è più conveniente e quale produce risposte migliori?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["fine_tuning_vs_rag", "llm", "costi_inferenza", "documentazione_tecnica"],
+      "structural_conflict": "Fine-tuning: 5K$ upfront + 0.002$ × 10K × 180 = 8.600$ in 6 mesi, ma il modello è frozen e la documentazione si aggiorna. RAG: 0.05$ × 10K × 180 = 90.000$ in 6 mesi, ma sempre aggiornato. Il fine-tuning è 10x più economico ma non gestisce aggiornamenti senza retraining. RAG è aggiornabile ma 10x più costoso. La risposta dipende dalla frequenza di aggiornamento della documentazione."
+    },
+    {
+      "prompt": "Un modello di NLP per classificare ticket di supporto (10 classi) ha accuracy 89% in dev ma 71% in produzione dopo 3 mesi. Il team sospetta data drift. Come diagnostichi il problema e quale strategia di monitoring implementi? Considera che il labeling in produzione costa 0.50$/ticket e il volume è 5.000 ticket/giorno.",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["data_drift", "model_monitoring", "mlops", "concept_drift"],
+      "structural_conflict": "Il monitoring completo richiede label in produzione (0.50$ × 5000 = 2.500$/giorno), insostenibile. Il monitoring senza label (distribuzione input, confidence scores) è economico ma non cattura concept drift. Il campionamento strategico riduce i costi ma introduce bias di selezione. Ogni approccio ha un punto cieco."
+    },
+    {
+      "prompt": "Un'azienda farmaceutica ha 5.000 immagini di cellule tumorali etichettate da patologi (costo: 200$/immagine, totale: 1M$). Per aumentare il dataset, considera: (A) data augmentation classica (rotazioni, flip, colore) — gratuita, ma genera varianti superficiali; (B) generazione sintetica con un modello diffusion fine-tuned — costo 20K$ di training, genera immagini realistiche, ma la FDA non ha linee guida su dati sintetici per medical AI; (C) self-supervised pretraining su 500K immagini non etichettate + fine-tuning sulle 5.000 etichettate — sfrutta dati existenti ma richiede 2 mesi di lavoro e esperienza in contrastive learning. Quale strategia massimizza le performance del modello finale?",
+      "conflict_type": ["technical_disagreement", "risk_assessment", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["data_augmentation", "dati_sintetici", "medical_ai", "self_supervised", "fda_compliance"],
+      "structural_conflict": "L'augmentation classica è safe ma limitata. I dati sintetici sono potenti ma il rischio regolatorio è sconosciuto — la FDA potrebbe invalidare il modello. Self-supervised è la scelta più robusta scientificamente ma richiede competenze rare e tempo. La regolamentazione rende rischiosa l'opzione tecnicamente superiore."
+    },
+    {
+      "prompt": "Un modello transformer per traduzione automatica (600M parametri) ha latenza di 800ms su CPU. Il requisito è <200ms per una chatbot. Le opzioni: (A) quantizzazione INT8 — riduce latenza a 350ms ma BLEU score scende da 38.2 a 36.8; (B) distillazione in un modello 150M parametri — latenza 180ms ma BLEU scende a 34.5; (C) deployment su GPU T4 — latenza 120ms con BLEU intatto ma costo 0.53$/ora vs 0.05$/ora per CPU; (D) ONNX Runtime con ottimizzazioni — latenza 450ms su CPU, BLEU 38.0, costo invariato. Il volume è 200K richieste/giorno. Quale opzione bilancia costo, qualità e latenza?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["ottimizzazione_inferenza", "quantizzazione", "distillazione", "gpu_vs_cpu", "latenza"],
+      "structural_conflict": "La GPU risolve tutto tranne il costo (0.53$/hr × 24 = 12.72$/giorno vs ~1.2$/giorno CPU). La quantizzazione non raggiunge il requisito di 200ms. La distillazione raggiunge il target ma perde 3.7 punti BLEU. Non esiste un'opzione che soddisfi tutti e tre i vincoli contemporaneamente."
+    },
+    {
+      "prompt": "Un team di 3 ML engineer deve scegliere lo stack MLOps per un'azienda con 12 modelli in produzione. Le opzioni: (A) MLflow + Airflow + Docker — maturo, self-hosted, ma richiede 1 FTE per la manutenzione dell'infrastruttura; (B) Vertex AI (GCP) — managed, ma lock-in su Google Cloud e costo stimato 8K$/mese; (C) costruire un sistema custom con DVC + GitHub Actions + Kubernetes — massima flessibilità ma 4 mesi di sviluppo prima di essere operativo. I modelli vengono retrainati settimanalmente e servono A/B testing, rollback automatico e monitoring. Con 3 persone, quale stack è sostenibile?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["mlops", "mlflow", "vertex_ai", "team_sizing", "infrastruttura"],
+      "structural_conflict": "Vincolo quantificabile: 3 FTE totali, 1 FTE su MLflow = 33% della capacità sottratta al modelling. Vertex AI: 8K$/mese = 96K$/anno di spesa fissa, superiore al costo di 1 FTE junior. Custom richiede 4 mesi di zero-MLOps con 12 modelli live — il rischio di incidente è alto. Le tre opzioni ottimizzano variabili incompatibili: team capacity (A), budget (B), time-to-value (C)."
+    },
+    {
+      "prompt": "Un modello di object detection (YOLOv8-m, 25.9M parametri) deve girare su un dispositivo edge (Jetson Orin Nano, 8GB RAM, 40 TOPS INT8). Il modello originale ha mAP 50.2 a 640×640 e richiede 12GB di RAM. Le opzioni: (A) TensorRT FP16 — mAP 49.8, 7.5GB RAM, 30 FPS; (B) TensorRT INT8 con calibrazione — mAP 47.2, 4.2GB RAM, 55 FPS; (C) passare a YOLOv8-s (11.2M parametri) in FP16 — mAP 44.9, 3.8GB RAM, 60 FPS. L'applicazione è videosorveglianza industriale dove un falso negativo (mancata rilevazione di intrusione) ha un costo stimato di 50.000€. Quale configurazione scegli?",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["edge_deployment", "object_detection", "quantizzazione", "jetson", "videosorveglianza"],
+      "structural_conflict": "FP16 ha la migliore qualità ma non entra in 8GB RAM. INT8 entra e ha buoni FPS ma perde 3.0 punti mAP. YOLOv8-s è il più efficiente ma perde 5.3 punti mAP. Con falsi negativi a 50K€, ogni punto di mAP perso ha un costo economico reale. Il vincolo hardware forza un compromesso tra sicurezza e fattibilità."
+    },
+    {
+      "prompt": "Un team di data science di 4 persone deve costruire un modello predittivo per stimare il lifetime value (LTV) dei clienti di un e-commerce con 3 anni di dati transazionali (2M clienti, 120 feature raw). Il team senior propone feature engineering manuale: costruire 40 feature curate (RFM, trend di spesa, stagionalità, basket analysis) in 6 settimane, poi trainare un gradient boosting. Il team junior propone AutoML (H2O AutoML o AutoGluon) su tutte le 120 feature raw, pronto in 3 giorni. I benchmark interni mostrano: feature engineering manuale + XGBoost raggiunge MAE 42€, AutoML sulle feature raw raggiunge MAE 48€, AutoML sulle 40 feature curate raggiunge MAE 39€. Ma le 40 feature curate richiedono una pipeline ETL dedicata che deve essere mantenuta, e ogni nuova feature richiede 2-3 giorni di lavoro del team senior. Il business aggiunge nuove metriche ogni trimestre. Quale strategia bilancia accuratezza, velocità di iterazione e debito tecnico?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["automl", "feature_engineering", "lifetime_value", "debito_tecnico", "team_produttivita"],
+      "structural_conflict": "Le feature curate + AutoML danno il risultato migliore (MAE 39€) ma creano un debito tecnico crescente: ogni trimestre nuove feature, pipeline ETL da mantenere, knowledge concentrato nel team senior. AutoML su feature raw è peggiore (MAE 48€) ma è ripetibile senza dipendenza da esperti. Il compromesso feature manuali + XGBoost (MAE 42€) è il classico ma scala male. Il vero costo non è la MAE ma il tempo-uomo per mantenere le feature nel tempo. L'approccio ottimale cambia in funzione del turnover del team e della velocità di evoluzione del business."
+    },
+    {
+      "prompt": "Un team deve decidere tra Llama 3 70B open-source (self-hosted su 2×A100 80GB, costo 6K$/mese) e GPT-4o via API (costo stimato 3K$/mese per il volume attuale di 20M tokens/giorno in input, 5M in output). L'applicazione è un assistente legale per uno studio da 50 avvocati. I dati contengono contratti confidenziali e informazioni privilegiate avvocato-cliente. La qualità di GPT-4o è superiore del 12% su benchmark legali interni. Quale scegli?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["open_source_vs_proprietario", "privacy_dati", "llm_deployment", "legal_ai"],
+      "structural_conflict": "GPT-4o è più preciso e costa la metà ma i dati legali passano per server di terzi — potenziale violazione del privilegio avvocato-cliente. Llama self-hosted mantiene i dati in-house ma è inferiore del 12% e costa il doppio. La superiorità qualitativa ed economica di GPT-4o è vanificata dal rischio legale. Il trade-off è qualità+costo vs compliance."
+    },
+    {
+      "prompt": "Un modello di classificazione di immagini per diagnosi dermatologica ha F1 0.91 su un dataset bilanciato per tipo di pelle (Fitzpatrick I-VI). L'ospedale vuole metterlo in produzione. Analizzando le performance per sottogruppo, il modello ha F1 0.94 su tipi I-III (pelle chiara) e F1 0.79 su tipi IV-VI (pelle scura). Il dataset di training ha 70% pelle chiara e 30% pelle scura. Come risolvi il gap di equità senza peggiorare le performance generali?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["bias", "fairness", "medical_ai", "sottogruppi", "disparita_performance"],
+      "structural_conflict": "Oversampling dei tipi IV-VI può peggiorare le performance sui tipi I-III. Raccogliere più dati è costoso e lento (200$/immagine etichettata da dermatologo). Una soglia di decisione differenziata per gruppo equalizza le performance ma introduce trattamento differenziale esplicito basato sull'etnia, eticamente problematico. L'equità perfetta e le performance massime sono in tensione."
+    },
+    {
+      "prompt": "Un modello GPT-4o genera riassunti di articoli scientifici per un'agenzia di stampa. Nel 3.2% dei casi, il modello produce allucinazioni — cita paper inesistenti o attribuisce conclusioni sbagliate. L'agenzia pubblica 200 articoli/giorno. Le opzioni per mitigare: (A) aggiungere un retrieval step con Semantic Scholar API per verificare ogni citazione — riduce allucinazioni all'1.1% ma aggiunge 8 secondi/articolo e costa 0.02$/query; (B) un secondo modello (Claude 3.5) che verifica il riassunto contro l'originale — riduce allucinazioni allo 0.4% ma raddoppia il costo LLM; (C) revisione umana di tutti i riassunti — allucinazioni ~0% ma richiede 3 revisori a tempo pieno (150K€/anno). La reputazione dell'agenzia dipende dall'accuratezza. Quale approccio implementi?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["allucinazioni", "fact_checking", "llm_reliability", "costi_qualita"],
+      "structural_conflict": "Il retrieval è economico ma lascia l'1.1% di errori (2 articoli/giorno falsi). Il doppio LLM è costoso ma quasi elimina il problema. La revisione umana è infallibile ma costa come 3 stipendi. Per un'agenzia di stampa, anche l'1% di errori può distruggere la credibilità. Il costo della perfezione è esponenziale."
+    },
+    {
+      "prompt": "Un team vuole implementare federated learning per un modello di rilevazione frodi su transazioni bancarie. 5 banche partecipano, ciascuna con 10M di transazioni. Le banche non possono condividere i dati raw per regolamenti antitrust e privacy. Le opzioni: (A) federated averaging classico — ogni banca allena localmente e condivide i gradienti, ma model inversion attacks possono ricostruire transazioni individuali dai gradienti; (B) federated learning con differential privacy (ε=3) — protegge contro inversion ma l'accuratezza scende dal 96.2% al 91.8%; (C) secure aggregation con homomorphic encryption — i gradienti sono cifrati, ma il training è 50x più lento (da 2 ore a 100 ore per round). Il modello centralizzato (se fosse possibile) raggiungerebbe il 97.5%. Quale approccio bilancia privacy, performance e praticità?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["federated_learning", "differential_privacy", "banche", "frodi", "homomorphic_encryption"],
+      "structural_conflict": "Federated averaging è pratico ma non sicuro (model inversion). Differential privacy è sicura ma perde 4.4 punti percentuali — 4.4% in meno di frodi rilevate si traduce in milioni persi. Homomorphic encryption è inattaccabile ma impraticabile a 100 ore/round. Ogni incremento di privacy costa performance e viceversa."
+    },
+    {
+      "prompt": "Un modello di credit scoring usa 150 feature tra cui codice postale, storico pagamenti, importo richiesto e tipo di occupazione. L'analisi SHAP mostra che il codice postale è la 3a feature più importante. Il codice postale correla al 78% con l'etnia del quartiere. Rimuovere il CAP peggiora l'AUC da 0.87 a 0.83. La banca è in un paese con leggi anti-discriminazione che vietano l'uso di proxy razziali. Il modello senza CAP è meno accurato ma più equo. Con CAP è più accurato ma potenzialmente discriminatorio. Come procedi?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["fairness", "proxy_variables", "credit_scoring", "discriminazione", "shap"],
+      "structural_conflict": "Impossibilita matematica dimostrabile: la correlazione del 78% tra CAP ed etnia rende impossibile mantenere accuracy e soddisfare demographic parity simultaneamente (teorema di impossibilita di Chouldechova). Rimuovere il CAP costa 4 punti AUC = X milioni in crediti mal prezzati. Tenerlo espone a sanzioni legali per discriminazione indiretta (rischio multa + class action). Approcci intermedi (adversarial debiasing, fairness constraints) spostano il punto sul Pareto frontier accuracy-fairness ma non eliminano il trade-off. Agenti con framework deontologico (legge = vincolo hard) vs consequenzialista (AUC = valore economico) producono raccomandazioni incompatibili."
+    },
+    {
+      "prompt": "Un team di ricerca ha sviluppato un modello per generare strutture proteiche (come AlphaFold ma per design de novo). Il modello può generare proteine con proprietà specifiche, incluse tossine sintetiche non presenti in natura. Un paper di ricerca descriverebbe l'architettura e renderebbe il modello riproducibile. Le opzioni: (A) pubblicare tutto open-source — massimizza il progresso scientifico ma abilita bioterrorismo; (B) pubblicare solo il paper senza pesi — descrive il metodo ma non lo rende immediatamente riproducibile; (C) non pubblicare e brevettare — protegge dall'uso malevolo ma blocca la ricerca e crea un monopolio. Il NIH ha finanziato la ricerca con fondi pubblici. Come bilanci open science e biosicurezza?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["dual_use", "biosicurezza", "open_source", "ricerca_responsabile", "protein_design"],
+      "structural_conflict": "L'open science è un principio fondamentale, specialmente con fondi pubblici. Ma la pubblicazione dei pesi abilita direttamente la creazione di tossine sintetiche. Il paper senza pesi è un compromesso ma un team competente può riaddestrarli in settimane. Il brevetto tradisce il mandato della ricerca pubblica. Non esiste una scelta che preservi sia la sicurezza sia l'apertura."
+    },
+    {
+      "prompt": "Un'azienda di assicurazioni vuole usare un LLM per generare automaticamente lettere di rifiuto sinistro. Il modello è addestrato su 50.000 lettere storiche scritte da periti umani. Il 23% delle lettere storiche contiene linguaggio che un avvocato classifica come 'potenzialmente intimidatorio' verso il cliente. Il modello replica questo pattern perché è nel training data. Se ripulisci il dataset rimuovendo il linguaggio intimidatorio, le lettere generate diventano meno persuasive e i ricorsi dei clienti aumentano del 35%. Se lasci il dataset com'è, automatizzi un comportamento eticamente discutibile su scala. Come procedi?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["bias_nel_training", "automazione_discriminatoria", "assicurazioni", "linguaggio_intimidatorio"],
+      "structural_conflict": "Tensione quantificabile: pulire il dataset riduce l'efficacia persuasiva del 35% (misurato in tasso di ricorso). Il costo del 35% in più di ricorsi è calcolabile (ogni ricorso costa X€). Il costo reputazionale/legale dell'intimidazione automatizzata su scala è anch'esso calcolabile (class action risk). Due funzioni obiettivo (minimizzare ricorsi vs minimizzare rischio legale/etico) hanno gradienti opposti. Il punto di equilibrio dipende dalla giurisdizione e dalla propensione al rischio legale — agenti con framework diversi produrranno risposte strutturalmente incompatibili."
+    },
+    {
+      "prompt": "Un sistema di AI per il reclutamento analizza 100.000 CV/anno per una grande azienda tech. Il modello ha un tasso di selezione femminile del 18% contro il 34% maschile per ruoli di engineering. Analizzando i dati storici di hiring, l'azienda ha assunto il 19% donne storicamente. Il modello sta replicando il bias storico. Le opzioni: (A) ribilanciare con post-processing (calibrare le soglie per genere) — equalizza i tassi ma viola il principio di merit-based selection; (B) rimuovere il genere e tutti i proxy dal modello — il gap si riduce al 24% vs 30% ma non scompare (proxy residui); (C) abbandonare l'AI e tornare alla selezione umana — i recruiter umani hanno un bias del 22% vs 32%, peggiore del modello. Cosa raccomandi e come giustifichi la scelta al board?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["bias_reclutamento", "fairness", "gender_gap", "proxy_variables", "post_processing"],
+      "structural_conflict": "Conflitto computazionale: tre metriche di equità (demographic parity, equal opportunity, individual fairness) non possono essere soddisfatte simultaneamente (impossibilità di Chouldechova-Kleinberg). Il post-processing ottimizza demographic parity (18%→30%) ma viola individual fairness. La rimozione proxy ottimizza individual fairness ma non raggiunge demographic parity (24% vs 30%). Gli umani hanno bias peggiore (22% vs 32%) ma la non-sistematicità rende il bias umano non amplificabile. Agenti che prioritizzano metriche di equità diverse produrranno raccomandazioni strutturalmente incompatibili."
+    },
+    {
+      "prompt": "Un governo vuole deployare un sistema di riconoscimento facciale negli aeroporti per identificare sospetti terroristi. Il modello ha: tasso di veri positivi del 99.2% (cattura il 99.2% dei sospetti), tasso di falsi positivi dello 0.01% (identifica erroneamente 1 persona su 10.000). L'aeroporto ha 50 milioni di passeggeri/anno. Calcola quanti innocenti vengono fermati ingiustamente per anno. Il 67% dei falsi positivi sono persone con pelle scura. Il governo afferma che il sistema 'salva vite'. I gruppi per i diritti civili lo definiscono 'sorveglianza di massa razzista'. Chi ha ragione e cosa raccomandi?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["riconoscimento_facciale", "sorveglianza", "falsi_positivi", "diritti_civili", "bias_razziale"],
+      "structural_conflict": "0.01% di 50M = 5.000 innocenti fermati/anno, di cui 3.350 con pelle scura. Il 99.2% di true positive sembra eccellente ma la base rate di terroristi è infinitesimale — il valore predittivo positivo è quasi zero. Matematicamente è sorveglianza di massa con bias razziale. Ma rifiutare il sistema potrebbe costare vite in caso di attentato. La sicurezza collettiva e i diritti individuali sono in conflitto irresolubile."
+    },
+    {
+      "prompt": "Un modello di linguaggio da 13B parametri, addestrato su dati web, viene usato per generare contenuti educativi per bambini di 8-12 anni. I filtri di sicurezza bloccano il 98.5% dei contenuti inappropriati. L'1.5% residuo include occasionalmente linguaggio violento, stereotipi sottili e informazioni mediche errate. Su 10.000 contenuti generati/giorno, sono ~150 contenuti potenzialmente dannosi. Le opzioni: (A) aggiungere un secondo modello di classificazione — riduce al 0.3% ma aggiunge 200ms di latenza e 2.000$/mese; (B) revisione umana a campione (10%) — cattura parte degli errori ma ne manca il 90%; (C) RLHF aggressivo per ridurre l'1.5% — costa 50K$ di training e il modello diventa eccessivamente cauto, rifiutando il 15% di contenuti legittimi. 150 contenuti dannosi/giorno per bambini. Quanto rischio è accettabile?",
+      "conflict_type": ["ethical_dilemma", "risk_assessment", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["ai_safety", "contenuti_minori", "filtri_sicurezza", "rlhf", "rischio_residuo"],
+      "structural_conflict": "Per contenuti destinati a minori, anche lo 0.3% è 30 contenuti dannosi/giorno — inaccettabile. La revisione umana integrale è impossibile a 10K/giorno. L'RLHF aggressivo è sicuro ma il 15% di rifiuti legittimi degrada il prodotto. Il rischio zero è impossibile con modelli generativi. La domanda non è tecnica ma etica: è lecito deployare un sistema che espone bambini a un rischio residuo non eliminabile?"
+    },
+    {
+      "prompt": "Un modello di previsione meteorologica basato su rete neurale (GraphCast-like, 37 livelli di pressione, risoluzione 0.25°) ha RMSE inferiore del 8% rispetto al modello numerico ECMWF IFS per previsioni a 3-7 giorni. Ma il modello numerico ha basi fisiche note, errori comprensibili e calibrabili. Il modello ML è una black box: quando sbaglia, sbaglia in modi imprevedibili (es. ha predetto un uragano che non esisteva con confidenza 87%). Un servizio meteorologico nazionale deve scegliere se sostituire il modello numerico con quello ML per gli avvisi di allerta. Un falso allarme uragano costa 200M€ in evacuazioni inutili. Un mancato allarme costa potenzialmente vite umane. Come integri i due modelli?",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["ai_vs_modelli_fisici", "interpretabilita", "previsioni_meteo", "rischio_catastrofico", "black_box"],
+      "structural_conflict": "Il modello ML è statisticamente superiore ma i suoi errori sono imprevedibili e non calibrabili. Il modello fisico è inferiore in media ma i suoi errori sono comprensibili e bounds noti. Per decisioni ad alto rischio (evacuazioni), la comprensibilità dell'errore è più importante dell'errore medio. Ma ignorare il modello migliore 'perché non lo capiamo' è anti-scientifico."
+    },
+    {
+      "prompt": "Un'azienda ha 3 data scientist che mantengono 20 modelli ML in produzione con notebook Jupyter, nessun version control sui modelli, deploy manuale via SCP, e nessun monitoring automatico. Il CTO vuole 'industrializzare' la ML pipeline in 3 mesi. Le opzioni: (A) implementare tutto (MLflow + Airflow + Kubernetes + Prometheus) — lo standard industriale ma 3 persone non possono farcela in 3 mesi; (B) adottare solo MLflow per tracking + GitHub Actions per CI/CD — copre il 60% dei problemi in 1 mese; (C) passare a una piattaforma managed (SageMaker) — copre tutto ma il costo è 12K$/mese e il vendor lock-in è totale. Il rischio attuale è concreto: 2 mesi fa un modello in produzione è stato sovrascitto per errore e ci sono voluti 4 giorni per ripristinarlo. Cosa fai?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["mlops", "team_sizing", "prioritizzazione", "incidenti_produzione", "managed_vs_self_hosted"],
+      "structural_conflict": "Lo stack completo è la soluzione giusta ma irrealizzabile in 3 mesi con 3 persone. MLflow+CI/CD risolve i problemi più urgenti ma lascia buchi nel monitoring. SageMaker risolve tutto ma il lock-in è un debito tecnico futuro. Il vincolo reale è il tempo e le risorse umane — la soluzione tecnicamente ottimale è organizzativamente impossibile."
+    },
+    {
+      "prompt": "Un'azienda energetica vuole prevedere la produzione di energia solare per i prossimi 7 giorni con granularità oraria. Ha 5 anni di dati storici (produzione, meteo, irradianza). Le opzioni: (A) modello fisico (radiazione solare + efficienza pannelli + temperatura) — interpretabile, funziona senza dati storici, ma errore MAPE del 12% perché non cattura degradazione pannelli e ombreggiamenti locali; (B) LSTM su serie storiche — MAPE 7.5%, cattura pattern stagionali e degradazione, ma fallisce su eventi meteo rari non nel training set (grandinate, nuvole di cenere vulcanica); (C) modello ibrido (fisico + ML residual learning) — MAPE 6.2%, combina il meglio di entrambi, ma richiede 6 mesi di sviluppo e manutenzione doppia. Il costo di un errore di previsione del 10% è 50K€/mese in penali contrattuali. Quale approccio giustifica il ROI?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["time_series", "energia_solare", "modelli_ibridi", "lstm", "modelli_fisici"],
+      "structural_conflict": "Il modello fisico è robusto su scenari estremi ma impreciso sul quotidiano. L'LSTM è preciso in media ma fragile sugli outlier — che sono esattamente dove le penali colpiscono. L'ibrido è la soluzione ottimale ma il costo di sviluppo e manutenzione potrebbe superare il risparmio in penali. Il ROI dipende dalla frequenza degli eventi rari, che è per definizione difficile da stimare."
+    },
+    {
+      "prompt": "Un'AI medica per screening del cancro al seno ha sensibilità 96% e specificità 92%. La prevalenza reale nella popolazione target è 0.5%. Un ospedale vuole usarla come primo screening prima della mammografia umana. Calcola il valore predittivo positivo. Con 100.000 screening/anno, quanti falsi positivi ci sono? Ogni falso positivo causa ansia al paziente, una biopsia inutile (costo 800€) e un sovraccarico radiologico. Il valore predittivo positivo rende il sistema utile o dannoso?",
+      "conflict_type": ["risk_assessment", "ethical_dilemma", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["screening_medico", "valore_predittivo", "base_rate", "falsi_positivi", "sovradiagnosi"],
+      "structural_conflict": "Con prevalenza 0.5%: PPV = (0.96 × 0.005) / (0.96 × 0.005 + 0.08 × 0.995) ≈ 5.7%. Il 94.3% dei positivi sono falsi. Su 100K screening: ~7960 falsi positivi, ~480 veri positivi, 6.37M€ in biopsie inutili. Il paradosso della base rate rende un test apparentemente eccellente clinicamente quasi inutile come screening di primo livello. La sensibilità del 96% è fuorviante senza considerare la prevalenza."
+    },
+    {
+      "prompt": "Un laboratorio di ricerca ha sviluppato un modello di generazione di codice (15B parametri) che su HumanEval supera GPT-4 (pass@1: 89% vs 86%). Il CEO vuole rilasciarlo come open-source per ottenere visibilità e adozione. Il CTO obietta: (A) il modello potrebbe generare malware — su benchmark interni genera exploit funzionanti nel 12% dei casi se promptato; (B) competitor come Meta e Mistral rilasciano modelli simili, il vantaggio competitivo dura 3 mesi al massimo; (C) il rilascio open-source impedirebbe di monetizzarlo via API. Il modello è costato 2M$ di training su 512 H100. Come bilanci apertura, sicurezza e ritorno sull'investimento?",
+      "conflict_type": ["ethical_dilemma", "strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["open_source", "dual_use", "code_generation", "malware", "strategia_business"],
+      "structural_conflict": "L'open-source massimizza impatto e adozione ma non si può controllare l'uso malevolo. Il modello proprietario via API permette monitoring e filtering ma i competitor rilasciano gratis. Il 12% di exploit generation è un rischio concreto. Trattenere il modello per monetizzarlo ha un finestra di 3 mesi prima che diventi commodity. I 2M$ di costo sono sunk cost ma il board vuole un ritorno."
+    },
+    {
+      "prompt": "Un progetto di autonomous driving usa un ensemble di 5 modelli per la percezione: camera (2D), LiDAR (3D point cloud), radar (velocità), modello di fusione, e planner. Il sistema complessivo ha un tasso di disengagement di 1 ogni 50.000 km. La regolamentazione richiede 1 ogni 100.000 km per l'approvazione. Migliorare il modello camera (architettura BEVFormer) porterebbe il rate a 1/72.000 km con 6 mesi di sviluppo. Aggiungere un sesto modello (thermal imaging) porterebbe a 1/95.000 km con 12 mesi e 500K$ extra in sensori per veicolo. Combinare entrambi raggiungerebbe 1/120.000 km ma con 18 mesi e 800K$/veicolo in sensori. La flotta è di 1.000 veicoli. L'approvazione vale 5B$ di mercato. Come prioritizzi?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["autonomous_driving", "percezione", "regolamentazione", "sensori", "time_to_market"],
+      "structural_conflict": "Il miglioramento camera non raggiunge il target (72K < 100K). Il thermal imaging ci si avvicina (95K) ma non lo supera. Solo la combinazione raggiunge 120K km ma richiede 18 mesi e 800M$ per la flotta. Il time-to-market è critico: 18 mesi di ritardo in autonomous driving possono significare perdere il mercato. Ma approvare senza raggiungere il target è impossibile. Il vincolo regolatorio è binario: pass/fail."
+    },
+    {
+      "prompt": "Un'azienda di social media ha un modello di content moderation che rimuove contenuti tossici con precision 94% e recall 88%. Il 12% di contenuti legittimi rimossi (falsi positivi) sono sproporzionatamente in arabo, hindi e lingue africane — il modello è stato trainato su dati prevalentemente in inglese. Opzioni: (A) raccogliere 100K esempi etichettati per lingua sotto-rappresentata — costo 500K$ e 6 mesi; (B) usare traduzione automatica per creare training data — economico ma la traduzione introduce artefatti che degradano il modello; (C) deployare comunque e ridurre la soglia per le lingue sotto-rappresentate — riduce i falsi positivi ma aumenta i contenuti tossici non rimossi per quelle lingue. 2 miliardi di utenti globali, di cui 800M in lingue sotto-rappresentate. Quale opzione scegli?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["content_moderation", "bias_linguistico", "multilingue", "equita_globale"],
+      "structural_conflict": "La raccolta dati è la soluzione corretta ma 6 mesi con il modello biased in produzione significa 6 mesi di censura sproporzionata di 800M di utenti. La traduzione automatica è un cerotto che potrebbe peggiorare le cose. Abbassare la soglia è un'ammissione di disparità — e la piattaforma sta di fatto applicando standard diversi per lingua. Deployare un modello biased su scala globale è peggio che non deployarlo?"
+    },
+    {
+      "prompt": "Un'azienda vuole usare GPT-4 per automatizzare le risposte del customer service (40.000 ticket/mese). Il modello deve: (A) rispondere con informazioni aziendali corrette, (B) non inventare policy inesistenti, (C) escalare a un umano se non è sicuro. I test mostrano che il modello inventa policy inesistenti nel 2.8% dei casi, non escala quando dovrebbe nel 5.1% dei casi, e risolve correttamente il 91% dei ticket. Un ticket risolto dall'AI costa 0.15$, da un umano 12$. Errori (policy inventate) costano in media 350$ in rimborsi e danno reputazionale. Con 40K ticket/mese, il costo totale di ciascuna strategia (100% AI, 100% umano, ibrido con threshold di confidenza) cambia drasticamente. Quale strategia minimizza il costo totale includendo il costo degli errori?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["customer_service_ai", "costo_errore", "threshold_confidenza", "escalation", "allucinazioni"],
+      "structural_conflict": "Due funzioni di costo in opposizione: C_ai = 6K + 392K = 398K$/mese, C_umano = 480K$/mese. L'AI è più economica solo se il costo reputazionale per errore è esattamente 350$. Se il danno reputazionale cumulativo è non-lineare (1.120 errori/mese causano perdita clienti a cascata), la funzione di costo AI diverge. Il threshold di confidenza è un problema di calibrazione su distribuzione sconosciuta: il 5.1% di mancate escalation indica che il modello è miscalibrato (alta confidenza su risposte errate). Senza dati di calibrazione in-domain, il threshold ottimale non è calcolabile a priori — agenti con priors diversi sulla calibrabilità del modello divergeranno."
+    },
+    {
+      "prompt": "Un'azienda di genomica ha sviluppato un modello che predice il rischio di sviluppare malattie genetiche con accuracy 89%. Un'assicurazione sanitaria vuole acquistare il modello per stratificare i premi. Usare il modello significherebbe che persone con predisposizione genetica pagherebbero premi 3-5x più alti o verrebbero rifiutate. In molti paesi (USA: GINA Act) è illegale discriminare basandosi su informazioni genetiche per l'assicurazione sanitaria. Ma il modello migliorerebbe la sostenibilità finanziaria dell'assicuratore. L'azienda di genomica ha bisogno del contratto (2M$/anno) per sopravvivere. Come procedi?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["discriminazione_genetica", "assicurazioni", "gina_act", "genomica", "sopravvivenza_aziendale"],
+      "structural_conflict": "Vendere il modello è potenzialmente illegale e certamente discriminatorio — le persone non scelgono i propri geni. Ma l'azienda ha bisogno del contratto per sopravvivere e continuare la ricerca che aiuta tutti. Rifiutare il contratto è etico ma può significare la chiusura. Il modello in sé è neutro — è l'uso che è discriminatorio. L'azienda può controllare l'uso dopo la vendita?"
+    },
+    {
+      "prompt": "Un ricercatore ha trainato un modello di generazione immagini (Stable Diffusion fine-tuned) su 100K immagini di opere d'arte. Il modello genera immagini nello stile di artisti viventi senza il loro consenso. Un artista scopre che il modello replica il suo stile con il 87% di similarità stilistica (misurata con CLIP embeddings). L'artista chiede la rimozione del suo lavoro dal training set. Le opzioni: (A) machine unlearning — rimuovere l'influenza dell'artista dal modello, ma le tecniche attuali degradano la qualità complessiva del 8-15% e non garantiscono rimozione completa; (B) retraining da zero senza le opere dell'artista — costo 30K$ e 2 settimane ma la rimozione è garantita; (C) aggiungere un filtro post-generazione che blocca output simili allo stile dell'artista — economico ma aggirabili con prompt engineering. Il modello è già deployato con 10K utenti paganti. Cosa fai?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["copyright", "generative_ai", "machine_unlearning", "diritto_autore", "artisti"],
+      "structural_conflict": "L'artista ha un diritto morale legittimo ma il framework legale è incerto. Machine unlearning è imperfetto — 'probabilmente rimosso' non è una garanzia. Retraining è definitivo ma costoso e interrompe il servizio. Il filtro è un cerotto bypassabile. I 10K utenti paganti creano pressione a non interrompere il servizio. Il precedente che si stabilisce (opt-in vs opt-out) ha implicazioni per tutta l'industria."
+    },
+    {
+      "prompt": "Un ospedale vuole implementare un sistema di triage AI nel pronto soccorso. Il modello classifica i pazienti in 5 livelli di urgenza basandosi su sintomi, segni vitali e storia clinica. Su dati retrospettivi, il modello concorda con il triage degli infermieri esperti nel 88% dei casi. Nel 7% è più conservativo (assegna urgenza più alta — sovratriage) e nel 5% è meno conservativo (assegna urgenza più bassa — sottotriage). Il sottotriage è potenzialmente letale. Un infermiere gestisce il triage in 3 minuti, l'AI in 15 secondi. Il pronto soccorso è cronicamente in affanno con tempi di attesa medi di 4 ore. L'AI come assistente o come decisore?",
+      "conflict_type": ["risk_assessment", "ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["triage_ai", "pronto_soccorso", "sottotriage", "rischio_clinico", "sovraccarico"],
+      "structural_conflict": "Come decisore, il 5% di sottotriage su migliaia di pazienti/mese significa decine di pazienti gravi sottovalutati. Come assistente, l'AI velocizza il processo ma l'infermiere è comunque il collo di bottiglia — e tende ad accettare il suggerimento dell'AI per automation bias. Il sovratriage è 'sicuro' individualmente ma satura le risorse, danneggiando indirettamente tutti. Il pronto soccorso in affanno ha bisogno di velocità, ma la velocità senza accuratezza è pericolosa."
+    },
+    {
+      "prompt": "Un'azienda vuole usare dati sintetici per trainare un modello di fraud detection. Il generatore sintetico (CTGAN) produce transazioni con distribuzione statistica simile ai dati reali. Su 1M di transazioni reali, 0.1% sono frodi. CTGAN genera 10M di transazioni sintetiche con lo stesso ratio. Ma le frodi sintetiche sono basate sui pattern di frode NOTI — il modello trainato sui sintetici non rileverà nuovi schemi di frode non presenti nel training. Un modello trainato su dati reali ha recall del 82% sulle frodi. Lo stesso modello trainato su dati sintetici ha recall del 91% in test (sintetico) ma solo 68% su dati reali. Come usi correttamente i dati sintetici senza degradare la capacità di rilevazione?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["dati_sintetici", "fraud_detection", "ctgan", "distribuzione", "overfitting_sintetico"],
+      "structural_conflict": "I dati sintetici amplificano i pattern noti ma non creano pattern nuovi. Il recall del 91% su test sintetico è illusorio — i dati sintetici e il test set condividono la stessa distribuzione generata. Il 68% su dati reali mostra che il modello ha memorizzato gli artefatti del generatore. Ma i dati reali sono insufficienti (solo 1.000 frodi su 1M). Il problema fondamentale è che non si può sintetizzare ciò che non si conosce."
+    },
+    {
+      "prompt": "Un governo vuole creare un 'punteggio di rischio recidiva' basato su AI per le decisioni di libertà condizionale. Il modello usa: storia criminale, età al primo arresto, tipo di reato, istruzione, occupazione e area di residenza. L'accuracy complessiva è 72%. Ma il modello predice recidiva per il 45% dei detenuti neri vs il 23% dei detenuti bianchi. Analizzando i dati storici, il tasso di RE-ARRESTO (non di recidiva effettiva) è più alto per i neri perché le aree a maggioranza nera hanno più sorveglianza poliziesca. Il modello sta imparando il bias di sorveglianza, non la criminalità reale. Come risolvi un bias che è nel dato stesso, non nel modello?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["giustizia_penale", "recidiva", "bias_sistemico", "sorveglianza_differenziale", "equita"],
+      "structural_conflict": "Il modello è matematicamente corretto — predice i re-arresti con buona accuracy. Ma i re-arresti sono una proxy distorta della recidiva reale. Rimuovere la razza non aiuta: area di residenza, occupazione e istruzione sono proxy. Usare equal opportunity constraints forza risultati uguali ma potrebbe rilasciare soggetti ad alto rischio reale. Il bias non è nel modello ma nel sistema giudiziario stesso — l'AI lo amplifica. Nessun fix tecnico può correggere un'ingiustizia sistemica."
+    },
+    {
+      "prompt": "Un team di ML deve scegliere come gestire missing values in un dataset tabellare di 500K righe e 80 feature per un modello di previsione churn. Il 15% dei valori è mancante, con pattern non casuali (i clienti che stanno per churnare compilano meno i form). Le opzioni: (A) imputation con la media — semplice, ma distrugge il segnale informativo del 'dato mancante'; (B) imputation con modello (MICE, iterative imputer) — preserva correlazioni ma introduce circolarità se il pattern di missingness è predittivo; (C) creare feature binarie 'is_missing' + imputation — cattura il segnale ma aggiunge 80 feature e rischia overfitting; (D) usare modelli che gestiscono nativamente i missing (XGBoost, LightGBM) — elegante ma nasconde il problema. Il pattern MNAR (Missing Not At Random) è il vero segnale predittivo. Come lo sfrutti senza perderlo?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["missing_values", "feature_engineering", "mnar", "imputation", "churn"],
+      "structural_conflict": "Il fatto che i dati manchino E' il segnale più forte per il churn. L'imputation con media lo distrugge. L'imputation con modello lo distorce. Le feature is_missing lo preservano ma introducono dimensionalità. I tree-based models lo gestiscono implicitamente ma non in modo trasparente. L'ironia è che il 'dato mancante' è più informativo del dato presente."
+    }
+  ]
+}

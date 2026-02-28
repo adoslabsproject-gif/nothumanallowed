@@ -1,0 +1,631 @@
+{
+  "domain": "urbanistica",
+  "description": "Urbanistica, pianificazione territoriale, smart city, mobilità urbana, rigenerazione, gentrificazione",
+  "prompts": [
+    {
+      "prompt": "Cos'è la zonizzazione e a cosa serve nella pianificazione urbanistica?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "zonizzazione",
+        "pianificazione",
+        "concetti_base"
+      ],
+      "structural_conflict": "La zonizzazione separa le funzioni per evitare conflitti (industria lontano da residenza) ma la separazione stessa crea dipendenza dall'automobile e quartieri monofunzionali morti fuori orario. La soluzione crea il problema successivo."
+    },
+    {
+      "prompt": "Qual è la differenza tra piano regolatore generale e piano urbanistico comunale?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "piano_regolatore",
+        "strumenti_urbanistici",
+        "concetti_base"
+      ],
+      "structural_conflict": "Il PRG è rigido e prevedibile ma non si adatta ai cambiamenti. Il PUC è flessibile ma crea incertezza per cittadini e investitori. Lo strumento urbanistico deve essere simultaneamente stabile e adattivo — due proprietà in contraddizione."
+    },
+    {
+      "prompt": "Cosa si intende per consumo di suolo e perché è un problema in Italia?",
+      "conflict_type": [
+        "values_tradeoff"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "consumo_suolo",
+        "impermeabilizzazione",
+        "sostenibilita"
+      ],
+      "structural_conflict": "L'Italia perde 2,7 m² di suolo al secondo (dato ISPRA 2025) ma la crescita economica richiede infrastrutture. Il suolo consumato è irreversibile ma il blocco totale impedisce lo sviluppo. Il compromesso 'consumo zero netto' è un gioco contabile che non restituisce suolo vero."
+    },
+    {
+      "prompt": "Cos'è la rigenerazione urbana e in cosa differisce dalla ristrutturazione edilizia?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "rigenerazione_urbana",
+        "ristrutturazione",
+        "concetti_base"
+      ],
+      "structural_conflict": "La rigenerazione è più ambiziosa (sociale + economica + fisica) ma più lenta, costosa e incerta. La ristrutturazione è veloce ma non cambia il contesto. Il meglio è nemico del bene, ma il bene non risolve i problemi strutturali."
+    },
+    {
+      "prompt": "Cosa sono gli standard urbanistici e quali sono i principali requisiti in Italia (DM 1444/1968)?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "standard_urbanistici",
+        "servizi",
+        "verde_pubblico",
+        "normativa"
+      ],
+      "structural_conflict": "Gli standard del 1968 garantiscono minimi universali ma sono calibrati su una società che non esiste più. Aggiornarli è necessario ma qualsiasi modifica viene letta come riduzione dei diritti acquisiti."
+    },
+    {
+      "prompt": "Cos'è una smart city? Fai tre esempi concreti di tecnologie smart applicate alla gestione urbana.",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "smart_city",
+        "tecnologia",
+        "gestione_urbana"
+      ],
+      "structural_conflict": "La smart city promette efficienza tramite dati ma trasforma ogni cittadino in una fonte di dati. L'ottimizzazione dei servizi richiede sorveglianza. La città 'intelligente' non chiede il consenso informato dei suoi abitanti per raccogliere dati su di loro."
+    },
+    {
+      "prompt": "Cosa si intende per gentrificazione e quali sono i suoi indicatori principali?",
+      "conflict_type": [
+        "values_tradeoff"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "gentrificazione",
+        "indicatori",
+        "concetti_base"
+      ],
+      "structural_conflict": "La gentrificazione è simultaneamente miglioramento oggettivo (meno degrado, più servizi, più sicurezza) e espulsione sociale (i residenti originali non possono più permettersi il quartiere migliorato). Lo stesso fenomeno è positivo o negativo a seconda di chi si chiede."
+    },
+    {
+      "prompt": "Qual è la differenza tra densificazione e sprawl urbano? Quali sono i vantaggi e svantaggi di ciascuno?",
+      "conflict_type": [
+        "strategy_choice"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "densificazione",
+        "sprawl",
+        "forma_urbana"
+      ],
+      "structural_conflict": "La densificazione riduce il consumo di suolo ma aumenta la pressione sulle infrastrutture esistenti. Lo sprawl consuma suolo ma offre più spazio e qualità percepita. Entrambi i modelli hanno esternalità che ricadono su chi non ha scelto."
+    },
+    {
+      "prompt": "Una città di 250.000 abitanti deve decidere dove costruire un nuovo ospedale da 300 posti letto (investimento: 180M€). Due siti disponibili: (A) area periferica con terreno a basso costo (12M€) e buona accessibilità autostradale ma lontana 8km dal centro — penalizza il 35% della popolazione senza auto; (B) area semicentrale su un'ex area industriale che richiede bonifica (costo bonifica: 22M€, tempi: 18 mesi extra) ma è a 2km dal centro e servita da 3 linee bus. Il sito A costa 10M€ meno e apre 18 mesi prima. Il sito B è più equo ma più costoso e lento. Quale sito massimizza il beneficio pubblico e come si pesano i diversi criteri?",
+      "conflict_type": [
+        "strategy_choice",
+        "resource_allocation"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "localizzazione",
+        "ospedale",
+        "accessibilita",
+        "bonifica",
+        "equita_territoriale"
+      ],
+      "structural_conflict": "Il sito economico esclude chi non ha auto (spesso i più fragili). Il sito equo costa di più e arriva dopo — i 18 mesi di ritardo significano pazienti non curati. La bonifica è un costo ambientale del passato che grava sul presente. L'accessibilità autostradale favorisce chi già è mobile."
+    },
+    {
+      "prompt": "Un quartiere residenziale di 15.000 abitanti, costruito negli anni '70 con edilizia popolare, ha un tasso di criminalità 3 volte superiore alla media cittadina, il 40% degli appartamenti è in cattive condizioni, e il valore immobiliare è il 55% della media urbana. Il comune ha 25M€ da investire. Le opzioni: (A) demolizione e ricostruzione totale — sposta temporaneamente 15.000 persone per 4 anni, crea quartiere nuovo ma distrugge la comunità esistente; (B) riqualificazione graduale con residenti in loco — più lenta (10 anni), meno traumatica, ma il cantiere perpetuo scoraggia nuovi investimenti; (C) mix: demolire il 30% peggiore, riqualificare il 70%, e aggiungere servizi commerciali per attrarre classe media — funziona economicamente ma è social engineering. Quale strategia preserva la comunità senza congelare il degrado?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "edilizia_popolare",
+        "riqualificazione",
+        "demolizione",
+        "comunita",
+        "degrado"
+      ],
+      "structural_conflict": "La demolizione è efficace ma cancella legami sociali di 50 anni. La riqualificazione graduale mantiene il tessuto ma il cantiere perpetuo peggiora la vita nel frattempo. Il mix è pragmatico ma decide chi resta e chi va — urbanistica come ingegneria sociale. Nessuna opzione tratta i residenti come soggetti: sono sempre oggetti di intervento."
+    },
+    {
+      "prompt": "Una città di 180.000 abitanti ha un centro storico medievale (5.200 residenti, età media 72 anni) che sta morendo: il 35% dei fondi commerciali è chiuso, il 20% degli edifici è inagibile, gli affitti sono bassi ma nessuno vuole abitarci perché non c'è parcheggio, l'accessibilità è scarsa e non ci sono servizi (la farmacia più vicina è a 1.2km). Inserire parcheggi e supermercati nel centro storico distrugge il patrimonio. Non inserirli lo condanna allo spopolamento. Come si rende vivibile un centro storico vincolato senza snaturarlo e senza lasciarlo morire?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "centro_storico",
+        "patrimonio",
+        "spopolamento",
+        "accessibilita",
+        "vincoli"
+      ],
+      "structural_conflict": "La conservazione del patrimonio e la vivibilità contemporanea sono in conflitto diretto. I vincoli proteggono la forma ma uccidono la funzione. Senza funzione la forma degrada comunque. Il centro storico perfettamente conservato ma vuoto è un museo, non una città."
+    },
+    {
+      "prompt": "Una regione deve aggiornare il piano territoriale di coordinamento. I dati mostrano che negli ultimi 20 anni: il 60% della crescita edilizia è avvenuta lungo le strade extraurbane in modo lineare (ribbon development); i centri minori si sono svuotati (-25% abitanti) mentre le frazioni lungo la statale sono cresciute (+40%); il risultato è un territorio né urbano né rurale dove il trasporto pubblico non è efficiente (densità insufficiente) e le auto sono obbligatorie. Il danno è fatto. Come si pianifica il recupero di un territorio già compromesso dalla dispersione insediativa?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "dispersione_insediativa",
+        "pianificazione_territoriale",
+        "sprawl",
+        "ribbon_development"
+      ],
+      "structural_conflict": "Concentrare lo sviluppo futuro non risolve quello passato. Demolire l'esistente è politicamente impossibile e umanamente inaccettabile. Servire con trasporto pubblico una densità insufficiente è antieconomico. Il territorio disperso è una condizione permanente — non un problema ma il nuovo stato delle cose."
+    },
+    {
+      "prompt": "Un comune costiero di 30.000 abitanti ha un'economia basata per il 70% sul turismo estivo. Il piano urbanistico deve decidere se: (A) consentire la costruzione di un resort da 500 camere su un'area di 12 ettari (investimento privato: 90M€, 400 posti di lavoro stagionali, impatto paesaggistico significativo); (B) sviluppare turismo diffuso recuperando 150 edifici storici nel centro (investimento misto pubblico/privato: 45M€, 200 posti di lavoro annuali, impatto paesaggistico nullo ma tempi: 8 anni); (C) diversificare l'economia puntando su un polo tecnologico (investimento pubblico: 35M€, risultati incerti, rischio che il polo resti vuoto come il 60% delle aree produttive pianificate nei comuni simili). Il turismo è certo ma fragile (una pandemia lo azzera). La diversificazione è resiliente ma incerta. Come si pianifica un territorio mono-economico?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty",
+        "resource_allocation"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "turismo",
+        "monoeconomia",
+        "resort",
+        "diversificazione",
+        "territorio_costiero"
+      ],
+      "structural_conflict": "Il resort è certo e veloce ma rende il territorio ancora più dipendente dal turismo. Il turismo diffuso è sostenibile ma lento e non scala. Il polo tecnologico è una scommessa — la maggioranza fallisce. La scelta urbanistica è una scelta economica che vincola 30.000 persone per decenni."
+    },
+    {
+      "prompt": "Una metropoli di 1.2 milioni di abitanti ha un problema di isola di calore urbano: la temperatura estiva media è 4.5°C superiore alle aree rurali circostanti. Il piano prevede di piantare 500.000 alberi in 10 anni (costo: 120M€, riduzione prevista: 1.5°C). Ma gli alberi richiedono acqua (15.000 m³/giorno aggiuntivi in estate) in una città che già raziona l'acqua 45 giorni/anno. Le alternative tecnologiche (tetti verdi obbligatori, cool pavement) costano 3 volte di più per grado di riduzione. Gli alberi sono la soluzione più efficace ma aggravano la crisi idrica. Come si pianifica l'adattamento climatico quando le soluzioni competono per le stesse risorse scarse?",
+      "conflict_type": [
+        "values_tradeoff",
+        "resource_allocation"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "isola_calore",
+        "verde_urbano",
+        "crisi_idrica",
+        "adattamento_climatico",
+        "risorse_scarse"
+      ],
+      "structural_conflict": "Il calore uccide (800 morti/anno in più nelle ondate) ma anche la siccità. Piantare alberi che moriranno per mancanza d'acqua è uno spreco. Non piantarli condanna la città al surriscaldamento. Le risorse idriche e termiche sono in competizione diretta. L'adattamento climatico ha costi che competono tra loro."
+    },
+    {
+      "prompt": "Un quartiere periferico di 40.000 abitanti non ha nessun spazio culturale (cinema, teatro, biblioteca, centro sociale). Il comune ha un terreno disponibile di 8.000 m² e un budget di 15M€. Tre progetti concorrenti: (A) biblioteca + centro sociale polivalente — beneficio diffuso, 500 utenti/giorno previsti, costo 12M€; (B) cinema multisala + spazi commerciali — attrae visitatori anche da fuori quartiere, genera entrate (canone annuo 200K€), costo 15M€ ma il gestore privato vuole un contratto trentennale; (C) parco urbano con anfiteatro all'aperto — costo 5M€, zero entrate, usabile solo 7 mesi/anno, ma è l'unica opzione che non richiede manutenzione costosa. I residenti nel sondaggio: 45% biblioteca, 35% cinema, 20% parco. Ma il sondaggio ha raggiunto solo il 12% dei residenti. Quale progetto, e il sondaggio è una base decisionale sufficiente?",
+      "conflict_type": [
+        "strategy_choice",
+        "resource_allocation"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "spazi_culturali",
+        "periferia",
+        "partecipazione",
+        "scelta_progettuale",
+        "beni_comuni"
+      ],
+      "structural_conflict": "Il sondaggio al 12% non rappresenta il quartiere ma è l'unico dato disponibile. La biblioteca è il bene più pubblico ma non genera reddito. Il cinema attrae ma vincola per 30 anni a un operatore privato. Il parco è economico ma insufficiente. La scelta urbanistica per 40.000 persone viene fatta con il consenso di 4.800."
+    },
+    {
+      "prompt": "Una città universitaria di 90.000 abitanti (di cui 25.000 studenti) affronta una crisi abitativa: gli affitti sono saliti del 65% in 10 anni, il 40% degli studenti vive in appartamenti non a norma, e le famiglie residenti a reddito medio vengono espulse dal centro. Il mercato produce 200 nuovi alloggi/anno, la domanda è di 800. Le opzioni: (A) calmiere degli affitti — blocca i prezzi ma i proprietari ritirano gli alloggi dal mercato (successo a Berlino: -50% offerta in 3 anni); (B) residenze universitarie pubbliche per 3.000 posti (costo: 120M€, tempi: 5 anni) — risolve per gli studenti ma non per le famiglie; (C) incentivi fiscali ai proprietari che affittano a canone concordato (meno 30% IMU) — debole, adesione stimata al 15%. Come si governa un mercato immobiliare in una città dove la domanda strutturale supera l'offerta e ogni intervento ha effetti collaterali?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "crisi_abitativa",
+        "studenti",
+        "affitti",
+        "calmiere",
+        "housing"
+      ],
+      "structural_conflict": "Il calmiere riduce l'offerta. Costruire risolve un segmento ma non l'altro. Gli incentivi sono deboli. Il problema è strutturale: la città attrae più persone di quante possa ospitare e il mercato non produce abbastanza alloggi. Ogni intervento sul prezzo riduce l'offerta. Ogni intervento sull'offerta richiede anni e miliardi."
+    },
+    {
+      "prompt": "Un quartiere degradato viene rigenerato con investimenti pubblici di 50M€: nuovi marciapiedi, parco di 3 ettari, scuola elementare, fermata della metropolitana. I valori immobiliari salgono del 200% in 5 anni. I residenti originali (reddito medio 18.000€/anno) pagavano affitti di 350€/mese — ora gli affitti sono 900€/mese. Il 60% dei residenti originali è stato costretto a trasferirsi in periferie ancora più degradate. La rigenerazione ha migliorato il quartiere eliminando chi doveva beneficiarne. I nuovi residenti (reddito medio 52.000€) usufruiscono di investimenti pubblici pagati da tasse di tutti. Come si previene la gentrificazione da investimento pubblico senza bloccare lo sviluppo?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "gentrificazione",
+        "investimento_pubblico",
+        "espulsione",
+        "equita",
+        "rigenerazione"
+      ],
+      "structural_conflict": "L'investimento pubblico che migliora il quartiere aumenta i valori immobiliari che espellono i residenti. Il beneficio pubblico viene catturato dal mercato privato. Bloccare gli affitti disincentiva la manutenzione. Non investire condanna al degrado. La gentrificazione è il mercato che risponde correttamente a un miglioramento — il problema non è il mercato, è che il miglioramento pubblico genera profitto privato."
+    },
+    {
+      "prompt": "Una città di 600.000 abitanti vuole diventare 'città 15 minuti' — ogni servizio essenziale raggiungibile a piedi o in bici in 15 minuti. L'analisi mostra che: il centro (150.000 ab.) è già a 10 minuti per tutto; la prima periferia (250.000 ab.) è a 20-25 minuti; la seconda periferia (200.000 ab.) è a 35-45 minuti. Portare servizi nella seconda periferia costa 400M€ e richiede 15 anni. Ma la seconda periferia esiste perché il piano regolatore degli anni '60 l'ha progettata come dormitorio — le funzioni sono assenti by design. Rifare l'urbanistica di 30km² per 200.000 persone è possibile? O la città 15 minuti è un privilegio del centro che il centro vuole universalizzare senza capire che la periferia ha una logica diversa?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "citta_15_minuti",
+        "periferia",
+        "prossimita",
+        "retrofitting",
+        "modello_urbano"
+      ],
+      "structural_conflict": "La città 15 minuti funziona dove la densità e il mix funzionale già esistono — cioè nel centro. La periferia è stata costruita per funzionare con l'auto. Trasformarla richiede un investimento urbanistico paragonabile a quello originale. Il modello universale ignora che le periferie hanno esigenze diverse dal centro. La prossimità è un prodotto della densità, non una policy implementabile ovunque."
+    },
+    {
+      "prompt": "Una megalopoli di 3 milioni di abitanti ha 1.8 milioni di veicoli privati. L'inquinamento causa 2.400 morti premature/anno (stima OMS). Il sindaco propone una ZTL (zona a traffico limitato) di 25km² (il 15% del territorio urbano) con accesso a pagamento: 10€/giorno per auto Euro 4-5, 20€/giorno per Euro 0-3, gratis per elettriche. La stima: -35% traffico nella ZTL, -20% PM10. I problemi: (A) il 70% dei lavoratori che entra nella ZTL guadagna meno di 25.000€/anno e non può permettersi un'auto elettrica (prezzo medio: 35.000€); (B) il commercio nella ZTL prevede un calo del 25% di fatturato nel primo anno; (C) le periferie fuori dalla ZTL vedranno un aumento del 40% del traffico di attraversamento; (D) i 180M€ di entrate dalla ZTL finanzieranno il trasporto pubblico, ma le nuove linee saranno pronte tra 4 anni. La ZTL è una tassa regressiva che protegge la salute di chi vive nel centro scaricando il traffico sulla periferia?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "ztl",
+        "inquinamento",
+        "equita_sociale",
+        "mobilita",
+        "regressivita"
+      ],
+      "structural_conflict": "La salute pubblica richiede riduzione del traffico. La riduzione colpisce chi non ha alternative (lavoratori poveri senza auto elettrica). I benefici sanitari sono nel centro, i costi economici nelle periferie. I 4 anni di gap tra ZTL e trasporto pubblico alternativo significano 4 anni di penalizzazione senza opzioni. La ZTL è una politica sanitaria progressiva ed economica regressiva simultaneamente."
+    },
+    {
+      "prompt": "Un'area industriale dismessa di 45 ettari nel cuore di una città di 350.000 abitanti deve essere riconvertita. È il più grande vuoto urbano in Italia per una città di queste dimensioni. Tre visioni si scontrano: (A) il sindaco vuole un parco tecnologico con incubatori di startup (costo pubblico: 80M€, 2.000 posti di lavoro in 10 anni, rischio: il 65% degli incubatori italiani è sottoutilizzato); (B) un investitore privato propone un quartiere residenziale misto con 3.000 appartamenti e centro commerciale (investimento privato: 250M€, zero costi pubblici ma il 100% dei profitti è privato e il centro commerciale ucciderebbe il 30% del commercio locale); (C) i comitati di quartiere vogliono un grande parco urbano con orti sociali e spazi per associazioni (costo: 15M€, zero posti di lavoro, zero entrate, beneficio ambientale e sociale non quantificabile). I 45 ettari non possono essere divisi (la bonifica richiede un intervento unitario da 35M€). Chi decide, e con quale legittimità, il destino di 45 ettari che influenzeranno la città per 100 anni?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff",
+        "resource_allocation"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "riconversione",
+        "area_industriale",
+        "partecipazione",
+        "visioni_urbane",
+        "brownfield"
+      ],
+      "structural_conflict": "Ogni visione ha una sua razionalità: economica, imprenditoriale, sociale. La scelta è irreversibile per generazioni. Il processo partecipativo dà voce ai residenti attuali ma non a quelli futuri. L'investitore privato risolve il finanziamento ma cattura il valore. Il parco è il bene più pubblico ma non crea economia. Chi non ha voce (i cittadini tra 50 anni) è chi subirà di più la decisione."
+    },
+    {
+      "prompt": "Una città di 500.000 abitanti ha un sistema di trasporto pubblico obsoleto: 800 autobus con età media 14 anni, frequenza di 15-20 minuti sulle linee principali, 35-40 minuti sulle secondarie. Il 68% degli spostamenti avviene in auto privata. Il budget annuo per il TPL è 120M€ (copre il 35% dei costi, il resto sono fondi statali). Tre piani alternativi di investimento decennale: (A) rete tramviaria su 4 direttrici (45km, 800M€, capacità: 150.000 passeggeri/giorno) — alta capacità ma 8 anni di cantiere con impatto devastante sulla viabilità; (B) rete BRT (bus rapid transit) su 8 direttrici (80km, 180M€, capacità: 100.000 passeggeri/giorno) — meno capacità ma operativo in 3 anni; (C) MaaS (Mobility as a Service) con app integrata, bike sharing, car sharing, micro-mobilità (60M€, nessun cantiere) — innovativo ma dipende dalla tecnologia e non funziona per anziani e periferie. La scelta urbanistica del trasporto definirà la forma della città per 50 anni. Quale modello e perché?",
+      "conflict_type": [
+        "strategy_choice",
+        "resource_allocation",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "trasporto_pubblico",
+        "tram",
+        "brt",
+        "maas",
+        "investimento_infrastrutturale"
+      ],
+      "structural_conflict": "Il tram è superiore nel lungo termine ma il cantiere di 8 anni è politicamente letale. Il BRT è buono subito ma non scala. Il MaaS è il futuro ma esclude chi non è digitale. La scelta di oggi vincola la città di domani ma i decisori di oggi non saranno quelli di domani. L'infrastruttura di trasporto è la più irreversibile delle scelte urbanistiche."
+    },
+    {
+      "prompt": "Una regione con 4 milioni di abitanti deve decidere come gestire il rischio sismico. Il 45% degli edifici residenziali (380.000 edifici, 1.2 milioni di appartamenti) è in zona sismica 1 o 2 e non è adeguato. L'adeguamento sismico costerebbe in media 45.000€ per appartamento (totale: 54 miliardi, il 300% del bilancio regionale annuo). Lo stato offre il Sismabonus al 110% ma la misura scade tra 2 anni e la capacità delle imprese locali copre 8.000 interventi/anno — a questo ritmo, servono 150 anni. Un terremoto di magnitudo 6.5 nella zona più popolata causerebbe stimate 8.000-15.000 vittime e 40 miliardi di danni. La probabilità nei prossimi 50 anni è del 30%. Come si governa un rischio certo ma non databile quando le risorse coprono l'1% del fabbisogno?",
+      "conflict_type": [
+        "risk_assessment",
+        "resource_allocation",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "rischio_sismico",
+        "adeguamento",
+        "risorse_scarse",
+        "prevenzione",
+        "sismabonus"
+      ],
+      "structural_conflict": "La prevenzione totale costa 54 miliardi che non esistono. La prevenzione parziale salva alcuni e abbandona altri — chi decide quali edifici prima? Il rischio è statisticamente certo (30% in 50 anni) ma temporalmente incerto — ogni anno senza terremoto riduce la percezione di urgenza. Il costo della prevenzione è certo e immediato, il beneficio è probabilistico e futuro. La politica sconta il futuro molto più della statistica."
+    },
+    {
+      "prompt": "Una città costiera di 120.000 abitanti affronta l'erosione costiera: 3 metri di spiaggia persi ogni anno negli ultimi 20 anni. La prima fila di edifici (2.800 abitazioni, valore catastale: 420M€) sarà a rischio strutturale entro 15 anni. Le opzioni: (A) ripascimento annuale (portare sabbia) — 8M€/anno, soluzione temporanea che si ripete all'infinito; (B) barriere frangiflutti — 45M€, efficaci per 30 anni ma distruggono l'ecosistema costiero e la balneabilità; (C) arretramento gestito (managed retreat) — esproprio della prima fila per 420M€, demolizione e creazione di una fascia di rispetto naturale — è la soluzione definitiva ma 2.800 famiglie perdono la casa; (D) non fare nulla e lasciare che il mercato immobiliare incorpori il rischio — i prezzi caleranno, i proprietari meno abbienti non potranno vendere e saranno intrappolati. Il mare non negozia. Come si pianifica la ritirata?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "erosione_costiera",
+        "managed_retreat",
+        "rischio_climatico",
+        "esproprio",
+        "adattamento"
+      ],
+      "structural_conflict": "Il ripascimento è un costo infinito. Le barriere distruggono l'ecosistema. L'arretramento è l'unica soluzione permanente ma richiede espropri per 420M€ e 2.800 famiglie sfollate. Non fare nulla scarica il costo sui proprietari più deboli. Il cambiamento climatico rende ogni soluzione temporanea tranne l'arretramento — ma l'arretramento è politicamente impossibile finché il mare non arriva."
+    },
+    {
+      "prompt": "Un piano urbanistico prevede la pedonalizzazione del centro storico (12 ettari, 800 attività commerciali, 6.000 residenti). I dati di altre città italiane pedonalizzate mostrano: +30% fatturato commerciale dopo 3 anni ma -25% nel primo anno; -60% inquinamento nel perimetro; +40% valore immobiliare. I commercianti si oppongono violentemente (manifestazione con 2.000 persone). I residenti sono divisi: il 55% è a favore ma il 45% che usa l'auto quotidianamente è contrario. Il parcheggio più vicino sarebbe a 600 metri. Un referendum consultivo viene proposto ma chi vota? Solo i residenti del centro? Tutti i cittadini che usano il centro? Solo i commercianti? La pedonalizzazione beneficia la maggioranza ma penalizza una minoranza concentrata e rumorosa. Come si governa una transizione dove i costi a breve sono certi e i benefici a lungo incerti?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "pedonalizzazione",
+        "commercianti",
+        "partecipazione",
+        "transizione",
+        "costi_breve_vs_lungo"
+      ],
+      "structural_conflict": "I dati dicono che la pedonalizzazione funziona ma il primo anno è devastante per i commercianti. Chi fallisce nel primo anno non c'è più per beneficiare del terzo. La democrazia locale non sa gestire i costi concentrati su pochi e i benefici diffusi su molti. Il referendum è problematico: chi ha diritto di voto su uno spazio usato da tutti ma abitato da pochi?"
+    },
+    {
+      "prompt": "Una smart city ha installato 15.000 sensori IoT per gestire traffico, illuminazione, rifiuti e sicurezza. Il sistema raccoglie 2 TB di dati/giorno su movimenti, consumi energetici e comportamenti. L'efficienza è aumentata: -22% consumi energetici, -18% tempi di percorrenza, -30% rifiuti non raccolti. Ma un data breach espone 6 mesi di dati di movimento di 400.000 cittadini — si può ricostruire chi va dove, quando, con chi. Un'inchiesta giornalistica rivela che il fornitore del sistema (un consorzio privato con contratto ventennale) rivende dati aggregati a broker pubblicitari. I cittadini non sono mai stati informati che i sensori raccoglievano dati individuali — il consenso era sepolto in una delibera comunale di 847 pagine. Come si governa una smart city senza trasformarla in una surveillance city?",
+      "conflict_type": [
+        "values_tradeoff",
+        "risk_assessment"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "smart_city",
+        "sorveglianza",
+        "data_breach",
+        "privacy",
+        "iot",
+        "consenso"
+      ],
+      "structural_conflict": "L'efficienza della smart city dipende dalla granularità dei dati. Dati aggregati sono meno utili. Dati individuali sono sorveglianza. Il consenso formale (delibera comunale) non è consenso informato. Il contratto ventennale lega la città a un fornitore che ha interessi divergenti (vendere dati). L'efficienza energetica del 22% vale la sorveglianza di 400.000 persone?"
+    },
+    {
+      "prompt": "Una metropoli deve decidere come allocare 600M€ di fondi EU per la transizione ecologica urbana. I quartieri ricchi (reddito medio 65.000€) hanno le condizioni per installare pannelli solari, colonnine elettriche, tetti verdi — il ROI è alto e i residenti co-finanziano. I quartieri poveri (reddito medio 16.000€) hanno edifici energivori (classe G), zero co-finanziamento possibile, ma consumano il 300% in più di energia per metro quadro. L'efficienza dice: investi dove il ROI è massimo (quartieri ricchi, -40% emissioni con 200M€). L'equità dice: investi dove il bisogno è massimo (quartieri poveri, -15% emissioni con 400M€ perché tutto costa di più). Il risultato efficiente aumenta il divario. Il risultato equo riduce meno le emissioni. Come si alloca il budget climatico in modo giusto ed efficace?",
+      "conflict_type": [
+        "resource_allocation",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "transizione_ecologica",
+        "equita",
+        "efficienza",
+        "divario_energetico",
+        "allocazione"
+      ],
+      "structural_conflict": "L'efficienza climatica e l'equità sociale puntano in direzioni opposte. Investire nei quartieri ricchi massimizza la riduzione di emissioni. Investire nei poveri massimizza il beneficio sociale. I fondi EU richiedono risultati misurabili in CO2, non in equità. Il divario energetico si sovrappone al divario sociale — la transizione ecologica rischia di essere una nuova forma di gentrificazione verde."
+    },
+    {
+      "prompt": "Un paese ha 12 milioni di edifici residenziali, di cui oltre 7 milioni costruiti prima del 1976 (prima di qualsiasi normativa energetica). L'obiettivo EU è 'zero emission building' entro il 2050. La ristrutturazione energetica media costa 60.000€ per unità abitativa. Totale necessario: oltre 400 miliardi in 25 anni (16+ miliardi/anno). Il settore edilizio ha capacità per 150.000 interventi/anno. A questo ritmo, servono oltre 45 anni — ben oltre la scadenza. Il Superbonus 110% ha generato circa 130 miliardi di detrazioni in 4 anni ma ha ristrutturato solo il 4% circa degli edifici residenziali (circa 500.000 immobili), con miliardi di frodi documentate. L'efficienza energetica è un problema di scala industriale trattato con strumenti artigianali. Come si pianifica una ristrutturazione di massa che è fisicamente impossibile con i metodi attuali?",
+      "conflict_type": [
+        "strategy_choice",
+        "resource_allocation",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "efficienza_energetica",
+        "ristrutturazione_massa",
+        "superbonus",
+        "scala_industriale",
+        "obiettivi_eu"
+      ],
+      "structural_conflict": "L'obiettivo è chiaro (2050), le risorse sono note (oltre 400 miliardi), la capacità produttiva è insufficiente (oltre 45 anni per un obiettivo a 25). Il Superbonus ha dimostrato che il 110% di incentivo genera frodi (miliardi scoperti) e non scala nonostante 130 miliardi di detrazioni. Servono metodi industriali (prefabbricazione, economie di scala) che il settore edilizio italiano, frammentato in centinaia di migliaia di micro-imprese, non può produrre. Il problema urbanistico è in realtà un problema industriale."
+    },
+    {
+      "prompt": "Due città confinanti (A: 200.000 abitanti, B: 150.000 abitanti) hanno piani urbanistici in totale contraddizione. La città A ha adottato una politica di densificazione e zero consumo di suolo — costruisce solo su terreni già urbanizzati. La città B ha mantenuto standard espansivi e offre terreni a basso costo al confine con A. Risultato dopo 10 anni: le imprese e i nuovi residenti scelgono B (tasse più basse, terreni disponibili, meno vincoli); A perde il 12% della popolazione e il 20% delle entrate fiscali; B cresce del 25% ma senza infrastrutture adeguate (fognature al collasso, scuole sovraffollate); il consumo di suolo regionale è aumentato perché il suolo risparmiato da A è stato consumato da B e altri. La pianificazione virtuosa di A è stata punita dal mercato. La governance urbanistica comunale è strutturalmente inadeguata quando i comuni competono tra loro?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "competizione_territoriale",
+        "dumping_urbanistico",
+        "governance_sovracomunale",
+        "consumo_suolo"
+      ],
+      "structural_conflict": "La pianificazione virtuosa è penalizzata dalla competizione tra comuni. Il comune A perde popolazione e gettito per aver fatto la cosa giusta. Il comune B guadagna nel breve termine ma accumula debito infrastrutturale. La governance urbanistica comunale in un mercato libero è un gioco del dilemma del prigioniero: cooperare è svantaggioso individualmente. Serve governance sovracomunale ma chi la impone viola l'autonomia locale."
+    },
+    {
+      "prompt": "Una città decide di convertire 3.000 posti auto di parcheggio su strada in: 800 posti per dehors di ristoranti, 600 per piste ciclabili, 500 per aree verdi pocket park, 400 per stazioni di bike/scooter sharing, 200 per aree gioco bambini, 500 per ampliamento marciapiedi. Il piano è supportato dal 60% dei cittadini in sondaggio. Ma il 100% dei 3.000 automobilisti che perdono il posto reagisce con furia — blocchi stradali, petizioni con 15.000 firme, ricorsi al TAR. La perdita è concentrata (3.000 persone perdono qualcosa di specifico), il beneficio è diffuso (200.000 persone guadagnano qualcosa di generico). Questo schema asimmetrico — perdita concentrata vs beneficio diffuso — blocca ogni riforma urbana. Come si governa la transizione dello spazio pubblico quando i perdenti sono più motivati dei vincitori?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "spazio_pubblico",
+        "parcheggi",
+        "perdita_concentrata",
+        "beneficio_diffuso",
+        "transizione"
+      ],
+      "structural_conflict": "L'economia politica della riforma urbana è asimmetrica: chi perde lo sa con certezza (il mio parcheggio), chi guadagna non lo percepisce (un po' più di verde). I perdenti si organizzano, i vincitori no. Il TAR può bloccare per anni una decisione democratica. Lo spazio pubblico è finito e ogni uso esclude gli altri — il parcheggio E la pista ciclabile non possono stare nello stesso metro quadro. La transizione richiede di togliere prima di dare."
+    },
+    {
+      "prompt": "Un terremoto distrugge il 40% di una città di 25.000 abitanti. 10.000 sfollati, 800 edifici distrutti, 400 danneggiati. La ricostruzione richiede una scelta fondamentale: (A) ricostruzione 'dov'era, com'era' — preserva l'identità urbana ma riproduce le vulnerabilità (strade strette, edifici addossati, rete idrica sotto gli edifici, centro storico su terreno instabile); (B) ricostruzione in sito diverso a 3km (terreno stabile, urbanistica moderna, anti-sismica) — sicuro ma distrugge 800 anni di identità urbana e i residenti rifiutano di spostarsi; (C) ricostruzione parziale: centro storico come museo/memoriale, nuova città adiacente — compromesso ma il centro storico vuoto diventa un rudere in 20 anni senza manutenzione. Gli sfollati sono in container da 2 anni e la pazienza è finita. Come si ricostruisce un'identità urbana distrutta da un sisma senza ricostruire le vulnerabilità?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "ricostruzione_post_sisma",
+        "identita_urbana",
+        "vulnerabilita",
+        "sfollati",
+        "patrimonio"
+      ],
+      "structural_conflict": "Ricostruire uguale riproduce il rischio. Ricostruire altrove uccide l'identità. Il compromesso non funziona: una città a metà muore. Il tempo è nemico: ogni anno nei container erode la comunità. I residenti vogliono tornare a casa ma 'casa' non esiste più e il luogo dove sorgeva è pericoloso. L'urbanistica post-disastro deve decidere tra sicurezza e identità con persone traumatizzate che non possono decidere lucidamente."
+    },
+    {
+      "prompt": "Una città di 1 milione di abitanti pianifica l'espansione della rete ciclabile da 60km a 250km in 8 anni (investimento: 150M€). Il piano prevede di togliere una corsia auto su 35 arterie principali per creare piste ciclabili protette. La modellazione del traffico prevede: 18 mesi di caos (tempi di percorrenza auto +40%), poi stabilizzazione (-10% auto, +300% ciclisti, tempo medio invariato in 3 anni). Ma i 18 mesi di caos coincidono con le elezioni comunali. Nessun sindaco sopravvive politicamente a 18 mesi di traffico paralizzato. Il piano è stato approvato da 3 giunte diverse e mai implementato per questo motivo. Il ciclo elettorale di 5 anni è incompatibile con riforme infrastrutturali che richiedono 2 anni di peggioramento prima del miglioramento. Come si governa una città quando l'orizzonte politico è più corto dell'orizzonte urbanistico?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "piste_ciclabili",
+        "ciclo_elettorale",
+        "orizzonte_temporale",
+        "transizione_mobilita",
+        "governance_urbana"
+      ],
+      "structural_conflict": "Il piano è corretto tecnicamente ma suicida politicamente. Il miglioramento richiede un peggioramento transitorio che nessun politico può permettersi. Tre giunte diverse hanno approvato e poi bloccato lo stesso piano. La governance urbana è prigioniera del ciclo elettorale. Le infrastrutture richiedono decenni, la politica ragiona in quinquenni. La soluzione tecnica esiste, la soluzione politica no."
+    },
+    {
+      "prompt": "Un comune di 60.000 abitanti scopre che il 40% dei condoni edilizi concessi tra il 1985 e il 2003 riguarda edifici in zona a rischio idrogeologico elevato (R3 e R4). Sono 2.200 edifici con 8.500 residenti. Il condono li ha resi legali ma non li ha resi sicuri. Ogni anno la probabilità di alluvione o frana è del 4%. La delocalizzazione di tutti gli edifici costerebbe 380M€ (6 volte il bilancio annuale del comune). L'alternativa è opere di mitigazione (argini, muri di contenimento) per 90M€ che riducono il rischio del 60% ma non lo eliminano. Il 70% dei residenti rifiuta di trasferirsi: 'la casa è mia, l'ho condonata, lo stato non può toccarla'. Come si governa il conflitto tra proprietà privata condonata e sicurezza pubblica quando il condono stesso ha creato il pericolo?",
+      "conflict_type": [
+        "values_tradeoff",
+        "risk_assessment"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "condono_edilizio",
+        "rischio_idrogeologico",
+        "proprieta_privata",
+        "delocalizzazione",
+        "sicurezza"
+      ],
+      "structural_conflict": "Il condono ha legalizzato l'illegale ma non ha sanato il rischio fisico. I residenti hanno un diritto di proprietà formale su un bene in zona pericolosa. Lo stato che ha concesso il condono è corresponsabile del rischio. La delocalizzazione è l'unica soluzione sicura ma costa più di quanto il comune può spendere. La mitigazione riduce il rischio senza eliminarlo — e il 40% residuo è comunque inaccettabile per le norme attuali."
+    },
+    {
+      "prompt": "Una città di 200.000 abitanti ha 35.000 alloggi vuoti (il 18% del patrimonio edilizio totale) mentre 4.200 famiglie sono in lista d'attesa per l'edilizia residenziale pubblica. I proprietari tengono gli alloggi vuoti per: speculazione (attesa di aumento dei valori, 40%), contenzioso ereditario (25%), condizioni fatiscenti senza risorse per ristrutturare (20%), seconda casa occasionale (15%). Il comune può: (A) tassare gli alloggi vuoti con IMU maggiorata del 200% — punitivo ma rischia di colpire i proprietari più fragili (quelli che non ristrutturano perché non hanno soldi); (B) requisizione temporanea con compenso (come previsto da alcune legislazioni europee) — efficace ma giuridicamente contestabile in Italia; (C) incentivi alla rimessa in mercato (bonus ristrutturazione + garanzia pubblica sull'affitto) — volontario, adesione prevista: 8%. Come si mobilita un patrimonio edilizio privato inutilizzato per rispondere a un'emergenza abitativa pubblica?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "alloggi_vuoti",
+        "emergenza_abitativa",
+        "proprieta",
+        "tassazione",
+        "requisizione"
+      ],
+      "structural_conflict": "35.000 alloggi vuoti accanto a 4.200 famiglie senza casa è un fallimento di mercato. La proprietà privata include il diritto di non usare il bene. La tassazione punitiva colpisce anche chi non può permettersi di ristrutturare. La requisizione è efficace ma viola la cultura giuridica italiana. Gli incentivi sono troppo deboli. Il mercato immobiliare non alloca efficientemente quando la speculazione è più redditizia dell'affitto."
+    },
+    {
+      "prompt": "Una città di 150.000 abitanti deve aggiornare il piano del commercio. I dati: 3 centri commerciali periferici (aperti tra 2005-2015, superficie totale: 85.000 m²) hanno catturato il 55% del commercio al dettaglio. Il centro città ha perso il 45% dei negozi in 15 anni (da 820 a 450). I centri commerciali generano 2.800 posti di lavoro (di cui l'80% part-time a 800€/mese), i negozi del centro ne generavano 1.600 (di cui il 70% full-time a 1.400€/mese). Il piano può: (A) bloccare nuove aperture di grandi superfici — protegge l'esistente ma non recupera il perso; (B) incentivare il ritorno al centro con affitti calmierati e pedonalizzazione — costa 8M€/anno con risultati incerti; (C) tassare i parcheggi dei centri commerciali per internalizzare le esternalità (traffico, consumo suolo) — efficace ma il 60% dei clienti si sposterebbe sul commercio online, non sul centro città. La desertificazione commerciale dei centri è reversibile?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "commercio",
+        "centri_commerciali",
+        "desertificazione",
+        "centro_citta",
+        "piano_commercio"
+      ],
+      "structural_conflict": "I centri commerciali hanno vinto la competizione sul prezzo e sulla comodità. Tassarli non riporta i clienti nel centro — li sposta online. Il ritorno al centro richiede che il centro offra qualcosa che Amazon e i centri commerciali non possono — ma nessuno sa cosa sia. La desertificazione commerciale potrebbe essere irreversibile perché il modello di consumo è cambiato strutturalmente, non per carenza di policy."
+    },
+    {
+      "prompt": "Un nuovo campus universitario per 15.000 studenti deve essere localizzato in un'area metropolitana di 800.000 abitanti. Due opzioni: (A) campus suburbano di 25 ettari su terreno agricolo a 12km dal centro (costo terreno: 8M€, servizio TPL da creare, parcheggio per 3.000 auto, autosufficienza di servizi) — il modello americano che crea un ghetto studentesco autocontenuto; (B) campus urbano diffuso su 8 edifici esistenti riqualificati nel centro città (costo: 65M€ di ristrutturazioni, zero consumo di suolo, integrazione con la città, nessun parcheggio dedicato) — il modello europeo che integra ma non crea identità di campus. I docenti preferiscono A (tranquillità, laboratori grandi), gli studenti preferiscono B (vita urbana, servizi), la città preferisce B (rivitalizzazione), l'università preferisce A (controllo, espansione futura). Chi decide dove mettere 15.000 persone nella città?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "campus_universitario",
+        "localizzazione",
+        "consumo_suolo",
+        "integrazione_urbana",
+        "stakeholder"
+      ],
+      "structural_conflict": "Il campus suburbano consuma suolo e genera mobilità forzata ma funziona per la ricerca. Il campus urbano integra ma non offre spazi per laboratori e crescita. I 4 stakeholder (docenti, studenti, città, università) hanno preferenze opposte a coppie. La decisione urbanistica è di fatto una decisione sul modello di università — e viceversa."
+    },
+    {
+      "prompt": "Una città di 100.000 abitanti in pianura padana ha superato i limiti di PM10 per 95 giorni nell'ultimo anno (limite EU: 35 giorni). Le cause: 40% riscaldamento domestico (80.000 caldaie a gas, 5.000 a pellet), 30% traffico veicolare, 20% agricoltura intensiva nell'hinterland, 10% industria. Il comune può agire solo sul 70% urbano (riscaldamento + traffico). Sostituire tutte le caldaie costerebbe 1.2 miliardi. Bloccare il traffico per 95 giorni/anno paralizza l'economia. L'agricoltura è fuori dalla giurisdizione comunale. L'industria rispetta i limiti individuali ma il cumulo supera la capacità dell'aria. La pianura padana è una conca atmosferica dove l'inquinamento di tutti si concentra sul territorio di ciascuno. Come si governa un problema che nessun singolo comune può risolvere da solo?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "inquinamento",
+        "pm10",
+        "pianura_padana",
+        "governance_multilivello",
+        "competenze"
+      ],
+      "structural_conflict": "Il comune è responsabile della qualità dell'aria ma non controlla il 30% delle cause (agricoltura + industria esterna). Anche se azzerasse il suo 70%, la conca padana raccoglie l'inquinamento dei comuni circostanti. La soluzione richiede coordinamento tra centinaia di comuni, province e regioni — un livello di governance che non esiste operativamente. Il singolo comune che agisce virtuosamente è penalizzato dal vicino che non agisce."
+    },
+    {
+      "prompt": "Un piano urbanistico prevede la costruzione di 2.000 alloggi di edilizia residenziale sociale (ERS) in 4 localizzazioni distribuite nella città. I residenti di tutti e 4 i quartieri si oppongono (sindrome NIMBY): raccolgono 25.000 firme, fanno ricorso al TAR, organizzano presidi. Gli argomenti: 'gli alloggi sociali abbassano il valore delle nostre case del 15%' (dato confermato da studi); 'attirano criminalità' (dato non confermato ma percepito); 'ci sono aree migliori in periferia' (dove nessuno vuole andare a vivere). Il bisogno è reale: 6.500 famiglie in lista d'attesa, tempi medi: 8 anni. Concentrare l'ERS in periferia crea ghetti. Distribuirla nei quartieri scatena l'opposizione. Come si localizza l'edilizia sociale in una città dove tutti la vogliono purché sia altrove?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "edilizia_sociale",
+        "nimby",
+        "localizzazione",
+        "mixite",
+        "opposizione"
+      ],
+      "structural_conflict": "La mixité sociale è urbanisticamente corretta ma politicamente impossibile. I residenti hanno ragione sul calo dei valori (15% documentato) e torto sulla criminalità (non documentato). La concentrazione in periferia è politicamente facile ma urbanisticamente disastrosa. La distribuzione è urbanisticamente corretta ma politicamente suicida. 6.500 famiglie aspettano mentre 25.000 firmatari bloccano — il NIMBY dei molti supera il bisogno dei pochi."
+    },
+    {
+      "prompt": "Una città storica patrimonio UNESCO di 55.000 abitanti riceve 4 milioni di turisti/anno. Il rapporto residenti/turisti è di 1:73. Gli effetti: il 60% dei fondi commerciali è diventato souvenir shop o B&B, i servizi per i residenti (ferramenta, alimentari, medici) sono spariti, gli affitti sono triplicati in 10 anni (da 400€ a 1.200€ per un bilocale), il 30% dei residenti si è trasferito nell'ultimo decennio. La città sta morendo di successo. Le opzioni: (A) numero chiuso per i turisti (max 15.000/giorno) con biglietto d'ingresso (20€) — preserva la vivibilità ma viola la libertà di circolazione e riduce l'economia turistica del 40%; (B) tassa di scopo sugli alloggi turistici (30% del canone) per finanziare servizi ai residenti — genera 12M€/anno ma non ferma la sostituzione residenziale; (C) vincolo urbanistico che vieta il cambio di destinazione d'uso da residenziale a ricettivo — blocca il mercato, i proprietari perdono il 50% del valore potenziale dell'immobile. Il turismo di massa è compatibile con la vita urbana? Esiste un equilibrio o è un gioco a somma zero?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice",
+        "resource_allocation"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "overtourism",
+        "patrimonio_unesco",
+        "residenti_vs_turisti",
+        "numero_chiuso",
+        "turistificazione"
+      ],
+      "structural_conflict": "Il turismo è l'economia della città ma ne è anche la malattia. Limitarlo uccide l'economia. Non limitarlo uccide la città. Il numero chiuso funziona ma è giuridicamente fragile. La tassa mitiga ma non risolve. Il vincolo urbanistico espropria di fatto i proprietari. La città patrimonio UNESCO appartiene all'umanità in teoria ma ai residenti in pratica — e i residenti stanno scappando."
+    },
+    {
+      "prompt": "Un'area metropolitana di 2 milioni di abitanti ha una cintura agricola periurbana di 15.000 ettari che produce il 12% del fabbisogno alimentare locale. La pressione edificatoria offre ai proprietari agricoli 10 volte il valore agricolo del terreno per la conversione edilizia (terreno agricolo: 30.000€/ha, terreno edificabile: 300.000€/ha). Ogni anno 200 ettari vengono convertiti. Al ritmo attuale, la cintura agricola sparirà in 75 anni. Il piano paesaggistico regionale vieta la conversione ma i comuni concedono varianti urbanistiche — 45 varianti in 10 anni, tutte per 'interesse pubblico prevalente'. Il proprietario che non converte perde 270.000€/ha di valore potenziale. Il sistema dei vincoli funziona sulla carta ma non nella realtà. Come si preserva l'agricoltura periurbana quando il valore economico del suolo edificato è 10 volte quello coltivato?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "agricoltura_periurbana",
+        "consumo_suolo",
+        "rendita_fondiaria",
+        "varianti_urbanistiche",
+        "vincoli"
+      ],
+      "structural_conflict": "Il vincolo paesaggistico vieta la conversione ma non compensa il proprietario per il mancato guadagno di 270.000€/ha. Il proprietario agricolo è razionalmente incentivato a cercare la variante. I comuni concedono varianti perché gli oneri di urbanizzazione finanziano il bilancio. Il sistema crea un incentivo strutturale alla violazione del vincolo che esso stesso impone. Preservare la cintura agricola richiede compensare il proprietario — ma con quali fondi?"
+    },
+    {
+      "prompt": "Un progetto di rigenerazione urbana prevede la trasformazione di un ex quartiere industriale di 80 ettari in un nuovo quartiere mixed-use per 25.000 residenti e 10.000 lavoratori. Il masterplan è stato disegnato da un archistar internazionale con edifici iconici, parco lineare di 3km, e standard ambientali LEED Platinum. Il costo totale è di 2.2 miliardi, di cui 400M€ pubblici e 1.8 miliardi privati. Il progetto è eccellente sulla carta ma: (A) i tempi previsti sono 15 anni — in 15 anni cambieranno 3 giunte comunali, le normative, le condizioni di mercato e forse lo stesso archistar; (B) i 25.000 residenti previsti avranno un reddito medio di 55.000€ — il quartiere nasce per la classe medio-alta in una città dove il reddito medio è 28.000€; (C) il parco lineare di 3km separa fisicamente il nuovo quartiere da quelli esistenti (popolazione: reddito medio 22.000€) creando un confine socio-spaziale; (D) l'archistar non ha mai visitato il sito e non conosce il contesto locale. La rigenerazione urbana contemporanea è urbanistica o marketing immobiliare con un parco?",
+      "conflict_type": [
+        "values_tradeoff",
+        "strategy_choice",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "rigenerazione",
+        "archistar",
+        "mixed_use",
+        "segregazione",
+        "marketing_immobiliare",
+        "masterplan"
+      ],
+      "structural_conflict": "Il masterplan è tecnicamente eccellente ma socialmente escludente. Il parco lineare è un amenity per i nuovi residenti e una barriera per quelli vecchi. Il reddito target (55.000€) è il doppio della media cittadina — il quartiere rigenerato non è per la città, è per un'altra città dentro la città. L'archistar vende un brand, non una soluzione urbana. I 15 anni di cantiere garantiscono che il progetto originale non sarà mai realizzato come previsto. La rigenerazione come operazione finanziaria che usa l'urbanistica come involucro."
+    }
+  ]
+}

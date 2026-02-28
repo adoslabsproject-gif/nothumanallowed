@@ -1,0 +1,287 @@
+{
+  "domain": "compliance_gdpr",
+  "description": "GDPR, privacy, protezione dati personali, DPO, DPIA, consenso, trasferimenti internazionali, data breach, diritti interessati, profilazione, decisioni automatizzate, privacy by design/default",
+  "prompts": [
+    {
+      "prompt": "Un social network scopre tramite il suo algoritmo che un utente quattordicenne sta probabilmente subendo abusi domestici, basandosi su pattern nei messaggi privati. L'algoritmo ha un tasso di falsi positivi del 15%. Segnalare alle autorita viola la privacy del minore e della famiglia. Non segnalare potrebbe lasciare un bambino in pericolo. L'analisi dei messaggi privati stessa e eticamente discutibile. Cosa deve fare la piattaforma e quale framework etico applichi?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["privacy_vs_sicurezza_minori", "falsi_positivi", "analisi_messaggi_privati", "obbligo_segnalazione"],
+      "gold": true,
+      "structural_conflict": "L'art. 6(1)(d) GDPR ammette il trattamento per interessi vitali dell'interessato incapace di prestare consenso, ma l'analisi sistematica dei messaggi privati di TUTTI gli utenti per individuare pattern di abuso e una sorveglianza di massa che viola l'art. 5(1)(c) minimizzazione. Il 15% di falsi positivi significa che 1 segnalazione su 7 distrugge una famiglia innocente. Il GDPR protegge i minori (art. 8, Considerando 38) ma non impone sorveglianza attiva. La Convenzione di Lanzarote impone l'obbligo di segnalazione ma non autorizza lo scanning privato. La piattaforma e intrappolata: spegnere l'algoritmo la rende complice, tenerlo acceso la rende un Grande Fratello."
+    },
+    {
+      "prompt": "Cosa si intende per 'dato personale' secondo l'art. 4(1) del GDPR? Fai tre esempi di dati che molte aziende non considerano dati personali ma che lo sono.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["definizione_dato_personale", "art_4", "identificabilita"],
+      "structural_conflict": "Nessun conflitto strutturale: la definizione e chiara nell'art. 4(1). Il punto critico e che molte aziende sottovalutano l'identificabilita indiretta — un indirizzo IP, un cookie ID, o coordinate GPS sono dati personali se combinabili con altre informazioni per identificare un individuo."
+    },
+    {
+      "prompt": "Quando e obbligatorio nominare un DPO (Data Protection Officer) secondo l'art. 37 GDPR? Quali sono i tre casi previsti dal regolamento?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["DPO", "art_37", "nomina_obbligatoria"],
+      "structural_conflict": "Nessun conflitto strutturale: i tre casi sono elencati nell'art. 37(1). La zona grigia e il concetto di 'monitoraggio regolare e sistematico su larga scala' che lascia margine interpretativo — ma le linee guida WP243 del Gruppo Art. 29 chiariscono i criteri."
+    },
+    {
+      "prompt": "Entro quante ore il titolare del trattamento deve notificare un data breach all'autorita di controllo ai sensi dell'art. 33 GDPR? Quali informazioni minime deve contenere la notifica?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["data_breach", "art_33", "72_ore", "notifica"],
+      "structural_conflict": "Nessun conflitto strutturale: il termine di 72 ore e esplicito. Il vero problema pratico e che molte aziende non hanno un processo di incident detection che consenta di SCOPRIRE il breach entro tempi utili — il termine decorre dalla scoperta, ma se scopri dopo 6 mesi e gia troppo tardi per mitigare."
+    },
+    {
+      "prompt": "Quali sono le sei basi giuridiche previste dall'art. 6(1) GDPR per il trattamento dei dati personali? Per ciascuna, fai un esempio pratico.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["basi_giuridiche", "art_6", "consenso", "legittimo_interesse", "contratto", "obbligo_legale"],
+      "structural_conflict": "Nessun conflitto strutturale: le sei basi sono enumerate tassativamente. La complessita emerge nella scelta della base corretta — molte aziende usano il consenso quando il legittimo interesse sarebbe piu appropriato, o viceversa, con conseguenze sulla revocabilita e sulla gestione operativa."
+    },
+    {
+      "prompt": "Qual e la differenza tra titolare del trattamento (data controller) e responsabile del trattamento (data processor) secondo gli artt. 4(7) e 4(8) GDPR? Chi ha la responsabilita primaria in caso di violazione?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["titolare", "responsabile", "art_4", "responsabilita"],
+      "structural_conflict": "Nessun conflitto strutturale nella definizione. La complessita emerge quando i ruoli si sovrappongono nella pratica — un cloud provider che decide autonomamente come processare i dati diventa co-titolare? La giurisprudenza (Fashion ID, C-40/17) ha ampliato enormemente il concetto di joint controller."
+    },
+    {
+      "prompt": "Cosa prevede il diritto alla cancellazione (diritto all'oblio) secondo l'art. 17 GDPR? In quali casi il titolare PUO rifiutare la cancellazione?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["diritto_oblio", "art_17", "cancellazione", "eccezioni"],
+      "structural_conflict": "Nessun conflitto strutturale: le eccezioni sono elencate nell'art. 17(3). La tensione reale e tra il diritto all'oblio dell'individuo e la liberta di espressione/informazione (art. 17(3)(a)) — come ha dimostrato la sentenza Google Spain (C-131/12) e il caso Costeja."
+    },
+    {
+      "prompt": "Quando e obbligatorio condurre una DPIA (Data Protection Impact Assessment) secondo l'art. 35 GDPR? Quali elementi deve contenere?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["DPIA", "art_35", "valutazione_impatto", "rischio_elevato"],
+      "structural_conflict": "Nessun conflitto strutturale: l'art. 35(3) elenca i casi obbligatori e l'art. 35(7) i contenuti minimi. Il punto critico e che la soglia 'rischio elevato per i diritti e le liberta delle persone fisiche' e soggettiva — le liste nazionali delle autorita garanti divergono, creando incertezza per aziende multinazionali."
+    },
+    {
+      "prompt": "Cosa deve contenere il registro dei trattamenti previsto dall'art. 30 GDPR? Quali organizzazioni sono esentate dall'obbligo?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["registro_trattamenti", "art_30", "documentazione", "esenzione_PMI"],
+      "structural_conflict": "Nessun conflitto strutturale: l'art. 30 elenca i contenuti e l'esenzione per organizzazioni con meno di 250 dipendenti (con eccezioni). Il conflitto pratico e che l'esenzione e cosi ristretta (non si applica se il trattamento presenta rischi, non e occasionale, o riguarda categorie particolari) che di fatto quasi nessuna PMI ne beneficia."
+    },
+    {
+      "prompt": "Un'azienda italiana di e-commerce vuole inviare newsletter promozionali ai clienti che hanno acquistato negli ultimi 12 mesi. Puo usare il legittimo interesse (art. 6(1)(f)) invece del consenso esplicito (art. 6(1)(a))? Il Garante italiano ha una posizione specifica sul soft spam — come si bilancia la direttiva ePrivacy (art. 130 Codice Privacy) con il GDPR?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["legittimo_interesse", "soft_spam", "email_marketing", "ePrivacy", "garante_italiano"],
+      "structural_conflict": "L'art. 130(4) del Codice Privacy italiano ammette il soft spam (invio a clienti esistenti per prodotti simili senza consenso, con opt-out), ma il Garante ha interpretato restrittivamente il concetto di 'prodotto simile'. Il GDPR consentirebbe il legittimo interesse, ma la direttiva ePrivacy (lex specialis) impone consenso per comunicazioni elettroniche. Le due normative si sovrappongono con esiti diversi. Il rischio sanzionatorio con legittimo interesse e piu alto (fino al 4% del fatturato globale) ma il tasso di conversione e 3-5x superiore rispetto al re-consenso."
+    },
+    {
+      "prompt": "Una startup SaaS B2B con sede in Irlanda usa AWS (regione eu-west-1) per l'hosting ma il supporto tecnico AWS ha sede negli USA e puo accedere ai dati per troubleshooting. Dopo Schrems II, le Standard Contractual Clauses (SCCs) bastano? La startup deve fare un Transfer Impact Assessment — come si struttura concretamente e quali misure supplementari sono necessarie?",
+      "conflict_type": ["risk_assessment", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["schrems_II", "SCCs", "transfer_impact_assessment", "AWS", "misure_supplementari"],
+      "structural_conflict": "I dati sono fisicamente in EU ma il personale AWS USA puo accedere — questo costituisce trasferimento ai sensi del GDPR (EDPB Recommendations 01/2020 sulle misure supplementari e Guidelines 05/2021 sull'interazione tra art. 3 e Capo V). Le SCCs post-giugno 2021 richiedono una valutazione caso per caso dell'ordinamento giuridico del paese terzo. La sezione 702 del FISA Act USA consente sorveglianza senza warrant sui dati di non-americani, rendendo le SCCs insufficienti senza misure supplementari. Ma la crittografia end-to-end impedirebbe ad AWS di fare supporto tecnico. Il DPF (Data Privacy Framework) del 2023 offre una via ma potrebbe essere invalidato da Schrems III."
+    },
+    {
+      "prompt": "Un ospedale pubblico italiano vuole implementare un sistema di AI per il triage al pronto soccorso che classifica i pazienti in codici di priorita basandosi su sintomi, storia clinica e dati biometrici in tempo reale. L'art. 22 GDPR vieta decisioni basate unicamente su trattamento automatizzato che producano effetti giuridici. L'ospedale puo implementare il sistema se un medico ha l'ultima parola ma nella pratica conferma il 98% delle decisioni dell'AI?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["decisioni_automatizzate", "art_22", "AI_sanitaria", "human_in_the_loop", "dati_sanitari"],
+      "structural_conflict": "L'art. 22(1) vieta decisioni puramente automatizzate con effetti significativi, ma l'eccezione dell'art. 22(2)(c) ammette il consenso esplicito per dati sanitari (art. 9(2)(a)). Il problema e che un medico che conferma il 98% delle decisioni AI non e un vero human-in-the-loop — l'automation bias rende la supervisione umana una finzione. L'EDPB richiede che la supervisione sia 'significativa', non rituale. Ma rallentare il triage per una vera valutazione umana costa vite in pronto soccorso. L'efficienza salva pazienti, la compliance protegge diritti."
+    },
+    {
+      "prompt": "Un'azienda di recruitment usa un algoritmo di screening CV che analizza 50.000 candidature al mese. L'algoritmo non usa dati sensibili direttamente, ma inferisce etnia e genere dal nome, universita e codice postale con accuratezza dell'87%. L'azienda sostiene di non trattare dati di categorie particolari (art. 9) perche non li raccoglie esplicitamente. E una posizione difendibile? Quale base giuridica si applica e serve una DPIA?",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["profilazione", "dati_inferiti", "art_9", "discriminazione_algoritmica", "DPIA_obbligatoria"],
+      "structural_conflict": "I dati inferiti rientrano nell'art. 9 se rivelano categorie particolari — la CGUE nella sentenza Meta Platforms (C-252/21) ha confermato che anche dati non direttamente sensibili sono soggetti all'art. 9 se permettono di dedurre informazioni sensibili. L'accuratezza dell'87% significa che il 13% dei candidati e classificato erroneamente. L'azienda ha un legittimo interesse al recruitment efficiente, ma la profilazione su larga scala con inferenza di dati sensibili richiede DPIA obbligatoria (art. 35(3)(a)) e probabilmente viola il principio di minimizzazione (art. 5(1)(c))."
+    },
+    {
+      "prompt": "Un data broker europeo vende dataset 'anonimi' di dati di geolocalizzazione di 2 milioni di utenti a societa di real estate. I dati sono stati aggregati e k-anonimizzati con k=5. Un ricercatore dimostra che incrociando i dati con registri pubblici catastali puo re-identificare il 12% degli utenti. Il data broker e ancora soggetto al GDPR? Chi e responsabile della re-identificazione?",
+      "conflict_type": ["risk_assessment", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["anonimizzazione", "pseudonimizzazione", "re-identificazione", "k-anonimita", "data_broker"],
+      "structural_conflict": "Il Considerando 26 del GDPR dice che i dati anonimi non sono dati personali, ma definisce l'anonimizzazione come irreversibile considerando 'tutti i mezzi ragionevolmente probabili'. Se un ricercatore con dati pubblici puo re-identificare il 12%, l'anonimizzazione e fallita e i dati sono pseudonimi (art. 4(5)), soggetti al GDPR. Il data broker e titolare per la vendita, ma il compratore che effettua la re-identificazione commette un nuovo trattamento illecito. K=5 e considerato insufficiente dal WP29 (Opinion 05/2014). Pero innalzare k riduce l'utilita del dataset fino a renderlo commercialmente inutile."
+    },
+    {
+      "prompt": "Una multinazionale con 15.000 dipendenti in 8 paesi EU implementa un sistema di employee monitoring che traccia: (1) keystroke logging, (2) screenshot ogni 5 minuti, (3) analisi del sentiment delle email interne, (4) tempo speso su ogni applicazione. L'azienda invoca il legittimo interesse per prevenire il furto di dati aziendali. I dipendenti hanno firmato un consenso nel contratto di lavoro. E valido? Quale base giuridica si applica?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["employee_monitoring", "consenso_dipendenti", "legittimo_interesse", "proporzionalita", "keystroke_logging"],
+      "structural_conflict": "Il consenso dei dipendenti NON e valido come base giuridica perche il rapporto di lavoro crea un disequilibrio di potere (Considerando 43, confermato da EDPB Guidelines 5/2020). Il legittimo interesse richiede il test di bilanciamento a tre fasi (LIA), e il keystroke logging + screenshot ogni 5 minuti e quasi certamente sproporzionato (art. 5(1)(c) minimizzazione). L'analisi del sentiment delle email potrebbe rivelare dati sanitari (umore, stress) rientrando nell'art. 9. Ma il furto di proprieta intellettuale costa alle aziende EU 60 miliardi annui — il rischio e reale. La proporzionalita impone misure meno invasive (DLP software, access logging) prima del monitoraggio pervasivo."
+    },
+    {
+      "prompt": "Un'app di fitness italiana raccoglie dati sulla frequenza cardiaca, pattern di sonno e ciclo mestruale di 500.000 utenti. La base giuridica e il consenso esplicito (art. 9(2)(a)). L'app vuole vendere dati aggregati a compagnie assicurative per modelli attuariali. Il consenso originale copre anche la vendita a terzi? Se no, come si ottiene un nuovo consenso valido senza violare il principio di trasparenza?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["dati_sanitari", "consenso_specifico", "finalita_ulteriore", "assicurazioni", "art_9"],
+      "structural_conflict": "Il consenso deve essere specifico per ogni finalita (art. 6(1)(a) + art. 7). La vendita a compagnie assicurative e una finalita completamente diversa dalla fornitura del servizio fitness — richiede un nuovo consenso esplicito, specifico e informato. Ma chiedere il consenso per 'vendere i tuoi dati sanitari alle assicurazioni' avra un tasso di accettazione vicino allo 0%. L'aggregazione non risolve: se i gruppi sono piccoli (es. donne 25-30 anni in un quartiere specifico), la re-identificazione e possibile. Il modello di business dell'app si basa su questa monetizzazione — senza di essa, il servizio gratuito non e sostenibile."
+    },
+    {
+      "prompt": "Un partito politico europeo vuole usare micro-targeting su Facebook per le elezioni europee 2024, creando 200 varianti di messaggi politici personalizzati basati su interessi, posizione geografica e engagement precedente. L'EDPB ha emesso linee guida specifiche sulla profilazione per scopi politici. Quali basi giuridiche possono essere invocate e quali limiti si applicano alla profilazione politica sotto GDPR?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["micro_targeting", "profilazione_politica", "opinioni_politiche_art_9", "elezioni", "democrazia"],
+      "structural_conflict": "Le opinioni politiche sono dati di categoria particolare (art. 9(1)). Il micro-targeting inferisce orientamento politico dalla navigazione, violando l'art. 9 anche senza raccolta diretta (per la logica della sentenza Meta Platforms). Il partito puo invocare l'art. 9(2)(d) (trattamento da parte di un organismo con finalita politica per i propri membri), ma il targeting su non-membri non rientra in questa eccezione. Il consenso esplicito e l'unica via per non-membri, ma il consenso al micro-targeting politico su social media non e 'liberamente prestato' (dark patterns, asimmetria informativa). La democrazia richiede comunicazione politica, ma la manipolazione algoritmica la distorce."
+    },
+    {
+      "prompt": "Una banca italiana implementa un sistema di credit scoring automatizzato che nega prestiti basandosi su 150 variabili, incluse localita geografica, tipo di smartphone posseduto e pattern di navigazione web. Un cliente si vede negare un mutuo e esercita il diritto di spiegazione (art. 22(3) + Considerando 71). La banca risponde con una spiegazione generica: 'il suo profilo di rischio non soddisfa i criteri'. E sufficiente? Quali rimedi ha l'interessato?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["credit_scoring", "diritto_spiegazione", "art_22", "trasparenza_algoritmica", "discriminazione"],
+      "structural_conflict": "L'art. 22(3) da diritto a contestare la decisione e ottenere l'intervento umano, e il Considerando 71 menziona il diritto a una spiegazione. Ma il GDPR non specifica il livello di dettaglio della spiegazione. Una spiegazione completa (tutte le 150 variabili con i pesi) rivelerebbe il modello proprietario della banca e permetterebbe il gaming del sistema. Una spiegazione generica non permette la contestazione effettiva. La variabile 'tipo di smartphone' e probabilmente un proxy per reddito/classe sociale (discriminazione indiretta). Il garante puo sanzionare fino al 4% del fatturato globale ma la banca ha diritto alla protezione del segreto commerciale."
+    },
+    {
+      "prompt": "Un comune italiano di 30.000 abitanti installa 200 telecamere con riconoscimento facciale nelle aree pubbliche per prevenire crimini. Il sistema identifica i volti confrontandoli con un database di 500 ricercati. Il legislatore italiano ha introdotto una moratoria sul riconoscimento facciale in tempo reale negli spazi pubblici (DL 139/2021, estesa fino al 31 dicembre 2025 dal DL 51/2023). Il comune invoca l'art. 6(1)(e) (interesse pubblico) e l'art. 9(2)(g) (interesse pubblico rilevante). E legittimo?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["riconoscimento_facciale", "videosorveglianza", "biometria", "art_9", "moratoria_garante"],
+      "structural_conflict": "I dati biometrici per l'identificazione univoca rientrano nell'art. 9(1) — il riconoscimento facciale in tempo reale negli spazi pubblici e il trattamento biometrico piu invasivo possibile. La moratoria legislativa (DL 139/2021 convertito, prorogata al 31/12/2025 dal DL 51/2023 convertito in L. 87/2023) e chiara, ma il comune argomenta che la sicurezza pubblica e una finalita superiore. L'AI Act (art. 5(1)(h)) vieta il riconoscimento biometrico in tempo reale negli spazi pubblici per forze dell'ordine con eccezioni limitate. L'intersezione GDPR/AI Act crea un doppio layer normativo: anche se l'AI Act ammettesse l'uso, la DPIA del GDPR potrebbe bloccarlo. Ma i 30.000 cittadini chiedono sicurezza e il tasso di criminalita e alto."
+    },
+    {
+      "prompt": "Un'azienda di telemedicina opera in Italia e Francia. Un paziente francese usa il servizio con medici italiani. I dati sanitari sono conservati su server in Italia. Il paziente vuole esercitare il diritto di portabilita (art. 20) per trasferire i suoi dati a un altro servizio. L'azienda sostiene che i dati sanitari non sono 'forniti dall'interessato' ma generati dal medico (diagnosi, prescrizioni). Chi ha ragione? Come si applica l'art. 20 ai dati sanitari generati durante una prestazione medica?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["portabilita", "art_20", "dati_sanitari", "dati_forniti_vs_generati", "telemedicina"],
+      "structural_conflict": "L'art. 20 si applica ai dati 'forniti dall'interessato' trattati con consenso o contratto. Le linee guida WP242 del WP29 distinguono tra dati forniti attivamente (sintomi riferiti), dati osservati (frequenza cardiaca misurata) e dati derivati/inferiti (diagnosi). Le diagnosi sono dati derivati e NON rientrano nella portabilita, ma i sintomi riferiti e i dati biometrici si. In pratica, separare i due tipi nella stessa cartella clinica e tecnicamente complesso e clinicamente pericoloso — una diagnosi senza i dati su cui si basa e inutile, ma i dati senza la diagnosi possono essere mal interpretati."
+    },
+    {
+      "prompt": "Un sito web italiano usa un cookie wall: l'utente puo accedere al contenuto solo se accetta tutti i cookie di profilazione OPPURE paga un abbonamento di 4.99 EUR/mese. Il Garante italiano ha sanzionato pratiche simili ma la CGUE non si e ancora espressa definitivamente. Il consenso ottenuto tramite cookie wall e 'liberamente prestato' ai sensi dell'art. 7(4) GDPR?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["cookie_wall", "consenso_libero", "art_7", "ePrivacy", "modello_pay_or_ok"],
+      "structural_conflict": "L'art. 7(4) richiede che il consenso sia libero — non puo essere condizionato alla prestazione di un servizio se il trattamento non e necessario al servizio. Un cookie wall condiziona l'accesso all'accettazione del tracking, violando la liberta del consenso. Ma il modello 'pay or OK' offre un'alternativa (pagare), rendendo il consenso teoricamente libero. L'EDPB (Opinion 08/2024) ammette il modello con riserve, ma il prezzo di 4.99 EUR puo essere proibitivo per utenti a basso reddito, creando un 'divario di privacy' socio-economico. Il business model del giornalismo online dipende dalla pubblicita profilata — senza cookie wall, il 70% degli editori non sopravvivrebbe."
+    },
+    {
+      "prompt": "Un'azienda USA (fatturato 500 milioni USD) acquisisce una startup tedesca con 200.000 utenti europei. L'azienda USA vuole integrare i dati degli utenti tedeschi nel suo CRM globale. I dati verrebbero trasferiti su server USA. Dopo l'adozione del Data Privacy Framework (DPF) nel 2023, il trasferimento e legittimo? Quali rischi rimangono considerando che una potenziale sentenza Schrems III potrebbe invalidare anche il DPF?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["DPF", "schrems_III", "M&A", "trasferimento_USA", "due_diligence"],
+      "structural_conflict": "Il DPF offre una base di adeguatezza (art. 45) per trasferimenti verso aziende USA certificate. Ma il DPF si basa sull'Executive Order 14086 di Biden — un ordine esecutivo, non una legge, revocabile dal prossimo presidente. La sezione 702 FISA non e stata modificata. Max Schrems ha gia annunciato che impugnera il DPF. Se l'azienda integra i dati e Schrems III invalida il DPF, deve riportare 200.000 record in EU in tempi strettissimi o affrontare sanzioni fino al 4% di 500M USD (20 milioni). Il risk assessment deve considerare: (a) probabilita di invalidazione, (b) tempo di migrazione inversa, (c) costo della non-integrazione (inefficienza operativa, duplicazione sistemi), (d) misure supplementari che sopravviverebbero a Schrems III."
+    },
+    {
+      "prompt": "Un'azienda farmaceutica conduce un trial clinico pan-europeo con 10.000 partecipanti in 6 paesi EU. I dati genetici e sanitari vengono raccolti con consenso esplicito. A meta trial, l'azienda scopre un potenziale effetto collaterale grave che richiede l'analisi di dati non previsti nel consenso originale. Ri-contattare 10.000 partecipanti per un nuovo consenso ritarderebbe l'analisi di 3 mesi. L'art. 5(1)(b) ammette il trattamento per finalita di ricerca scientifica compatibili — ma i dati genetici richiedono consenso esplicito specifico (art. 9(2)(a)). Come si bilancia l'urgenza sanitaria con il consenso?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["trial_clinico", "dati_genetici", "consenso_specifico", "finalita_compatibili", "urgenza_sanitaria"],
+      "structural_conflict": "L'art. 5(1)(b) e il Considerando 50 ammettono il trattamento per finalita di ricerca compatibili senza nuovo consenso, ma l'art. 9 richiede consenso esplicito per dati genetici con eccezione per ricerca scientifica solo se il diritto nazionale lo prevede (art. 9(2)(j)). I 6 paesi hanno implementazioni nazionali diverse dell'art. 9(2)(j) — la Germania richiede pseudonimizzazione, la Francia ammette l'interesse pubblico, l'Italia richiede autorizzazione del Garante. 3 mesi di ritardo su un effetto collaterale grave potrebbe costare vite umane. Ma procedere senza consenso viola i diritti di 10.000 persone e potrebbe invalidare l'intero trial."
+    },
+    {
+      "prompt": "Una smart city europea implementa un sistema IoT con 50.000 sensori che raccolgono: qualita dell'aria, flussi pedonali (anonimi), consumi energetici per edificio, livelli di rumore, e temperature. Un'analisi incrociata di flussi pedonali + consumi energetici + orari consente di inferire quante persone vivono in ogni appartamento e i loro orari di presenza/assenza. Il comune non raccoglie dati personali direttamente ma il combinato disposto li crea. E soggetto al GDPR? Come si applica il principio di privacy by design (art. 25)?",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["smart_city", "IoT", "dati_aggregati", "re_identificazione", "privacy_by_design", "art_25"],
+      "structural_conflict": "Nessun singolo dataset contiene dati personali, ma la fusione crea dati personali (orari di presenza = monitoraggio sistematico della vita privata). L'art. 25 impone privacy by design MA e il comune il titolare se non ha inteso creare dati personali? Il Considerando 26 dice che bisogna considerare 'tutti i mezzi ragionevolmente probabili' per la re-identificazione. Se un ricercatore lo dimostra, i dati erano personali fin dall'inizio. La smart city ha un interesse pubblico legittimo (efficienza energetica, gestione traffico) ma la sorveglianza accidentale di massa e un risultato collaterale non inteso. Riprogettare i sensori per impedire la correlazione costa 2 milioni EUR e riduce l'utilita dei dati del 40%."
+    },
+    {
+      "prompt": "Un'autorita garante nazionale apre un'indagine su un'azienda tech che opera in 12 paesi EU. L'azienda ha il suo stabilimento principale in Irlanda (art. 56 one-stop-shop). L'autorita italiana ritiene che la DPC irlandese sia troppo lenta (l'indagine dura da 3 anni senza risultati). L'art. 66 consente misure d'urgenza provvisorie con effetto massimo 3 mesi. L'autorita italiana puo agire autonomamente o deve attendere la DPC? Il meccanismo di coerenza (art. 63-65) funziona davvero?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["one_stop_shop", "art_56", "DPC_irlandese", "cooperazione", "misure_urgenza", "enforcement_gap"],
+      "structural_conflict": "Il meccanismo one-stop-shop concentra il potere sulla DPC irlandese, dove hanno sede Apple, Google, Meta, Microsoft, TikTok. La DPC ha aperto centinaia di indagini ma chiuso poche con sanzioni significative. L'art. 66 ammette misure d'urgenza ma solo per 3 mesi e con obbligo di sottomissione al meccanismo di coerenza. L'EDPB puo emettere decisioni vincolanti (art. 65) ma il processo richiede mesi. Il risultato e un enforcement gap strutturale: i diritti dei cittadini di 11 paesi dipendono dalla velocita dell'autorita di 1 paese. Le alternative (riforma del one-stop-shop, azioni nazionali concorrenti) rischierebbero di frammentare l'applicazione uniforme del GDPR."
+    },
+    {
+      "prompt": "Un ospedale utilizza un LLM (Large Language Model) per generare lettere di dimissione basate sulle cartelle cliniche. Il modello e hostato da un provider cloud USA con certificazione DPF. Il prompt contiene il nome del paziente, diagnosi, terapie e prognosi. Il LLM potrebbe memorizzare frammenti di dati nei suoi pesi durante il fine-tuning. L'ospedale e titolare, il cloud provider e responsabile — ma il provider del modello base (es. OpenAI) quale ruolo ha? E il training data extraction attack e un rischio GDPR reale?",
+      "conflict_type": ["technical_disagreement", "risk_assessment", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["LLM", "dati_sanitari", "cloud_USA", "training_data_extraction", "catena_responsabilita"],
+      "structural_conflict": "La catena titolare-responsabile si rompe con gli LLM: il cloud provider e responsabile del trattamento (art. 28), ma il modello base potrebbe contenere dati di training estratti da internet. L'ospedale non controlla cosa il modello ha appreso. Un training data extraction attack potrebbe rivelare dati di ALTRI pazienti memorizzati nei pesi. L'art. 28 impone che il responsabile agisca 'soltanto su istruzione documentata' del titolare — ma il modello agisce in base al training, non alle istruzioni. Il fine-tuning su dati sanitari crea un nuovo modello che CONTIENE dati di categoria particolare nei pesi. Chi e titolare di quei pesi? Se il modello viene usato per un altro cliente e 'ricorda' dati del primo, e un data breach? Nessun framework giuridico attuale risponde a queste domande."
+    },
+    {
+      "prompt": "Una compagnia assicurativa europea vuole usare dati di wearable (smartwatch) per offrire premi personalizzati: chi fa piu attivita fisica paga meno. Il programma e volontario e basato sul consenso. Ma i dipendenti che rifiutano pagano il premio pieno — creando una penalizzazione de facto per chi non condivide i dati sanitari. L'art. 9 si applica? Il consenso e veramente libero se rifiutare costa 200 EUR/anno in piu? E discriminazione indiretta contro persone con disabilita che non possono fare attivita fisica?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["assicurazioni", "wearable", "consenso_libero", "discriminazione_indiretta", "dati_sanitari"],
+      "structural_conflict": "I dati di attivita fisica sono dati sanitari (art. 9) se combinati con informazioni sulla salute. Il consenso 'volontario' che costa 200 EUR/anno a chi rifiuta non e libero ai sensi dell'art. 7(4) — e un condizionamento economico. La discriminazione e multipla: (a) persone con disabilita fisiche sono strutturalmente svantaggiate, (b) persone anziane hanno meno attivita, (c) persone a basso reddito non hanno smartwatch. Ma l'assicurazione basata sul rischio effettivo e il fondamento del settore assicurativo — premi uguali per tutti sono iniqui verso chi ha stili di vita sani. La direttiva 2004/113/CE vieta la discriminazione ma ammette differenze attuariali basate su dati pertinenti. Il GDPR e la normativa antidiscriminazione producono risposte opposte."
+    },
+    {
+      "prompt": "Un datore di lavoro italiano con 500 dipendenti vuole implementare un sistema di whistleblowing anonimo (D.Lgs. 24/2023) che garantisce l'anonimato del segnalante. Ma il GDPR richiede trasparenza nel trattamento (art. 13/14) e il diritto di difesa del segnalato richiede di conoscere le accuse e chi le muove. Come si concilia l'anonimato del whistleblower con il diritto di accesso del segnalato (art. 15) e il principio di trasparenza? Quale base giuridica si usa?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["whistleblowing", "anonimato", "diritto_difesa", "art_15", "trasparenza", "D_Lgs_24_2023"],
+      "structural_conflict": "Il D.Lgs. 24/2023 (attuazione direttiva EU 2019/1937) impone la protezione dell'identita del segnalante. L'art. 15 GDPR da al segnalato il diritto di accedere ai dati che lo riguardano, inclusa l'origine dei dati (art. 15(1)(g)). L'art. 23 GDPR consente limitazioni per 'la prevenzione, l'indagine, l'accertamento o il perseguimento di reati' — ma il whistleblowing non e un'indagine penale. L'art. 14(5)(b) esclude l'obbligo informativo se rischia di rendere impossibile gli obiettivi del trattamento. Il segnalato senza sapere chi lo accusa non puo difendersi effettivamente (art. 6 CEDU). Ma rivelare il segnalante lo espone a ritorsioni. Ogni scelta sacrifica un diritto fondamentale a favore di un altro."
+    },
+    {
+      "prompt": "Una piattaforma di dating online raccoglie dati su orientamento sessuale, preferenze religiose, origine etnica e stato di salute (HIV status) di 3 milioni di utenti in EU. Un attacco ransomware cifra il database e gli attaccanti minacciano di pubblicare i dati se non viene pagato un riscatto di 5 milioni EUR. L'azienda ha 72 ore per notificare il Garante (art. 33) e deve valutare se notificare i 3 milioni di interessati (art. 34). Pagare il riscatto e una scelta GDPR-compliant? Cosa succede se i dati vengono pubblicati?",
+      "conflict_type": ["risk_assessment", "values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["data_breach", "ransomware", "art_33", "art_34", "dati_sensibili", "riscatto"],
+      "structural_conflict": "L'art. 33 impone notifica entro 72 ore — ma notificare che l'orientamento sessuale e lo stato HIV di 3 milioni di persone e stato compromesso causera panico di massa. L'art. 34 impone notifica agli interessati se il rischio e elevato — in paesi dove l'omosessualita e perseguita, questa notifica puo mettere in pericolo vite. Pagare il riscatto non garantisce la non-pubblicazione e finanzia il crimine organizzato. Non pagare garantisce la pubblicazione. L'azienda rischia sanzioni fino al 4% del fatturato per misure di sicurezza inadeguate (art. 32) PIU danni civili individuali di 3 milioni di persone. La crittografia del database a riposo avrebbe prevenuto il tutto ma avrebbe aggiunto 200ms di latency per ogni match — il prodotto sarebbe stato inutilizzabile."
+    },
+    {
+      "prompt": "Un'associazione no-profit che aiuta rifugiati raccoglie dati su etnia, religione, stato di salute e situazione legale di 50.000 persone in EU. I dati servono per fornire assistenza. Un governo autoritario del paese d'origine richiede i dati tramite rogatoria internazionale. L'art. 48 GDPR vieta il trasferimento basato su decisioni giudiziarie di paesi terzi non riconosciute. Ma il governo minaccia ritorsioni contro i familiari dei rifugiati rimasti in patria. L'associazione come deve agire?",
+      "conflict_type": ["values_tradeoff", "risk_assessment", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["rifugiati", "art_48", "rogatoria_internazionale", "dati_vulnerabili", "ritorsioni"],
+      "structural_conflict": "L'art. 48 e chiaro: nessun trasferimento senza accordo internazionale (MLAT) o riconoscimento ai sensi dell'art. 46. Ma il rifiuto espone famiglie a ritorsioni reali in paesi dove la tortura e praticata. L'art. 49(1)(e) ammette trasferimenti necessari per la difesa di diritti in giudizio — ma non per obbedire a rogatorie non riconosciute. L'associazione e intrappolata: la compliance GDPR protegge i rifugiati in EU ma mette in pericolo i familiari nel paese d'origine. Consegnare i dati viola il GDPR, la privacy e potenzialmente la vita dei rifugiati stessi. La Convenzione di Ginevra non copre i dati digitali. Nessun framework giuridico contempla questo scenario."
+    },
+    {
+      "prompt": "L'AI Act (Regolamento EU 2024/1689) classifica i sistemi di AI per rischio. Un'azienda sviluppa un chatbot per customer service che usa un foundation model (GPAI con rischio sistemico, art. 51). Il chatbot processa dati personali. L'azienda deve conformarsi simultaneamente al GDPR (privacy), all'AI Act (sicurezza AI), alla direttiva NIS2 (cybersecurity), e al Digital Services Act (responsabilita piattaforme). I quattro regolamenti hanno requisiti di trasparenza diversi, definizioni di rischio diverse, e autorita di enforcement diverse. Come si crea un framework di compliance unificato?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["AI_Act", "GDPR", "NIS2", "DSA", "compliance_multipla", "foundation_model"],
+      "structural_conflict": "I quattro regolamenti si sovrappongono con requisiti potenzialmente conflittuali. Il GDPR richiede minimizzazione dei dati, ma l'AI Act richiede dataset di training sufficientemente diversi e rappresentativi. Il GDPR richiede spiegabilita delle decisioni automatizzate (art. 22), l'AI Act richiede trasparenza del modello (art. 13) ma i foundation models sono intrinsecamente opachi. La NIS2 impone un early warning entro 24 ore e una notifica completa entro 72 ore per incidenti significativi, il GDPR impone notifica al Garante entro 72 ore per data breach — se un incidente e entrambi, l'early warning NIS2 a 24 ore anticipa di fatto l'intero processo. Il DSA impone trasparenza degli algoritmi di raccomandazione, ma rivelare troppo facilita gli attacchi adversariali. Le autorita sono diverse: Garante Privacy, autorita AI nazionale, CSIRT nazionale, Digital Services Coordinator. Un'azienda deve navigare 4 regimi sanzionatori con sanzioni cumulative potenziali fino al 35% del fatturato globale."
+    },
+    {
+      "prompt": "Un'azienda di genomica offre test del DNA direct-to-consumer a 2 milioni di europei. I dati genetici rivelano predisposizioni a malattie, origini etniche e parentele. Dopo 5 anni, l'azienda fallisce. Chi diventa titolare dei dati genetici di 2 milioni di persone? Il GDPR non disciplina esplicitamente il trasferimento di titolarita in caso di fallimento. I dati possono essere venduti come asset nel procedimento fallimentare? L'art. 17 da diritto alla cancellazione ma il curatore fallimentare potrebbe non avere le risorse per eseguirla.",
+      "conflict_type": ["risk_assessment", "strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["dati_genetici", "fallimento", "titolarita", "art_17", "asset_vendita", "data_orphaning"],
+      "structural_conflict": "I dati personali NON sono un asset commerciale liberamente trasferibile — ma nella pratica fallimentare, i database sono valutati e venduti. L'art. 6(1)(f) legittimo interesse del creditore potrebbe giustificare la conservazione temporanea, ma non la vendita a terzi per finalita diverse. I dati genetici (art. 9) richiedono consenso esplicito per ogni nuovo titolare. Ri-contattare 2 milioni di persone per un nuovo consenso costa centinaia di migliaia di euro che il fallimento non ha. La cancellazione di massa potrebbe distruggere dati utili per la ricerca medica. L'alternativa e il data orphaning: i dati restano su server che nessuno mantiene, gestisce o protegge — diventando un rischio di breach senza responsabile."
+    },
+    {
+      "prompt": "Un motore di ricerca europeo vuole implementare il diritto all'oblio (sentenza Google Spain) in modo che i risultati de-indicizzati in EU non compaiano neanche accedendo dalla versione .com fuori EU. Google ha resistito questa estensione globale e la CGUE (C-507/17) ha stabilito che la de-indicizzazione e obbligatoria solo in EU. Ma con le VPN, qualsiasi cittadino EU puo accedere alla versione globale. La de-indicizzazione solo geografica protegge davvero il diritto? Come si bilancia il diritto all'oblio europeo con la liberta di espressione di paesi terzi?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["diritto_oblio", "de_indicizzazione", "google_spain", "extraterritorialita", "liberta_espressione"],
+      "structural_conflict": "La de-indicizzazione geografica e un compromesso instabile: protegge solo chi accede dall'EU senza VPN. Ma l'estensione globale impone la legge europea al mondo intero — la Corte Suprema canadese (Equustek) l'ha ordinata, la Francia l'ha chiesta, gli USA la rifiutano come censura. Il diritto all'oblio europeo e il Primo Emendamento americano sono incompatibili. Un risultato de-indicizzato in EU ma visibile da Google.com e un diritto parzialmente efficace. Un diritto applicato globalmente e imperialismo giuridico. Il GDPR si applica al trattamento di dati di persone in EU (art. 3), ma i server di Google.com non sono in EU. Ogni soluzione tecnica (geo-blocking, VPN detection) e aggirabile e crea nuovi problemi di privacy."
+    },
+    {
+      "prompt": "Un consorzio di ospedali europei vuole creare un registro pan-europeo di malattie rare con i dati sanitari di 500.000 pazienti distribuiti in 15 paesi. Ogni ospedale e titolare autonomo. Il consorzio propone un'architettura di federated learning dove i dati non lasciano mai l'ospedale ma i modelli ML vengono addestrati in modo distribuito. Il federated learning e conforme al GDPR? I gradienti scambiati possono rivelare dati individuali (gradient inversion attack). Chi e titolare del modello risultante?",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["federated_learning", "dati_sanitari", "contitolarita", "gradient_inversion", "malattie_rare"],
+      "structural_conflict": "Il federated learning sembra risolvere il trasferimento di dati: i dati restano locali. Ma i gradienti scambiati contengono informazioni sui dati di training — un gradient inversion attack puo ricostruire singoli record (dimostrato da Zhu et al., 2019). I gradienti sono dati personali? Se si, il loro scambio e un trasferimento soggetto al GDPR. I 15 ospedali sono contitolari (art. 26) perche determinano congiuntamente finalita e mezzi — ma l'accordo di contitolarita tra 15 enti in 15 ordinamenti giuridici e un incubo legale. Il modello risultante, addestrato su dati di 500.000 pazienti, contiene 'conoscenza' estratta da dati sanitari — e il modello stesso un dato personale? Per le malattie rare, un dataset di 500.000 pazienti e clinicamente essenziale. Senza cooperazione, queste malattie restano non studiate."
+    },
+    {
+      "prompt": "Il GDPR prevede sanzioni fino a 20 milioni di euro o il 4% del fatturato annuo globale (art. 83(5)). Un gruppo industriale con fatturato di 50 miliardi EUR ha 200 societa controllate. La sanzione si calcola sul fatturato della singola societa controllata che ha violato il GDPR o sul fatturato dell'intero gruppo? La CGUE (caso Deutsche Wohnen, C-807/21) ha chiarito che il concetto di 'impresa' include il gruppo. Ma un'azienda potrebbe strutturare le operazioni di trattamento in filiali con fatturato minimo per ridurre l'esposizione sanzionatoria. E legittimo?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["sanzioni", "art_83", "fatturato_gruppo", "elusione", "struttura_societaria"],
+      "structural_conflict": "La CGUE ha esteso il concetto antitrust di 'impresa' al GDPR: la sanzione si calcola sull'intero gruppo se le societa formano un'unita economica. Questo significa che una violazione di una filiale da 1 milione EUR di fatturato in un gruppo da 50 miliardi genera una sanzione potenziale di 2 miliardi EUR (4%). Ma il principio di proporzionalita (art. 83(1)) richiede che la sanzione sia effettiva, proporzionata e dissuasiva — non confiscatoria. Strutturare filiali a basso fatturato per il trattamento e elusione del GDPR? O e legittima pianificazione societaria? Il confine tra compliance planning e frode alla legge e sfumato. Le autorita garanti non hanno le risorse per analizzare la struttura societaria di ogni multinazionale."
+    },
+    {
+      "prompt": "Un'azienda edtech fornisce una piattaforma di apprendimento usata da 5 milioni di studenti minorenni (6-16 anni) in EU. I genitori hanno dato il consenso al momento dell'iscrizione. L'azienda aggiunge una funzionalita di analisi comportamentale che traccia: tempo di attenzione, velocita di risposta, pattern di errore, e stato emotivo inferito dall'espressione facciale via webcam. La nuova funzionalita e coperta dal consenso originale? Come si applica l'art. 8 GDPR (condizioni per il consenso dei minori) quando la funzionalita evolve dopo il consenso iniziale?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["minori", "art_8", "consenso_genitoriale", "edtech", "riconoscimento_emotivo", "function_creep"],
+      "structural_conflict": "L'art. 8 richiede il consenso del genitore per minori sotto i 16 anni (o 13-16 a seconda dello Stato membro). Il consenso originale copriva l'apprendimento, non l'analisi comportamentale e il riconoscimento emotivo. Il 'function creep' — aggiungere funzionalita invasive a un servizio gia approvato — viola il principio di limitazione della finalita (art. 5(1)(b)). Ri-chiedere il consenso a 5 milioni di genitori costa milioni e il tasso di rinnovo sara basso. Ma il riconoscimento emotivo dei minori via webcam e classificato come alto rischio dall'AI Act (art. 6, Allegato III) E vietato in contesti educativi (art. 5(1)(f)). L'intersezione GDPR/AI Act rende questa funzionalita probabilmente illegale indipendentemente dal consenso. Ma i dati pedagogici mostrano che l'analisi dell'attenzione migliora i risultati scolastici del 23%."
+    },
+    {
+      "prompt": "Un'azienda blockchain sviluppa un sistema di identita digitale decentralizzata (Self-Sovereign Identity) dove i dati personali sono memorizzati on-chain in forma cifrata. L'utente controlla le proprie chiavi. L'art. 17 GDPR garantisce il diritto alla cancellazione, ma i dati scritti su una blockchain pubblica sono immutabili per design. Come si concilia l'immutabilita della blockchain con il diritto alla cancellazione? Chi e il titolare del trattamento in una rete decentralizzata senza entita centrale?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["blockchain", "art_17", "cancellazione", "immutabilita", "SSI", "decentralizzazione"],
+      "structural_conflict": "La blockchain e progettata per essere immutabile — il diritto alla cancellazione richiede la modificabilita dei dati. Le soluzioni proposte (off-chain storage con hash on-chain, crittografia con key destruction) sono workaround che non cancellano realmente i dati dalla chain. Se i dati sono cifrati e la chiave e distrutta, i dati sono 'praticamente cancellati' ma fisicamente presenti — il GDPR richiede cancellazione 'senza ingiustificato ritardo', non cancellazione pratica. In una rete decentralizzata, ogni nodo che conserva la blockchain e un titolare? La CNIL francese ha suggerito che i minatori non sono titolari, ma il WP29 non ha raggiunto un consenso. La Self-Sovereign Identity promette il controllo dell'utente sui propri dati — il GDPR promuove lo stesso obiettivo. Ma le implementazioni tecniche sono incompatibili."
+    },
+    {
+      "prompt": "Un'azienda di ad-tech europea ha costruito un profilo comportamentale su 100 milioni di utenti basato su 3 anni di tracking cross-site. Con il Digital Markets Act e il phasing out dei cookie di terze parti, l'azienda vuole transitare verso il contextual advertising ma mantenere i profili esistenti come 'backup'. L'interessato ha diritto alla cancellazione dei profili (art. 17) ma l'azienda invoca la necessita per l'esecuzione del contratto (art. 6(1)(b)) e il legittimo interesse (art. 6(1)(f)) per la retention. Puo mantenere 100 milioni di profili 'dormienti'?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["ad_tech", "profili_comportamentali", "cookie_phase_out", "retention", "art_5_1_e"],
+      "structural_conflict": "L'art. 5(1)(e) impone la limitazione della conservazione: i dati vanno conservati solo per il tempo necessario alla finalita. Se l'azienda transita al contextual advertising, i profili comportamentali non servono piu per la finalita originale. L'art. 6(1)(b) non si applica perche il profiling cross-site non e 'necessario' per l'esecuzione del contratto (EDPB Guidelines 2/2019). Il legittimo interesse richiede un bilanciamento: l'interesse dell'azienda (backup per possibile ritorno al behavioral targeting) vs i diritti di 100 milioni di persone alla non-profilazione. Ma la cancellazione di 100 milioni di profili e un asset valutato 200 milioni EUR — la distruzione impatta azionisti e dipendenti."
+    },
+    {
+      "prompt": "Una catena alberghiera europea trasferisce i dati delle prenotazioni (nome, passaporto, date di soggiorno, preferenze alimentari che possono rivelare religione) a un partner commerciale in Arabia Saudita per un programma loyalty congiunto. Non esiste una decisione di adeguatezza per l'Arabia Saudita. Le SCCs sono l'unico strumento. Ma la legislazione saudita consente alle autorita l'accesso ai dati senza controllo giudiziario indipendente. Il Transfer Impact Assessment mostra un rischio elevato. L'azienda puo procedere con misure supplementari?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["trasferimento_extra_UE", "SCCs", "Arabia_Saudita", "TIA", "misure_supplementari", "dati_religiosi"],
+      "structural_conflict": "Le SCCs richiedono che il livello di protezione nel paese terzo sia 'sostanzialmente equivalente' a quello EU (Schrems II). L'Arabia Saudita non ha una legge di protezione dati equivalente al GDPR e le autorita hanno poteri di accesso ampi senza controllo giudiziario. Le misure supplementari tecniche (crittografia in transito e a riposo) non proteggono se le autorita possono ottenere le chiavi. Le preferenze alimentari (halal, kosher) rivelano religione — dato di categoria particolare (art. 9). Il programma loyalty genera 30% delle prenotazioni della catena — rinunciare al partner saudita significa perdere milioni di fatturato nel mercato luxury in crescita piu rapida al mondo."
+    },
+    {
+      "prompt": "Un'azienda sviluppa un sistema di fraud detection per banche che analizza in tempo reale transazioni, geolocalizzazione e pattern comportamentali di 20 milioni di correntisti. Il sistema blocca automaticamente le transazioni sospette. Il GDPR richiede trasparenza (art. 13/14) e il diritto di non essere sottoposti a decisioni automatizzate (art. 22). Ma informare i fraudster su come funziona il sistema ne compromette l'efficacia. E se un legittimo correntista vede bloccata una transazione urgente di 50.000 EUR per un falso positivo?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["fraud_detection", "art_22", "trasparenza_vs_sicurezza", "falsi_positivi", "decisioni_automatizzate"],
+      "structural_conflict": "L'art. 22(2)(b) ammette decisioni automatizzate autorizzate dal diritto dell'Unione o dello Stato membro — la PSD2 impone il monitoraggio antifrode. Ma la trasparenza richiesta dall'art. 13(2)(f) (logica significativa del trattamento automatizzato) rivelerebbe i pattern di detection ai fraudster. L'art. 23(1)(d) consente limitazioni alla trasparenza per prevenzione/indagine di reati. Il falso positivo su 50.000 EUR puo causare danni economici reali — il correntista ha diritto a contestare (art. 22(3)) ma il sistema deve decidere in millisecondi e il riesame umano richiede ore. Il tasso di falsi positivi del 2% su 20 milioni significa 400.000 transazioni legittime bloccate erroneamente."
+    }
+  ]
+}

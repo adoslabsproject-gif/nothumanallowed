@@ -1,0 +1,286 @@
+{
+  "domain": "economia",
+  "description": "Economia politica, macroeconomia, microeconomia, politica monetaria, commercio internazionale, disuguaglianza",
+  "prompts": [
+    {
+      "prompt": "Cos'è il PIL e come si calcola? Spiega la differenza tra PIL nominale e PIL reale, e perché il deflatore del PIL è necessario per confrontare la produzione economica di anni diversi.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["pil", "contabilita_nazionale", "deflatore", "fondamenti"],
+      "structural_conflict": "Non c'è vero disaccordo sulla definizione del PIL, ma esiste un dibattito tra economisti su quanto il PIL catturi realmente il benessere di una nazione — non misura lavoro domestico, economia informale, esternalità ambientali, né distribuzione del reddito."
+    },
+    {
+      "prompt": "Spiega la differenza tra politica monetaria espansiva e restrittiva. Quando la BCE abbassa i tassi di interesse dallo 4.5% al 3.0%, quali sono i meccanismi di trasmissione attraverso cui questa decisione influenza l'economia reale?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["politica_monetaria", "bce", "tassi_interesse", "trasmissione_monetaria"],
+      "structural_conflict": "Il meccanismo teorico è chiaro, ma gli economisti dibattono sull'efficacia reale della trasmissione monetaria — i monetaristi enfatizzano il canale del credito, i keynesiani evidenziano la trappola della liquidità quando i tassi sono già vicini a zero."
+    },
+    {
+      "prompt": "Cos'è l'inflazione e quali sono le sue cause principali? Distingui tra inflazione da domanda (demand-pull) e inflazione da costi (cost-push), fornendo un esempio concreto per ciascuna.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["inflazione", "domanda_aggregata", "costi_produzione", "fondamenti"],
+      "structural_conflict": "La distinzione teorica è netta, ma nella pratica le due cause si mescolano. L'inflazione post-COVID (2021-2023) ha generato un dibattito feroce: era cost-push (supply chain) o demand-pull (stimoli fiscali)? La risposta determina se la politica monetaria restrittiva era appropriata."
+    },
+    {
+      "prompt": "Spiega il concetto di vantaggio comparativo con un esempio numerico. Se l'Italia produce 10 unità di vino o 5 di tessuti per ora di lavoro, e la Germania produce 8 unità di vino o 12 di tessuti, chi dovrebbe specializzarsi in cosa e perché?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["commercio_internazionale", "vantaggio_comparativo", "ricardo", "specializzazione"],
+      "structural_conflict": "Il modello ricardiano è matematicamente elegante, ma economisti come Dani Rodrik contestano che nella realtà i costi di transizione (lavoratori che perdono il lavoro nel settore abbandonato), le economie di scala e le asimmetrie di potere negoziale rendono il vantaggio comparativo un argomento insufficiente per giustificare il libero scambio totale."
+    },
+    {
+      "prompt": "Cos'è il moltiplicatore fiscale? Se un governo spende 10 miliardi di euro in infrastrutture, spiega perché l'effetto sul PIL potrebbe essere maggiore, uguale o minore di 10 miliardi, a seconda delle condizioni economiche.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["politica_fiscale", "moltiplicatore", "keynes", "crowding_out"],
+      "structural_conflict": "Il valore del moltiplicatore fiscale è uno dei punti più contestati in macroeconomia. I keynesiani stimano moltiplicatori di 1.5-2.0 in recessione, i neoclassici argomentano effetti di spiazzamento (crowding out) che li riducono sotto 1.0. Le stime empiriche del FMI (Blanchard 2012) hanno mostrato che i moltiplicatori erano stati sistematicamente sottostimati durante la crisi dell'eurozona."
+    },
+    {
+      "prompt": "Cos'è un bene pubblico in senso economico? Spiega le caratteristiche di non-rivalità e non-escludibilità, e perché il mercato da solo tende a sotto-produrre questi beni (il problema del free rider).",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["beni_pubblici", "free_rider", "fallimento_mercato", "microeconomia"],
+      "structural_conflict": "La definizione è standard, ma il confine tra beni pubblici e privati è fluido e politicamente contestato. L'istruzione, la sanità, l'accesso a internet sono beni pubblici? Gli economisti libertari (Friedman) argomentano che la privatizzazione è più efficiente anche per questi beni, mentre gli economisti istituzionali (Ostrom) dimostrano che esistono soluzioni comunitarie diverse sia dal mercato sia dallo stato."
+    },
+    {
+      "prompt": "Spiega la curva di Phillips: qual è la relazione teorica tra inflazione e disoccupazione? Perché Milton Friedman argomentò che nel lungo periodo questa relazione scompare, introducendo il concetto di tasso naturale di disoccupazione?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["curva_phillips", "inflazione", "disoccupazione", "friedman", "lungo_periodo"],
+      "structural_conflict": "La curva di Phillips è stata confermata, smentita e reinterpretata più volte. La stagflazione degli anni '70 sembrò distruggerla, Friedman la reinterpretò con le aspettative adattive, i nuovi keynesiani la incorporarono con aspettative razionali, ma dal 2010 al 2019 la disoccupazione USA scese sotto il 4% senza inflazione significativa — fenomeno che nessun modello spiega pienamente."
+    },
+    {
+      "prompt": "Cos'è un'esternalità negativa? Spiega perché l'inquinamento industriale rappresenta un fallimento del mercato e confronta due soluzioni: la tassa pigouviana e il sistema cap-and-trade di permessi negoziabili.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["esternalita", "pigou", "cap_and_trade", "inquinamento", "fallimento_mercato"],
+      "structural_conflict": "Entrambe le soluzioni internalizzano l'esternalità, ma con trade-off diversi. La tassa pigouviana fissa il prezzo e lascia variare la quantità di inquinamento — l'economista conosce il costo ma non il risultato ambientale. Il cap-and-trade fissa la quantità e lascia variare il prezzo — si conosce il risultato ambientale ma non il costo per le imprese. La scelta dipende da cosa è più importante controllare."
+    },
+    {
+      "prompt": "L'Italia ha un rapporto debito/PIL di circa il 135% (2024). Il governo propone un taglio fiscale da 20 miliardi finanziato a deficit, argomentando che stimolerà la crescita e alla fine ridurrà il rapporto debito/PIL (ipotesi Laffer). I critici sostengono che con tassi al 4% il costo del debito aggiuntivo supererà la crescita generata. Analizza entrambe le posizioni con numeri: a quale tasso di crescita del PIL il taglio fiscale si 'ripaga da solo'? È realistico?",
+      "conflict_type": ["prediction_uncertainty", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["debito_pubblico", "laffer", "politica_fiscale", "italia", "sostenibilita_debito"],
+      "structural_conflict": "La curva di Laffer è teoricamente valida — esiste un punto oltre il quale alzare le tasse riduce il gettito — ma la posizione dell'Italia su questa curva è ignota. Gli economisti supply-side stimano che l'Italia sia oltre il picco, i keynesiani stimano il contrario. Con debito/PIL al 135% e spread BTP-Bund a 150bp, il margine di errore è sottile: se il moltiplicatore è 0.8 invece di 1.5, il debito esplode."
+    },
+    {
+      "prompt": "L'aumento del salario minimo a 12€/ora in un paese con salario mediano di 11.50€/ora: i modelli keynesiani prevedono un aumento della domanda aggregata che compensa i costi per le imprese, i modelli neoclassici prevedono un aumento della disoccupazione tra i lavoratori meno qualificati. Lo studio Card-Krueger (1994) sul New Jersey non trovò effetti negativi sull'occupazione, ma il replication study di Neumark-Wascher trovò il contrario. Con dati empirici misti, quale politica raccomanderesti e perché?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["salario_minimo", "occupazione", "card_krueger", "neoclassici_vs_keynesiani"],
+      "structural_conflict": "Il disaccordo è tanto teorico quanto empirico. Nel modello neoclassico con mercati perfettamente competitivi, un salario minimo sopra l'equilibrio crea disoccupazione per definizione. Ma se il mercato del lavoro è monopsonistico (pochi datori di lavoro con potere di mercato), un salario minimo moderato può AUMENTARE l'occupazione. La domanda empirica — quanto è monopsonistico il mercato del lavoro italiano? — non ha risposta definitiva."
+    },
+    {
+      "prompt": "La BCE deve decidere se continuare il Quantitative Easing (acquisto di 60 miliardi/mese di titoli di stato) o terminarlo. L'inflazione nell'eurozona è al 2.1% (appena sopra il target del 2%), ma il tasso di disoccupazione è ancora al 7.5% e la crescita è dello 0.9%. I paesi del Nord (Germania, Olanda) chiedono la fine del QE per paura dell'inflazione, i paesi del Sud (Italia, Spagna, Grecia) chiedono di continuarlo per sostenere la crescita. Analizza il dilemma istituzionale della BCE: come può avere una politica monetaria unica per economie strutturalmente diverse?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["bce", "quantitative_easing", "eurozona", "asimmetria_strutturale", "politica_monetaria"],
+      "structural_conflict": "Il problema è strutturale e irrisolvibile con la sola politica monetaria: l'eurozona è un'area valutaria non ottimale (Mundell). Un tasso di interesse unico è troppo alto per la Grecia (che avrebbe bisogno di tassi più bassi) e troppo basso per la Germania (che rischia bolle immobiliari). Senza unione fiscale (trasferimenti automatici tra regioni), la BCE è costretta a scegliere chi penalizzare."
+    },
+    {
+      "prompt": "Un governo vuole ridurre la disuguaglianza di reddito (coefficiente di Gini attuale: 0.33). Deve scegliere tra due politiche: (A) tassazione progressiva più aggressiva (aliquota marginale massima dal 43% al 55% sopra i 150.000€) con redistribuzione tramite servizi pubblici; (B) investimento massiccio in istruzione e formazione professionale (15 miliardi/anno per 10 anni) per ridurre la disuguaglianza di opportunità. La politica A ha effetti immediati ma rischia fuga di capitali e riduzione degli investimenti. La politica B è più sostenibile ma richiede una generazione per vedere risultati. Quale scegli e perché?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["disuguaglianza", "gini", "tassazione_progressiva", "istruzione", "redistribuzione"],
+      "structural_conflict": "Economisti di sinistra (Piketty) argomentano che senza tassazione progressiva forte, r > g (rendimento del capitale maggiore della crescita) perpetua la disuguaglianza indipendentemente dall'istruzione. Economisti di destra (Mankiw) argomentano che l'alta tassazione disincentiva l'innovazione e che l'istruzione è l'unico equalizzatore sostenibile. La tensione fondamentale è tra equità oggi (redistribuzione) e equità domani (opportunità)."
+    },
+    {
+      "prompt": "La Federal Reserve ha alzato i tassi dal 0-0.25% al 5.25-5.50% tra marzo 2022 e luglio 2023 (circa 16 mesi) per combattere un'inflazione al 9.1%. L'inflazione è scesa sotto il 3% ma il settore immobiliare si è contratto del 15%, le insolvenze sui mutui sono aumentate del 40%, e le banche regionali mostrano perdite non realizzate di 620 miliardi sui portafogli obbligazionari. La Fed deve decidere se fare una pausa (rischiando che l'inflazione risalga) o continuare (rischiando una crisi bancaria). Analizza il dilemma con il framework della stabilità finanziaria vs stabilità dei prezzi.",
+      "conflict_type": ["values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["federal_reserve", "tassi_interesse", "stabilita_finanziaria", "inflazione", "crisi_bancaria"],
+      "structural_conflict": "Il mandato duale della Fed (massima occupazione + stabilità dei prezzi) non include esplicitamente la stabilità finanziaria. Continuare ad alzare i tassi è coerente con il mandato anti-inflazione ma potrebbe causare una crisi bancaria sistemica (come SVB 2023). Fare una pausa protegge il sistema finanziario ma rischia il dis-ancoraggio delle aspettative inflazionistiche — che richiederebbe tassi ancora più alti in futuro."
+    },
+    {
+      "prompt": "Il protezionismo è tornato: gli USA impongono dazi del 25% sull'acciaio e del 10% sull'alluminio importato (con dazi addizionali mirati sulle importazioni cinesi). La Cina ritorsione con dazi equivalenti sui prodotti agricoli americani. L'UE è nel mezzo. I dati: i dazi proteggono 140.000 posti nell'industria siderurgica USA ma aumentano i costi per 6.2 milioni di lavoratori nei settori che usano acciaio (automotive, costruzioni, manifattura). L'effetto netto stimato è una perdita di 400.000 posti e un aumento dei prezzi al consumo dell'1.2%. Quando, se mai, i dazi sono economicamente giustificabili?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["protezionismo", "dazi", "commercio_internazionale", "guerra_commerciale", "globalizzazione"],
+      "structural_conflict": "Il libero scambio è Pareto-efficiente in aggregato ma crea perdenti concentrati e vincitori diffusi. Gli economisti mainstream (Krugman) argomentano che i dazi sono quasi sempre inefficienti, ma lo stesso Krugman ammette eccezioni per industrie nascenti e sicurezza nazionale. Gli economisti eterodossi (Ha-Joon Chang) mostrano che TUTTI i paesi ricchi si sono industrializzati con protezione tariffaria — il libero scambio è una 'scala che si tira via dopo essere saliti'."
+    },
+    {
+      "prompt": "L'economia comportamentale ha dimostrato che gli esseri umani non sono razionali nel senso neoclassico: soffrono di avversione alla perdita, sconto iperbolico, effetto ancoraggio, e bias di status quo. Questo invalida i modelli di equilibrio generale basati sull'agente razionale? Se sì, cosa li sostituisce? Se no, perché i modelli con assunzioni false possono comunque produrre previsioni accurate (l'argomento di Friedman 1953 sull'irrilevanza delle assunzioni)?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["economia_comportamentale", "razionalita", "kahneman", "thaler", "modelli_neoclassici"],
+      "structural_conflict": "Friedman argomentava che un modello si giudica dalle previsioni, non dalle assunzioni — come una palla da biliardo non conosce la fisica ma si comporta 'come se' la conoscesse. Kahneman e Thaler mostrano che i bias sistematici producono deviazioni prevedibili dall'equilibrio — non sono rumore casuale che si cancella in aggregato. Ma l'economia comportamentale non ha ancora prodotto un modello generale alternativo: spiega le anomalie senza offrire un framework unificato."
+    },
+    {
+      "prompt": "Un paese in via di sviluppo con PIL pro capite di 4.000$ deve scegliere la sua strategia di sviluppo: (A) industrializzazione guidata dallo stato (modello cinese/coreano — sussidi a industrie strategiche, investimenti in infrastrutture, manipolazione valutaria) oppure (B) liberalizzazione dei mercati (modello Washington Consensus — privatizzazioni, deregolamentazione, apertura commerciale, disciplina fiscale). I dati storici: la Cina ha sollevato 800 milioni dalla povertà con (A), ma la Russia post-sovietica ha avuto una catastrofe con una versione mal implementata di (B). Il Chile ha avuto successo con (B) ma con costi sociali enormi. Quale approccio raccomanderesti e con quali caveat?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["sviluppo_economico", "washington_consensus", "industrializzazione", "stato_vs_mercato"],
+      "structural_conflict": "Il Washington Consensus (FMI/Banca Mondiale) sosteneva che mercati liberi + istituzioni solide = sviluppo. Ma i successi asiatici (Corea, Taiwan, Cina) hanno usato massicciamente intervento statale. Rodrik argomenta che non esiste una ricetta universale — le istituzioni locali determinano quale approccio funziona. Il problema è che 'dipende dal contesto' non è una prescrizione operativa per un policymaker che deve decidere oggi."
+    },
+    {
+      "prompt": "L'Italia deve riformare il sistema pensionistico. La situazione: rapporto lavoratori/pensionati di circa 1.7:1 (nel 1970 era circa 5:1, e le proiezioni indicano circa 1:1 entro il 2050), spesa pensionistica a oltre il 16% del PIL (media OCSE: circa 8%), età pensionistica effettiva di circa 63 anni (aspettativa di vita: 83 anni). Le opzioni: (A) alzare l'età pensionistica a 67 per tutti (protesté sindacali, impatto su lavori usuranti); (B) passare al contributivo puro (pensioni più basse del 30%, rischio povertà anziani); (C) immigrazione massiccia per allargare la base contributiva (resistenza politica). Nessuna opzione è indolore. Quale mix è sostenibile?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["pensioni", "invecchiamento", "italia", "sostenibilita_fiscale", "equita_intergenerazionale"],
+      "structural_conflict": "Il conflitto è intergenerazionale e strutturalmente irrisolvibile senza sacrifici: i pensionati attuali hanno diritti acquisiti (contratto sociale), i lavoratori giovani pagano contributi per pensioni che probabilmente non riceveranno allo stesso livello. L'equità intergenerazionale richiede tagli alle pensioni attuali, la stabilità sociale li impedisce. L'immigrazione è la soluzione tecnica ma lo scontro politico la blocca."
+    },
+    {
+      "prompt": "Le criptovalute (Bitcoin, stablecoins) rappresentano una minaccia o un'opportunità per la politica monetaria delle banche centrali? Analizza: (a) se Bitcoin con supply fissa di 21 milioni è deflazionario per design e cosa succederebbe se diventasse valuta dominante; (b) se le stablecoins private (USDT, USDC, con capitalizzazione combinata superiore ai 200 miliardi) creano shadow banking non regolamentato; (c) se le CBDC (valute digitali delle banche centrali) sono la risposta appropriata o un rischio per la privacy.",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["criptovalute", "bitcoin", "cbdc", "stablecoins", "politica_monetaria", "privacy"],
+      "structural_conflict": "Gli economisti austriaci vedono Bitcoin come moneta 'sana' che elimina la manipolazione monetaria dei governi. I keynesiani argomentano che una valuta deflazionaria incentiva il tesaureggiamento e paralizza l'economia. Le CBDC risolvono il problema tecnico ma creano uno strumento di sorveglianza finanziaria senza precedenti — ogni transazione tracciabile dal governo. Il trade-off è tra stabilità monetaria, innovazione finanziaria e libertà individuale."
+    },
+    {
+      "prompt": "La teoria monetaria moderna (MMT) sostiene che un governo che emette la propria valuta non può mai fallire in senso tecnico — può sempre stampare moneta per pagare i debiti. Il vincolo reale non è il deficit ma l'inflazione. I critici (Summers, Rogoff) argomentano che la MMT è 'voodoo economics' che ignora le aspettative dei mercati e le esperienze iperinflazionistiche (Zimbabwe, Venezuela, Weimar). La MMT risponde che quei casi avevano cause reali (distruzione della capacità produttiva), non monetarie. Chi ha ragione, e in quali condizioni la MMT è applicabile vs pericolosa?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["mmt", "teoria_monetaria_moderna", "deficit", "inflazione", "sovranita_monetaria"],
+      "structural_conflict": "La MMT è tecnicamente corretta su un punto ristretto: un governo con sovranità monetaria non può fare default nella propria valuta. Ma 'non fare default' non significa 'nessuna conseguenza' — l'inflazione è la tassa nascosta. Il disaccordo reale è empirico: a quale livello di deficit il finanziamento monetario genera inflazione incontrollabile? I MMTisti dicono 'molto più in là di quanto pensiate', i mainstream dicono 'molto prima di quanto speriate'. Nessuno ha un modello preciso del punto di rottura."
+    },
+    {
+      "prompt": "L'antitrust nell'era digitale: Google controlla circa il 90% della ricerca, Amazon circa il 40% dell'e-commerce USA, Meta domina i social con quattro piattaforme oltre 1 miliardo di utenti ciascuna. I modelli antitrust tradizionali misurano il danno al consumatore tramite i prezzi — ma questi servizi sono gratuiti. L'approccio Chicago School (Bork) direbbe 'nessun danno, prezzi bassi, consumatore beneficiato'. L'approccio neo-Brandeisiano (Lina Khan) direbbe 'il monopolio è pericoloso indipendentemente dai prezzi, per il potere politico e l'innovazione soffocata'. Come deve evolvere il diritto antitrust?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["antitrust", "monopoli_digitali", "big_tech", "chicago_school", "neo_brandeis"],
+      "structural_conflict": "Il framework antitrust del XX secolo è costruito sul welfare del consumatore misurato dai prezzi. I monopoli digitali hanno prezzi zero, qualità alta, e innovazione rapida — passano ogni test tradizionale. Ma accumulano dati (potere informativo), uccidono concorrenti tramite acquisizioni predatorie, e hanno potere di gatekeeping su interi ecosistemi. Il disaccordo è se l'antitrust debba proteggere solo i consumatori (Chicago) o anche la concorrenza come processo democratico (Brandeis)."
+    },
+    {
+      "prompt": "Un governo europeo considera l'introduzione di un reddito di base universale (UBI) di 800€/mese per ogni cittadino adulto. Popolazione adulta: 50 milioni. Costo lordo: 480 miliardi/anno. PIL: 2.000 miliardi. Il costo è il 24% del PIL, ma sostituirebbe sussidi esistenti per 180 miliardi, riducendo il costo netto a 300 miliardi. Finanziamento proposto: IVA al 25% (da 22%), patrimoniale dello 0.5%, carbon tax di 80€/tonnellata. I sostenitori citano i pilot in Finlandia (miglioramento benessere psicologico, nessun calo dell'offerta di lavoro). I critici dicono che un pilot da 2.000 persone non scala a 50 milioni. Analizza fattibilità e rischi.",
+      "conflict_type": ["prediction_uncertainty", "values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["ubi", "reddito_universale", "welfare", "tassazione", "automazione"],
+      "structural_conflict": "Il problema della scalabilità è reale: i pilot (Finlandia, Kenya, Stockton) non catturano gli effetti di equilibrio generale — inflazione, cambiamento nell'offerta di lavoro aggregata, effetti sui salari di mercato. I sostenitori (Standing, Van Parijs) vedono l'UBI come risposta all'automazione e alla precarietà. I critici (Mankiw) preferiscono un imposta negativa sul reddito (targeted) rispetto all'universalità (inefficiente dare 800€ anche a un milionario). Il conflitto è tra universalità (dignità, semplicità) e targeting (efficienza, costo)."
+    },
+    {
+      "prompt": "Flat tax vs tassazione progressiva: un partito propone un'aliquota unica del 23% per tutti i redditi (da 0 a infinito), eliminando le attuali 3 aliquote IRPEF (23%, 35%, 43%). Argomentano semplificazione, riduzione dell'evasione, e incentivo alla crescita. L'analisi distributiva mostra che: i redditi sotto 28.000€ pagherebbero uguale o di più, i redditi sopra 50.000€ risparmierebbero tra 2.000 e 15.000€/anno, i redditi sopra 200.000€ risparmierebbero oltre 30.000€/anno. Il gettito fiscale calerebbe di 40 miliardi senza tagli compensativi alla spesa. È una politica di crescita o di redistribuzione verso l'alto?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["flat_tax", "progressivita", "tassazione", "redistribuzione", "gettito_fiscale"],
+      "structural_conflict": "Gli supply-siders argomentano che aliquote marginali più basse sui redditi alti stimolano investimenti e lavoro, generando crescita che compensa il minor gettito (Laffer). I distributivisti argomentano che la propensione marginale al consumo dei ricchi è bassa — un euro in meno di tasse ai ricchi genera meno domanda di un euro in meno ai poveri. Il principio di capacità contributiva (art. 53 Costituzione italiana) richiede progressività, ma non specifica quanta."
+    },
+    {
+      "prompt": "L'economia circolare propone di sostituire il modello lineare 'estrai-produci-scarta' con cicli chiusi di riuso e riciclo. L'UE ha fissato l'obiettivo del 65% di riciclo dei rifiuti urbani entro il 2035. Ma i critici osservano che: (a) il riciclo della plastica ha un tasso reale del 9% globale (non il 30% dichiarato); (b) il downcycling produce materiali di qualità inferiore; (c) il rebound effect significa che maggiore efficienza porta a maggiore consumo totale. L'economia circolare è una soluzione reale o un greenwashing sistemico?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["economia_circolare", "riciclo", "sostenibilita", "rebound_effect", "greenwashing"],
+      "structural_conflict": "Gli economisti ecologici (Georgescu-Roegen) argomentano che la seconda legge della termodinamica rende impossibile un ciclo veramente chiuso — ogni trasformazione aumenta l'entropia. Il riciclo rallenta il degrado ma non lo elimina. I sostenitori dell'economia circolare (Ellen MacArthur Foundation) rispondono che 'circolare' non significa perpetuo, ma riduzione drastica del throughput. Il disaccordo profondo è se la crescita economica sia compatibile con i limiti biofisici del pianeta."
+    },
+    {
+      "prompt": "Una banca centrale deve scegliere tra combattere un'inflazione al 7.2% con un rialzo dei tassi di 200 basis points (dal 3.5% al 5.5%), che i modelli macroeconomici stimano causerà una recessione con perdita di 1.8 milioni di posti di lavoro e contrazione del PIL del 2.1%, oppure tollerare l'inflazione mantenendo i tassi invariati, rischiando che le aspettative inflazionistiche si dis-ancorino e l'inflazione si autoalimenti raggiungendo il 10-12% entro 18 mesi. Il governatore sa che la recessione colpirà sproporzionatamente i lavoratori a basso reddito (disoccupazione al 15% nel quintile più povero). L'inflazione però è una tassa regressiva che erode i risparmi degli stessi lavoratori. Qual è la scelta meno sbagliata?",
+      "conflict_type": ["values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["politica_monetaria", "inflazione", "recessione", "disuguaglianza", "aspettative_inflazionistiche"],
+      "structural_conflict": "Il dilemma è che entrambe le opzioni danneggiano le stesse persone (i più poveri) ma attraverso canali diversi e con orizzonti temporali diversi. Alzare i tassi causa sofferenza certa e immediata (disoccupazione). Non alzarli causa sofferenza probabile e prolungata (inflazione persistente). Volcker nel 1980 scelse la recessione e fu giudicato eroico col senno di poi — ma durante la recessione la disoccupazione raggiunse il 10.8% e le comunità industriali furono devastate. La scelta dipende dalla credibilità della banca centrale: se è alta, basta una mossa moderata; se è bassa, serve una mossa brutale."
+    },
+    {
+      "prompt": "Il debito pubblico giapponese è a circa il 237% del PIL, eppure il Giappone paga tassi d'interesse vicini allo zero e non ha mai avuto una crisi del debito. Il debito greco raggiunse il 180% e il paese andò in default. Il debito USA è a circa il 121% del PIL (debito totale) e il dollaro resta la valuta di riserva globale. I modelli che predicono 'crisi del debito' sopra il 90% (Reinhart-Rogoff 2010, contestati nel 2013 da Herndon-Ash-Pollin) si sono rivelati basati su un errore nel foglio Excel, esclusione selettiva di dati e ponderazione non convenzionale. Esiste un livello di debito/PIL 'troppo alto'? Se sì, da cosa dipende? Se no, perché i governi non spendono illimitatamente?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["debito_pubblico", "giappone", "grecia", "reinhart_rogoff", "sostenibilita_debito", "sovranita_monetaria"],
+      "structural_conflict": "Il fallimento di Reinhart-Rogoff eliminò l'unico 'fatto stilizzato' sulla soglia di debito (90%). Ora gli economisti non hanno consenso su quando il debito diventa insostenibile. I fattori chiave — sovranità monetaria (Giappone sì, Grecia no), detenzione domestica vs estera, denominazione in valuta propria — spiegano i casi passati ma non predicono quelli futuri. La MMT argomenta che il vincolo è l'inflazione, non il debito. I mainstream rispondono che la transizione da 'sostenibile' a 'crisi' è non-lineare e imprevedibile — come la sabbia che si accumula prima di una valanga."
+    },
+    {
+      "prompt": "La globalizzazione ha ridotto la povertà assoluta globale (da circa 2.0 miliardi nel 1990 a circa 660 milioni nel 2019) ma ha aumentato la disuguaglianza all'interno dei paesi ricchi. Il 'grafico dell'elefante' di Milanovic mostra che la classe media globale (cinesi, indiani) e l'1% globale hanno beneficiato enormemente, mentre la classe media occidentale ha visto redditi stagnanti per 30 anni. Un economista deve consigliare un leader politico: la globalizzazione va accelerata (Bhagwati), rallentata con 'globalizzazione gestita' (Rodrik), o invertita (reshoring, sovranismo economico)? I dati supportano posizioni opposte a seconda di chi si include nel calcolo del benessere.",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["globalizzazione", "disuguaglianza", "milanovic", "elefante", "classe_media", "reshoring"],
+      "structural_conflict": "Il conflitto è filosofico prima che tecnico: il benessere di chi conta? Se si adotta una prospettiva cosmopolita (tutti gli esseri umani hanno peso uguale), la globalizzazione è il più grande successo anti-povertà della storia. Se si adotta una prospettiva nazionale (il governo risponde ai propri cittadini), la globalizzazione ha tradito la classe media. La teoria economica non può risolvere un conflitto normativo su chi merita priorità — può solo mostrare i trade-off."
+    },
+    {
+      "prompt": "Il paradosso della produttività: dal 2005 al 2025 la produttività del lavoro nei paesi OCSE è cresciuta solo dello 0.9%/anno, contro il 2.3%/anno del periodo 1950-2000 — nonostante la rivoluzione digitale, l'AI, il cloud computing. Robert Gordon argomenta che le innovazioni recenti sono 'di intrattenimento' (social media) e non trasformative come l'elettricità o il motore a combustione. Erik Brynjolfsson risponde che siamo in un 'J-curve' — la produttività da AI esploderà ma con ritardo, come accadde con l'elettricità (30 anni tra invenzione e impatto sulla produttività). Chi ha ragione ha implicazioni enormi per crescita, salari, e pensioni future. Analizza entrambe le posizioni con evidenze.",
+      "conflict_type": ["prediction_uncertainty", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["produttivita", "stagnazione_secolare", "gordon", "brynjolfsson", "innovazione", "ai"],
+      "structural_conflict": "Il disaccordo è fondamentalmente non risolvibile con dati presenti — dipende da previsioni sul futuro dell'AI e della tecnologia. Gordon ha ragione guardando i dati storici (la produttività è bassa da 20 anni). Brynjolfsson ha ragione guardando l'analogia storica (l'elettricità impiegò decenni). Il problema è che le politiche economiche (pensioni, investimenti, debito) devono essere calibrate oggi su assunzioni di produttività futura — e la differenza tra 0.9% e 2.3% di crescita della produttività su 30 anni è la differenza tra stagnazione e prosperità."
+    },
+    {
+      "prompt": "Piketty in 'Il Capitale nel XXI Secolo' dimostra che storicamente r > g (il rendimento del capitale supera il tasso di crescita dell'economia), portando a concentrazione crescente della ricchezza. Propone un'imposta patrimoniale globale progressiva (1% sotto 5 milioni, 2% sopra). I critici argomentano: (a) la patrimoniale è impossibile senza coordinamento globale (fuga di capitali), (b) la tassazione del patrimonio non liquido (aziende, immobili) forza vendite forzate distruttive, (c) il periodo 1914-1980 di bassa disuguaglianza fu causato da guerre e distruzione, non da politiche — e non è replicabile. Piketty ha ragione sulla diagnosi? E la sua prescrizione è attuabile o utopica?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["piketty", "r_maggiore_g", "patrimoniale", "disuguaglianza", "concentrazione_ricchezza"],
+      "structural_conflict": "La diagnosi (r > g) è empiricamente robusta su secoli di dati, ma i critici (Acemoglu, Robinson) argomentano che le istituzioni politiche contano più dei parametri macroeconomici — i paesi con istituzioni inclusive riducono la disuguaglianza indipendentemente da r e g. La prescrizione (patrimoniale globale) richiede un livello di cooperazione internazionale che non esiste e probabilmente non esisterà. Il risultato è una diagnosi convincente con una cura impossibile — che lascia il problema strutturalmente irrisolto."
+    },
+    {
+      "prompt": "Il movimento degrowth (decrescita) argomenta che la crescita economica perpetua è fisicamente impossibile su un pianeta finito e che i paesi ricchi devono deliberatamente ridurre il PIL per restare entro i limiti planetari. I modelli mostrano che per raggiungere gli obiettivi climatici di 1.5°C servirebbero riduzioni delle emissioni del 7%/anno — impossibili con crescita economica anche 'verde'. Ma il PIL pro capite è fortemente correlato con aspettativa di vita, mortalità infantile, istruzione. La decrescita significherebbe accettare vite più corte e meno sane? O il disaccoppiamento tra PIL e benessere è possibile? Analizza le posizioni di Hickel (degrowth) vs McAfee (green growth) con dati.",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["degrowth", "decrescita", "limiti_planetari", "green_growth", "disaccoppiamento", "clima"],
+      "structural_conflict": "Il conflitto è tra due visioni incompatibili del rapporto economia-biosfera. McAfee mostra che i paesi ricchi hanno ridotto l'uso di molte risorse in termini assoluti (dematerializzazione) — ma i critici rispondono che questo è stato possibile solo esternalizzando la produzione in Cina. Hickel mostra che nessun paese ha raggiunto simultaneamente benessere alto e impronta ecologica sostenibile. Il disaccoppiamento assoluto a livello globale non è mai stato osservato. Ma proporre la decrescita ai paesi in via di sviluppo è moralmente problematico — è facile dire 'basta crescere' quando sei già ricco."
+    },
+    {
+      "prompt": "L'Unione Europea impone una carbon border adjustment mechanism (CBAM) — una tassa sulle importazioni basata sul contenuto di carbonio. L'obiettivo è evitare il 'carbon leakage' (le imprese europee spostano la produzione in paesi senza carbon pricing). Ma i paesi in via di sviluppo (India, Brasile, Indonesia) accusano l'UE di protezionismo mascherato da ambientalismo. Un'acciaieria indiana emette 2.4 tonnellate di CO2 per tonnellata di acciaio (vs 1.6 in UE). Con CBAM a 90€/tonnellata CO2, l'acciaio indiano costa il 12% in più. L'India argomenta che ha emissioni pro capite di circa 2.1 tCO2 (vs circa 6 tCO2 UE) e diritto storico a industrializzarsi. Chi ha ragione?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["cbam", "carbon_leakage", "protezionismo_verde", "commercio_internazionale", "equita_climatica"],
+      "structural_conflict": "Il CBAM è economicamente coerente (internalizza l'esternalità carbonio) ma distributivamente ingiusto (penalizza chi si è industrializzato dopo). L'UE ha emesso CO2 per 200 anni e ora chiede ai nuovi arrivati di pagare il prezzo della transizione. L'India ha ragione sulle emissioni pro capite e sul debito climatico storico. L'UE ha ragione che senza CBAM le sue politiche climatiche spostano le emissioni senza ridurle. Il conflitto è tra efficienza ambientale globale ed equità distributiva internazionale — e non esiste un principio economico che li risolva entrambi."
+    },
+    {
+      "prompt": "Le sanzioni economiche contro la Russia dopo l'invasione dell'Ucraina (2022): congelamento di 300 miliardi di riserve della banca centrale, disconnessione da SWIFT, embargo su petrolio e gas. Risultati dopo 2 anni: il PIL russo è calato del 2.1% nel 2022 ma è cresciuto del 3.6% nel 2023 grazie al riorientamento verso Cina e India e alla spesa militare. L'Europa ha subito una crisi energetica con prezzi del gas aumentati del 400%. Le sanzioni sono uno strumento economico efficace per obiettivi geopolitici? I dati storici (Cuba, Iran, Nord Corea) mostrano che le sanzioni raramente cambiano il comportamento dei regimi — lo studio Hufbauer-Schott-Elliott su 116 episodi mostra successo nel 34% dei casi — ma sempre danneggiano la popolazione civile. Analizza costi, benefici e alternative.",
+      "conflict_type": ["prediction_uncertainty", "values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["sanzioni", "russia", "geopolitica", "guerra_economica", "efficacia_sanzioni"],
+      "structural_conflict": "Le sanzioni occupano lo spazio tra diplomazia (inefficace) e guerra (impensabile). La loro efficacia è sistematicamente sovrastimata: lo studio Hufbauer-Schott-Elliott su 116 episodi mostra successo in circa il 34% dei casi — e quasi mai contro grandi potenze autarchiche. Ma l'alternativa (non fare nulla) segnala che l'aggressione non ha costi. Il dilemma è che le sanzioni danneggiano certamente i civili russi e gli europei (costo energetico), mentre il loro effetto sul comportamento di Putin è incerto e probabilmente marginale."
+    },
+    {
+      "prompt": "L'automazione e l'AI stanno sostituendo posti di lavoro: McKinsey stima che entro il 2030 il 30% delle ore lavorate attuali potrebbe essere automatizzato. Ma ogni rivoluzione tecnologica precedente (agricoltura meccanizzata, industrializzazione, informatizzazione) ha creato più posti di quanti ne ha distrutti — il 'lump of labor fallacy'. Stavolta è diverso? L'AI può replicare capacità cognitive, non solo fisiche. Un economista del lavoro deve consigliare un governo: investire in riqualificazione professionale (per quali lavori, se l'AI cambia tutto?), introdurre UBI, tassare i robot (proposta Gates), o lasciare che il mercato si aggiusti da solo? La risposta sbagliata potrebbe significare disoccupazione strutturale al 25% o perdita di competitività globale.",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["automazione", "ai", "disoccupazione_tecnologica", "riqualificazione", "robot_tax"],
+      "structural_conflict": "Il precedente storico (ogni tecnologia ha creato più lavori di quanti ne ha distrutti) è rassicurante ma potrebbe essere irrilevante — le rivoluzioni precedenti sostituivano muscoli, l'AI sostituisce cervelli. Ma anche questo argomento 'stavolta è diverso' è stato fatto ogni volta (Luddisti, anni '60, anni '90) ed è sempre stato sbagliato. La differenza cruciale è la velocità: le transizioni precedenti hanno richiesto generazioni, l'AI potrebbe trasformare interi settori in anni. Se il mercato si aggiusta 'nel lungo periodo', nel frattempo milioni di persone soffrono — e come disse Keynes, 'nel lungo periodo siamo tutti morti'."
+    },
+    {
+      "prompt": "Una piccola economia aperta (PIL 300 miliardi, popolazione 20 milioni) scopre un giacimento di gas naturale che vale 500 miliardi di dollari. La storia insegna che le risorse naturali sono spesso una 'maledizione' più che una benedizione — la Dutch Disease: l'afflusso di valuta estera apprezza il tasso di cambio, distruggendo le esportazioni manifatturiere, e la rendita energetica alimenta corruzione e rent-seeking. La Norvegia ha evitato la maledizione con il suo fondo sovrano (oltre 2.000 miliardi di dollari a fine 2025). La Nigeria no (PIL pro capite più basso oggi che nel 1975 nonostante 600 miliardi di ricavi petroliferi). Quali istituzioni servono PRIMA di iniziare l'estrazione per evitare la resource curse?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["dutch_disease", "resource_curse", "fondo_sovrano", "istituzioni", "norvegia_vs_nigeria"],
+      "structural_conflict": "La risposta tecnica è nota (fondo sovrano, regole fiscali, diversificazione) — la Norvegia l'ha dimostrato. Ma la Norvegia aveva istituzioni forti PRIMA del petrolio. I paesi con istituzioni deboli non possono costruirle rapidamente, e la rendita petrolifera stessa corrompe le istituzioni esistenti (il petrostato non ha incentivo a tassare i cittadini, quindi non ha incentivo a essere accountable). Il paradosso è che i paesi che hanno più bisogno della ricchezza delle risorse sono quelli meno attrezzati per gestirla — e la ricchezza stessa li rende meno capaci di costruire le istituzioni necessarie."
+    },
+    {
+      "prompt": "La crisi finanziaria del 2008 ha mostrato che il sistema bancario crea rischio sistemico: banche 'troppo grandi per fallire' prendono rischi eccessivi sapendo che il governo le salverà (moral hazard). La regolamentazione post-crisi (Basilea III, Dodd-Frank) ha imposto requisiti di capitale più alti (CET1 minimo 4.5% + buffer), ma le banche argomentano che requisiti troppo alti riducono il credito all'economia reale. I critici (Admati, Hellwig) propongono requisiti del 20-30% — le banche dicono che questo dimezzerebbe il credito disponibile. I dati: tra il 1870 e il 1960 le banche operavano con capitale del 15-25% e il credito funzionava. Chi ha ragione, e quanto capitale è 'abbastanza'?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["regolamentazione_bancaria", "basilea", "moral_hazard", "too_big_to_fail", "capitale_bancario"],
+      "structural_conflict": "Le banche operano con leva altissima (95:5) perché il debito è fiscalmente favorito (interessi deducibili) e perché i depositi sono garantiti dallo stato (moral hazard). Admati dimostra che il costo 'alto' del capitale proprio è un'illusione del teorema Modigliani-Miller violato dai sussidi impliciti. Ma le banche hanno un potere di lobbying enorme e riescono a framing la questione come 'più capitale = meno prestiti', quando in realtà 'più capitale = meno profitti per gli azionisti ma sistema più sicuro'. Il disaccordo è tra interesse privato delle banche e interesse pubblico della stabilità."
+    },
+    {
+      "prompt": "L'eurozona è un esperimento unico: 20 paesi (21 dal 2026 con la Bulgaria) con una moneta comune ma senza unione fiscale, senza un'autorità che emetta eurobond, senza trasferimenti automatici tra regioni ricche e povere. Gli USA hanno tutti e tre (Treasury, Federal budget, trasferimenti interstatali). La crisi dell'euro (2010-2015) ha mostrato che senza questi strumenti, gli shock asimmetrici sono devastanti — la Grecia non poteva svalutare e non riceveva trasferimenti, poteva solo tagliare salari del 25% (svalutazione interna). L'eurozona deve scegliere: (A) completare l'unione con eurobond e bilancio federale (la Germania si oppone: 'non paghiamo per i debiti degli altri'), (B) mantenere lo status quo fragile, o (C) accettare che l'euro fu un errore e gestire una dissoluzione ordinata. Analizza costi e rischi di ciascuna opzione.",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["eurozona", "unione_fiscale", "eurobond", "area_valutaria_ottimale", "mundell"],
+      "structural_conflict": "L'euro viola i criteri di Mundell per un'area valutaria ottimale: mobilità del lavoro bassa, shock asimmetrici frequenti, nessun meccanismo di aggiustamento fiscale. Ma tornare indietro è quasi impossibile — la dissoluzione causerebbe panico bancario, fuga di capitali, e costi legali immensi (tutti i contratti in euro dovrebbero essere ridenominati). Andare avanti richiede solidarietà fiscale che i paesi del Nord rifiutano. Lo status quo è fragile ma funziona finché non c'è la prossima crisi. È un equilibrio instabile che tutti preferiscono non toccare — finché non crolla."
+    },
+    {
+      "prompt": "L'inflazione è un fenomeno monetario (Friedman: 'sempre e dovunque') o un fenomeno di potere (post-keynesiani: le imprese con potere di mercato alzano i prezzi e i lavoratori con potere sindacale chiedono aumenti salariali)? L'inflazione 2021-2023 ha riaperto il dibattito: i monetaristi indicano i 5.000 miliardi di stimoli fiscali USA, i post-keynesiani mostrano che i profitti aziendali sono cresciuti più dei costi (profit-led inflation/greedflation). Weber e Wasner mostrano che in settori concentrati (energia, alimentare, trasporti) i mark-up sono aumentati del 30-50%. Se l'inflazione è profit-led, la risposta corretta non è alzare i tassi (che colpisce i lavoratori) ma regolamentare i prezzi o l'antitrust (che colpisce le imprese). La diagnosi determina la cura.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["inflazione", "greedflation", "monetarismo", "post_keynesiani", "profitti", "potere_mercato"],
+      "structural_conflict": "Il monetarismo e il post-keynesianismo hanno ontologie diverse dell'inflazione. Per Friedman è un fenomeno aggregato causato dalla quantità di moneta — i prezzi individuali sono irrilevanti. Per i post-keynesiani è un fenomeno distributivo — l'inflazione è il risultato di un conflitto tra gruppi sociali (imprese vs lavoratori) su chi sopporta i costi degli shock reali. Se Friedman ha ragione, la banca centrale è lo strumento giusto. Se i post-keynesiani hanno ragione, alzare i tassi punisce le vittime (lavoratori) e premia i colpevoli (imprese che hanno alzato i mark-up). La stessa cura è giusta o sbagliata a seconda della diagnosi."
+    },
+    {
+      "prompt": "Un paese africano con 100 milioni di abitanti, PIL pro capite di 1.200$, e un debito estero di 45 miliardi (60% denominato in dollari) subisce una svalutazione della propria valuta del 40% dopo una crisi delle materie prime. Il debito in termini di valuta locale raddoppia. Il FMI offre un prestito da 8 miliardi con condizionalità: taglio della spesa pubblica del 15%, eliminazione dei sussidi alimentari (che costano 3 miliardi/anno e sfamano 30 milioni di persone), privatizzazione delle utility pubbliche, e liberalizzazione del conto capitale. Le condizionalità del FMI sono state criticate da Stiglitz come 'la stessa medicina indipendentemente dalla malattia'. Ma senza il prestito, il paese fa default e perde accesso ai mercati internazionali. Il governo deve accettare, negoziare, o fare default strategico?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["fmi", "condizionalita", "debito_estero", "austerita", "sviluppo", "stiglitz"],
+      "structural_conflict": "Il FMI opera con un paradigma (consolidamento fiscale + liberalizzazione = crescita) che funziona in teoria ma ha prodotto risultati catastrofici nella pratica (Argentina 2001, Grecia 2010, vari paesi africani negli anni '80-'90). Stiglitz argomenta che tagliare i sussidi alimentari durante una crisi causa malnutrizione, morte, e instabilità politica — peggiorando l'economia. Il FMI risponde che senza disciplina fiscale il prestito è buttato e il paese ritorna in crisi. Il default strategico (Argentina 2001) può funzionare ma ha costi enormi: esclusione dai mercati, sequestro di asset all'estero, contenziosi legali decennali."
+    },
+    {
+      "prompt": "L'indipendenza della banca centrale è un dogma della macroeconomia moderna: i politici hanno incentivi ad abbassare i tassi prima delle elezioni (ciclo politico-economico), quindi la politica monetaria deve essere delegata a tecnici indipendenti. Ma questa indipendenza crea un deficit democratico: il governatore della BCE prende decisioni che influenzano la vita di 350 milioni di persone senza essere eletto. La scelta di alzare i tassi nel 2022 ha causato recessione in paesi già deboli (Grecia, Portogallo) per combattere un'inflazione causata da uno shock energetico su cui la BCE non ha nessun potere. I tecnocrati non eletti dovrebbero avere il potere di causare recessioni? O il rischio di politici populisti che stampano moneta è peggiore?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["indipendenza_banca_centrale", "democrazia", "tecnocrazia", "bce", "accountability"],
+      "structural_conflict": "L'indipendenza della banca centrale è giustificata dal problema dell'incoerenza temporale (Kydland-Prescott): un governo razionale promette bassa inflazione ma poi è tentato di svalutare per stimolare l'economia. Ma delegare la politica monetaria a tecnici non eletti viola il principio democratico che chi prende decisioni deve risponderne ai cittadini. Il compromesso attuale (indipendenza operativa con mandato definito dal legislatore) funziona quando il mandato è chiaro (inflazione al 2%), ma crolla quando ci sono conflitti di obiettivi (inflazione vs occupazione vs stabilità finanziaria) — perché la scelta tra obiettivi conflittuali è una scelta politica, non tecnica."
+    },
+    {
+      "prompt": "L'evasione fiscale globale: le multinazionali spostano 1.000 miliardi di profitti/anno verso paradisi fiscali (Irlanda: aliquota 12.5%, Lussemburgo: ruling fiscali segreti, Cayman Islands: 0%). L'OCSE ha introdotto la Global Minimum Tax del 15% (Pillar Two), ma: (a) il 15% è comunque inferiore alle aliquote domestiche del 25-30%, quindi incentiva ancora lo spostamento; (b) i paesi piccoli (Irlanda, Singapore) dipendono dalla competizione fiscale per attrarre investimenti; (c) i paesi in via di sviluppo perdono 240 miliardi/anno di gettito — più di quanto ricevono in aiuti. La competizione fiscale tra stati è efficienza (Tiebout: le giurisdizioni competono offrendo il mix migliore di tasse e servizi) o una corsa al ribasso che distrugge la capacità fiscale degli stati?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["evasione_fiscale", "paradisi_fiscali", "global_minimum_tax", "ocse", "competizione_fiscale"],
+      "structural_conflict": "La competizione fiscale è vista positivamente dal modello di Tiebout (le giurisdizioni competono e i contribuenti 'votano con i piedi') e negativamente dalla teoria della race to the bottom (se tutti abbassano le tasse, nessuno può finanziare servizi pubblici). Il Global Minimum Tax al 15% è un compromesso politico, non ottimale: abbastanza basso da essere accettato, troppo basso per eliminare davvero lo spostamento dei profitti. Il problema fondamentale è che il sistema fiscale è nazionale ma l'economia è globale — e la sovranità fiscale degli stati è sacrosanta in un mondo senza governo globale."
+    },
+    {
+      "prompt": "Il mercato immobiliare come fonte di disuguaglianza intergenerazionale: in Italia il prezzo medio di una casa a Milano è circa 5.000-5.500€/mq (2025), il reddito mediano di un under-35 è 18.000€/anno netto. Un bilocale di 60mq costa 324.000€ — 18 anni di reddito senza spendere un centesimo. Nel 1990 lo stesso rapporto era 6:1. I proprietari (circa 74-76% degli italiani, prevalentemente over-55) beneficiano dell'aumento dei prezzi. I non-proprietari (prevalentemente giovani) sono esclusi. Le politiche possibili: (A) tassazione delle rendite immobiliari e delle case vuote, (B) edilizia pubblica massiccia, (C) liberalizzazione urbanistica (costruire di più), (D) limiti agli acquisti speculativi e Airbnb. Ogni politica colpisce una constituency diversa. Quale mix risolve il problema senza causare un crollo immobiliare che distrugge la ricchezza della classe media proprietaria?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["mercato_immobiliare", "disuguaglianza_intergenerazionale", "rendita", "urbanistica", "housing"],
+      "structural_conflict": "Il paradosso è che la soluzione (prezzi più bassi) è il problema per chi possiede casa. Circa il 74-76% degli italiani ha la maggior parte della ricchezza in immobili — un calo del 30% dei prezzi distrugge la classe media proprietaria e causa una crisi bancaria (i mutui sono garantiti da immobili). Ma non fare nulla perpetua l'esclusione dei giovani. La liberalizzazione urbanistica (più costruzioni) è la soluzione economica standard, ma i proprietari esistenti la osteggiano (riduce il valore delle loro case). Il conflitto è tra insider (proprietari, anziani, elettori) e outsider (affittuari, giovani, non-elettori) — e i sistemi democratici favoriscono gli insider."
+    }
+  ]
+}

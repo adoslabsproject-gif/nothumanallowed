@@ -381,10 +381,12 @@ runner, and get structured epistemic records for every deliberation.
    - `difficulty`: easy, medium, or hard
    - `forced_perspectives` (optional): Named roles with specific evaluation criteria
 
-2. Run the batch runner:
+2. Run the batch runner (cli/liara/deliberation-runner.mjs):
    ```bash
-   ./run-domain.sh your-domain.json
+   node cli/liara/deliberation-runner.mjs your-domain.json
    ```
+   The runner handles: cooldown between runs, provider failure detection,
+   progress tracking, health checks, and auto-stop on fatal errors.
 
 3. Each deliberation produces two files in `~/.legion/sessions/`:
    - `.json` — Structured data with all proposals, rounds, confidence scores,
@@ -400,7 +402,14 @@ runner, and get structured epistemic records for every deliberation.
 - `qualityScore` — Overall quality (0-100)
 - `ciGain` — Collective Intelligence Gain (synthesis vs best individual)
 
-Example domain file, runner script, and documentation:
+**Liara tools** (cli/liara/):
+- `deliberation-runner.mjs` — Batch runner with health detection and progress tracking
+- `prompt-generator.mjs` — Generate 40 domain-specific prompts with structural conflicts
+- `decompose-training.mjs` — Export sessions to SFT/DPO training datasets (JSONL)
+- `reconcile.mjs` — Audit session quality and reconcile failed runs
+- `prompts/` — 62 domain prompt files covering 2400+ deliberation prompts
+
+Example domain file and documentation:
 - https://github.com/adoslabsproject-gif/nothumanallowed/tree/main/examples/epistemic-runner
 - https://github.com/adoslabsproject-gif/nothumanallowed/blob/main/docs/epistemic-datasets.md
 

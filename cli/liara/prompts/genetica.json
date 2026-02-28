@@ -1,0 +1,632 @@
+{
+  "domain": "genetica",
+  "description": "Genetica, genomica, CRISPR, terapia genica, test genetici, farmacogenomica, bioinformatica",
+  "prompts": [
+    {
+      "prompt": "Qual è la differenza tra genotipo e fenotipo? Fai un esempio con il gruppo sanguigno ABO, spiegando perché due genotipi diversi (IA/i e IA/IA) producono lo stesso fenotipo (gruppo A).",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "genotipo",
+        "fenotipo",
+        "dominanza",
+        "gruppo_sanguigno"
+      ],
+      "structural_conflict": "Il rapporto genotipo-fenotipo sembra semplice nel caso ABO ma diventa complesso con la penetranza incompleta, l'espressività variabile e l'epistasi. La 'dominanza' è un modello semplificato che nasconde meccanismi molecolari diversi."
+    },
+    {
+      "prompt": "Cos'è una mutazione puntiforme e quali sono i 3 tipi principali (missense, nonsense, silent)? Per ciascuno, spiega l'effetto sulla proteina con un esempio concreto (es. anemia falciforme per missense).",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "mutazione_puntiforme",
+        "missense",
+        "nonsense",
+        "silent",
+        "anemia_falciforme"
+      ],
+      "structural_conflict": "La classificazione in 3 tipi è didatticamente utile ma la realtà è più sfumata: una mutazione 'silent' può alterare lo splicing, e una 'missense' può essere benigna. La patogenicità è un continuum, non una categoria."
+    },
+    {
+      "prompt": "Spiega il meccanismo di base di CRISPR-Cas9: come la guida RNA (sgRNA) trova il bersaglio, come Cas9 taglia il DNA, e quali sono i due meccanismi di riparazione (NHEJ e HDR) con le rispettive efficienze (~70% NHEJ vs ~10-30% HDR).",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "crispr",
+        "cas9",
+        "nhej",
+        "hdr",
+        "gene_editing"
+      ],
+      "structural_conflict": "CRISPR è presentato come 'forbice molecolare' precisa, ma il rapporto NHEJ:HDR (70:30 nel migliore dei casi) significa che il risultato più probabile è un knockout casuale, non un'editing preciso. La narrativa della precisione è parzialmente fuorviante."
+    },
+    {
+      "prompt": "Cosa sono i test genetici diretti al consumatore (DTC) come 23andMe? Che differenza c'è tra un test per ancestry, un test per tratti (es. colore occhi), e un test per rischio di malattia (es. BRCA1)? Quale ha validità clinica e quale no?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "test_dtc",
+        "23andme",
+        "validita_clinica",
+        "ancestry"
+      ],
+      "structural_conflict": "I test DTC mescolano intrattenimento (ancestry) e medicina (BRCA1) nella stessa piattaforma, confondendo il consumatore. La validità clinica varia enormemente ma la presentazione è uniformemente 'scientifica'."
+    },
+    {
+      "prompt": "Cos'è l'ereditarietà mendeliana e quali sono le 5 modalità di trasmissione principali (autosomica dominante, autosomica recessiva, X-linked dominante, X-linked recessiva, mitocondriale)? Per ciascuna, cita una malattia genetica nota.",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "mendel",
+        "ereditarieta",
+        "trasmissione_genetica",
+        "malattie_monogeniche"
+      ],
+      "structural_conflict": "L'ereditarietà mendeliana descrive meno del 5% delle malattie genetiche. La maggior parte dei tratti è poligenica e influenzata dall'ambiente. Insegnare Mendel come fondamento è corretto storicamente ma rischia di creare un modello mentale eccessivamente deterministico."
+    },
+    {
+      "prompt": "Cos'è la farmacogenomica e come viene usata nella pratica clinica? Spiega con l'esempio del gene CYP2D6 e la codeina: perché i metabolizzatori ultra-rapidi (5-10% della popolazione caucasica, fino al 29% in Etiopia) rischiano overdose da morfina con una dose standard di codeina.",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "farmacogenomica",
+        "cyp2d6",
+        "codeina",
+        "metabolizzatori"
+      ],
+      "structural_conflict": "La farmacogenomica promette 'il farmaco giusto al paziente giusto' ma la variabilità tra popolazioni (5-10% vs 29%) significa che i protocolli standard sono sempre sbagliati per qualcuno. Implementare test pre-prescrizione per tutti i farmaci è ideale ma economicamente proibitivo."
+    },
+    {
+      "prompt": "Cos'è un punteggio di rischio poligenico (PRS) e come viene calcolato? Se un PRS per il diabete di tipo 2 ha AUC 0.64, cosa significa in termini di capacità predittiva individuale? Perché un AUC di 0.64 è utile a livello di popolazione ma quasi inutile per un singolo paziente?",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "prs",
+        "poligenico",
+        "auc",
+        "predizione_individuale"
+      ],
+      "structural_conflict": "Il PRS è statisticamente reale ma clinicamente debole a livello individuale. AUC 0.64 è meglio del caso (0.50) ma lontano dalla diagnosi (>0.90). La comunicazione del rischio poligenico ai pazienti è problematica: numeri veri ma non azionabili."
+    },
+    {
+      "prompt": "Spiega la differenza tra sequenziamento Sanger, NGS (Next-Generation Sequencing) e sequenziamento di terza generazione (Oxford Nanopore, PacBio). Per ciascuno indica lunghezza media dei read, tasso di errore e costo approssimativo per genoma umano nel 2025.",
+      "conflict_type": [
+        "technical_disagreement"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "sequenziamento",
+        "sanger",
+        "ngs",
+        "nanopore",
+        "pacbio"
+      ],
+      "structural_conflict": "Ogni tecnologia ha un trade-off lunghezza/accuratezza/costo. Sanger è il gold standard per accuratezza ma troppo lento per genomi interi. Nanopore legge read lunghi ma con errore più alto. La scelta della tecnologia determina cosa si può e non si può trovare."
+    },
+    {
+      "prompt": "Un laboratorio di genetica clinica riceve un campione di un paziente con sospetta sindrome di Lynch (cancro colorettale ereditario). Il panel genetico standard testa 5 geni (MLH1, MSH2, MSH6, PMS2, EPCAM). Il test trova una variante missense nel gene MSH2 classificata come VUS (variante di significato incerto). Il database ClinVar ha 3 segnalazioni: 1 'likely pathogenic', 1 'VUS', 1 'likely benign'. Il paziente ha 38 anni e una storia familiare suggestiva (madre e nonna con cancro colorettale). Si consiglia una colectomia profilattica basandosi su una VUS? L'alternativa è sorveglianza endoscopica ogni 6 mesi (rischio di diagnosi tardiva: 5-8%/anno). Il laboratorio deve riclassificare la variante o mantenere VUS?",
+      "conflict_type": [
+        "technical_disagreement",
+        "ethical_dilemma"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "vus",
+        "lynch",
+        "classificazione_varianti",
+        "colectomia_profilattica"
+      ],
+      "structural_conflict": "Una VUS è un'ammissione di ignoranza, non una diagnosi. La storia familiare è suggestiva ma non diagnostica. La colectomia è irreversibile; la sorveglianza è rischiosa. L'incertezza della variante si trasferisce al paziente che deve prendere una decisione binaria (operarsi o no) da un dato non binario."
+    },
+    {
+      "prompt": "Un team di ricerca vuole usare CRISPR base editing (senza double-strand break) per correggere la mutazione F508del nel gene CFTR, responsabile del 70% dei casi di fibrosi cistica. Il base editing converte C→T con efficienza del 45% nelle cellule epiteliali bronchiali in vitro. Ma il 12% delle cellule mostra editing bystander (modifiche non volute entro 5 bp dal target). Per un approccio terapeutico in vivo (aerosol di nanoparticelle lipidiche nei polmoni), serve almeno il 25% di cellule corrette per un effetto clinico. Il 12% di bystander editing è accettabile per una malattia con aspettativa di vita mediana di 56 anni (e in aumento grazie ai modulatori CFTR)? Come si bilancia efficacia sub-ottimale con rischio di off-target?",
+      "conflict_type": [
+        "technical_disagreement",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "base_editing",
+        "fibrosi_cistica",
+        "cftr",
+        "off_target",
+        "bystander_editing"
+      ],
+      "structural_conflict": "Il 45% di efficienza in vitro non si traduce direttamente in vivo (la delivery riduce di 3-10x). Il 12% di bystander editing in cellule somatiche polmonari ha rischio oncogenico basso ma non nullo. Per una malattia cronica mortale, la soglia di rischio accettabile è più alta, ma il paziente potrebbe vivere 30+ anni con le conseguenze di quell'editing."
+    },
+    {
+      "prompt": "Il sequenziamento dell'esoma (WES, ~2% del genoma, 20.000 geni) costa 800 euro e identifica la causa nel 25-40% dei pazienti con malattia rara. Il sequenziamento del genoma intero (WGS, 100% del genoma) costa 1.200 euro e identifica la causa nel 35-50% dei casi (il delta viene da varianti introniche, strutturali e regolatorie). Un sistema sanitario con 50.000 pazienti con malattia rara non diagnosticata deve decidere: WES per tutti (costo: 40 milioni, diagnosi: 12.500-20.000 pazienti) o WGS per tutti (costo: 60 milioni, diagnosi: 17.500-25.000 pazienti)? I 20 milioni aggiuntivi diagnosticano 5.000 pazienti in più. Il costo per diagnosi addizionale è 4.000 euro — ragionevole. Ma quei 20 milioni potrebbero finanziare 200 ricercatori per un anno sulle 30.000 varianti VUS che WES e WGS trovano ma non sanno interpretare. Quale investimento è più efficace?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "wes_vs_wgs",
+        "malattie_rare",
+        "allocazione_ricerca",
+        "costo_efficacia"
+      ],
+      "structural_conflict": "WGS trova di più ma il delta diagnostico (10 punti percentuali) non è enorme. I 20 milioni per WGS hanno un rendimento certo; i 20 milioni per ricerca su VUS hanno un rendimento incerto ma potenzialmente superiore nel lungo termine. Il trade-off è tra pazienti diagnosticati oggi e capacità diagnostica futura."
+    },
+    {
+      "prompt": "Un test prenatale non invasivo (NIPT) basato su cfDNA ha rilevato trisomia 21 in un feto a 12 settimane. La sensibilità del NIPT per T21 è 99.5%, la specificità 99.9%. Ma in una popolazione con prevalenza di T21 dello 0.15% (donne <35 anni), il valore predittivo positivo (VPP) è solo del 60%. Questo significa che il 40% dei positivi sono falsi positivi. La coppia riceve il risultato come 'positivo per sindrome di Down'. Il counselor genetico deve spiegare che c'è il 40% di probabilità che il test sia sbagliato — ma la coppia ha già iniziato a elaborare emotivamente. Si consiglia amniocentesi di conferma (rischio di aborto: 0.1-0.3%) o si attendono le 16 settimane per un test di conferma non invasivo ancora in fase sperimentale? Come si comunica un VPP del 60% a una coppia in crisi?",
+      "conflict_type": [
+        "technical_disagreement",
+        "ethical_dilemma"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "nipt",
+        "trisomia_21",
+        "valore_predittivo_positivo",
+        "falsi_positivi",
+        "counseling"
+      ],
+      "structural_conflict": "Il NIPT è venduto come 'altamente accurato' (99.5% sensibilità) ma in una popolazione a bassa prevalenza il 40% dei positivi sono falsi. La comunicazione del VPP 60% è contro-intuitiva: il paziente sente '99.5% accurato' e non capisce come possa essere '40% sbagliato'. L'amniocentesi risolve l'incertezza ma aggiunge un rischio fisico a un problema che potrebbe non esistere."
+    },
+    {
+      "prompt": "Una biobanca con 2 milioni di campioni di DNA scopre che 45.000 portatori (2.25%) hanno varianti patogeniche 'azionabili' secondo le linee guida ACMG (81 geni nella lista SF v3.2, inclusi BRCA1/2, LDLR, MLH1). Questi portatori non sanno di esserlo. La biobanca ha il consenso per la ricerca ma NON il consenso per restituire risultati clinici individuali. Restituire i risultati potrebbe salvare vite (screening precoce, chirurgia profilattica). Non restituirli rispetta il consenso originale ma priva 45.000 persone di informazione potenzialmente salvavita. Il comitato etico è diviso 50/50. L'analisi legale dice che restituire senza consenso specifico viola il GDPR. Ma non restituire potrebbe configurare un'omissione di soccorso. Si restituiscono i risultati?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "biobanca",
+        "restituzione_risultati",
+        "acmg",
+        "gdpr",
+        "consenso"
+      ],
+      "structural_conflict": "Il consenso per la ricerca non copre la restituzione clinica — sono due atti giuridici diversi. Ma l'informazione esiste e non condividerla causa danno prevedibile. Il GDPR protegge la privacy ma la non-restituzione mina la salute. 45.000 persone è un numero che rende la questione non solo etica ma di sanità pubblica."
+    },
+    {
+      "prompt": "Un paziente oncologico con tumore al polmone NSCLC stadio IV ha un profilo genomico tumorale che mostra: (a) mutazione EGFR L858R (sensibile a osimertinib, risposta ~70%, OS mediana 38.6 mesi nella popolazione complessiva EGFR-mutata del trial FLAURA), (b) amplificazione MET (sensibile a capmatinib, risposta 40%, OS sconosciuta), (c) TMB alto (tumor mutational burden 18 mut/Mb, sensibile a immunoterapia, risposta 45%, OS mediana 20 mesi). La guideline NCCN dice EGFR come prima linea. Ma il paziente ha una mutazione co-occorrente TP53+RB1 che in letteratura è associata a trasformazione in SCLC nel 15% dei casi trattati con EGFR-inibitori. Nessun trial ha testato la combinazione EGFR+MET in questo contesto. Il molecular tumor board deve decidere: seguire la guideline (EGFR prima linea), tentare una combinazione off-label (EGFR+MET), o privilegiare l'immunoterapia (che potrebbe funzionare con TMB alto ma è controindicata con EGFR mutato)? Come si decide quando il profilo genomico è più complesso delle guidelines?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "oncologia_di_precisione",
+        "molecular_tumor_board",
+        "egfr",
+        "off_label",
+        "co_mutazioni"
+      ],
+      "structural_conflict": "Le guidelines sono basate su trial che testano mutazioni singole in popolazioni selezionate. Il profilo reale del paziente ha 3 driver simultanei e co-mutazioni che modificano il rischio. Seguire la guideline è 'sicuro' ma potenzialmente sub-ottimale. Andare off-label è potenzialmente migliore ma senza evidenza. Il molecular tumor board decide 'a sentimento esperto' — non è evidence-based medicine."
+    },
+    {
+      "prompt": "Un programma di terapia genica AAV (virus adeno-associato) per la distrofia muscolare di Duchenne costa 3.5 milioni di euro per paziente (dose singola). Il vettore AAV9 ha tropismo per muscolo e cuore. Efficacia: il 65% dei pazienti mostra miglioramento della funzione muscolare a 2 anni. Ma: (a) l'immunità pre-esistente anti-AAV nel 30% della popolazione rende il trattamento non utilizzabile (serve screening); (b) una dose elevata di AAV9 ha causato 3 morti per epatotossicità su 200 pazienti trattati (1.5%); (c) la risposta immunitaria al vettore impedisce una seconda dose se la prima fallisce. Per una malattia letale (aspettativa di vita mediana ~25-30 anni senza trattamento per la Duchenne), un rischio dell'1.5% di morte iatrogena è accettabile? E il 30% escluso per immunità pre-esistente ha diritto a un'alternativa?",
+      "conflict_type": [
+        "technical_disagreement",
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "terapia_genica",
+        "aav",
+        "duchenne",
+        "epatotossicita",
+        "immunita_preesistente"
+      ],
+      "structural_conflict": "Per una malattia letale, un rischio dell'1.5% è basso in termini relativi ma alto in termini assoluti (3 morti su 200). L'impossibilità di una seconda dose rende ogni tentativo un 'all-in'. Il 30% escluso per immunità pre-esistente è discriminato dalla biologia, non dalla medicina — ma il risultato è lo stesso."
+    },
+    {
+      "prompt": "Due laboratori di bioinformatica analizzano lo stesso dataset di RNA-seq (50 campioni tumorali vs 50 controlli) e trovano risultati divergenti. Il Lab A usa DESeq2 con correzione batch ComBat e trova 1.200 geni differenzialmente espressi (FDR<0.05). Il Lab B usa edgeR con normalizzazione TMM e trova 800 geni (FDR<0.05). Solo 450 geni sono in comune (overlap 37.5%). Entrambi i pipeline sono pubblicati, validati e citati in >1.000 paper. La lista del Lab A include un gene (FOXM1) che potrebbe essere un target terapeutico; la lista del Lab B no. Un'azienda farmaceutica vuole investire 50 milioni nella validazione di FOXM1. Quale pipeline è 'corretto'? L'overlap del 37.5% è accettabile per decisioni cliniche? Come si gestisce la riproducibilità computazionale in genomica?",
+      "conflict_type": [
+        "technical_disagreement",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "bioinformatica",
+        "rna_seq",
+        "riproducibilita",
+        "deseq2_vs_edger",
+        "analisi_differenziale"
+      ],
+      "structural_conflict": "Entrambi i pipeline sono 'corretti' secondo i rispettivi framework statistici. L'overlap del 37.5% è tipico ma scandaloso: il 62.5% dei risultati dipende dalla scelta dell'analista, non dai dati. FOXM1 potrebbe essere un vero target o un artefatto di DESeq2+ComBat. I 50 milioni di investimento dipendono da una scelta metodologica arbitraria."
+    },
+    {
+      "prompt": "Lo screening neonatale espanso testa oggi 40-50 malattie metaboliche in molti paesi. Una proposta vuole aggiungere il sequenziamento del genoma neonatale per 200 malattie genetiche. Progetto pilota su 100.000 neonati: il 3% (3.000 neonati) ha almeno una variante classificata come VUS in un gene di malattia grave. I genitori di questi 3.000 neonati ricevono un risultato che dice: 'vostro figlio ha una variante genetica di significato incerto in un gene associato a [malattia grave]'. Il 97% di queste VUS si rivelerà benigno in 5-10 anni quando i database saranno più completi. Ma il 3% (90 neonati) avrà una diagnosi precoce di malattia reale che avrebbe altrimenti atteso anni. 3.000 famiglie in ansia per 90 diagnosi reali — il rapporto è 33:1. Si sequenzia comunque?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "screening_neonatale",
+        "sequenziamento_genoma",
+        "vus",
+        "ansia_genitoriale"
+      ],
+      "structural_conflict": "Il rapporto danno/beneficio è 33:1 — 33 famiglie soffrono inutilmente per ogni famiglia che beneficia. Ma la sofferenza delle 33 è ansia (reversibile), mentre il beneficio per 1 è una diagnosi precoce (potenzialmente salvavita). Il VUS è un problema temporaneo (i database miglioreranno) ma il danno psicologico è permanente per le famiglie colpite ora."
+    },
+    {
+      "prompt": "La terapia cellulare CAR-T (Chimeric Antigen Receptor T-cell) per leucemia linfoblastica acuta costa circa 300.000-320.000 euro per infusione in Italia (Kymriah, prezzo negoziato SSN). In Italia, circa 200 pazienti/anno sono eleggibili. Il tasso di remissione completa è dell'83% a 3 mesi, ma il 30-60% dei pazienti ha ricaduta entro 12 mesi. L'effetto collaterale principale (sindrome da rilascio citochinico, CRS) colpisce il 77% dei pazienti con grado 3-4 nel 46-49% dei casi secondo la scala Penn (potenzialmente letale). Un'alternativa: il trapianto allogenico di midollo costa 150.000 euro con il 55% di remissione e il 15% di mortalità da procedura. CAR-T ha una remissione iniziale migliore (83% vs 55%) ma una ricaduta più alta. Il costo per anno di vita guadagnato è ~185.000 euro per CAR-T e ~120.000 per trapianto. Quale terapia è la prima scelta per un paziente di 22 anni? E per un paziente di 55 anni?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "car_t",
+        "leucemia",
+        "trapianto_midollo",
+        "costo_efficacia",
+        "terapia_cellulare"
+      ],
+      "structural_conflict": "CAR-T ha una remissione iniziale superiore ma una durabilità incerta. Il trapianto ha una mortalità procedurale più alta ma outcome a lungo termine più stabili. L'età cambia il calcolo: a 22 anni il trapianto ha risultati migliori a lungo termine; a 55 la mortalità procedurale aumenta. Il costo per anno di vita non cattura la qualità di quel anno."
+    },
+    {
+      "prompt": "Un consorzio internazionale propone di costruire un 'genoma sintetico umano completo' (progetto GP-write) — sintetizzare da zero tutti i 3.2 miliardi di paia di basi del DNA umano. Costo stimato iniziale: oltre 100 milioni di dollari con le tecnologie attuali (ridimensionato rispetto al budget originale del Human Genome Project di lettura, 3 miliardi). Applicazioni: (a) cellule umane resistenti ai virus (ricodificando i codoni usati dai virus); (b) organi per trapianto cresciuti in bioreattori; (c) comprensione fondamentale della biologia umana. Ma: (d) la stessa tecnologia potrebbe creare patogeni sintetici (variante di vaiolo resistente ai vaccini); (e) un genoma sintetico completo potrebbe essere inserito in un ovocita enucleato — creando un essere umano 'sintetico'; (f) chi possiede la proprietà intellettuale di un genoma sintetico? Si finanzia GP-write?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "genoma_sintetico",
+        "gp_write",
+        "biosicurezza",
+        "dual_use",
+        "proprieta_intellettuale"
+      ],
+      "structural_conflict": "La tecnologia è dual-use per eccellenza: le stesse competenze che rendono cellule resistenti ai virus possono creare virus resistenti alle difese. Il genoma sintetico è il massimo strumento di comprensione E il massimo strumento di rischio. La proprietà intellettuale di un genoma umano sintetico è un concetto che i framework legali attuali non possono gestire."
+    },
+    {
+      "prompt": "Il gene drive CRISPR-based potrebbe eliminare la malaria sterminando la zanzara Anopheles gambiae in Africa sub-sahariana. La malaria uccide circa 610.000 persone/anno (dato WHO 2024), il 95% in Africa, il 76% bambini sotto i 5 anni. Il gene drive si auto-propaga: una volta rilasciato, potrebbe portare A. gambiae all'estinzione in 7-15 generazioni (~2-4 anni). Rischi: (a) A. gambiae è cibo per pipistrelli, uccelli e pesci — la sua estinzione potrebbe avere effetti a cascata sconosciuti; (b) il gene drive potrebbe 'saltare' a specie vicine di Anopheles non-vettori; (c) una volta rilasciato è IRREVERSIBILE — non esiste un 'undo'; (d) il 78% delle morti sono bambini sotto i 5: l'urgenza morale è massima. Si rilascia il gene drive sapendo che è irreversibile e gli effetti ecologici sono imprevedibili?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "prediction_uncertainty",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "gene_drive",
+        "malaria",
+        "anopheles",
+        "irreversibilita",
+        "ecologia"
+      ],
+      "structural_conflict": "610.000 morti/anno (~464.000 bambini) creano un'urgenza morale che pochi altri interventi eguagliano. Ma l'irreversibilità del gene drive è assoluta: se gli effetti ecologici sono negativi, non c'è rimedio. Il principio di precauzione dice 'no' ma il costo dell'inazione è 610.000 morti/anno. È uno scontro tra due imperativi morali: non agire (precauzione) e agire (soccorso)."
+    },
+    {
+      "prompt": "Una coppia di portatori sani di talassemia beta (entrambi eterozigoti) chiede la PGD per selezionare un embrione non affetto. Su 8 embrioni: 2 omozigoti sani (AA), 4 portatori (Aβ), 2 affetti (ββ). I genitori chiedono di impiantare solo un omozigote sano (AA) per eliminare il gene dalla discendenza. Il centro di PMA obietta: i portatori (Aβ) sono perfettamente sani, vivreanno una vita normale. Selezionare contro i portatori è eugenetica — si elimina una variante genetica non patologica. Ma i genitori argomentano: 'Se nostro figlio portatore sposa un altro portatore, il ciclo si ripete'. La selezione contro lo stato di portatore sano è eticamente diversa dalla selezione contro la malattia? Chi decide: i genitori (che pagano), il medico (che ha competenza), o la legge (che pone limiti)?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "pgd",
+        "talassemia",
+        "selezione_portatore",
+        "eugenetica",
+        "autonomia_riproduttiva"
+      ],
+      "structural_conflict": "I portatori sani non sono malati: selezionare contro di loro è eliminare una variante genetica neutrale. Ma l'argomento dei genitori (evitare il rischio per i nipoti) è razionale. Se si accetta la selezione contro la malattia, il passo verso la selezione contro il portatore è logicamente piccolo ma eticamente enorme. La linea è: si seleziona per il benessere del nascituro o per la 'pulizia' della linea genetica?"
+    },
+    {
+      "prompt": "L'epigenetica transgenerazionale suggerisce che le esperienze di una generazione (fame, stress, esposizione a tossine) modificano l'epigenoma dei discendenti per 2-3 generazioni. Uno studio olandese (Dutch Hunger Winter, 1944-45) mostra che i figli e nipoti degli affamati hanno tassi più alti di obesità e malattie cardiovascolari (+15-30%). Implicazione giuridica: se un'industria chimica contamina un'area e i residenti sviluppano modifiche epigenetiche trasmesse ai figli, il danno include 2-3 generazioni non ancora nate. Implicazione etica: le scelte di vita (fumo, dieta) di una generazione 'danneggiano' i geni dei discendenti. Implicazione scientifica: l'ereditarietà epigenetica è ancora dibattuta (gli studi sugli umani sono osservazionali, non causali). Si possono usare dati epigenetici come prova in tribunale se la causalità non è dimostrata sperimentalmente?",
+      "conflict_type": [
+        "technical_disagreement",
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "epigenetica",
+        "transgenerazionale",
+        "responsabilita_intergenerazionale",
+        "dutch_hunger_winter"
+      ],
+      "structural_conflict": "Le correlazioni epidemiologiche sono forti ma la causalità molecolare è controversa. Usare l'epigenetica in tribunale richiede un livello di prova che la scienza attuale non raggiunge. Ma aspettare la certezza scientifica significa negare giustizia alle generazioni danneggiate. Il paradosso: la scienza è troppo immatura per il diritto ma il diritto non può aspettare la scienza."
+    },
+    {
+      "prompt": "La bioinformatica ha identificato che i dataset genomici usati per calcolare i PRS (Polygenic Risk Scores) sono composti per l'87% da individui di discendenza europea. Un PRS per rischio cardiovascolare con AUC 0.72 negli europei ha AUC 0.58 negli africani e 0.63 negli asiatici. Questo significa che la medicina genomica funziona meglio per i bianchi. Proposta A: usare comunque i PRS esistenti (meglio di niente). Proposta B: non usarli finché non sono validati in tutte le popolazioni (equità ma ritardo). Proposta C: usarli per europei e non per altri (massima accuratezza ma discriminazione). L'attuale bias nei dataset è un artefatto storico (la ricerca è stata fatta dove c'erano soldi) ma le conseguenze cliniche sono reali: un africano con rischio cardiovascolare alto potrebbe non essere identificato. Come si gestisce un bias strutturale nella genomica?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "technical_disagreement",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "bias_genomico",
+        "prs",
+        "diversita_etnica",
+        "equita_sanitaria"
+      ],
+      "structural_conflict": "Il bias è storico ma le conseguenze sono presenti. Usare PRS solo per europei è tecnicamente corretto ma politicamente inaccettabile. Usarli per tutti è equo nell'accesso ma iniquo nel risultato. Non usarli per nessuno è il massimo della cautela ma priva tutti del beneficio. Il bias non si corregge velocemente: servono 10+ anni di studi su popolazioni diverse."
+    },
+    {
+      "prompt": "Un test di paternità rivela che un bambino di 8 anni non è il figlio biologico del padre legale. Il test era stato richiesto per una consulenza genetica (il padre voleva sapere se il figlio aveva ereditato una predisposizione familiare alla cardiomiopatia ipertrofica). Il risultato genetico per la cardiomiopatia è irrilevante (non è figlio biologico), ma l'informazione sulla paternità è devastante. Il genetista ha il dovere di comunicare la non-paternità? In Italia, il referto genetico è del paziente (il bambino, tramite i genitori). La madre non ha acconsentito a un test di paternità. Il padre ha il 'diritto di sapere'? Il bambino ha il 'diritto alla stabilità familiare'? Il genetista è vincolato dal segreto professionale verso il paziente (il bambino) ma il padre è il richiedente. Chi è il paziente in questo caso?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "non_paternita",
+        "segreto_professionale",
+        "consulenza_genetica",
+        "diritto_sapere"
+      ],
+      "structural_conflict": "Il test è stato richiesto per una finalità (cardiomiopatia) ma ha prodotto un'informazione incidentale (non-paternità). Il genetista non può 'non sapere'. Il dovere di informazione verso il padre-richiedente confligge con la privacy della madre e il best interest del bambino. Non esiste una soluzione che non tradisca qualcuno."
+    },
+    {
+      "prompt": "Un'azienda usa l'intelligenza artificiale per progettare proteine terapeutiche de novo (protein design). L'AI genera una proteina con attività anti-tumorale 100 volte superiore a qualsiasi proteina naturale nota. La proteina non esiste in natura — è un 'artefatto computazionale' con struttura 3D confermata da AlphaFold (pLDDT medio 92). Test in vitro: citotossicità selettiva su 7 linee tumorali, IC50 < 1 nM. Ma: (a) la proteina ha una regione che assomiglia a un epitopo di una tossina batterica (similitudine strutturale 68%); (b) l'AI non può spiegare PERCHÉ funziona (è una black box); (c) nessun quadro regolatorio copre le 'proteine sintetiche mai esistite in natura'; (d) l'EMA/FDA richiede che i farmaci biologici siano 'ben caratterizzati' ma come si caratterizza qualcosa che non ha analoghi naturali? Si porta in trial clinico una proteina progettata da un'AI, non spiegabile e non naturale?",
+      "conflict_type": [
+        "technical_disagreement",
+        "prediction_uncertainty",
+        "ethical_dilemma"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "protein_design",
+        "ai_farmaci",
+        "regolatorio",
+        "proteine_sintetiche",
+        "alphafold"
+      ],
+      "structural_conflict": "L'efficacia in vitro è spettacolare ma la similarità con una tossina è preoccupante. L'AI non spiega il meccanismo e il regolatorio richiede comprensione meccanicistica. Il precedente è fondamentale: se si approva, si apre la porta a farmaci 'inspiegabili'. Se non si approva, si blocca potenzialmente la più grande rivoluzione farmaceutica del secolo."
+    },
+    {
+      "prompt": "La terapia con oligonucleotidi antisenso (ASO) per l'atrofia muscolare spinale (nusinersen/Spinraza) costa circa 600.000 euro il primo anno e 375.000 euro/anno successivamente in Europa (750.000 USD il primo anno negli USA), a VITA. Il farmaco deve essere somministrato con puntura lombare ogni 4 mesi. L'efficacia è straordinaria: i bambini trattati in fase presintomatica (studio NURTURE, neonati ≤6 settimane) raggiungono la deambulazione indipendente nel 92% dei casi a 5 anni di follow-up (vs 0% non trattati nei casi SMA tipo 1). Ma il trattamento è a vita — interrompere causa regressione. Un sistema sanitario con 30 nuovi casi/anno deve garantire il trattamento per ogni coorte. In 20 anni, ci saranno 600 pazienti in trattamento cronico a 375.000 euro/anno ciascuno = 225 milioni/anno solo per SMA. L'alternativa (terapia genica Zolgensma, 2.1 milioni di dollari / ~1.9 milioni di euro, dose singola) è più costosa subito ma potrebbe essere una cura. Si sceglie il trattamento cronico garantito o la cura potenziale?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "aso",
+        "spinraza",
+        "zolgensma",
+        "sma",
+        "costo_cronico_vs_cura"
+      ],
+      "structural_conflict": "Spinraza funziona ma crea una dipendenza economica crescente (225 milioni/anno a regime). Zolgensma è potenzialmente curativa ma i dati a lungo termine sono limitati (5 anni max). La scelta razionale è Zolgensma SE funziona a vita, ma se l'effetto svanisce a 10 anni, il paziente non può tornare a Spinraza (finestra terapeutica chiusa). L'incertezza sulla durabilità della terapia genica rende la decisione un azzardo."
+    },
+    {
+      "prompt": "La clonazione terapeutica (trasferimento nucleare di cellule somatiche, SCNT) potrebbe generare cellule staminali embrionali geneticamente identiche al paziente per trapianto senza rigetto. L'efficienza è bassissima (1-3% in primati) e richiede ovociti umani donati. Per trattare 10.000 pazienti/anno con cellule staminali da SCNT servirebbero ~500.000 ovociti/anno. La donazione di ovociti richiede stimolazione ormonale con rischio di iperstimolazione (1-5%), è invasiva, e le donatrici sarebbero principalmente donne a basso reddito attratte dal compenso (5.000-10.000 euro). L'alternativa — le iPSC (cellule staminali pluripotenti indotte) — non richiede ovociti ma ha un rischio oncogenico del 2-5% per la riprogrammazione. SCNT: rischio per le donatrici, nessun rischio oncogenico per i pazienti. iPSC: nessun rischio per terzi, rischio oncogenico per i pazienti. Chi deve sopportare il rischio?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff",
+        "technical_disagreement"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "clonazione_terapeutica",
+        "scnt",
+        "ipsc",
+        "ovociti",
+        "rischio_distribuzione"
+      ],
+      "structural_conflict": "SCNT esternalizza il rischio alle donatrici (donne sane che subiscono una procedura invasiva per altri). iPSC internalizza il rischio nel paziente (che almeno consente per sé stesso). La distribuzione del rischio è il vero dilemma: è più giusto che il paziente rischi per sé stesso (iPSC) o che una donna sana rischi per lui (SCNT)? Il mercato degli ovociti aggiunge sfruttamento economico."
+    },
+    {
+      "prompt": "Il genome editing somatico in vivo è diventato possibile con vettori a nanoparticelle lipidiche (LNP) che consegnano CRISPR direttamente al fegato con efficienza del 60%. Un'azienda propone un trattamento per l'ipercolesterolemia familiare: una singola iniezione di LNP-CRISPR knockout il gene PCSK9 nel fegato, riducendo il colesterolo LDL del 55-70% permanentemente. Costo: 250.000 euro (una tantum, vs statine a 500 euro/anno per 40 anni = 20.000 euro). Problema: (a) il knockout è permanente — se si scopre che PCSK9 ha funzioni sconosciute, non c'è undo; (b) le statine funzionano e sono sicure con 40 anni di dati; (c) l'editing somatico in vivo colpirà anche cellule non-target nel 2-5% dei casi; (d) per l'ipercolesterolemia familiare omozigote (1:250.000) le statine non funzionano e il CRISPR è l'unica opzione. Si usa un editing permanente e irreversibile per una condizione gestibile con farmaci cronici, solo perché è più 'elegante'?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "crispr_in_vivo",
+        "pcsk9",
+        "ipercolesterolemia",
+        "irreversibilita",
+        "statine"
+      ],
+      "structural_conflict": "L'irreversibilità è il nodo: le statine sono reversibili (si smettono), il knockout di PCSK9 è permanente. Per la forma eterozigote (1:200) le statine funzionano: il CRISPR è un'alternativa premium, non una necessità. Per la forma omozigote (1:250.000) il CRISPR è l'unica opzione. Lo stesso trattamento è opzionale per uno e salvavita per l'altro — il pricing e l'approvazione devono riflettere questa differenza?"
+    },
+    {
+      "prompt": "Il progetto Human Genome Diversity Project 2.0 propone di sequenziare il genoma di 5.000 individui da 500 popolazioni indigene in tutto il mondo, incluse 50 popolazioni in via di estinzione (meno di 1.000 individui ciascuna). Obiettivo: preservare la diversità genetica umana e scoprire varianti protettive (es. popolazioni andine con adattamenti all'altitudine, Bajau con adattamenti all'apnea). Ma: (a) molte comunità indigene hanno una storia di sfruttamento biomedico (caso Havasupai, 2004: campioni di DNA usati senza consenso per studi non autorizzati); (b) il 'consenso comunitario' è un concetto occidentale che potrebbe non avere senso in queste culture; (c) le varianti scoperte saranno brevettate da aziende farmaceutiche, non dalle comunità; (d) il 'beneficio per l'umanità' è un argomento usato storicamente per giustificare l'estrazione dalle comunità vulnerabili. Come si progetta un consenso eticamente valido per comunità con strutture decisionali non occidentali e una storia di sfruttamento?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "diversita_genetica",
+        "popolazioni_indigene",
+        "consenso_comunitario",
+        "biopirateria"
+      ],
+      "structural_conflict": "La diversità genetica è un patrimonio dell'umanità ma 'patrimonio dell'umanità' è un concetto che ha storicamente giustificato l'esproprio. Il consenso comunitario non ha status giuridico nella maggior parte degli ordinamenti. I benefici saranno estratti dalle comunità e monetizzati altrove. Il caso Havasupai dimostra che anche il consenso formale non protegge."
+    },
+    {
+      "prompt": "L'analisi del DNA ambientale (eDNA) permette di identificare tutti gli organismi presenti in un campione d'acqua — incluso DNA umano. Un laboratorio forense propone di usare eDNA raccolto da fiumi e laghi per creare un database di DNA di tutti gli abitanti di una regione (il DNA umano nelle acque reflue è sufficiente per il profiling). Nessun consenso è necessario perché il DNA è 'abbandonato nell'ambiente'. Il database aiuterebbe a risolvere cold case e identificare criminali. Ma: (a) il concetto di DNA 'abbandonato' è giuridicamente controverso; (b) il database includerebbe TUTTI, non solo i sospetti; (c) l'eDNA rivela anche informazioni sanitarie (farmaci metabolizzati nelle urine = diagnosi inferite); (d) i costi sono bassi (50 stazioni di campionamento per una città di 500.000 abitanti = 2 milioni/anno). La sorveglianza genomica ambientale è legale, etica, e proporzionata?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "values_tradeoff",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "edna",
+        "sorveglianza_genomica",
+        "privacy_genetica",
+        "dna_ambientale",
+        "forense"
+      ],
+      "structural_conflict": "Il DNA 'abbandonato' non è stato abbandonato volontariamente — è un prodotto metabolico inevitabile. La sorveglianza genomica ambientale crea un database universale senza consenso, senza mandato, e senza limiti temporali. L'analogia con le telecamere pubbliche non regge: una telecamera riprende comportamenti, l'eDNA rivela biologia, salute e identità."
+    },
+    {
+      "prompt": "La farmacogenomica rivela che il farmaco antidepressivo più prescritto (escitalopram) ha efficacia fortemente dipendente dal genotipo CYP2C19: i metabolizzatori lenti (2-5% della popolazione caucasica, 15-20% degli asiatici) hanno concentrazioni plasmatiche 3 volte superiori con effetti collaterali gravi nel 45% dei casi. I metabolizzatori ultra-rapidi (5% caucasici, 1% asiatici) non raggiungono livelli terapeutici e il farmaco è inefficace. Un test CYP2C19 costa 120 euro. In Italia, 4 milioni di persone assumono antidepressivi. Testare tutti costerebbe 480 milioni. Ma senza test, il 13-25% dei pazienti (520.000-1.000.000 di persone) riceve un farmaco con dose sbagliata. Il costo della non-diagnosi (visite aggiuntive, cambio farmaco, ricoveri) è stimato in 2.800 euro/paziente. L'analisi costo-beneficio dice test per tutti. Ma il SSN ha budget limitato e ogni 480 milioni potrebbe finanziare 8 nuovi ospedali. Test farmacogenomico universale o investimento strutturale?",
+      "conflict_type": [
+        "strategy_choice",
+        "values_tradeoff"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "farmacogenomica",
+        "cyp2c19",
+        "antidepressivi",
+        "test_universale",
+        "costo_opportunita"
+      ],
+      "structural_conflict": "L'analisi costo-beneficio pura favorisce il test (480M investiti, 1.4-2.8 miliardi risparmiati in 5 anni). Ma l'analisi del costo-opportunità è diversa: 8 ospedali servono TUTTI i pazienti, il test serve 'solo' 4 milioni di pazienti con antidepressivi. La decisione dipende da quale contatore di sofferenza si usa."
+    },
+    {
+      "prompt": "Un nuovo approccio alla terapia genica usa vettori AAV ingegnerizzati con tropismo tessuto-specifico programmabile tramite AI. L'algoritmo genera capsidi sintetici mai esistiti in natura. Un capside progettato per il cervello raggiunge il 40% dei neuroni corticali (vs 2% del miglior AAV naturale). Ma: (a) il capside è 'nuovo per il sistema immunitario' — le reazioni immunitarie sono imprevedibili; (b) il tropismo è stato ottimizzato su organoidi umani, non su cervelli reali (gli organoidi mancano di vascolarizzazione e cellule gliali mature); (c) l'AI ha ottimizzato per efficienza di trasduzione, non per sicurezza; (d) in modelli murini, il 3% dei topi ha sviluppato encefalite autoimmune 6 mesi dopo il trattamento. Per malattie neurologiche letali (SMA, Huntington), un vettore 20x più efficiente con un 3% di encefalite è accettabile? Chi decide la soglia di rischio per tecnologie generate da AI senza analogia naturale?",
+      "conflict_type": [
+        "technical_disagreement",
+        "prediction_uncertainty",
+        "ethical_dilemma"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "aav_sintetico",
+        "ai_capside",
+        "tropismo_cerebrale",
+        "encefalite",
+        "rischio_immunitario"
+      ],
+      "structural_conflict": "Il salto da 2% a 40% di efficienza è rivoluzionario ma il 3% di encefalite nel topo potrebbe essere 1% o 10% nell'uomo — il modello murino è inadeguato per neuroinfiammazione. Il capside è 'alieno' per il sistema immunitario: le reazioni sono per definizione imprevedibili. L'AI ha ottimizzato un obiettivo (efficienza) senza vincoli su un altro (sicurezza immunitaria). La soglia di rischio per una terapia AI-designed è più alta o più bassa di una terapia naturale?"
+    },
+    {
+      "prompt": "Il CRISPR prime editing (PE) può inserire sequenze fino a ~50 bp senza double-strand break. Un laboratorio propone di usare PE per inserire un 'gene kill switch' (gene suicida inducibile) in ogni terapia cellulare: se le cellule trapiantate diventano tumorali, un farmaco attiva il kill switch e le elimina. Efficienza dell'inserzione: 35% (il 65% delle cellule non ha il kill switch). Efficienza del kill switch quando attivato: 98% (il 2% delle cellule sfugge). In un trapianto di 10 milioni di cellule: 3.5 milioni hanno il kill switch. Se il 0.01% diventa tumorale (1.000 cellule), 650 non hanno il kill switch (non eliminabili), e delle 350 con kill switch, 7 sfuggono. Totale: 657 cellule tumorali sopravvivono. Il kill switch funziona ma non al 100%. È meglio del nulla ma crea un falso senso di sicurezza? Si implementa un kill switch imperfetto o si accetta il rischio tumorale senza?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "prime_editing",
+        "kill_switch",
+        "terapia_cellulare",
+        "sicurezza_oncologica"
+      ],
+      "structural_conflict": "Un kill switch al 98% sembra ottimo ma l'aritmetica mostra che 657 cellule tumorali sopravvivono — sufficienti per un tumore. Il kill switch riduce il rischio senza eliminarlo. Ma la sua esistenza potrebbe abbassare la soglia di cautela per l'approvazione delle terapie cellulari ('c'è il kill switch, possiamo essere meno prudenti'). Il miglioramento reale è modesto ma il miglioramento percepito è grande."
+    },
+    {
+      "prompt": "La liquido biopsia (cfDNA tumorale nel sangue) permette di rilevare tumori in stadio precoce con un singolo prelievo di sangue. Un test multi-cancer (es. Galleri) analizza pattern di metilazione del cfDNA e rileva 50+ tipi di tumore. Nei trial: sensibilità 51% per tutti gli stadi (stadio I: 17%, stadio IV: 90%), specificità 99.5%, falsi positivi 0.5%. In uno screening di 1 milione di persone: 5.000 falsi positivi che subiranno biopsie, imaging e ansia. Dei veri positivi, il 17% dei tumori stadio I rilevati sono la popolazione che beneficia di più della diagnosi precoce — ma il 83% non viene rilevato. Il costo del test è 800 euro. Per screening universale sopra i 50 anni in Italia (20 milioni di persone): 16 miliardi di euro con 100.000 falsi positivi. La liquido biopsia è pronta per lo screening di massa o è una tecnologia promettente venduta prematuramente?",
+      "conflict_type": [
+        "technical_disagreement",
+        "strategy_choice",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "hard",
+      "tags": [
+        "liquido_biopsia",
+        "screening_oncologico",
+        "cfdna",
+        "falsi_positivi",
+        "sovradiagnosi"
+      ],
+      "structural_conflict": "La sensibilità del 17% per stadio I è il dato critico: il test manca l'83% dei tumori che più beneficerebbero della diagnosi precoce. Il 99.5% di specificità sembra alto ma su 20 milioni genera 100.000 falsi positivi. Il costo di 16 miliardi è enorme per un test che rileva meno di 1/5 dei tumori precoci. La tecnologia è reale ma la narrativa commerciale la presenta come più matura di quanto sia."
+    },
+    {
+      "prompt": "Un consorzio di 5 ospedali vuole implementare un pannello farmacogenomico pre-emptivo: testare 12 geni (CYP2D6, CYP2C19, CYP3A5, DPYD, TPMT, UGT1A1, SLCO1B1, VKORC1, CYP2C9, HLA-B, HLA-A, CYP2B6) in tutti i pazienti al momento del ricovero. Costo del pannello: 350 euro/paziente. Il consorzio ricovera 180.000 pazienti/anno. Costo totale: 63 milioni/anno. Dati dalla letteratura: il 98% dei pazienti ha almeno una variante azionabile, il 25% riceve almeno un farmaco influenzato dal pannello durante il ricovero, le reazioni avverse prevenibili con il pannello sono 8 per 1.000 ricoveri (1.440/anno nel consorzio), di cui il 12% gravi (173 gravi/anno). Il costo medio di una reazione avversa grave è 35.000 euro. Risparmio: 6 milioni/anno. Il pannello costa 63 milioni e ne risparmia 6 — rapporto 10:1 sfavorevole nel breve termine. Ma in 10 anni, con il database accumulato, il valore predittivo migliora. Si investe a perdita per 10 anni per un beneficio futuro incerto?",
+      "conflict_type": [
+        "strategy_choice",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "farmacogenomica_preemptiva",
+        "pannello_genetico",
+        "costo_beneficio",
+        "reazioni_avverse"
+      ],
+      "structural_conflict": "Il rapporto costo-beneficio diretto è sfavorevole 10:1. Ma il pannello genera dati che migliorano il sistema nel tempo. Le 173 reazioni avverse gravi prevenute/anno sono un beneficio umano reale non completamente catturato dall'analisi economica. L'investimento è razionale solo se si crede nel valore cumulativo dei dati — un atto di fede nel learning health system."
+    },
+    {
+      "prompt": "Un laboratorio di genetica forense riceve una richiesta dalla polizia: generare un 'identikit genetico' (fenotipizzazione forense) da DNA trovato su una scena del crimine. La tecnologia predice colore degli occhi (accuratezza 94% per blu/marrone), colore dei capelli (80%), ascendenza biogeografica (>95%), e produce una ricostruzione facciale 3D approssimativa. Il sospetto non è nel database CODIS. La polizia vuole pubblicare il fenotipo predetto per chiedere alla popolazione di identificare persone 'corrispondenti'. Problemi: (a) l'accuratezza facciale 3D è bassa (50-60% di somiglianza); (b) l'ascendenza biogeografica diventa di fatto profiling etnico ('cerchiamo un maschio di ascendenza nordafricana'); (c) persone innocenti ma somiglianti al fenotipo predetto verranno sospettate. La fenotipizzazione forense è uno strumento investigativo legittimo o profiling genetico mascherato?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "technical_disagreement"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "fenotipizzazione_forense",
+        "profiling_genetico",
+        "dna_forense",
+        "ascendenza"
+      ],
+      "structural_conflict": "La predizione del colore degli occhi (94%) è solida; la ricostruzione facciale (50-60%) è quasi inutile. Pubblicare un fenotipo predetto trasforma una probabilità statistica in un sospetto sociale. L'ascendenza biogeografica è scientificamente valida ma socialmente esplosiva: dire 'cerchiamo una persona di ascendenza X' è profiling etnico con patina scientifica."
+    },
+    {
+      "prompt": "Il mosaicismo somatico è più comune di quanto si pensasse: studi recenti mostrano che il 5-10% degli individui sani ha mutazioni somatiche clonali nel sangue (CHIP, Clonal Hematopoiesis of Indeterminate Potential) che raddoppiano il rischio cardiovascolare (~2 volte, +100%) e il rischio di leucemia del 1000% (da 0.01%/anno a 0.1%/anno). Un programma di screening CHIP su 100.000 individui sani over-60 troverebbe 7.000-10.000 positivi. Per questi, non esiste terapia specifica — solo monitoraggio più frequente (emocromo ogni 6 mesi, ecocardiogramma annuale). Il costo del monitoraggio: 1.800 euro/anno/paziente. Il beneficio: diagnosi precoce di leucemia o evento cardiovascolare nel 2-3%/anno dei positivi. Si implementa uno screening per una condizione senza terapia, dove il principale effetto è trasformare 7.000-10.000 persone sane in 'pazienti in attesa'?",
+      "conflict_type": [
+        "technical_disagreement",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "chip",
+        "mosaicismo",
+        "screening_sani",
+        "sovradiagnosi",
+        "ematopoiesi_clonale"
+      ],
+      "structural_conflict": "Lo screening identifica un rischio reale (~2x di cardiovascolare, 10x leucemia) ma non offre un intervento specifico. Il monitoraggio rileva precocemente complicanze nel 2-3%/anno — utile per quei 2-3% ma ansiogeno per il 97%. La medicina ha un problema crescente: la capacità diagnostica supera la capacità terapeutica, creando una popolazione di 'malati senza malattia'."
+    },
+    {
+      "prompt": "Un team di ricerca usa CRISPR-Cas13 (che taglia RNA, non DNA) per creare un antivirale programmabile: dato il genoma di un nuovo virus, CRISPR-Cas13 può essere riprogrammato in 48 ore per tagliare specificamente l'RNA virale. Nei test su cellule umane in vitro, riduce la carica virale del 95% per SARS-CoV-2, influenza H5N1 e virus Nipah. La delivery è via aerosol inalabile (nanoparticelle lipidiche). Tempo di sviluppo per un nuovo target: 48 ore (vs 12-18 mesi per un antivirale tradizionale). Ma: (a) Cas13 ha attività collaterale — taglia anche RNA umani vicini al target (1-3% degli RNA cellulari); (b) la risposta immunitaria alla proteina Cas13 dopo dosi ripetute è sconosciuta; (c) se il virus muta, il Cas13 perde efficacia (come gli antivirali tradizionali); (d) la stessa piattaforma potrebbe essere riprogrammata per tagliare RNA umani essenziali (arma biologica). Si accelera lo sviluppo di Cas13 antivirale sapendo che è anche un'arma?",
+      "conflict_type": [
+        "technical_disagreement",
+        "ethical_dilemma",
+        "prediction_uncertainty"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "crispr_cas13",
+        "antivirale",
+        "dual_use",
+        "preparazione_pandemica"
+      ],
+      "structural_conflict": "La velocità di 48 ore per un nuovo antivirale è rivoluzionaria per la preparazione pandemica. Ma l'attività collaterale (1-3% degli RNA cellulari) potrebbe causare tossicità a lungo termine. Il dual-use è il problema più grave: la stessa piattaforma che salva da una pandemia può essere usata come arma biologica programmabile. La dual-use è intrinseca alla tecnologia, non eliminabile con governance."
+    },
+    {
+      "prompt": "L'analisi di polimorfismi a singolo nucleotide (SNP) su larga scala ha identificato che ~12.000+ varianti comuni spiegano circa il 40% della varianza nell'altezza adulta. Un'azienda di fecondazione assistita offre ai genitori la possibilità di selezionare embrioni per altezza stimata usando un PRS. Il PRS predice l'altezza con un errore standard di ±4.5 cm. Su 5 embrioni, la differenza media tra l'embrione 'più alto' e il 'più basso' è di 2.8 cm — inferiore all'errore del modello. Il servizio costa 8.000 euro. L'azienda non mente: presenta i limiti statistici. Ma il 78% dei clienti in un sondaggio crede di 'scegliere un figlio più alto', non di 'spostare leggermente una distribuzione di probabilità'. La selezione poligenica per tratti non patologici è frode scientifica, servizio legittimo, o il primo passo verso la selezione per intelligenza?",
+      "conflict_type": [
+        "ethical_dilemma",
+        "technical_disagreement"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "selezione_poligenica",
+        "altezza",
+        "prs_embrionale",
+        "marketing_genetico"
+      ],
+      "structural_conflict": "Il PRS è scientificamente reale (basato su ~12.000+ varianti) ma l'effetto pratico (2.8 cm di differenza media con ±4.5 cm di errore) è indistinguibile dal caso. L'azienda è tecnicamente onesta ma commercialmente ingannevole. Il 78% dei clienti ha un'aspettativa non supportata dalla statistica. Se si permette per l'altezza, il precedente per l'intelligenza è inevitabile — e lì il PRS è ancora più debole."
+    },
+    {
+      "prompt": "Un nuovo test NIPT avanzato rileva microdelezioni cromosomiche (delezione 22q11.2, sindrome di DiGeorge) con sensibilità del 75% e specificità del 99.8%. La prevalenza è 1:4.000. In Italia (400.000 nascite/anno), ci sono ~100 casi/anno. Il test identificherebbe 75 veri positivi e 800 falsi positivi (VPP: 8.6%). Gli 800 falsi positivi riceverebbero un'amniocentesi (rischio aborto 0.1-0.3%), potenzialmente causando 1-2 aborti di feti sani. La sindrome di DiGeorge ha espressività variabile: dal 30% con disabilità intellettiva lieve al 10% con cardiopatia grave al 5% letale prenatale. Il 55% ha vita sostanzialmente normale con supporto. Se un test rileva una condizione dove il 55% degli affetti vive normalmente, il 30% ha disabilità lieve, e il 5% è grave — il test informa o spaventa? E gli 1-2 aborti iatrogeni per i falsi positivi sono un prezzo accettabile?",
+      "conflict_type": [
+        "technical_disagreement",
+        "ethical_dilemma",
+        "values_tradeoff"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "nipt_microdelezioni",
+        "digeorge",
+        "falsi_positivi",
+        "espressivita_variabile"
+      ],
+      "structural_conflict": "Il VPP dell'8.6% è devastante: il 91.4% dei positivi è falso. L'espressività variabile rende impossibile dire ai genitori cosa significhi un risultato positivo confermato. La comunicazione 'vostro figlio potrebbe avere disabilità lieve o vita normale o morte prenatale' non è informazione — è incertezza ansiogena. I test per condizioni a espressività variabile creano un problema di counseling senza soluzione."
+    }
+  ]
+}

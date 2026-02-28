@@ -520,6 +520,12 @@ cli/
   install.sh          PIF one-line installer
   versions.json       Version manifest for auto-updates
   agents/             38 specialized agent definitions (.mjs)
+  liara/
+    deliberation-runner.mjs   Batch deliberation runner with health detection
+    prompt-generator.mjs      Domain prompt generator (40 prompts per domain)
+    decompose-training.mjs    Training dataset decomposition (SFT/DPO export)
+    reconcile.mjs             Session reconciliation and quality audit
+    prompts/                  62 domain prompt files (2400+ prompts total)
 docs/
   api.md              REST API reference
   cli.md              PIF CLI command reference
@@ -647,7 +653,7 @@ All credentials stay on your machine.
 - Two-pass scanning with agent-specific code injection
 
 ### Legion X 1.0 — Initial Release
-- Server-side orchestration with 41 agents and 9-layer Geth Consensus
+- Server-side orchestration with 38 agents and 9-layer Geth Consensus
 
 ## Author
 

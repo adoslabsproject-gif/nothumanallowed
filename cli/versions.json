@@ -113,8 +113,8 @@
         "date": "2026-02-14",
         "highlights": [
           "Full transparency by default — verbose + immersive ON out of the box, use --no-verbose / --no-immersive to disable",
-          "41 A-grade agent prompts — every agent rewritten with deep domain expertise, systematic methodology, output format, anti-patterns, inter-agent coordination",
-          "PUPPET merged into CONDUCTOR — 42 agents reduced to 41 with zero capability loss (rollback + idempotency absorbed)",
+          "38 A-grade agent prompts — every agent rewritten with deep domain expertise, systematic methodology, output format, anti-patterns, inter-agent coordination",
+          "PUPPET merged into CONDUCTOR — 42 agents reduced to 38 with zero capability loss (rollback + idempotency absorbed)",
           "Custom deliberation modes — VERITAS (claim validator), LOGOS (proof auditor), CASSANDRA (risk predictor), SAURON (deep diagnostician)",
           "Zero LLM truncation — 22+ truncation points removed: proposals, cross-reading, debate, synthesis, validation, episodic memory, knowledge graph all see complete content",
           "38 agents: 13 primary + 28 sub-agents across 13 categories"
@@ -284,8 +284,8 @@
         "date": "2026-02-14",
         "highlights": [
           "Full transparency by default — verbose + immersive ON out of the box, use --no-verbose / --no-immersive to disable",
-          "41 A-grade agent prompts — every agent rewritten with deep domain expertise, systematic methodology, anti-patterns, inter-agent coordination",
-          "PUPPET merged into CONDUCTOR — 42 agents reduced to 41 with zero capability loss",
+          "38 A-grade agent prompts — every agent rewritten with deep domain expertise, systematic methodology, anti-patterns, inter-agent coordination",
+          "PUPPET merged into CONDUCTOR — 42 agents reduced to 38 with zero capability loss",
           "Custom deliberation modes — VERITAS (claim validator), LOGOS (proof auditor), CASSANDRA (risk predictor), SAURON (deep diagnostician)",
           "Zero LLM truncation — 23+ truncation points removed from all LLM-bound paths"
         ]

@@ -1,0 +1,286 @@
+{
+  "domain": "contrattualistica",
+  "description": "Diritto contrattuale, negoziazione, clausole, appalti, SLA, licensing, risoluzione controversie",
+  "prompts": [
+    {
+      "prompt": "Qual e' la differenza fondamentale tra un contratto a corpo (lump sum) e un contratto a misura (unit price) nell'ambito degli appalti? In quale scenario conviene l'uno piuttosto che l'altro, considerando che un appalto a corpo da 2M EUR ha un margine fisso del 12% ma nessuna flessibilita' sulle varianti, mentre un appalto a misura consente adeguamento ma espone il committente a sforamenti?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["appalto_a_corpo", "appalto_a_misura", "margine", "varianti"],
+      "structural_conflict": "Il contratto a corpo trasferisce il rischio delle varianti al fornitore ma incentiva il risparmio sui materiali. Il contratto a misura protegge il fornitore ma rende il budget imprevedibile per il committente. La scelta dipende dalla maturita' del progetto: requisiti stabili favoriscono il corpo, requisiti incerti favoriscono la misura."
+    },
+    {
+      "prompt": "Cosa si intende per clausola penale ex art. 1382 c.c. e in che modo si differenzia dalla caparra confirmatoria ex art. 1385 c.c.? Se un contratto di fornitura da 150.000 EUR prevede una penale del 10% per ritardo oltre i 30 giorni, il fornitore puo' chiederne la riduzione in sede giudiziale?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["clausola_penale", "caparra_confirmatoria", "riduzione_giudiziale", "art_1382_cc"],
+      "structural_conflict": "La clausola penale predetermina il danno semplificando la lite, ma il giudice puo' ridurla se manifestamente eccessiva (art. 1384 c.c.). La caparra funziona sia come garanzia sia come liquidazione del danno ma solo in caso di recesso, non di adempimento parziale. La scelta tra le due dipende dal tipo di inadempimento che si vuole presidiare."
+    },
+    {
+      "prompt": "Come funziona la clausola di force majeure nel diritto contrattuale italiano ed europeo? Se un fornitore invoca la force majeure per un blocco logistico nel canale di Suez che ritarda una consegna di 45 giorni su un contratto CIF da 800.000 EUR, il committente puo' contestarla sostenendo che il fornitore avrebbe potuto usare una rotta alternativa a +18% di costo?",
+      "conflict_type": ["risk_assessment"],
+      "difficulty": "easy",
+      "tags": ["force_majeure", "eccessiva_onerosita", "CIF", "logistica_internazionale"],
+      "structural_conflict": "La force majeure richiede impossibilita' oggettiva, non mera onerosita'. L'esistenza di una rotta alternativa a +18% potrebbe escludere l'impossibilita' e ricadere nella eccessiva onerosita' sopravvenuta (art. 1467 c.c.), che prevede rimedi diversi. Il confine tra i due istituti e' il cuore della disputa."
+    },
+    {
+      "prompt": "Qual e' la differenza tra recesso unilaterale (art. 1373 c.c.) e risoluzione per inadempimento (art. 1453 c.c.)? In un contratto di distribuzione esclusiva della durata di 5 anni con investimenti iniziali del distributore pari a 300.000 EUR, il produttore puo' recedere liberamente con preavviso di 6 mesi?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["recesso", "risoluzione", "distribuzione_esclusiva", "investimenti_specifici"],
+      "structural_conflict": "Il recesso e' un diritto potestativo che non richiede inadempimento. La risoluzione presuppone una colpa. Ma nei contratti di durata con investimenti specifici, il recesso libero puo' configurare abuso del diritto se non compensa gli investimenti non ammortizzati del distributore. La giurisprudenza italiana e' oscillante."
+    },
+    {
+      "prompt": "Che cosa prevede la disciplina del subappalto nel Codice degli Appalti (D.Lgs. 36/2023)? Quali sono i limiti percentuali e gli obblighi di comunicazione alla stazione appaltante?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["subappalto", "codice_appalti", "dlgs_36_2023", "stazione_appaltante"],
+      "structural_conflict": "Il nuovo Codice (D.Lgs. 36/2023) ha rimosso i tetti percentuali fissi al subappalto dopo la sentenza CGUE C-63/18, ma la stazione appaltante puo' ancora limitarlo caso per caso motivando. Il conflitto e' tra la liberta' di organizzazione dell'impresa e la necessita' della PA di controllare chi esegue effettivamente i lavori."
+    },
+    {
+      "prompt": "Come si qualifica giuridicamente un contratto di licenza software secondo il diritto italiano? E' un contratto atipico, una locazione, una vendita? Se la licenza prevede un canone annuo di 24.000 EUR e il licenziante fallisce, il licenziatario puo' continuare ad usare il software?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["licenza_software", "qualificazione_giuridica", "fallimento_licenziante", "contratto_atipico"],
+      "structural_conflict": "La qualificazione giuridica della licenza software e' ancora dibattuta: se e' locazione il fallimento del licenziante non la scioglie automaticamente (art. 80 L.F.), se e' vendita il diritto si e' gia' trasferito. La scelta ha conseguenze pratiche enormi sulla continuita' operativa del licenziatario."
+    },
+    {
+      "prompt": "Qual e' la differenza tra una lettera di intenti (LOI) vincolante e non vincolante nel diritto italiano? Se due aziende firmano una LOI per un'acquisizione da 5M EUR con clausola di esclusiva di 90 giorni e una parte si ritira dopo 60 giorni avendo gia' condiviso informazioni confidenziali, quali sono le conseguenze?",
+      "conflict_type": ["risk_assessment"],
+      "difficulty": "easy",
+      "tags": ["LOI", "lettera_intenti", "precontrattuale", "esclusiva", "buona_fede"],
+      "structural_conflict": "La LOI non vincolante non obbliga alla conclusione del contratto, ma la responsabilita' precontrattuale ex art. 1337 c.c. tutela comunque l'affidamento della controparte. L'esclusiva potrebbe essere l'unica clausola vincolante della LOI, creando un'asimmetria: liberta' di recedere dal deal ma obbligo di non trattare con altri."
+    },
+    {
+      "prompt": "Cosa sono gli INCOTERMS e quale impatto hanno sulla ripartizione dei rischi in un contratto di compravendita internazionale? Confronta FOB, CIF e DDP per una fornitura di macchinari industriali da 1.2M EUR dalla Germania all'Italia.",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["incoterms", "FOB", "CIF", "DDP", "compravendita_internazionale"],
+      "structural_conflict": "FOB trasferisce il rischio all'acquirente al porto di partenza (il venditore paga meno ma l'acquirente gestisce tutto il trasporto). DDP massimizza la comodita' per l'acquirente ma il prezzo include tutto e il venditore controlla la logistica. CIF e' un compromesso ma il rischio passa alla consegna al vettore, non all'arrivo. La scelta dipende da chi ha piu' potere negoziale e chi gestisce meglio la logistica."
+    },
+    {
+      "prompt": "Un'azienda italiana deve scegliere tra un contratto di system integration a prezzo fisso da 1.2M EUR con delivery in 18 mesi e un contratto time-and-materials con cap a 1.5M EUR e durata stimata 12-20 mesi. Il progetto prevede l'integrazione di 4 sistemi legacy con un nuovo ERP. L'analisi dei requisiti e' stata completata al 70%. Come strutturi la negoziazione e quale modello contrattuale scegli, considerando che il fornitore ha proposto il T&M e il CFO vuole il prezzo fisso?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["system_integration", "fixed_price", "time_and_materials", "ERP", "requisiti_incompleti"],
+      "structural_conflict": "Con requisiti al 70% il prezzo fisso obbliga il fornitore a prezzare il rischio del 30% sconosciuto, gonfiando il prezzo. Il T&M elimina questo markup ma espone il committente a scope creep. La soluzione ibrida (fixed-price per i moduli noti + T&M per la scoperta) introduce complessita' contrattuale. Il CFO vuole certezza di budget, il fornitore vuole certezza di margine: interessi strutturalmente opposti."
+    },
+    {
+      "prompt": "Un contratto SaaS enterprise con un vendor americano prevede SLA del 99.9% uptime mensile (max 43 minuti di downtime), penali dello 0.5% del canone mensile per ogni 0.1% sotto la soglia, e un cap alle penali del 10% del canone annuo di 180.000 EUR. Negli ultimi 6 mesi il vendor ha avuto 3 incidenti da 2+ ore ciascuno. Le penali accumulate sono 5.400 EUR — meno di quanto costa un giorno di fermo della tua produzione (stimato 45.000 EUR/giorno). Come renegozi lo SLA al rinnovo triennale?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["SaaS", "SLA", "penali", "uptime", "rinnovo_contrattuale"],
+      "structural_conflict": "Le penali standard SaaS sono calibrate per compensare il vendor, non il cliente: 5.400 EUR di penali vs 270.000 EUR di danni reali. Ma chiedere penali proporzionate al danno reale renderebbe il servizio invendibile per il vendor. Lo SLA e' un incentive mechanism, non un indennizzo. Il vero potere negoziale e' la minaccia di migrazione, che costa 2 anni e 400.000 EUR."
+    },
+    {
+      "prompt": "Una startup italiana ha sviluppato un algoritmo di AI per diagnostica medica e vuole concederlo in licenza a un grande gruppo ospedaliero. Il gruppo propone un contratto di licenza esclusiva per 5 anni con royalty del 3% sul fatturato generato, minimo garantito di 50.000 EUR/anno. La startup valuta che il mercato potenziale e' 10M EUR/anno ma il gruppo potrebbe non spingere la commercializzazione avendo prodotti concorrenti interni. Come strutturi le clausole di performance minima e anti-shelving?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["licenza_esclusiva", "royalty", "anti_shelving", "startup", "AI_medicale"],
+      "structural_conflict": "L'esclusiva massimizza il valore per il licenziatario ma rischia lo shelving. I minimi garantiti proteggono il licenziante ma un minimo di 50.000 EUR/anno su un mercato da 10M e' simbolico. Clausole di performance aggressive (es. 500.000 EUR/anno di vendite minime pena decadenza esclusiva) rendono il deal meno attraente per il gruppo. La startup ha bisogno del brand del gruppo per la credibilita' clinica, il gruppo ha bisogno della tecnologia ma potrebbe preferire svilupparla internamente."
+    },
+    {
+      "prompt": "Un general contractor italiano deve subappaltare il 35% di un appalto pubblico da 8M EUR per lavori specialistici (fondazioni speciali). Il subappaltatore proposto ha un prezzo inferiore del 22% rispetto al secondo concorrente ma ha un contenzioso pendente con un'altra stazione appaltante per difetti costruttivi. Il contratto di subappalto deve prevedere clausole di manleva, assicurazione, e penali per difetti. Come bilanci il risparmio di 616.000 EUR con il rischio reputazionale e tecnico?",
+      "conflict_type": ["risk_assessment", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["subappalto", "appalto_pubblico", "manleva", "rischio_reputazionale", "fondazioni_speciali"],
+      "structural_conflict": "Il risparmio del 22% e' significativo ma un prezzo cosi' basso potrebbe indicare taglio sulla qualita' o disperazione commerciale. La manleva contrattuale protegge giuridicamente ma non operativamente: se le fondazioni cedono, il general contractor risponde in solido verso la stazione appaltante. L'assicurazione copre il danno finanziario ma non il danno reputazionale che potrebbe escludere il GC da gare future."
+    },
+    {
+      "prompt": "Due societa' italiane stanno negoziando un contratto di joint venture paritetica (50/50) per sviluppare un prodotto IoT. La societa' A apporta la tecnologia (brevetto valutato 800.000 EUR), la societa' B apporta la rete commerciale e 600.000 EUR in cash. Come strutturi le clausole di governance per evitare lo stallo decisionale tipico delle JV 50/50, e come gestisci la proprieta' intellettuale sviluppata congiuntamente?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["joint_venture", "governance", "proprieta_intellettuale", "stallo_decisionale", "IoT"],
+      "structural_conflict": "La parita' 50/50 garantisce equita' ma crea rischio di deadlock su ogni decisione strategica. I meccanismi anti-stallo (casting vote, arbitrato, call/put option) alterano de facto la parita'. La PI congiunta crea dipendenza reciproca post-scioglimento: chi tiene il codice, chi tiene il brevetto derivato? I conferimenti asimmetrici (tecnologia vs cash) rendono la valutazione dell'equita' soggettiva."
+    },
+    {
+      "prompt": "Un'azienda manifatturiera italiana ha un contratto di fornitura esclusiva con un distributore tedesco che rappresenta il 40% del fatturato (3.2M EUR/anno). Il contratto scade tra 8 mesi e il distributore chiede: (a) estensione a 5 anni, (b) riduzione prezzo del 12%, (c) clausola di non-concorrenza post-contrattuale di 24 mesi sul mercato DACH. L'azienda ha identificato un distributore alternativo ma servirebbe 12-18 mesi per raggiungere volumi comparabili. Come imposti la negoziazione?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["distribuzione_esclusiva", "negoziazione", "dipendenza_commerciale", "non_concorrenza", "mercato_DACH"],
+      "structural_conflict": "L'azienda e' strutturalmente debole: il distributore rappresenta il 40% del fatturato e il sostituto richiede 12-18 mesi. Il distributore lo sa e negozia da posizione di forza. Ma la non-concorrenza di 24 mesi e' un cappio: se il contratto finisce, l'azienda non puo' vendere in DACH per 2 anni. La riduzione del 12% erode il margine ma perdere il 40% del fatturato e' peggio. L'unica leva e' il tempo: iniziare a sviluppare il canale alternativo ORA anche se costa doppio."
+    },
+    {
+      "prompt": "Un contratto di outsourcing IT tra un'azienda italiana e un provider indiano prevede la gestione di infrastruttura critica (ERP, email, CRM) per 5 anni a 420.000 EUR/anno. Dopo 2 anni il provider comunica un aumento del 25% motivato dall'inflazione salariale in India e dall'aumento dei costi cloud. Il contratto prevede un meccanismo di adeguamento ISTAT ma non un cap al rialzo. Il costo di transizione a un altro provider e' stimato in 600.000 EUR e 9 mesi. Come gestisci la situazione contrattualmente e negozialmente?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["outsourcing_IT", "adeguamento_prezzo", "lock_in", "transizione", "nearshoring"],
+      "structural_conflict": "Il provider ha un potere di lock-in enorme: 600K di transition cost + 9 mesi di rischio operativo. L'aumento del 25% e' aggressivo ma il meccanismo ISTAT senza cap lo consente formalmente. Rifiutare significa rischiare il recesso del provider. Accettare crea un precedente per aumenti futuri. La vera vulnerabilita' e' non aver negoziato un cap al rialzo e clausole di reversibilita' (exit plan, documentazione, knowledge transfer obbligatorio)."
+    },
+    {
+      "prompt": "Un franchisee italiano di una catena di ristorazione americana ha investito 450.000 EUR per l'apertura del punto vendita. Dopo 18 mesi il franchisor modifica unilateralmente il menu eliminando i prodotti che rappresentano il 35% del fatturato locale e introduce un obbligo di ristrutturazione del locale per 120.000 EUR entro 6 mesi. Il contratto di franchising prevede il diritto del franchisor di 'modificare gli standard operativi'. Il franchisee puo' opporsi?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["franchising", "modifica_unilaterale", "standard_operativi", "investimenti_specifici", "abuso_dipendenza_economica"],
+      "structural_conflict": "Il contratto da' al franchisor il diritto di modificare gli standard, ma l'esercizio di questo diritto deve rispettare la buona fede (art. 1375 c.c.) e non configurare abuso di dipendenza economica (art. 9 L. 192/1998). Il franchisee ha investito 450K e l'investimento aggiuntivo di 120K non era prevedibile. Ma il modello franchising si basa proprio sull'uniformita': se ogni franchisee puo' opporsi, il brand perde coerenza."
+    },
+    {
+      "prompt": "Una societa' italiana di software sta negoziando un contratto di sviluppo custom per una banca. La banca pretende la cessione totale della proprieta' intellettuale su tutto il codice prodotto, incluse le librerie e i framework sviluppati dalla societa' prima del contratto. Il valore del contratto e' 800.000 EUR ma le librerie preesistenti hanno un valore stimato di 2M EUR perche' vengono riutilizzate in altri 15 progetti. Come strutturi la clausola di IP ownership?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["IP_ownership", "sviluppo_custom", "librerie_preesistenti", "cessione_PI", "banca"],
+      "structural_conflict": "La banca vuole la certezza legale di possedere tutto il codice che esegue nei propri sistemi (compliance bancaria). La societa' non puo' cedere librerie che usa in 15 progetti senza autodistruggersi. La distinzione tra IP preesistente (licenziata) e IP sviluppata ad hoc (ceduta) e' la chiave, ma la banca potrebbe rifiutarla per policy interna. Il prezzo di 800K non giustifica la cessione di asset da 2M."
+    },
+    {
+      "prompt": "Un'azienda italiana deve decidere se inserire una clausola compromissoria (arbitrato) o una clausola di foro competente (tribunale ordinario) in un contratto di fornitura da 2.5M EUR con una controparte francese. L'arbitrato ICC costa circa 80.000-150.000 EUR di spese amministrative, il tribunale ordinario 15.000-30.000 EUR ma con tempi di 4-6 anni. Il contratto prevede consegne mensili per 3 anni con penali per ritardo. Quale clausola di risoluzione delle controversie consigli e perche'?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["arbitrato", "foro_competente", "ICC", "controversie_internazionali", "enforcement"],
+      "structural_conflict": "L'arbitrato e' veloce (12-18 mesi), riservato e con lodo esecutivo internazionalmente (Conv. New York 1958). Ma costa 5-10x di piu'. Il tribunale e' economico ma lento e la sentenza italiana va riconosciuta in Francia (Regolamento Bruxelles I-bis). Per un contratto da 2.5M con consegne mensili, un ritardo di 4 anni nella risoluzione della lite significa che il contratto sara' finito prima della sentenza. Il costo dell'arbitrato e' un investimento in velocita'."
+    },
+    {
+      "prompt": "Un contratto di appalto privato da 3.5M EUR per la costruzione di un capannone industriale prevede una clausola di revisione prezzi agganciata all'indice ISTAT dei costi di costruzione, con una franchigia del 5%. Dopo 8 mesi dall'inizio lavori, l'acciaio e' aumentato del 38% e il calcestruzzo del 22%, ma l'indice ISTAT composito e' salito solo dell'11%. L'appaltatore chiede una revisione extra-contrattuale invocando l'eccessiva onerosita' sopravvenuta. Il committente rifiuta sostenendo che la clausola di revisione e' gia' il rimedio contrattuale. Chi ha ragione?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["revisione_prezzi", "eccessiva_onerosita", "appalto_privato", "materie_prime", "art_1467_cc"],
+      "structural_conflict": "La clausola di revisione copre il rischio 'normale' (indice ISTAT +11% meno 5% franchigia = 6% di adeguamento). Ma il rincaro dell'acciaio (+38%) e' un evento straordinario che l'indice composito non cattura. La giurisprudenza e' divisa: per alcuni la clausola di revisione esclude il ricorso all'art. 1467 c.c. (le parti hanno gia' allocato il rischio), per altri l'eccessiva onerosita' opera comunque se lo squilibrio supera la soglia di prevedibilita'."
+    },
+    {
+      "prompt": "Un'azienda farmaceutica italiana vuole brevettare e commercializzare un farmaco sviluppato in collaborazione con un'universita' pubblica. Il contratto di ricerca originale prevedeva 'la PI sara' disciplinata di comune accordo al termine della ricerca'. La ricerca e' costata 1.8M EUR (60% azienda, 40% universita' tramite fondi PNRR). Il brevetto ha un valore stimato di 15-50M EUR. L'universita' chiede il 40% della PI, l'azienda offre il 5% di royalty. Come si risolve?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["brevetto", "ricerca_collaborativa", "universita", "PNRR", "royalty_vs_comproprietà"],
+      "structural_conflict": "La clausola vaga ('di comune accordo') e' una bomba a orologeria. L'universita' ha contribuito il 40% dei costi ma i fondi PNRR hanno vincoli specifici sulla valorizzazione dei risultati. La comproprietà del brevetto e' un incubo gestionale (ogni co-titolare puo' bloccare le licenze). Le royalty allineano gli interessi ma il 5% su un farmaco da 50M e' diverso dal 5% su un farmaco da 15M. Il rischio commerciale e' tutto dell'azienda."
+    },
+    {
+      "prompt": "Un'impresa di costruzioni ha vinto un appalto pubblico da 12M EUR con ribasso del 18%. A 6 mesi dall'inizio dei lavori, scopre che il progetto esecutivo fornito dalla stazione appaltante contiene errori che richiedono varianti per 2.8M EUR (23% del valore). La stazione appaltante sostiene che l'impresa avrebbe dovuto individuare gli errori in fase di gara. L'impresa invoca l'art. 120 D.Lgs. 36/2023 (varianti in corso d'opera). Chi paga le varianti e come si gestisce il contenzioso senza bloccare il cantiere?",
+      "conflict_type": ["risk_assessment", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["appalto_pubblico", "varianti", "errori_progettuali", "ribasso", "art_120_dlgs_36"],
+      "structural_conflict": "Il ribasso del 18% ha gia' eroso il margine e le varianti del 23% superano la soglia di tollerabilita'. La stazione appaltante scarica la responsabilita' progettuale sull'impresa, ma il progetto esecutivo e' atto della PA. L'impresa non puo' fermare i lavori (rischio escussione garanzia + iscrizione casellario ANAC) ma proseguire in perdita porta al dissesto. La riserva nei registri di contabilita' protegge il diritto ma il contenzioso durera' 5-8 anni. L'impresa lavora oggi a margine negativo sperando in un risarcimento futuro incerto."
+    },
+    {
+      "prompt": "Un contratto SaaS pluriennale (5 anni) per un ERP cloud con un vendor americano e' stato firmato 3 anni fa a 280.000 EUR/anno. Il vendor e' diventato monopolista di fatto nel settore dopo aver acquisito i due concorrenti principali. Al rinnovo chiede 420.000 EUR/anno (+50%). Il costo di migrazione a un'alternativa open-source e' stimato in 1.8M EUR e 24 mesi. Restare significa accettare aumenti potenzialmente illimitati. Come negozi da una posizione di debolezza strutturale e quali clausole avresti dovuto inserire 3 anni fa?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["vendor_lock_in", "monopolio", "SaaS", "migrazione", "potere_negoziale"],
+      "structural_conflict": "Il vendor ha il massimo potere negoziale: la migrazione costa 1.8M e 24 mesi di rischio operativo. Rifiutare il +50% e' un bluff che il vendor puo' chiamare. Accettare crea un precedente per aumenti futuri. Le clausole mancanti (cap annuo al rialzo, clausola MFN, exit plan obbligatorio con assistenza alla migrazione, escrow del codice) sono errori negoziali irreversibili. L'unica leva reale e' iniziare la migrazione come progetto parallelo e usarla come arma negoziale credibile — ma costa comunque 1.8M."
+    },
+    {
+      "prompt": "Una PMI italiana ha firmato un contratto di outsourcing completo della funzione IT con un provider per 7 anni a 1.1M EUR/anno. Dopo 4 anni vuole uscire per portare in-house le competenze AI critiche. La clausola di early termination prevede una penale pari al 60% del valore residuo del contratto (1.98M EUR). Il contratto prevede anche 12 mesi di transition assistance ma senza obblighi specifici di knowledge transfer. Come strutturi l'exit strategy minimizzando il costo e garantendo la continuita' operativa?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["outsourcing_exit", "early_termination", "knowledge_transfer", "penale_recesso", "in_house"],
+      "structural_conflict": "La penale di 1.98M e' stata calcolata per rendere l'uscita economicamente irrazionale — il provider ha ammortizzato gli investimenti iniziali sull'intera durata. Ma l'assenza di obblighi specifici di knowledge transfer significa che anche pagando la penale, la transizione puo' fallire. Il provider ha zero incentivi a cooperare su un'uscita che gli costa un cliente. La PMI deve scegliere tra: (a) pagare 1.98M + rischio transizione, (b) restare 3 anni in piu' pagando 3.3M ma perdendo il vantaggio competitivo AI, (c) negoziare un'uscita anticipata con concessioni (es. referenze, case study, contratto parziale residuo)."
+    },
+    {
+      "prompt": "Due aziende concorrenti italiane nel settore automobilistico stanno negoziando un accordo di co-sviluppo per una piattaforma elettrica condivisa. L'investimento e' 25M EUR (60/40). Il problema critico e' la clausola di non-concorrenza: l'azienda A vuole vietare all'azienda B di usare la tecnologia condivisa per veicoli nella stessa fascia di prezzo. L'azienda B sostiene che questo viola l'art. 101 TFUE (intese restrittive della concorrenza). Come strutturi l'accordo per massimizzare la collaborazione senza violare il diritto antitrust europeo?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["co_sviluppo", "non_concorrenza", "antitrust", "art_101_TFUE", "automotive", "piattaforma_condivisa"],
+      "structural_conflict": "Senza non-concorrenza, l'azienda A finanzia il 60% di una piattaforma che il concorrente usa contro di lei. Con non-concorrenza troppo ampia, l'accordo e' un'intesa anticoncorrenziale vietata. Il Regolamento di esenzione per accordi di R&S (Reg. 2023/1066, che ha sostituito il Reg. 1217/2010) consente restrizioni limitate ma non il divieto di commercializzare prodotti concorrenti. Il confine tra cooperazione legittima e cartello e' sottile e dipende dalla definizione del 'mercato rilevante' — una fascia di prezzo non e' un mercato in senso antitrust."
+    },
+    {
+      "prompt": "Un'azienda italiana di moda ha un contratto di licenza con un produttore cinese per la produzione di una linea di accessori. Il contratto prevede royalty del 8% sul fatturato dichiarato dal licenziatario, con diritto di audit annuale. Dopo 3 anni, un audit rivela che il licenziatario ha sottodichiarato il fatturato del 40% (royalty non pagate stimate in 1.2M EUR) e ha sub-licenziato la produzione a terzi non autorizzati in Vietnam. Il contratto e' regolato dal diritto italiano ma il licenziatario ha sede a Shenzhen. Come procedi per il recupero dei crediti e la risoluzione del contratto?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["licenza_internazionale", "audit", "sottodichiarazione", "enforcement_Cina", "sub_licenza_non_autorizzata"],
+      "structural_conflict": "Il diritto italiano si applica per clausola contrattuale ma l'enforcement in Cina e' problematico: non esiste un trattato bilaterale di riconoscimento delle sentenze e l'arbitrato (anche con lodo CIETAC/ICC) richiede che il licenziatario abbia asset aggredibili. La sub-licenza in Vietnam moltiplica le giurisdizioni coinvolte. Risolvere il contratto e' facile giuridicamente ma recuperare 1.2M e' quasi impossibile senza asset europei del licenziatario. Il danno vero e' la perdita di controllo sul brand: prodotti non autorizzati continueranno a circolare."
+    },
+    {
+      "prompt": "Un contratto di appalto integrato (progettazione + esecuzione) da 18M EUR per un ospedale prevede un termine di completamento di 30 mesi con penale di 15.000 EUR/giorno di ritardo, cap al 10% del valore contrattuale (1.8M EUR). A 20 mesi dall'inizio, i lavori sono al 55% e l'appaltatore comunica un ritardo previsto di 8 mesi dovuto a: (a) ritardo nelle approvazioni della Soprintendenza (3 mesi), (b) carenza di materiali (2 mesi), (c) errori progettuali propri (3 mesi). Come si ripartiscono le responsabilita' e le penali? L'appaltatore puo' invocare la sospensione parziale?",
+      "conflict_type": ["risk_assessment", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["appalto_integrato", "penali_ritardo", "sospensione", "soprintendenza", "ripartizione_responsabilita"],
+      "structural_conflict": "Le tre cause di ritardo hanno nature giuridiche diverse: il ritardo della Soprintendenza e' fatto del terzo non imputabile (ma nell'appalto integrato il rischio autorizzativo e' dell'appaltatore); la carenza materiali potrebbe essere force majeure o cattiva pianificazione; gli errori progettuali sono colpa dell'appaltatore. La penale di 15.000 EUR/giorno per 240 giorni supererebbe il cap (3.6M vs cap 1.8M) ma il cap e' il 10%. La sospensione parziale non e' prevista dal contratto — e' una strategia negoziale dell'appaltatore per congelare le penali."
+    },
+    {
+      "prompt": "Una multinazionale italiana sta implementando un programma di compliance anticorruzione per i contratti con agenti commerciali in Medio Oriente e Africa. Gli agenti ricevono commissioni del 5-15% sul valore dei contratti acquisiti (10-50M EUR ciascuno). La normativa italiana (D.Lgs. 231/2001), il FCPA americano e l'UK Bribery Act si applicano tutti perche' la societa' e' quotata a Milano, ha una filiale a New York, e un contratto di fornitura con il governo britannico. Come strutturi i contratti con gli agenti per prevenire la responsabilita' penale d'impresa senza perdere competitivita' commerciale in mercati dove le 'facilitazione payments' sono la norma?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["anticorruzione", "agenti_commerciali", "FCPA", "UK_Bribery_Act", "231_2001", "compliance"],
+      "structural_conflict": "Le commissioni del 5-15% su contratti da decine di milioni sono nella zona grigia: legittime come compenso commerciale, sospette come veicolo di corruzione. La triple jurisdiction (Italia, USA, UK) applica gli standard piu' restrittivi. Ma ridurre le commissioni o eliminare gli agenti significa perdere contratti in mercati dove le relazioni personali sono essenziali. Il modello di compliance deve essere credibile (due diligence, audit trail, red flag monitoring) senza essere cosi' restrittivo da rendere il business impossibile."
+    },
+    {
+      "prompt": "Un'azienda italiana di logistica vuole implementare smart contracts su blockchain per automatizzare i pagamenti ai vettori al raggiungimento di milestone verificabili (consegna confermata da IoT + firma digitale del destinatario). Il valore annuo dei contratti e' 12M EUR con 200+ vettori. Il problema: il codice del smart contract e' immutabile una volta deployato, ma i contratti di trasporto prevedono eccezioni (danni, ritardi giustificati, forza maggiore) che richiedono giudizio umano. Come bilanci l'automazione con la flessibilita' contrattuale e la validita' giuridica ex art. 1321 c.c.?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["smart_contract", "blockchain", "logistica", "automazione_pagamenti", "IoT", "validita_giuridica"],
+      "structural_conflict": "Lo smart contract esegue automaticamente ma il diritto contrattuale richiede buona fede, eccezioni e interpretazione contestuale. L'immutabilita' del codice confligge con la necessita' di gestire eccezioni (danni, force majeure, contestazioni). Le soluzioni ibride (oracoli umani, multisig per dispute, upgrade proxy pattern) reintroducono l'intermediazione umana che lo smart contract doveva eliminare. La validita' giuridica ex art. 1321 c.c. richiede accordo delle parti, causa e oggetto — un codice auto-eseguente soddisfa questi requisiti?"
+    },
+    {
+      "prompt": "Un'azienda alimentare italiana esporta in 15 paesi UE tramite una rete di distributori esclusivi nazionali. Vuole avviare la vendita diretta online (D2C) ma i contratti di distribuzione esclusiva vietano al produttore di vendere direttamente nel territorio del distributore. Il fatturato distributori e' 22M EUR/anno, il potenziale D2C stimato e' 5M EUR/anno. Tre distributori hanno gia' minacciato azioni legali. Come ristrutturi la rete contrattuale per integrare il canale D2C senza violare le esclusive esistenti e senza perdere il 80% del fatturato?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["distribuzione_esclusiva", "D2C", "e_commerce", "rete_distributiva", "channel_conflict"],
+      "structural_conflict": "L'esclusiva territoriale vieta le vendite dirette — il D2C viola il contratto. Ma la giurisprudenza UE (Regolamento 2022/720 - VBER) limita le restrizioni sulle vendite online passive. La distinzione tra vendita attiva (targeting il territorio) e passiva (il cliente visita il sito) e' la chiave ma e' sottile. Risolvere i contratti per avviare il D2C costa 22M/anno di fatturato a rischio. La soluzione ideale — rinegoziare le esclusive includendo il D2C con revenue sharing — richiede il consenso di 15 distributori con interessi divergenti."
+    },
+    {
+      "prompt": "Un'azienda energetica italiana sta negoziando un PPA (Power Purchase Agreement) ventennale per l'acquisto di energia da un parco eolico da 50 MW in costruzione. Il prezzo offerto e' 65 EUR/MWh fisso per 20 anni, con adeguamento inflattivo al 50% dell'HICP europeo. L'energia di mercato oggi e' a 85 EUR/MWh ma le proiezioni a 10 anni variano tra 45 e 110 EUR/MWh. Il PPA include una clausola di take-or-pay per l'80% della produzione stimata. Come valuti il rischio prezzo su 20 anni e quali clausole di protezione inserisci?",
+      "conflict_type": ["prediction_uncertainty", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["PPA", "energia_rinnovabile", "take_or_pay", "rischio_prezzo", "ventennale"],
+      "structural_conflict": "65 EUR/MWh oggi e' uno sconto del 24% sul mercato — attraente. Ma su 20 anni, se il prezzo di mercato scende a 45 EUR/MWh (scenario rinnovabili abbondanti), l'azienda paga il 44% in piu' del mercato per miliardi di kWh. La clausola take-or-pay aggiunge rischio volume: se la domanda cala, l'azienda paga per energia che non usa. L'adeguamento al 50% dell'inflazione protegge il produttore ma non il compratore in uno scenario deflattivo energetico. Le clausole di protezione (floor/cap, opzione di uscita ogni 5 anni, price reopener) costano — il produttore le prezzera' alzando il prezzo base."
+    },
+    {
+      "prompt": "Una societa' italiana di consulenza ha inserito nei contratti con i propri consulenti senior una clausola di non-concorrenza post-contrattuale di 24 mesi su tutto il territorio nazionale, senza corrispettivo specifico. Un consulente con RAL di 85.000 EUR se ne va e apre una societa' concorrente dopo 3 mesi. La societa' agisce in giudizio per violazione del patto. Il consulente eccepisce la nullita' per mancanza di corrispettivo adeguato, ampiezza territoriale eccessiva e durata sproporzionata. Analizza la validita' del patto ex art. 2125 c.c. e quantifica il rischio per entrambe le parti.",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["non_concorrenza", "art_2125_cc", "corrispettivo", "proporzionalita", "consulenza"],
+      "structural_conflict": "L'art. 2125 c.c. richiede corrispettivo, limiti di oggetto, tempo e luogo. La clausola senza corrispettivo specifico e' probabilmente nulla, ma la giurisprudenza ammette che il corrispettivo sia 'conglobato' nella retribuzione se adeguato. 24 mesi su tutto il territorio nazionale per un consulente da 85K e' probabilmente sproporzionato — i tribunali del lavoro tendono a ridurre. Ma nel frattempo il consulente ha gia' aperto la concorrenza: anche se vince, il danno reputazionale e' fatto. Il vero problema e' che le clausole di non-concorrenza mal redatte proteggono meno di nessuna clausola — danno un falso senso di sicurezza."
+    },
+    {
+      "prompt": "Un consorzio di 5 PMI italiane partecipa a una gara d'appalto europea da 45M EUR per infrastrutture ferroviarie. Il consorzio vince ma una delle 5 imprese (che copre il 20% dei lavori) entra in concordato preventivo dopo 6 mesi. Il contratto di consorzio prevede responsabilita' solidale. La stazione appaltante minaccia la risoluzione del contratto. Le altre 4 imprese devono assorbire il 20% di lavori aggiuntivi senza adeguamento di prezzo o trovare un sostituto che la stazione appaltante deve approvare. Il bonding (garanzia fideiussoria) copre il 10% del valore totale (4.5M EUR). Come gestisci la crisi?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["consorzio", "concordato_preventivo", "responsabilita_solidale", "appalto_europeo", "sostituzione_consorziato"],
+      "structural_conflict": "La responsabilita' solidale significa che le 4 imprese superstiti rispondono per tutto, ma devono eseguire lavori per cui non hanno necessariamente le competenze. Il sostituto deve avere i requisiti di qualificazione SOA e l'approvazione della stazione appaltante — un processo che richiede mesi. La risoluzione del contratto e' catastrofica: escussione della garanzia (4.5M) + iscrizione nel casellario ANAC + danni da mancata esecuzione. Le 4 imprese sono ostaggio della solidarieta' passiva per colpa di un consorziato che non potevano controllare."
+    },
+    {
+      "prompt": "Un'azienda italiana di automazione industriale sta negoziando un contratto di fornitura con un OEM tedesco. Il contratto prevede: prezzo unitario di 1.200 EUR per 10.000 unita'/anno per 5 anni (60M EUR totale), penale per difettosita' superiore allo 0.3% (attualmente la difettosita' e' 0.15%), e una clausola di 'most favored customer' (MFC) che obbliga il fornitore italiano a dare al cliente tedesco il miglior prezzo praticato a qualsiasi altro cliente nel mondo. La clausola MFC potrebbe distruggere la strategia di pricing dell'azienda in altri 8 mercati dove i prezzi variano da 900 a 1.500 EUR per unita'. Come negozi?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["most_favored_customer", "pricing_strategy", "OEM", "clausola_MFC", "mercati_multipli"],
+      "structural_conflict": "La clausola MFC garantisce al tedesco il prezzo piu' basso mondiale. Ma il prezzo di 900 EUR in altri mercati riflette volumi diversi, servizi ridotti, o mercati in penetrazione. Se la MFC si applica rigidamente, il tedesco paghera' 900 EUR invece di 1.200 EUR — una perdita di 3M EUR/anno. Se l'azienda rifiuta la MFC, rischia di perdere il cliente da 60M EUR. La negoziazione richiede una MFC 'qualificata' che confronti solo contratti comparabili (stesso volume, stesso servizio, stessa regione) — ma il tedesco vuole proprio la rigidita' per massimizzare il proprio vantaggio."
+    },
+    {
+      "prompt": "Un'azienda biotech italiana ha sviluppato un farmaco orfano in fase III. Un fondo di private equity propone un'operazione di royalty financing: anticipa 30M EUR in cambio del 12% delle royalty future sulle vendite globali per 15 anni. Le proiezioni di vendita variano tra 50M e 500M EUR/anno a regime. L'alternativa e' un round di Serie C a valutazione pre-money di 200M EUR con diluizione del 25% per i fondatori. Come valuti le due opzioni considerando la probabilita' di approvazione (stimata 65%), il time-to-market (3 anni), e il costo del capitale?",
+      "conflict_type": ["prediction_uncertainty", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["royalty_financing", "biotech", "farmaco_orfano", "serie_C", "valutazione"],
+      "structural_conflict": "Il royalty financing non diluisce ma costa carissimo se il farmaco ha successo: il 12% di 500M/anno per 15 anni = 900M EUR (30x il prestito). La Serie C diluisce del 25% ma mantiene tutte le royalty. Se il farmaco fallisce (35% probabilita'), il royalty financing e' denaro perso dal fondo ma l'azienda non deve nulla; la Serie C e' equity perso dagli investitori. L'incertezza sulle vendite (range 10x tra best e worst case) rende impossibile un calcolo NPV affidabile. La scelta dipende dalla propensione al rischio dei fondatori e dalla loro fiducia nel farmaco."
+    },
+    {
+      "prompt": "Un'azienda italiana di e-commerce ha un contratto con un payment service provider (PSP) che prevede commissioni dello 1.8% + 0.25 EUR per transazione, con un minimo garantito di 50.000 EUR/mese. Il volume attuale e' 4M EUR/mese (72.000 EUR di commissioni). L'azienda vuole integrare un secondo PSP per ridurre il rischio di single point of failure dopo un'interruzione di 6 ore che e' costata 180.000 EUR di mancate vendite. Ma il contratto con il PSP attuale ha una clausola di esclusiva che vieta l'uso di PSP concorrenti per le stesse tipologie di pagamento. Il contratto scade tra 14 mesi. Come gestisci la transizione?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["payment_service_provider", "esclusiva", "single_point_of_failure", "e_commerce", "business_continuity"],
+      "structural_conflict": "L'esclusiva impedisce la ridondanza tecnica critica per il business. Un secondo outage da 6 ore costa 180K — piu' delle commissioni mensili. Ma violare l'esclusiva espone a penali contrattuali. Attendere 14 mesi significa accettare il rischio. Rinegoziare l'esclusiva richiede offrire qualcosa in cambio (estensione contrattuale, volumi garantiti piu' alti). L'argomento di business continuity potrebbe non essere sufficiente legalmente per risolvere il contratto anticipatamente."
+    },
+    {
+      "prompt": "Una societa' di ingegneria italiana ha un contratto quadro con un ente pubblico per servizi di progettazione (accordo quadro da 8M EUR in 4 anni). L'ente emette ordini esecutivi (OdA) con tempistiche spesso irrealistiche: l'ultimo OdA richiede la progettazione definitiva di un ponte in 45 giorni quando lo standard di mercato e' 120 giorni. Rifiutare l'OdA rischia l'esclusione dall'accordo quadro. Accettare e consegnare in ritardo espone a penali. Accettare e consegnare un progetto affrettato espone a responsabilita' professionale. Quale strategia adotti?",
+      "conflict_type": ["values_tradeoff", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["accordo_quadro", "tempistiche_irrealistiche", "responsabilita_professionale", "ente_pubblico", "progettazione"],
+      "structural_conflict": "Le tre opzioni sono tutte perdenti: rifiutare = perdere un contratto da 8M; accettare e ritardare = penali; accettare e affrettare = responsabilita' professionale su un ponte (vite umane). La responsabilita' professionale dell'ingegnere e' personale e penale, non trasferibile contrattualmente. L'unica via d'uscita e' accettare con riserva scritta sulle tempistiche e proporre un piano di consegna realistico — ma l'ente potrebbe non accettarlo."
+    },
+    {
+      "prompt": "Un'azienda IT italiana vuole adottare un modello contrattuale Agile per un progetto di digital transformation da 2M EUR con un cliente bancario. Il cliente insiste su un contratto waterfall tradizionale con requisiti fissi, milestone rigide e acceptance testing formale ad ogni fase. Il project manager sa che il 60% dei requisiti cambiera' durante lo sviluppo (dato storico su progetti simili). Come strutturi un contratto che soddisfi la compliance bancaria (audit trail, milestone documentate) ma permetta la flessibilita' Agile necessaria per il successo del progetto?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["contratto_agile", "waterfall", "banca", "digital_transformation", "compliance"],
+      "structural_conflict": "Il waterfall da' certezza contrattuale ma il 60% dei requisiti cambiera' — il contratto sara' obsoleto prima della fine. L'Agile puro non ha milestone fisse — inaccettabile per la compliance bancaria. I modelli ibridi (contratto quadro waterfall + change request Agile con sprint review come acceptance) funzionano ma richiedono fiducia reciproca e governance complessa. Il cliente banca vuole il rischio sul fornitore (fixed price), il fornitore vuole flessibilita' (T&M). Il compromesso e' un contratto a fasi con re-pricing ad ogni fase basato sugli sprint completati."
+    },
+    {
+      "prompt": "Una catena alberghiera italiana con 25 strutture sta negoziando un contratto di management con un brand internazionale. Il brand chiede: (a) management fee del 3% sul fatturato lordo + 8% sul GOP (Gross Operating Profit), (b) contributo marketing del 4% sul fatturato, (c) durata 20 anni con penale di uscita pari a 5 anni di fees, (d) standard di brand che richiedono ristrutturazioni per 15M EUR. Il fatturato totale e' 80M EUR/anno con GOP del 30% (24M EUR). Le fees totali sarebbero circa 7M EUR/anno (8.75% del fatturato). Come valuti il deal e quali clausole modifichi?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["hotel_management", "brand_licensing", "fees_struttura", "lock_in_ventennale", "GOP"],
+      "structural_conflict": "Le fees del 8.75% del fatturato sono nella norma di mercato ma la penale di uscita (5 anni di fees = 35M EUR) rende l'uscita impossibile. La durata ventennale lega la catena a un brand che potrebbe deprezzarsi. Il 3% sul fatturato lordo e' pagato anche se l'hotel perde — il brand guadagna sempre. L'8% sul GOP allinea gli interessi ma il brand controlla le spese operative (standard di brand) che riducono il GOP. I 15M di ristrutturazioni obbligatorie alzano l'investimento totale senza garanzia di ritorno proporzionale. Il potere negoziale dipende da quanto il brand ha bisogno della catena vs quanto la catena ha bisogno del brand."
+    },
+    {
+      "prompt": "Un'impresa edile italiana deve scegliere la forma contrattuale per un progetto residenziale da 35M EUR: contratto di appalto tradizionale (art. 1655 c.c.) con il committente privato, oppure contratto di project financing con una SPV (Special Purpose Vehicle) che include anche la gestione ventennale. Nel primo caso il margine e' del 8% (2.8M EUR) con pagamento a SAL ogni 2 mesi. Nel secondo caso il margine sulla costruzione e' del 5% (1.75M EUR) ma la SPV genera un flusso di cassa dalla gestione di 800.000 EUR/anno per 20 anni. Il rischio e' che la SPV richiede un investimento equity di 4M EUR. Come valuti la scelta?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["project_financing", "SPV", "appalto_tradizionale", "gestione_ventennale", "rischio_equity"],
+      "structural_conflict": "L'appalto tradizionale e' sicuro: 2.8M di margine, pagamenti a SAL, rischio limitato alla costruzione. Il project financing ha un NPV superiore (800K/anno x 20 = 16M lordi) ma richiede 4M di equity a rischio, espone a 20 anni di rischio gestionale (tassi di occupazione, manutenzione straordinaria, normativa) e il flusso di cassa e' una proiezione. L'impresa edile ha competenze di costruzione, non di gestione immobiliare — il rischio di incompetenza gestionale potrebbe erodere il vantaggio finanziario. La scelta dipende dalla capacita' dell'impresa di trasformarsi da costruttore a operatore."
+    },
+    {
+      "prompt": "Un'azienda italiana di cybersecurity ha venduto una piattaforma SOC-as-a-Service a un'infrastruttura critica (operatore energetico) con SLA di detection time < 15 minuti e response time < 1 ora, 24/7/365. Il contratto prevede penali di 50.000 EUR per ogni breach non rilevata entro lo SLA e una clausola di limitazione di responsabilita' a 2x il canone annuo (canone: 600.000 EUR/anno, cap: 1.2M EUR). Se un attacco ransomware causa danni per 20M EUR all'operatore e il SOC lo ha rilevato in 22 minuti (7 minuti oltre lo SLA), la clausola di limitazione a 1.2M EUR regge in giudizio considerando che si tratta di infrastruttura critica soggetta alla Direttiva NIS2?",
+      "conflict_type": ["risk_assessment", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["SOC_as_a_service", "limitazione_responsabilita", "infrastruttura_critica", "NIS2", "ransomware", "SLA_security"],
+      "structural_conflict": "La clausola di limitazione a 1.2M EUR su danni da 20M e' standard nel mercato IT ma la Direttiva NIS2 impone obblighi stringenti agli operatori di infrastrutture critiche e potrebbe essere interpretata come norma imperativa che limita la liberta' contrattuale. Il ritardo di 7 minuti e' minimo ma il danno e' catastrofico. La giurisprudenza italiana tende a non applicare le clausole di limitazione in caso di dolo o colpa grave — e un SLA di cybersecurity violato per 7 minuti e' colpa grave? Il rischio per l'azienda di cybersecurity e' esistenziale: se il cap non regge, il danno da 20M supera il fatturato dell'intera azienda."
+    }
+  ]
+}

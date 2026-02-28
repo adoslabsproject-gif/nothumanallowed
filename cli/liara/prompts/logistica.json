@@ -1,0 +1,287 @@
+{
+  "domain": "logistica",
+  "description": "Logistica, warehouse management, last-mile delivery, trasporto merci, ottimizzazione rotte, reverse logistics",
+  "prompts": [
+    {
+      "prompt": "Qual è la differenza tra logistica inbound e outbound e quali KPI si usano per misurare l'efficienza di ciascuna?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["inbound", "outbound", "KPI", "definizioni_base"],
+      "structural_conflict": "Ottimizzare la logistica inbound (just-in-time, scorte minime) riduce i costi di magazzino ma aumenta il rischio di stockout. Ottimizzare l'outbound (consegne rapide) aumenta i costi di trasporto. I KPI delle due sono spesso in conflitto: il lead time inbound lungo che permette negoziazioni migliori peggiora l'OTD outbound."
+    },
+    {
+      "prompt": "Cos'è il cross-docking e in quali scenari è più vantaggioso rispetto allo stoccaggio tradizionale?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["cross_docking", "stoccaggio", "warehouse"],
+      "structural_conflict": "Il cross-docking elimina i costi di stoccaggio ma richiede sincronizzazione perfetta tra flussi in entrata e in uscita. Un ritardo di un fornitore blocca l'intero processo. Funziona con domanda prevedibile — fallisce con domanda volatile."
+    },
+    {
+      "prompt": "Cosa si intende per reverse logistics e perché è diventata un fattore competitivo nell'e-commerce?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["reverse_logistics", "resi", "e_commerce"],
+      "structural_conflict": "Rendere i resi facili aumenta le vendite ma anche il tasso di reso (30-40% nell'abbigliamento online). Il costo di gestione di un reso è 2-3 volte il costo della spedizione originale. L'alternativa — resi difficili — riduce le conversioni del 15-25%."
+    },
+    {
+      "prompt": "Quali sono i principali modelli di trasporto merci (FTL, LTL, parcel) e quando si usa ciascuno?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["FTL", "LTL", "parcel", "trasporto_merci"],
+      "structural_conflict": "FTL è economico per grandi volumi ma richiede domanda sufficiente per riempire un camion. LTL è flessibile ma i tempi di transito sono imprevedibili. Il parcel è veloce per piccoli volumi ma il costo per kg è 5-10x superiore. La scelta dipende da volume, urgenza e costo — che sono quasi sempre in conflitto."
+    },
+    {
+      "prompt": "Cos'è un WMS (Warehouse Management System) e quali funzionalità minime deve avere per un magazzino con più di 10.000 SKU?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["WMS", "warehouse", "SKU", "software"],
+      "structural_conflict": "Un WMS completo è costoso (150-500K€ per implementazione) e richiede 6-12 mesi di deployment. Non implementarlo con 10.000+ SKU causa errori di picking del 2-5%. Il ROI è chiaro ma il costo iniziale e il change management sono barriere reali per PMI."
+    },
+    {
+      "prompt": "Cosa significa ottimizzazione delle rotte nel last-mile delivery e quali fattori la rendono complessa?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["last_mile", "ottimizzazione_rotte", "TSP"],
+      "structural_conflict": "Il problema del commesso viaggiatore è NP-hard — le soluzioni sono approssimative. Le finestre di consegna ristrette riducono l'efficienza delle rotte del 30-40%. Il traffico in tempo reale invalida le rotte precalcolate. Ogni ottimizzazione matematica si scontra con la realtà urbana."
+    },
+    {
+      "prompt": "Qual è la differenza tra 3PL e 4PL e quando conviene esternalizzare la logistica?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["3PL", "4PL", "outsourcing", "esternalizzazione"],
+      "structural_conflict": "3PL esegue, 4PL orchestra. Esternalizzare riduce i costi fissi ma cede il controllo sulla customer experience. Internalizzare costa di più ma permette differenziazione. Il 4PL è il mediatore ma introduce un intermediario che guadagna sull'inefficienza del sistema."
+    },
+    {
+      "prompt": "Cos'è la logistica green e quali metriche si usano per misurare la sostenibilità della supply chain?",
+      "conflict_type": ["strategy_choice"],
+      "difficulty": "easy",
+      "tags": ["logistica_green", "sostenibilita", "metriche_ambientali"],
+      "structural_conflict": "Ridurre le emissioni aumenta i costi di trasporto. Consolidare le spedizioni riduce le emissioni ma rallenta le consegne. I clienti dicono di volere la sostenibilita ma circa il 40% sceglie la consegna piu veloce quando gli viene offerta l'opzione, e la maggioranza accetta ritardi solo se l'impatto ambientale e reso esplicito. Le metriche Scope 3 sono difficili da misurare con precisione."
+    },
+    {
+      "prompt": "Un e-commerce con 45.000 ordini/giorno deve scegliere tra consegna same-day (costo 8€/pacco, emissioni 3x rispetto allo standard, customer satisfaction +25%) e consegna 3-5 giorni (costo 2€/pacco, emissioni standard, customer satisfaction baseline). Il competitor principale offre same-day. Non offrirla significa perdere il 15% dei clienti (6.750 ordini/giorno). Offrirla a tutti è insostenibile: il margine netto per ordine è 5.20€, quindi il same-day erode il 100% del margine. Come si struttura l'offerta logistica?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["same_day", "margine", "competitor", "emissioni", "pricing"],
+      "gold": true,
+      "structural_conflict": "Il same-day gratuito è economicamente impossibile (8€ > 5.20€ margine). Il same-day a pagamento riduce l'adozione al 5-8% — troppo poco per competere. Perdere il 15% dei clienti è un calo di 6.750 ordini/giorno = 35.100€/giorno di margine perso. Le emissioni 3x contraddicono gli obiettivi ESG. Ogni opzione ha un costo che supera il beneficio."
+    },
+    {
+      "prompt": "Un magazzino automatizzato con 180 robot AMR (Autonomous Mobile Robot) e 12.000 mq di superficie processa 8.000 ordini/giorno. Un aggiornamento firmware ai robot è disponibile: migliora l'efficienza del picking del 18% ma richiede il fermo di tutti i robot per 14 ore (non è possibile aggiornare in rolling perché il nuovo firmware è incompatibile con il vecchio nella navigazione collaborativa). Le 14 ore di fermo corrispondono alla perdita di 4.600 ordini. Il Black Friday è tra 9 giorni. Si aggiorna prima del Black Friday (rischiando bug nel nuovo firmware durante il picco) o dopo (perdendo il 18% di efficienza nel giorno più critico)?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["AMR", "firmware", "Black_Friday", "fermo_magazzino", "automazione"],
+      "structural_conflict": "Aggiornare prima del Black Friday: +18% efficienza ma rischio di bug non testati in produzione sotto carico massimo. Aggiornare dopo: si perde il 18% di efficienza nel periodo di picco (la Cyber Week genera circa il 15% delle vendite online annuali di un e-commerce). Le 14 ore di fermo sono un costo fisso — prima o dopo. Il firmware nuovo non è mai stato testato a scala piena con 180 robot simultanei."
+    },
+    {
+      "prompt": "Un'azienda alimentare distribuisce 2.400 tonnellate/giorno di prodotti freschi con shelf life di 72 ore attraverso 5 hub regionali. Il 6.8% della merce viene scartata per rottura della catena del freddo durante il trasporto. Ogni punto percentuale di scarto equivale a 1.2 milioni di euro/anno. Investire in IoT (sensori di temperatura real-time su ogni pallet) costa 3.8 milioni e riduce lo scarto al 2.1%. Investire in veicoli refrigerati nuovi costa 12 milioni e riduce lo scarto al 1.4%. Il budget disponibile è 6 milioni. Si investe in IoT (ROI immediato, riduzione parziale) o si finanzia parzialmente i veicoli e si cerca il resto?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["catena_freddo", "food_waste", "IoT", "veicoli_refrigerati", "ROI"],
+      "structural_conflict": "L'IoT costa meno e dà ROI rapido ma non risolve la causa (veicoli vecchi) — solo la rileva prima. I veicoli nuovi risolvono la causa ma costano il doppio del budget. L'IoT con veicoli vecchi mostra il problema in tempo reale senza poterlo risolvere in transito. Finanziare parzialmente i veicoli lascia una flotta mista con problemi di gestione."
+    },
+    {
+      "prompt": "Un operatore logistico gestisce 3 hub in Italia (Milano, Roma, Catania) e deve decidere se aprire un quarto hub a Bologna. I dati: il 34% delle spedizioni da Milano a Roma e viceversa transita sull'A1 con un tempo medio di 7.2 ore. Un hub a Bologna ridurrebbe il tempo medio a 4.1 ore e permetterebbe il consolidamento di carichi LTL. L'investimento è 8.5 milioni per il magazzino + 2.3 milioni/anno di costi operativi. Il risparmio stimato in trasporto è 1.8 milioni/anno. Il payback period è 7.4 anni. I competitor stanno aprendo hub a Firenze. Si investe con payback lungo o si ottimizza la rete esistente?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["network_design", "hub", "payback", "competitor", "consolidamento"],
+      "structural_conflict": "Il payback di 7.4 anni è lungo per un settore con margini del 3-5%. I competitor a Firenze potrebbero rendere Bologna meno strategica. Ma non avere un hub nel centro Italia significa tempi di transito non competitivi. Il risparmio di 1.8M€/anno non include i ricavi aggiuntivi per il servizio migliore — ma quantificarli è speculativo."
+    },
+    {
+      "prompt": "Un retailer omnichannel con 120 negozi fisici e un e-commerce che fa il 38% del fatturato deve decidere il modello di fulfillment. Opzione A: magazzino centrale dedicato per e-commerce — efficienza di picking elevata (280 ordini/ora), costi di spedizione alti (media 4.80€). Opzione B: ship-from-store dai 120 negozi — picking inefficiente (35 ordini/ora per negozio), costi di spedizione bassi (media 2.10€ per prossimità), ma il personale di negozio è già sotto organico e il picking sottrae tempo alla vendita in store. Il fatturato medio per addetto in negozio è 48€/ora. Come si bilancia?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["omnichannel", "ship_from_store", "fulfillment", "costo_opportunita"],
+      "structural_conflict": "Il magazzino centrale è efficiente ma la spedizione costa il doppio. Ship-from-store è economico in spedizione ma il costo opportunità del personale (48€/ora tolti alla vendita) supera il risparmio. 35 ordini/ora vs 280 è un fattore 8x di inefficienza. La soluzione ibrida richiede un OMS sofisticato che costa 400-800K€ e 12 mesi di implementazione."
+    },
+    {
+      "prompt": "Un corriere last-mile consegna 85.000 pacchi/giorno con 1.200 furgoni diesel. La normativa ZTL delle principali città italiane vieta progressivamente i diesel Euro 5 nei centri urbani (Roma dal 2025-2026, altre città a seguire). Il 43% delle consegne è in aree ZTL. Opzione A: flotta 100% elettrica — costo 84 milioni (1.200 furgoni a 70K€), autonomia 180 km (sufficiente per il last-mile urbano ma non per percorsi misti urbano-extraurbano). Opzione B: flotta ibrida diesel/elettrico — costo 54 milioni, autonomia illimitata, emissioni -40% ma non zero e potenzialmente non conforme a normative future più restrittive. Il CAPEX disponibile è 60 milioni. Come si pianifica la transizione?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["flotta_elettrica", "ZTL", "transizione_energetica", "CAPEX", "last_mile"],
+      "structural_conflict": "L'elettrico è la soluzione definitiva ma costa il 40% in più del budget disponibile. L'ibrido rientra nel budget ma potrebbe non essere conforme tra 5 anni. L'autonomia di 180 km dell'elettrico non copre i percorsi misti — servono due flotte. Il leasing operativo riduce il CAPEX ma aumenta l'OPEX del 15%/anno. L'infrastruttura di ricarica per 1.200 furgoni non esiste."
+    },
+    {
+      "prompt": "Un'azienda farmaceutica deve spedire 2 milioni di dosi di vaccino a temperatura -70°C attraverso 3 paesi con infrastrutture logistiche diverse. Il paese A ha cold chain certificata GDP. Il paese B ha cold chain parziale — gli ultimi 80 km sono su strade sterrate senza alimentazione elettrica per i container refrigerati. Il paese C ha cold chain inesistente. Le dosi scadono in 30 giorni dalla produzione. L'unica opzione per il paese C è un dry-shipper criogenico che mantiene -70°C per 120 ore senza alimentazione. Ma il dry-shipper contiene solo 500 dosi. Servirebbero 4.000 dry-shipper (costo: 36 milioni, disponibilità: 800 a livello mondiale). Come si distribuisce?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["cold_chain", "vaccini", "ultra_cold", "dry_shipper", "paesi_emergenti"],
+      "structural_conflict": "La disponibilità mondiale di dry-shipper copre il 20% del fabbisogno. Le 2M di dosi non possono aspettare — scadono in 30 giorni. Dare priorità al paese A (dove la logistica funziona) salva più dosi ma lascia i paesi più bisognosi senza vaccini. Dividere equamente spreca dosi per rottura catena del freddo nei paesi B e C."
+    },
+    {
+      "prompt": "Un marketplace con 14.000 seller gestisce i resi centralizzati. Il tasso di reso medio è 28% ma varia da 5% (elettronica) a 52% (abbigliamento). Il costo medio di gestione di un reso è 11.40€ (ritiro, ispezione, ricondizionamento, ricollocamento). I seller pagano una fee fissa di 3€ per reso. Il marketplace perde 8.40€ per reso, con una perdita totale di 34 milioni/anno. Opzioni: (A) aumentare la fee a 8€ — i seller piccoli minacciano di uscire (il 23% ha margini sotto il 12%); (B) non accettare resi per seller con tasso di reso > 40% — discrimina la categoria abbigliamento; (C) implementare try-before-you-buy virtuale (AR) — costo 6 milioni, riduzione resi stimata del 18%. Cosa si fa?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["resi", "marketplace", "fee", "AR", "seller_retention"],
+      "structural_conflict": "La fee fissa penalizza i seller piccoli che non possono assorbire il costo. La fee variabile per categoria discrimina l'abbigliamento. L'AR costa 6M€ con un saving stimato (non garantito) di 18%. Non fare nulla brucia 34M€/anno. Il 23% dei seller a rischio di uscita genera il 31% del GMV — perderli costa più dei resi."
+    },
+    {
+      "prompt": "Un operatore portuale deve scegliere tra due strategie di automazione per il terminal container. Opzione A: automazione completa con 24 gru STS automatiche, 60 AGV, e yard crane automatiche — investimento 890 milioni, riduzione del personale da 1.200 a 180 operatori, throughput +45%, operativo in 4 anni. Opzione B: automazione parziale con assistenza AI — investimento 210 milioni, riduzione del personale da 1.200 a 750, throughput +22%, operativo in 18 mesi. Il porto è in una regione con il 14% di disoccupazione. I sindacati minacciano uno sciopero di 3 mesi se si sceglie l'opzione A. Lo sciopero bloccherebbe il 18% dell'import nazionale. Come si decide?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["automazione_portuale", "sindacati", "disoccupazione", "AGV", "throughput"],
+      "structural_conflict": "L'automazione completa è la scelta tecnicamente superiore ma elimina 1.020 posti in una regione al 14% di disoccupazione. Lo sciopero di 3 mesi costa più dell'intera automazione parziale. L'opzione B è un compromesso che soddisfa parzialmente tutti ma non è competitiva a lungo termine. I porti concorrenti nel Mediterraneo sono già completamente automatizzati."
+    },
+    {
+      "prompt": "Un'azienda di logistica last-mile deve scegliere il modello di consegna per le aree rurali. Le consegne rurali rappresentano il 12% del volume ma il 31% dei costi di trasporto. Opzione A: consegna a domicilio standard — costo medio 14.80€/pacco (vs 3.20€ urbano), tempo medio 2.8 giorni. Opzione B: locker e punti di ritiro in 450 bar/tabaccherie — costo installazione 2.7 milioni, costo operativo 1.80€/pacco, ma il 35% della popolazione rurale ha più di 65 anni e potrebbe non usarli. Opzione C: consegne aggregate 2 volte/settimana — costo 6.20€/pacco, tempo medio 4.5 giorni, customer satisfaction -40%. Come si struttura il servizio?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["last_mile_rurale", "locker", "anziani", "inclusione", "costi_trasporto"],
+      "structural_conflict": "La consegna a domicilio è inclusiva ma insostenibile (14.80€/pacco). I locker escludono il 35% della popolazione target (anziani). Le consegne aggregate riducono il costo ma degradano il servizio. La combinazione di tutte e tre richiede una complessità operativa che un operatore last-mile rurale difficilmente ha."
+    },
+    {
+      "prompt": "Un distributore di materiali edili consegna con flotta propria di 85 camion. I dati GPS mostrano che i camion sono fermi il 42% del tempo (in attesa di carico/scarico nei cantieri). Un sistema di slot booking per i cantieri potrebbe ridurre l'attesa al 15%, ma i 2.300 cantieri clienti non hanno incentivi ad adottarlo e il 60% non ha nemmeno connettività affidabile. Imporre lo slot booking come condizione commerciale rischia di perdere il 12% dei clienti. Non imporlo lascia 36 camion equivalenti fermi ogni giorno. Come si incentiva l'adozione?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["slot_booking", "cantieri", "tempo_fermo", "adozione_tecnologia", "incentivi"],
+      "structural_conflict": "I cantieri non hanno incentivi diretti — il costo del tempo fermo è del distributore, non del cantiere. Imporre lo slot booking = perdere il 12% dei clienti. Incentivare con sconti erode i margini. Investire in connettività per i cantieri è un costo fuori perimetro. I 36 camion fermi/giorno sono un costo nascosto che il mercato non prezza."
+    },
+    {
+      "prompt": "Un operatore di dark store per la consegna di generi alimentari in 15 minuti gestisce 8 dark store in una città da 1.5 milioni di abitanti. Il modello funziona nelle zone dense (ordine medio 32€, costo di consegna per ordine 4.80€) ma è in perdita nelle zone meno dense (ordine medio 24€, costo 8.40€). Il 40% del volume viene dalle zone in perdita. Chiudere i dark store nelle zone meno dense spinge quei clienti verso il competitor, che poi usa quei ricavi per sussidiare l'espansione nelle zone dense. Tenere aperti i dark store in perdita brucia 180K€/mese. Come si decide?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["dark_store", "quick_commerce", "unit_economics", "zone_densita", "competitor"],
+      "structural_conflict": "Chiudere le zone in perdita migliora la P&L ma regala il 40% del volume al competitor. Tenere aperto brucia 2.16M€/anno senza prospettiva di profittabilità. Il competitor potrebbe usare quei clienti per sussidiare un'aggressione nelle zone profittevoli. Il quick commerce è un gioco di scala — chi perde volume perde tutto."
+    },
+    {
+      "prompt": "Un produttore di elettronica consumer vende in 28 paesi europei. Attualmente ha un magazzino centrale in Olanda da cui spedisce a tutti i mercati. Il tempo medio di consegna è 4.2 giorni. Il competitor Amazon offre 1-2 giorni nella maggior parte dei mercati. Opzione A: aprire 4 magazzini regionali (Germania, Francia, Spagna, Polonia) — costo 22 milioni di setup + 8 milioni/anno di costi operativi, tempo medio 1.8 giorni. Opzione B: usare il programma FBA di Amazon — nessun CAPEX, costo variabile 15-20% del prezzo di vendita, tempo 1-2 giorni, ma cede dati, relazione cliente, e il 35% del margine. Opzione C: partnership con 4 operatori 3PL locali — costo variabile, tempo 2.5 giorni, complessità gestionale elevata con 4 contratti diversi. Come si decide?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["distribuzione_europea", "FBA", "3PL", "magazzini_regionali", "dati_cliente"],
+      "structural_conflict": "I magazzini propri sono la soluzione enterprise ma 30M€ di investimento per competere con Amazon è una gara persa in partenza. FBA risolve la logistica ma cede dati, relazione e margine — un cavallo di Troia strategico. I 3PL sono un compromesso che non eccelle in nulla. Ogni opzione sacrifica qualcosa di strategicamente critico."
+    },
+    {
+      "prompt": "Un corriere espresso deve decidere come gestire i pacchi non consegnati al primo tentativo. Il 18% delle consegne fallisce al primo tentativo (destinatario assente). Ogni ritentativo costa 6.20€. Opzioni: (A) 3 tentativi automatici in 3 giorni consecutivi — costo massimo 18.60€, tasso di successo complessivo 94%; (B) 1 tentativo + reindirizzamento a locker più vicino — costo 7.80€, tasso di ritiro dal locker 71% (il 29% non ritira mai); (C) 1 tentativo + consegna al vicino di casa con consenso — costo 6.20€, tasso di successo 82%, ma responsabilità legale in caso di pacco smarrito dal vicino. L'attuale margine per pacco è 1.40€. Quale modello si adotta?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["consegna_fallita", "ritentativo", "locker", "vicino_di_casa", "margine"],
+      "structural_conflict": "3 tentativi costano 18.60€ su un margine di 1.40€ — insostenibile. Il locker ha il 29% di abbandono — il pacco ritorna al mittente con costo aggiuntivo. Il vicino è economico ma la responsabilità legale è un rischio incalcolabile. Nessuna opzione è profittevole per il 18% dei pacchi che fallisce."
+    },
+    {
+      "prompt": "Un'azienda di moda fast fashion riceve 12.000 container/anno dalla Cina. Il transit time via mare è 32-38 giorni. Via treno (China Railway Express) è 16-18 giorni a un costo 2x rispetto al mare. Via aerea è 3-4 giorni a un costo 8x. Il ciclo moda è di 6 settimane — ogni giorno di ritardo riduce il sell-through del 1.5%. Un container via mare che arriva in ritardo di 5 giorni genera un deprezzamento medio del 7.5% sulla merce (che deve essere venduta in saldo). Con 12.000 container, anche l'1% di ritardi gravi costa 4.3 milioni. Come si ottimizza il mix modale?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["mix_modale", "fast_fashion", "transit_time", "sell_through", "Cina"],
+      "structural_conflict": "Il mare è economico ma il ciclo moda non aspetta. Il treno dimezza i tempi ma raddoppia i costi su 12.000 container. L'aereo è troppo caro per il fast fashion. Il deprezzamento del 1.5%/giorno di ritardo trasforma un risparmio logistico in una perdita commerciale. La prevedibilità del transit time via mare è peggiorata del 40% negli ultimi 3 anni."
+    },
+    {
+      "prompt": "Un magazzino e-commerce elabora 15.000 ordini/giorno con picking manuale. L'errore di picking è 0.8% (120 ordini/giorno sbagliati). Ogni errore costa in media 23€ (reso + rispedizione + customer care). Il costo annuale degli errori è 1.007.400€. Un sistema pick-to-light riduce l'errore allo 0.1% con un investimento di 1.2 milioni. Un sistema goods-to-person con robot riduce l'errore allo 0.02% con un investimento di 4.8 milioni ma richiede 14 mesi di implementazione durante i quali il magazzino opera al 60% della capacità. Il magazzino non può permettersi 14 mesi al 60%. Come si migliora la qualità?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["picking", "errori", "pick_to_light", "goods_to_person", "automazione_magazzino"],
+      "structural_conflict": "Il pick-to-light ha ROI in 14 mesi e implementazione rapida ma non è la soluzione best-in-class. Il goods-to-person è superiore ma i 14 mesi al 60% di capacità significano perdere il 40% degli ordini per 14 mesi — un danno che supera il beneficio. Implementare il pick-to-light ora e poi migrare a goods-to-person spreca il primo investimento."
+    },
+    {
+      "prompt": "Un operatore logistico deve decidere se implementare la blockchain per la tracciabilità dei prodotti farmaceutici nella propria supply chain. La normativa EU FMD (Falsified Medicines Directive) richiede la serializzazione e verifica di ogni confezione. Il sistema attuale basato su database centralizzato è conforme ma ha 3 punti di vulnerabilità. La blockchain elimina i 3 punti di vulnerabilità ma aggiunge 2.4 secondi di latenza per ogni verifica — inaccettabile per una linea di packaging che processa 800 confezioni/minuto. Un sistema ibrido (blockchain per audit trail, database per verifica real-time) è conforme e veloce ma raddoppia la complessità IT. Il team IT ha già 18 mesi di backlog. Come si procede?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["blockchain", "farmaceutica", "tracciabilita", "FMD", "latenza"],
+      "structural_conflict": "La blockchain risolve la sicurezza ma non la performance. Il database centralizzato risolve la performance ma non la sicurezza. L'ibrido risolve entrambi ma raddoppia la complessità per un team IT già in overload. La normativa FMD è soddisfatta dal sistema attuale — la blockchain è un miglioramento che nessuno richiede ma tutti vorrebbero."
+    },
+    {
+      "prompt": "Un distributore alimentare deve gestire la pianificazione della domanda per 4.200 SKU con shelf life variabile da 3 giorni (fresco) a 24 mesi (conserve). Il sistema di forecasting attuale basato su media mobile ha un MAPE (Mean Absolute Percentage Error) del 34% sul fresco e del 12% sulle conserve. Un sistema di forecasting basato su ML (gradient boosting) promette un MAPE del 18% sul fresco e del 8% sulle conserve, ma richiede 2 anni di dati storici di alta qualità — di cui l'azienda ne ha solo 8 mesi puliti. Addestrare il modello su dati sporchi peggiora il forecast. Aspettare 14 mesi per avere dati sufficienti lascia un MAPE del 34% per un altro anno. Cosa si fa?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["forecasting", "ML", "MAPE", "fresco", "dati_storici"],
+      "structural_conflict": "Il ML è superiore ma non ha abbastanza dati. I dati sporchi peggiorano il modello rispetto alla media mobile. Aspettare 14 mesi costa il 34% di MAPE sul fresco — che per prodotti a 3 giorni di shelf life significa food waste massiccio. Un approccio ibrido (ML dove i dati sono buoni, regole dove non lo sono) richiede manutenzione doppia."
+    },
+    {
+      "prompt": "Un'azienda di e-commerce deve scegliere il materiale di imballaggio. Opzione A: cartone riciclato — costo 0.45€/pacco, protezione sufficiente per il 92% dei prodotti, immagine sostenibile. Opzione B: pluriball + polistirolo — costo 0.28€/pacco, protezione per il 99.5% dei prodotti, non riciclabile. L'azienda spedisce 3.2 milioni di pacchi/anno. L'8% di prodotti non protetti dal cartone genera reclami da 18€ medi. Il cartone costa 544K€/anno in più ma risparmia solo se il danno è < 544K€. I danni con pluriball sono 28.800€/anno, con cartone sono 4.608.000€/anno. Come si bilancia sostenibilità, costo e soddisfazione cliente?",
+      "conflict_type": ["values_tradeoff", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["packaging", "sostenibilita", "protezione", "reclami", "cartone_vs_plastica"],
+      "structural_conflict": "I numeri sono impietosi: il cartone costa 544K€ in più E genera 4.58M€ in più di danni. La plastica è 160x più economica in danni evitati ma non è sostenibile. Il marketing dice sostenibilità, il CFO dice plastica, il customer care dice protezione. L'imballo differenziato per prodotto risolve ma aggiunge complessità operativa."
+    },
+    {
+      "prompt": "Una catena di supermercati con 380 punti vendita in Italia deve scegliere tra due modelli di rifornimento. Modello A: consegna diretta dal CDC (Centro di Distribuzione Centrale) — 4 CDC servono tutti i 380 punti vendita, 2 consegne/settimana, costo logistico basso, stock di sicurezza elevato nei negozi (15 giorni), spreco alimentare alto (4.2%). Modello B: hub regionali con consegna giornaliera — 12 hub regionali, consegna quotidiana, costo logistico 2.4x, stock di sicurezza ridotto (3 giorni), spreco alimentare basso (1.1%). La riduzione dello spreco del 3.1% vale 18 milioni/anno. Il costo aggiuntivo dei 12 hub è 24 milioni/anno. Si investe per ridurre lo spreco o si accetta lo spreco come costo del modello efficiente?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["rifornimento", "food_waste", "hub_regionali", "CDC", "supermercati"],
+      "structural_conflict": "Il modello A spreca 4.2% di prodotto — moralmente ed ecologicamente inaccettabile ma economicamente razionale. Il modello B riduce lo spreco ma costa 6M€/anno in più. Le normative anti-spreco stanno inasprendo le sanzioni. La differenza di 6M€ potrebbe essere colmata dalla vendita dei prodotti che oggi vengono scartati — ma il sell-through dei prodotti prossimi a scadenza è incerto."
+    },
+    {
+      "prompt": "Un'azienda di spedizioni internazionali trasporta 45.000 TEU/anno attraverso il canale di Suez. L'instabilità geopolitica nel Mar Rosso ha causato deviazioni via Capo di Buona Speranza nell'ultimo anno, aggiungendo 10-14 giorni al transit time e 450-650 USD/TEU di costo aggiuntivo (carburante + assicurazione). Il costo totale della deviazione è circa 24.7 milioni/anno. Opzione A: continuare via Capo — sicuro ma costoso e lento. Opzione B: riprendere il canale di Suez — rischio di attacco (3 navi del settore colpite negli ultimi 6 mesi), assicurazione triplicata, ma transit time e costo normali se non ci sono incidenti. Opzione C: spostare il 40% del volume su treno via Turchia/Georgia — transit time 18-20 giorni, costo intermedio, ma capacità limitata a 18.000 TEU/anno. Come si decide?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["Suez", "geopolitica", "Mar_Rosso", "rotte_alternative", "assicurazione"],
+      "structural_conflict": "Via Capo è sicura ma brucia 24.7M€/anno e ritarda le consegne di 2 settimane. Via Suez risparmia ma un attacco costa 50-200M€ per nave (perdita carico + danni + assicurazione). Il treno copre solo il 40% e non è scalabile. Diversificare su tutte e tre le rotte è la scelta resiliente ma la più complessa operativamente."
+    },
+    {
+      "prompt": "Un magazzino con 45 addetti al picking deve decidere se introdurre esoscheletri per ridurre gli infortuni muscoloscheletrici. Il tasso attuale di infortuni è 8.3% annuo (3.7 addetti/anno in media), con un costo medio per infortunio di 34.000€ (assenza + sostituzione + INAIL). Gli esoscheletri costano 6.500€ ciascuno, richiedono manutenzione annua di 800€, e riducono la produttività del 12% per le prime 6 settimane di adattamento. I dati clinici mostrano una riduzione degli infortuni del 62%. Il ROI è positivo a 2.3 anni ma i sindacati temono che gli esoscheletri vengano usati per giustificare carichi di lavoro maggiori. Come si implementa?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["esoscheletri", "ergonomia", "infortuni", "sindacati", "produttivita"],
+      "structural_conflict": "Gli esoscheletri riducono gli infortuni ma la paura dei sindacati è fondata: storicamente, ogni miglioramento ergonomico è stato seguito da un aumento dei carichi. La riduzione del 12% di produttività per 6 settimane è un costo reale durante il picco. Il ROI a 2.3 anni è positivo solo se non si aumentano i carichi — ma il management ha incentivi a farlo."
+    },
+    {
+      "prompt": "Un operatore di logistica urbana deve scegliere il mezzo per le consegne nel centro storico di una città europea. Opzione A: cargo bike elettriche — capacità 180 kg, raggio 40 km, costo 8.500€, zero emissioni, velocità media 18 km/h, 35 consegne/turno. Opzione B: van elettrici compatti — capacità 800 kg, raggio 120 km, costo 42.000€, zero emissioni, velocità media 25 km/h, 65 consegne/turno, ma non entrano nel 22% delle vie del centro storico (larghezza < 2.1 m). Opzione C: mix cargo bike + micro-hub urbano + van — costo infrastrutturale 1.8 milioni per il micro-hub, operativamente ottimale ma complessità gestionale elevata. Il volume è 2.800 consegne/giorno. Cosa si sceglie?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["cargo_bike", "logistica_urbana", "centro_storico", "micro_hub", "ultimo_miglio"],
+      "structural_conflict": "Le cargo bike coprono il 100% delle vie ma servono 80 rider per 2.800 consegne — costo umano elevato. I van sono più efficienti ma il 22% delle vie è inaccessibile. Il micro-hub è la soluzione architetturale corretta ma 1.8M€ per una singola città è un investimento che si ripaga solo con volumi stabili per 5+ anni."
+    },
+    {
+      "prompt": "Un'azienda di abbigliamento di lusso con il 44% di vendite online ha un tasso di reso del 48%. L'analisi dei resi mostra: 52% per taglia sbagliata, 23% per colore diverso dallo schermo, 14% per qualità non corrispondente alle aspettative, 11% per cambio idea. L'azienda spende 28 milioni/anno in gestione resi. Implementare un virtual fitting room con AI costa 4.2 milioni e promette -30% sui resi per taglia. Migliorare la fotografia prodotto (studio 3D con calibrazione colore) costa 1.8 milioni e promette -40% sui resi per colore. Implementare una politica di reso a pagamento (5€) promette -25% sui resi totali ma anche -18% di conversione. Il budget per l'anno è 3 milioni. Come si alloca?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["resi_lusso", "virtual_fitting", "fotografia_3D", "reso_a_pagamento", "conversione"],
+      "structural_conflict": "Il virtual fitting room e la fotografia 3D costano 6M€ insieme — il doppio del budget. Il reso a pagamento è gratis ma costa il 18% di conversione. I saving promessi sono stime — il virtual fitting potrebbe non funzionare per il lusso dove il tessuto e la vestibilità sono critici. Investire tutto nella fotografia 3D copre solo il 23% dei resi. Nessuna soluzione singola risolve il problema."
+    },
+    {
+      "prompt": "Un distributore di componenti automotive gestisce 85.000 SKU con una coda lunga dove il 72% degli SKU genera solo il 4% del fatturato. Mantenere questi SKU in magazzino costa 3.1 milioni/anno di holding cost. Eliminarli dal catalogo farebbe perdere il 4% del fatturato (2.8 milioni) ma soprattutto costringerebbe i clienti (officine) a cercare altrove — e un'officina che cambia fornitore per un pezzo raro spesso sposta l'intero account. L'analisi stima che il 18% dei clienti che ordinano SKU rari sposterebbe l'intero account (valore: 14.2 milioni/anno). Come si gestisce la coda lunga?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["coda_lunga", "automotive", "SKU", "holding_cost", "retention_clienti"],
+      "structural_conflict": "La coda lunga costa 3.1M€/anno da mantenere ma protegge 14.2M€/anno di fatturato da clienti che sposterebbero l'intero account. Eliminare la coda risparmia 3.1M€ ma rischia 14.2M€. La soluzione drop-ship (ordinare dal produttore on-demand) allunga i tempi di consegna da 24h a 5-7 giorni per pezzi che le officine spesso necessitano con urgenza."
+    },
+    {
+      "prompt": "Un operatore logistico deve scegliere il sistema di stoccaggio per un nuovo magazzino di 25.000 mq dedicato all'e-commerce. Opzione A: scaffalature tradizionali con picking manuale — CAPEX 2.8 milioni, flessibilità massima, scalabilità tramite assunzioni, 12.000 ordini/giorno. Opzione B: AutoStore (griglia di bin con robot) — CAPEX 18 milioni, densità di stoccaggio 4x, 20.000 ordini/giorno, ma rigidità sulle dimensioni dei prodotti (max 60x40x31 cm). Opzione C: shuttle system multi-livello — CAPEX 11 milioni, 16.000 ordini/giorno, flessibile sulle dimensioni, ma il vendor ha un unico stabilimento in Corea del Sud e i tempi di consegna dei ricambi sono 8-12 settimane. Il 15% dei prodotti non entra nei bin AutoStore. Il magazzino deve essere operativo in 10 mesi. Come si sceglie?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["AutoStore", "shuttle", "CAPEX", "densita_stoccaggio", "dimensioni_prodotto"],
+      "structural_conflict": "AutoStore ha la miglior densità e throughput ma esclude il 15% dei prodotti — che richiedono un'area manuale separata con complessità doppia. Lo shuttle è versatile ma il rischio supply chain (unico vendor in Corea, ricambi in 8-12 settimane) è inaccettabile per un magazzino H24. Il manuale è safe ma non scala. Il CAPEX di AutoStore è 6.4x il manuale — il ROI richiede 6+ anni."
+    },
+    {
+      "prompt": "Un corriere deve decidere se introdurre droni per le consegne in aree remote montane. Le 340 consegne/settimana in aree montane costano 22€/pacco (vs 3.80€ pianura) per i percorsi tortuosi e i tempi di guida. I droni possono coprire 280 delle 340 consegne (max 2.5 kg) con un costo operativo di 5.40€/consegna. L'investimento è 3.2 milioni per 12 droni + 4 stazioni di lancio. La normativa ENAC richiede il BVLOS (Beyond Visual Line of Sight) che è in fase di approvazione — data stimata: 12-24 mesi. Senza BVLOS, i droni possono operare solo con un pilota in vista, rendendo il costo uguale al furgone. Si investe ora anticipando la normativa o si aspetta?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["droni", "montagna", "BVLOS", "ENAC", "anticipazione_normativa"],
+      "structural_conflict": "Investire 3.2M€ su una normativa non ancora approvata è un azzardo. Aspettare la normativa significa che i competitor arrivano prima. Il BVLOS potrebbe avere restrizioni impreviste (corridoi obbligatori, limitazioni meteo) che riducono le 280 consegne coperte. I 12-24 mesi di stima normativa sono ottimistici — le approvazioni ENAC hanno storicamente richiesto il doppio."
+    },
+    {
+      "prompt": "Un grande retailer alimentare deve decidere se implementare il dynamic pricing sui prodotti prossimi a scadenza. Il sistema AI monitora la shelf life rimanente e applica sconti progressivi: -20% a 48h dalla scadenza, -40% a 24h, -60% a 12h. L'obiettivo è ridurre lo spreco alimentare dal 3.8% all'1.2%. Il sistema costa 890.000€ di implementazione + 180.000€/anno. Il rischio: i clienti abituali potrebbero iniziare ad aspettare gli sconti, cannibalizzando le vendite a prezzo pieno. I dati pilota su 12 negozi mostrano una cannibalizzazione del 2.3% sulle vendite full-price e una riduzione dello spreco al 1.4%. Il saving sullo spreco è 4.1 milioni/anno ma la cannibalizzazione costa 5.8 milioni/anno. Si implementa comunque?",
+      "conflict_type": ["strategy_choice", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["dynamic_pricing", "spreco_alimentare", "cannibalizzazione", "scadenza", "AI"],
+      "structural_conflict": "I numeri pilota sono devastanti: la cannibalizzazione (5.8M€) supera il saving sullo spreco (4.1M€) di 1.7M€. Ma il pilota è su 12 negozi — a scala piena il comportamento potrebbe essere diverso. Non implementare mantiene il 3.8% di spreco — un problema etico e normativo. Implementare con soglie più conservative (-10%, -20%, -30%) riduce la cannibalizzazione ma anche l'effetto anti-spreco."
+    },
+    {
+      "prompt": "Un produttore di mobili vende 60% tramite GDO e 40% direct-to-consumer online. Le consegne D2C di mobili pesanti (media 45 kg) con servizio di montaggio costano 52€/consegna e generano un NPS di 72. Le consegne senza montaggio costano 28€ e generano un NPS di 31. Il tasso di reso senza montaggio è 14% (spesso per incapacità del cliente di montare). Con montaggio è 3%. Ma il servizio di montaggio richiede personale specializzato — l'azienda usa 180 montatori freelance con qualità inconsistente (il 22% dei reclami riguarda il servizio di montaggio). Internalizzare i montatori costa 4.8 milioni/anno per 120 dipendenti. Come si struttura il servizio?",
+      "conflict_type": ["strategy_choice", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["mobili", "montaggio", "freelance", "NPS", "qualita_servizio"],
+      "structural_conflict": "Il montaggio è essenziale per il NPS e i resi ma la qualità dei freelance è inconsistente. Internalizzare costa 4.8M€ ma garantisce qualità. I freelance costano meno ma il 22% di reclami danneggia il brand. Eliminare il montaggio raddoppia la spedizione economica ma quadruplica i resi. Il margine su un mobile venduto D2C è 85€ — il montaggio a 52€ erode il 61% del margine."
+    },
+    {
+      "prompt": "Un operatore logistico che gestisce la distribuzione per 3 catene di supermercati deve decidere come affrontare la carenza cronica di autisti. Mancano 42 autisti su un organico di 310. Il turnover annuale è del 28%. Gli autisti rimasti fanno straordinari (media 12 ore/settimana) che costano il 35% in più e aumentano il rischio di incidenti del 23%. Opzione A: aumentare gli stipendi del 18% per attrarre nuovi autisti — costo addizionale 2.8 milioni/anno, effetto stimato +15 autisti in 6 mesi. Opzione B: implementare 8 camion a guida autonoma Level 4 per le tratte autostradali — investimento 4.2 milioni, operativi in 14 mesi, coprono solo il tragitto hub-to-hub (gli ultimi km richiedono comunque un autista). Opzione C: ridurre le frequenze di consegna da 6 a 4 volte/settimana — nessun costo aggiuntivo, ma le catene minacciano penali contrattuali di 1.2 milioni/anno. Come si gestisce la transizione?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["carenza_autisti", "guida_autonoma", "straordinari", "rischio_incidenti", "turnover"],
+      "structural_conflict": "L'aumento stipendi non risolve il problema strutturale (il mercato non ha abbastanza autisti) e costa 2.8M€/anno per 15 autisti — ne mancano ancora 27. La guida autonoma è la soluzione a lungo termine ma 14 mesi di gap e copertura parziale. Ridurre le frequenze è la soluzione immediata ma le penali e la perdita clienti compensano il risparmio. Gli straordinari sono insostenibili e pericolosi."
+    },
+    {
+      "prompt": "Un'azienda manifatturiera che esporta il 70% della produzione deve scegliere l'Incoterm per un nuovo contratto con un distributore in Brasile. Il prodotto è macchinario pesante (valore medio 180.000€ per spedizione). Opzione A: EXW (Ex Works) — rischio e costo a carico del compratore dal magazzino del venditore, prezzo più basso, zero responsabilità logistica ma il compratore brasiliano non ha esperienza di logistica intercontinentale e le ultime 3 spedizioni gestite da lui hanno avuto ritardi di 18-25 giorni e danni per 45.000€. Opzione B: DDP (Delivered Duty Paid) — il venditore si fa carico di tutto fino al magazzino del compratore, prezzo +22%, responsabilità totale inclusa dogana brasiliana (notoriamente complessa, tempi medi sdoganamento: 14 giorni). Opzione C: CIF (Cost, Insurance, Freight) — compromesso, rischio trasferisce al porto di Santos, ma nessuno controlla l'inland transport (dove avviene il 60% dei danni). Quale Incoterm si negozia?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["Incoterms", "export", "Brasile", "dogana", "responsabilita_logistica"],
+      "structural_conflict": "EXW scarica il rischio ma il compratore incompetente danneggia la reputazione del prodotto (i danni sono attribuiti al macchinario, non al trasporto). DDP dà il controllo totale ma la dogana brasiliana è un incubo burocratico e il +22% di prezzo riduce la competitività. CIF è un compromesso che lascia scoperto il tratto più critico (inland). Ogni Incoterm ottimizza un aspetto sacrificandone un altro."
+    },
+    {
+      "prompt": "Un centro di distribuzione farmaceutico che gestisce 3.200 SKU di farmaci a temperatura controllata deve decidere come allocare lo spazio nel magazzino refrigerato. Il 15% dei farmaci (480 SKU) richiede 2-8°C, il 3% (96 SKU) richiede -20°C, il resto è a temperatura ambiente. La capacità refrigerata attuale copre il 90% del fabbisogno a 2-8°C — il 10% viene stoccato in un magazzino esterno a 4 km con un costo di trasferimento di 3.40€ per collo e un ritardo medio di 45 minuti sugli ordini urgenti. Espandere la cella frigorifera costa 2.1 milioni (12 mesi di lavori). In alternativa, un sistema di stoccaggio verticale automatizzato (VLM refrigerato) aumenta la densità del 280% nel volume esistente, costa 1.4 milioni, e si installa in 4 mesi — ma non è mai stato usato per farmaci GDP in Italia e richiede una validazione AIFA che potrebbe richiedere 6-18 mesi. Come si procede?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["farmaceutico", "cold_chain", "GDP", "VLM", "AIFA", "magazzino_refrigerato"],
+      "structural_conflict": "L'espansione tradizionale è sicura normativamente ma costa di più e richiede 12 mesi. Il VLM è più efficiente e rapido ma la validazione AIFA è un'incognita (6-18 mesi = potenzialmente più lungo dell'espansione). Il magazzino esterno funziona ma i 45 minuti di ritardo sugli ordini urgenti sono un rischio per la catena di distribuzione farmaceutica dove le urgenze sono letteralmente vita o morte."
+    }
+  ]
+}

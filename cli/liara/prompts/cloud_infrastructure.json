@@ -1,0 +1,286 @@
+{
+  "domain": "cloud_infrastructure",
+  "description": "Architettura cloud, multi-cloud vs single-cloud, serverless vs container, IaC, ottimizzazione costi, networking (VPC, transit gateway), sicurezza IAM, compliance e data residency, edge computing, CDN, load balancing, auto-scaling, managed services vs self-hosted",
+  "prompts": [
+    {
+      "prompt": "Qual è la differenza tra una subnet pubblica e una subnet privata in un VPC AWS? Un database RDS PostgreSQL deve essere posizionato in una subnet pubblica o privata, e perché?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["vpc", "subnet", "rds", "aws", "networking_base"],
+      "structural_conflict": "Nessun conflitto reale: un database va SEMPRE in subnet privata, accessibile solo tramite security group da subnet pubblica o VPN. Mettere RDS in subnet pubblica espone la porta 5432 a Internet. La risposta è deterministica."
+    },
+    {
+      "prompt": "Cos'è un Availability Zone e perché è fondamentale distribuire le risorse su almeno 2 AZ? Un'applicazione con un singolo EC2 t3.medium in eu-west-1a e un RDS in eu-west-1b è considerata high-availability?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["availability_zone", "high_availability", "aws", "resilienza"],
+      "structural_conflict": "Nessun conflitto profondo: un singolo EC2 è un single point of failure indipendentemente dalla distribuzione AZ del database. La risposta corretta è che serve almeno un Auto Scaling Group con min 2 istanze su 2 AZ."
+    },
+    {
+      "prompt": "Quando è corretto usare un Application Load Balancer (ALB) vs un Network Load Balancer (NLB) su AWS? Un'API REST che gestisce 50K req/sec con TLS termination ha bisogno di ALB o NLB?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["load_balancing", "alb", "nlb", "aws", "tls"],
+      "structural_conflict": "Nessun conflitto strutturale: ALB opera a Layer 7 (HTTP/HTTPS), NLB a Layer 4 (TCP/UDP). Per un'API REST con routing basato su path e TLS termination, ALB è la scelta corretta. NLB serve per protocolli non-HTTP, latenza ultra-bassa (<100μs) o IP statici."
+    },
+    {
+      "prompt": "Qual è la differenza tra Reserved Instances, Savings Plans e Spot Instances su AWS? Un'applicazione con carico prevedibile (10 istanze m5.xlarge 24/7) e spike durante il Black Friday (fino a 50 istanze per 3 giorni) dovrebbe usare quale combinazione?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["cost_optimization", "reserved_instances", "savings_plans", "spot", "aws"],
+      "structural_conflict": "Nessun conflitto profondo: il pattern è consolidato. Reserved/Savings Plans per il carico base (10 istanze, risparmio 30-72% a seconda del commitment), On-Demand per spike prevedibili (Black Friday), Spot per workload fault-tolerant. La domanda testa la comprensione dei modelli di pricing, non un trade-off architetturale."
+    },
+    {
+      "prompt": "Come funziona un Auto Scaling Group su AWS? Un'applicazione web con carico prevedibile (picco ore 9-18, minimo ore 2-6) deve usare scaling basato su CPU, su request count o su schedule? Il target tracking a 60% CPU è una buona policy di default?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["auto_scaling", "scaling_policy", "target_tracking", "aws"],
+      "structural_conflict": "Nessun conflitto profondo: per carico prevedibile, lo scheduled scaling è il più efficiente (scale out alle 8:30, scale in alle 18:30). Il target tracking su CPU è un buon fallback per spike imprevisti. Il 60% CPU è un default ragionevole. La combinazione scheduled + target tracking è la best practice consolidata."
+    },
+    {
+      "prompt": "Come funziona S3 Glacier vs S3 Glacier Deep Archive per il backup a lungo termine? Un'azienda deve archiviare 50TB di log di compliance che devono essere disponibili entro 12 ore in caso di audit. I log non vengono MAI acceduti nel 99% dei casi. Glacier Flexible Retrieval (retrieval in 3-5 ore, $0.0036/GB/mese = $180/mese) vs Deep Archive (retrieval in 12 ore, $0.00099/GB/mese = $49.50/mese). Quale tier?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["s3", "glacier", "backup", "archivio", "compliance", "costo"],
+      "structural_conflict": "Nessun conflitto profondo: con requisito di 12 ore di retrieval, Deep Archive è la scelta corretta (retrieval entro 12h, costo ~3.6x inferiore). Glacier standard è giustificato solo se il requisito di retrieval scende sotto le 5 ore. La risposta è deterministica dato il requisito temporale."
+    },
+    {
+      "prompt": "Cos'è il VPC endpoint (Gateway vs Interface) e quando serve? Un'applicazione in subnet private deve accedere a S3 e DynamoDB. Attualmente il traffico esce dal NAT Gateway verso Internet e rientra in AWS. Il NAT Gateway processa 5TB/mese di traffico verso S3 ($225/mese solo in data processing). Un VPC Gateway Endpoint per S3 è gratuito. Perché non tutti lo usano di default?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["vpc_endpoint", "nat_gateway", "s3", "networking", "aws", "costo"],
+      "structural_conflict": "Nessun conflitto reale: il VPC Gateway Endpoint per S3/DynamoDB è gratuito e dovrebbe sempre essere configurato per subnet private. La ragione per cui non tutti lo usano è ignoranza o inerzia, non un trade-off tecnico. L'unica considerazione è che il Gateway Endpoint richiede route table entry e non funziona cross-region."
+    },
+    {
+      "prompt": "Un'applicazione deve scegliere tra AWS SQS e Apache Kafka (MSK) per la comunicazione asincrona tra microservizi. Il volume è 100K messaggi/ora, la dimensione media del messaggio è 2KB. I consumer devono processare ogni messaggio esattamente una volta (exactly-once semantics). SQS FIFO garantisce exactly-once ma ha un limite di 300 messaggi/secondo per coda (3K con batching) e costa $0.00000050/request (=$0.50/1M request). MSK non ha limite di throughput pratico e il costo è fisso ($400/mese per un cluster minimo), ma exactly-once richiede configurazione specifica (idempotent producer + transactional consumer) ed è complesso da implementare. Quale scegliere per 100K msg/h?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["sqs", "kafka", "messaging", "exactly_once", "microservizi", "aws"],
+      "structural_conflict": "Per 100K msg/h (~28 msg/sec), SQS FIFO è sufficiente e costa circa $36/mese in request fees (72M req/mese × $0.50/1M) — ordini di grandezza meno del cluster MSK a $400/mese. Kafka è sovradimensionato per questo volume. La risposta è quasi certamente SQS FIFO, a meno che non servano replay dei messaggi (Kafka retention) o event sourcing."
+    },
+    {
+      "prompt": "Un team di 3 sviluppatori gestisce l'infrastruttura cloud manualmente dalla console AWS. Hanno 12 EC2, 3 RDS, 2 S3 bucket e un CloudFront. Il CTO vuole introdurre Infrastructure as Code. Le opzioni: (A) Terraform — il più diffuso, stato gestito in S3+DynamoDB, ma il team non ha esperienza e la learning curve è 2-3 settimane; (B) AWS CloudFormation — nativo AWS, zero setup, ma è verboso (YAML/JSON), lento nei rollback e locked al vendor; (C) Pulumi — si scrive in TypeScript (il team lo conosce già), ma è meno maturo e la community è 10x più piccola di Terraform. L'infrastruttura è 100% AWS e resterà tale per almeno 3 anni. Quale strumento IaC consigli?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["iac", "terraform", "cloudformation", "pulumi", "devops"],
+      "structural_conflict": "Terraform è lo standard de facto ma richiede investimento in formazione. CloudFormation è gratis e nativo ma locked-in e verboso. Pulumi sfrutta competenze esistenti ma la community ridotta implica meno moduli e meno supporto. Se il team resterà su AWS, CloudFormation è pragmatico; se c'è anche solo una probabilità di multi-cloud, Terraform è l'unica scelta sostenibile."
+    },
+    {
+      "prompt": "Una startup con 50K€/anno di budget cloud deve scegliere il provider principale. Attualmente ha: un backend Node.js, un frontend Next.js, PostgreSQL, Redis, e un modello ML di inferenza (PyTorch, GPU necessaria). Le opzioni: (A) AWS — più servizi (200+), community enorme, ma i costi GPU (p3.2xlarge: $3.06/h) sono i più alti e la complessità IAM è elevata; (B) GCP — BigQuery nativo, TPU per ML a $1.35/h (v4 preemptible), Kubernetes nativo (GKE Autopilot), ma il supporto è peggiore e meno partner italiani; (C) Azure — integrazione Office 365, crediti startup (BizSpark 150K$), ma la UX della console è la peggiore e il networking (VNet) ha quirk rispetto a VPC AWS. Il team ha 2 persone con esperienza AWS e 0 su GCP/Azure. Quale provider e perché gli altri due sono sbagliati per questo caso?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["cloud_provider", "aws_vs_gcp_vs_azure", "startup", "budget", "gpu_ml"],
+      "structural_conflict": "AWS è il più completo ma costa di più per GPU e il budget è limitato. GCP è il migliore per ML ma il team non lo conosce e la curva di apprendimento costa tempo. Azure ha i crediti startup ma la UX scadente rallenta il team. L'esperienza del team favorisce AWS, il budget e l'ML favoriscono GCP — due forze opposte."
+    },
+    {
+      "prompt": "Un'azienda con 150 microservizi su ECS Fargate spende 28K$/mese. Il 60% dei servizi ha utilizzo CPU medio del 12% e memory del 18%. Le opzioni per ridurre i costi: (A) migrare i servizi sotto-utilizzati a Lambda — pay-per-invocation, ma 40 dei 90 servizi hanno connessioni persistenti a PostgreSQL (connection pooling) e cold start di 2-5 secondi; (B) passare da Fargate a EC2 con Spot Instances (risparmio 60-70%) — ma gli Spot possono essere interrotti con 2 minuti di preavviso e servono strategie di graceful shutdown; (C) right-sizing aggressivo dei task Fargate (dimezzare vCPU e memoria) — risparmio 40% stimato, zero rischio architetturale, ma alcuni servizi hanno spike del 300% durante i batch notturni. Target: scendere sotto 18K$/mese. Quale strategia o combinazione?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["cost_optimization", "fargate", "lambda", "spot_instances", "right_sizing", "microservizi"],
+      "structural_conflict": "Lambda è il più economico ma le connessioni persistenti e i cold start lo rendono inapplicabile per il 45% dei servizi. Spot risparmia il massimo ma introduce instabilità. Right-sizing è il più sicuro ma insufficiente da solo per raggiungere il target. Nessuna singola strategia raggiunge i 18K$; serve una combinazione che introduce complessità operativa."
+    },
+    {
+      "prompt": "Un team deve decidere se usare AWS ECS Fargate o Kubernetes (EKS) per orchestrare 30 microservizi containerizzati. Il team ha 5 sviluppatori, nessuno con esperienza Kubernetes. Fargate costa circa 20% in più rispetto a EKS con EC2 managed node group, ma richiede zero gestione del control plane e dei nodi. EKS richiede almeno 1 DevOps dedicato per gestire upgrade, networking (Calico/Cilium), e monitoring. Lo stipendio di un DevOps senior in Italia è 50-65K€/anno. Quale piattaforma scegliere considerando il TCO a 2 anni?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["ecs_vs_eks", "kubernetes", "fargate", "tco", "team_size", "devops"],
+      "structural_conflict": "EKS è più flessibile e costa meno in compute puro, ma il costo nascosto è l'assunzione o formazione di un DevOps Kubernetes — che in 2 anni costa 100-130K€, molto più del 20% di sovrapprezzo Fargate. Fargate è più costoso in compute ma il TCO reale è inferiore per team piccoli. Il conflitto è tra costo diretto (compute) e costo indiretto (personale)."
+    },
+    {
+      "prompt": "Un'organizzazione con 12 account AWS (dev, staging, prod per 4 team) deve connettere i VPC tra loro. Il team DevOps ha 2 persone. Le opzioni: (A) VPC Peering — gratuito per il data transfer intra-region, semplice, ma richiede N*(N-1)/2 = 66 peering connections e non è transitivo (A↔B e B↔C non implica A↔C); (B) AWS Transit Gateway — hub centralizzato, routing transitivo, ma costa $0.05/GB di data transfer + $36/mese per attachment (12 × $36 = $432/mese fisso) e la configurazione delle route table è complessa; (C) AWS PrivateLink per servizi specifici — zero routing globale, accesso granulare, ma richiede un NLB per ogni servizio esposto e non risolve la connettività generica. Il data transfer inter-VPC è 500GB/mese. Quale soluzione?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["vpc_peering", "transit_gateway", "privatelink", "networking", "multi_account"],
+      "structural_conflict": "VPC Peering è gratuito ma 66 connessioni sono ingestibili per 2 persone. Transit Gateway è centralizzato ma introduce costi fissi e variabili (432$/mese + 25$/mese data). PrivateLink è il più sicuro ma non scala come soluzione generica. Il trade-off è tra costo operativo (gestire 66 peering), costo economico (Transit Gateway) e limitazione funzionale (PrivateLink)."
+    },
+    {
+      "prompt": "Una fintech deve decidere tra AWS Managed Kafka (MSK) e un cluster Kafka self-hosted su EC2 per un event streaming pipeline che processa 2M eventi/secondo con retention di 7 giorni. MSK costa ~$0.84/broker/ora per istanze kafka.m5.2xlarge (3 broker minimum: ~$1,814/mese). Self-hosted su 3 EC2 r5.2xlarge + 6TB EBS gp3 per broker costa $2,400/mese ma richiede gestione manuale di upgrade, patching, monitoring, e il team non ha mai gestito un cluster Kafka in produzione. Un downtime Kafka blocca l'intera pipeline di pagamenti. SLA richiesto: 99.95%. Quale opzione?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["kafka", "msk", "event_streaming", "managed_vs_selfhosted", "fintech", "sla"],
+      "structural_conflict": "MSK costa di piu' ma include patching, upgrade e monitoring con SLA 99.9%. Self-hosted e' piu' economico ma il rischio operativo e' enorme per un team senza esperienza Kafka — un misconfiguration può causare data loss. Per una fintech con SLA 99.95%, il costo del downtime (pagamenti bloccati) è ordini di grandezza superiore al risparmio. Il delta di costo MSK vs self-hosted rimane significativo per una fintech early-stage, ma va pesato contro il rischio operativo."
+    },
+    {
+      "prompt": "Un'organizzazione vuole implementare GitOps per il deploy su Kubernetes. Le opzioni: (A) ArgoCD — UI intuitiva, sync automatico da Git, ma la gestione dei secret è problematica (i secret non devono stare in Git) e richiede Sealed Secrets o External Secrets Operator; (B) Flux v2 — più leggero, integrato con Kustomize, ma nessuna UI nativa e il debugging è solo via CLI; (C) Jenkins + Helm — il team lo usa già, pipeline esistenti, ma non è vero GitOps (push-based, non pull-based) e Jenkins stesso è un single point of failure con 200+ plugin da gestire. Il team ha 3 DevOps con forte esperienza Jenkins. Quale tool?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["gitops", "argocd", "flux", "jenkins", "kubernetes", "deploy"],
+      "structural_conflict": "ArgoCD è il gold standard GitOps ma la gestione secret richiede componenti aggiuntivi. Flux è più puro come architettura ma manca di UI per il team. Jenkins è già in uso ma non è vero GitOps (push vs pull) e la sua complessità è un debito tecnico. L'esperienza del team favorisce Jenkins, ma il principio GitOps lo esclude — si deve scegliere tra efficienza a breve termine (Jenkins) e architettura corretta a lungo termine (ArgoCD/Flux)."
+    },
+    {
+      "prompt": "Un e-commerce italiano con 2M di visite/mese vuole implementare una CDN. Il sito è hostato su un singolo server a Milano (Hetzner, 49€/mese). Il 70% degli utenti è in Italia, 20% in Europa, 10% resto del mondo. Le opzioni: (A) CloudFlare Free — CDN globale gratuita, DDoS protection, ma il caching aggressivo può servire pagine stale (prezzi non aggiornati per 5 minuti), e la versione free non ha WAF rules custom; (B) CloudFlare Pro (25$/mese) — WAF incluso, cache rules granulari, ma il traffico Europa è già veloce (30ms) e il miglioramento percepito è minimo per il 90% degli utenti; (C) AWS CloudFront — integrazione con S3/Lambda@Edge, invalidation istantanea, ma costa $0.085/GB in Europa (stimato 180$/mese per 2TB) e il setup è più complesso. Il sito usa Next.js con ISR (revalidate ogni 60 secondi). Quale CDN?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["cdn", "cloudflare", "cloudfront", "ecommerce", "caching", "italia"],
+      "structural_conflict": "CloudFlare Free è gratis ma il caching stale è un problema per i prezzi di un e-commerce. CloudFlare Pro è economico ma il 90% degli utenti è già vicino al server. CloudFront è il più configurabile ma costa 4x CloudFlare Pro e il setup è complesso. Con ISR a 60 secondi, il rischio di prezzi stale esiste su tutte le CDN — il problema è nel design dell'applicazione, non nella CDN."
+    },
+    {
+      "prompt": "Un team di data engineering processa 10TB/giorno di dati con Apache Spark. Le opzioni: (A) EMR (Elastic MapReduce) su AWS con Spot Instances — costo variabile $0.03-0.10/GB, ma i Spot possono essere interrotti a metà job causando ricalcolo completo (il job dura 4 ore); (B) Databricks su AWS — ottimizzato per Spark (Photon engine 2-5x più veloce), ma il costo è $0.22/DBU + compute, stimato 8K$/mese; (C) GCP Dataproc — Spark managed, preemptible VM con 30 secondi di preavviso (AWS Spot dà 2 minuti), ma con interruzioni meno frequenti in pratica, costo stimato 4K$/mese, ma il team è tutto su AWS e i dati sono su S3. Il job deve completare entro 6 ore con reliability 99%. Budget: 6K$/mese. Quale piattaforma?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["spark", "emr", "databricks", "dataproc", "data_engineering", "spot_instances"],
+      "structural_conflict": "EMR è il più economico ma i Spot interruptions su job da 4 ore sono un rischio reale (reliability <99%). Databricks è il più veloce ma sfora il budget. Dataproc ha il miglior rapporto costo/reliability ma i dati sono su S3 — il cross-cloud data transfer aggiunge latenza e costi. Con 6K$/mese di budget, nessuna soluzione soddisfa tutti i vincoli simultaneamente."
+    },
+    {
+      "prompt": "Un team vuole implementare observability completa (logs, metrics, traces) per 50 microservizi su EKS. Le opzioni: (A) stack AWS nativo — CloudWatch Logs ($0.50/GB ingest) + CloudWatch Metrics ($0.30/metric) + X-Ray per traces — integrato, ma CloudWatch costa circa 3K$/mese per 50 servizi e l'UI è limitata; (B) stack open-source — Grafana + Loki (logs) + Prometheus (metrics) + Tempo (traces) — zero licensing, ma richiede 3 nodi dedicati per lo stack (r5.large = $700/mese) e manutenzione continua; (C) Datadog — best-in-class UI, APM integrato, ma il pricing è $15/host/mese (infra) + $31-36/host/mese (APM, varia per tier e billing) = ~$46-51/host × 50 = $2,300-2,550/mese, che raddoppia se si aggiungono logs ($1.27/GB). Il team ha 2 DevOps. Quale stack?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["observability", "monitoring", "grafana", "datadog", "cloudwatch", "prometheus"],
+      "structural_conflict": "CloudWatch è integrato ma costoso e con UI scadente. Open-source è economico in licensing ma il costo operativo per 2 DevOps è alto (configurazione, upgrade, troubleshooting dello stack stesso). Datadog è il migliore come prodotto ma il costo scala linearmente con gli host e può sfuggire di mano. Per 2 DevOps, gestire uno stack open-source di observability è un lavoro part-time continuo — ma pagare $2,300+/mese per Datadog è un costo ricorrente significativo."
+    },
+    {
+      "prompt": "Un'azienda media italiana (200 dipendenti, 30 sviluppatori) ha tutta l'infrastruttura su un singolo account AWS. L'account ha 500+ risorse, 80 IAM users, e il billing mensile è 45K€. Il CISO vuole implementare AWS Organizations con una landing zone multi-account. La struttura proposta: root → OU Security (log archive, security tooling) → OU Workloads (dev, staging, prod per ogni team) → OU Sandbox (developer playground). Questo significa passare da 1 a 12+ account. Il team ops (3 persone) obietta che 12 account sono ingestibili: cross-account IAM roles, networking tra account, billing consolidato, e il deploy diventa 4x più complesso. Il CISO insiste che il blast radius di una compromissione su account singolo è catastrofico. Chi ha ragione?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["aws_organizations", "multi_account", "landing_zone", "sicurezza", "governance"],
+      "structural_conflict": "Il CISO ha ragione sul blast radius: un account singolo con 500 risorse significa che una compromissione IAM espone tutto. Il team ops ha ragione sulla complessità: 12 account richiedono automazione sofisticata che 3 persone faticano a costruire e mantenere. La soluzione corretta (multi-account) è anche la più complessa — e senza automazione (AWS Control Tower, Terraform modules) è insostenibile. Il conflitto è tra sicurezza teorica e capacità operativa reale."
+    },
+    {
+      "prompt": "Una startup vuole deployare la propria applicazione Next.js + API Node.js. Il team è di 2 developer full-stack senza esperienza DevOps. Le opzioni: (A) Vercel (frontend) + Railway (backend + PostgreSQL) — zero config, deploy da Git push, ma Vercel Pro costa $20/mese/membro e Railway $5-20/mese per servizio, e il vendor lock-in su Vercel (Edge Functions, Image Optimization) è significativo; (B) un singolo VPS su Hetzner (CX33, 8GB RAM, 4 vCPU, ~€5.49/mese) con Docker Compose — costo minimo, controllo totale, ma nessuna ridondanza, backup manuali, e il team deve gestire SSL, nginx, monitoring; (C) AWS Lightsail ($20/mese per 4GB) — più semplice di EC2, snapshot automatici, ma le risorse sono limitate e il salto a EC2/ECS quando si scala è un refactoring. L'applicazione ha 1K utenti/giorno e cresce del 20%/mese. Quale scelta per i prossimi 12 mesi?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["startup", "paas", "vercel", "hetzner", "lightsail", "deploy", "developer_experience"],
+      "structural_conflict": "Vercel+Railway è il migliore per developer experience ma il costo scala rapidamente e il lock-in è reale. Hetzner è 10x più economico ma richiede competenze DevOps che il team non ha — e un VPS singolo è un SPOF. Lightsail è un compromesso ma il ceiling è basso e la migrazione a EC2 è un salto architetturale. Con crescita 20%/mese, la scelta dei prossimi 12 mesi deve già considerare dove si sarà tra 12 mesi."
+    },
+    {
+      "prompt": "Un'applicazione su AWS deve essere conforme a PCI DSS per processare pagamenti con carta di credito. L'architetto propone: VPC dedicato con subnet isolate, AWS Config per compliance monitoring, GuardDuty per threat detection, CloudTrail per audit logging, KMS per encryption at rest. Il security auditor obietta che: (1) i log di CloudTrail devono essere in un account AWS separato (log archive) per impedire manomissione; (2) il KMS key policy deve impedire a qualsiasi IAM admin di decriptare i dati di carta senza MFA; (3) il VPC flow logs deve essere abilitato su TUTTE le ENI, non solo sulle subnet. L'implementazione delle 3 obiezioni costa 3 settimane di lavoro aggiuntivo e 800$/mese di costi infrastrutturali (account separato, CloudWatch Logs per flow logs). Il PM vuole andare live in 2 settimane. Come bilanciate compliance e deadline?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["pci_dss", "compliance", "sicurezza", "kms", "cloudtrail", "audit", "pagamenti"],
+      "structural_conflict": "Tutte e 3 le obiezioni dell'auditor sono requisiti PCI DSS reali, non nice-to-have. Saltarli per la deadline significa andare live non-compliant — che espone l'azienda a sanzioni e blocco del processing. Ma ritardare di 3 settimane ha un costo business. Il conflitto è tra compliance legale (non negoziabile) e pressione business (deadline) — e per PCI DSS, la compliance vince sempre, ma il PM non lo accetta facilmente."
+    },
+    {
+      "prompt": "Un'applicazione containerizzata deve gestire secret (database password, API keys, certificati TLS). Le opzioni: (A) AWS Secrets Manager — rotazione automatica, integrazione Lambda per rotazione custom, ma costa $0.40/secret/mese + $0.05/10K API call (con 200 secret e 1M call/mese = $80 + $5 = $85/mese); (B) HashiCorp Vault — dynamic secrets con TTL, engine database per credenziali temporanee, audit completo, ma richiede cluster HA (3 nodi), unseal ceremony, e un DevOps dedicato; (C) Kubernetes Secrets con External Secrets Operator che sincronizza da un backend (AWS SSM Parameter Store) — cost-effective ($0.05/parametro standard, gratis per i primi 10K), ma i K8s Secrets sono base64 encoded (non encrypted) a meno di non abilitare encryption at rest con KMS. Il team non ha un DevOps dedicato per Vault. Quale strategia?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "medium",
+      "tags": ["secrets_management", "vault", "aws_secrets_manager", "kubernetes", "sicurezza"],
+      "structural_conflict": "Secrets Manager è il più semplice ma manca dynamic secrets e il costo scala con il numero di secret. Vault è il gold standard ma l'operational overhead è proibitivo senza DevOps dedicato. K8s Secrets + ESO è economico ma i secret in etcd non sono encrypted di default. Per un team senza DevOps dedicato, Vault è la soluzione migliore che non possono permettersi di gestire."
+    },
+    {
+      "prompt": "Un e-commerce globale serve immagini prodotto (media 500KB, 2M di immagini uniche). Le immagini sono su S3 (1TB, $23/mese di storage). Il 30% delle immagini genera l'80% del traffico (Zipf distribution). Il data transfer mensile è 50TB ($4,250/mese verso Internet). Le opzioni per ridurre il costo: (A) CloudFront CDN — cache le immagini più richieste, stimato 80% cache hit ratio, data transfer $0.085/GB primo TB poi decrescente, costo stimato $2,500/mese; (B) CloudFlare R2 (zero egress) — sposta le immagini su R2, elimina il data transfer cost completamente, costo storage $15/TB = $15/mese, ma la migrazione di 2M file richiede 1-2 giorni e l'API S3-compatible ha limiti; (C) S3 + CloudFront con Lambda@Edge per image optimization on-the-fly (resize, WebP conversion) — riduce la dimensione media del 60% (500KB → 200KB), ma il costo Lambda@Edge è $0.60/1M invocazioni e il cold start aggiunge 100-200ms alla prima richiesta. Quale strategia?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["cdn", "s3", "cloudflare_r2", "image_optimization", "data_transfer", "costo"],
+      "structural_conflict": "CloudFront riduce i costi ma non li elimina — $2,500/mese è comunque significativo. R2 elimina i costi egress ma la migrazione e la dipendenza da CloudFlare sono un vendor switch. Lambda@Edge riduce il volume ma aggiunge complessità e latenza. La soluzione ottimale è R2 per il costo, ma comporta un cambio di provider di storage che ha implicazioni architetturali."
+    },
+    {
+      "prompt": "Un'organizzazione con 10 team di sviluppo (50 developer totali) vuole standardizzare l'approccio ai container. Attualmente ogni team sceglie la propria base image Docker: 3 team usano Alpine, 4 usano Debian slim, 2 usano Ubuntu, 1 usa Distroless. Le immagini base hanno vulnerabilità diverse (Alpine ha musl libc che causa bug con Node.js, Ubuntu è 3x più grande, Distroless non ha shell per debugging). La proposta del security team: forzare Distroless per tutti in produzione. La proposta del dev team: libertà di scelta con scan obbligatorio. L'SRE team propone: golden images centralizzate (3 base images approvate) ricostruite settimanalmente con patch di sicurezza. Chi ha ragione?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["container", "docker", "base_image", "sicurezza", "standardizzazione", "distroless"],
+      "structural_conflict": "Distroless è il più sicuro ma l'assenza di shell rende il debugging in produzione impossibile — quando un container ha problemi, servono tool diagnostici. Libertà di scelta crea frammentazione e vulnerabilità inconsistenti. Golden images centralizzate sono il compromesso corretto ma richiedono un team dedicato per la manutenzione settimanale. Il conflitto è tra sicurezza (meno surface area), operatività (debugging), e autonomia dei team (velocità di sviluppo)."
+    },
+    {
+      "prompt": "Un'azienda europea (sede in Italia) gestisce dati sanitari di 500K pazienti. Il GDPR richiede data residency in EU e il Garante italiano raccomanda che i dati non lascino l'Italia. AWS ha una region a Milano (eu-south-1) ma con un catalogo di servizi ridotto rispetto a eu-west-1 (mancano alcuni servizi, disponibilita' da verificare per ogni servizio specifico). GCP ha europe-west8 a Milano, ma con un catalogo di servizi più ridotto rispetto alle region principali. Azure ha Italy North (Milano). Le opzioni: (A) AWS eu-south-1 — data residency italiana, ma i servizi mancanti costringono a workaround architetturali o a replicare dati verso eu-west-1 (Irlanda); (B) Azure Italy North — più servizi disponibili in region, compliance tools integrati (Compliance Manager), ma il team è tutto AWS; (C) hosting on-premise in un datacenter italiano (Aruba Cloud, Seeweb) — compliance perfetta, ma zero servizi managed, team di 4 persone deve gestire tutto. Budget: 80K€/anno. Quale scelta garantisce compliance senza compromettere l'operatività?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["compliance", "gdpr", "data_residency", "italia", "dati_sanitari", "aws_vs_azure_vs_onprem"],
+      "structural_conflict": "AWS Italia ha data residency ma manca servizi critici — forzando architetture ibride che possono violare la residency stessa. Azure ha i servizi ma cambiare provider costa 3-6 mesi di migrazione e ritraining. On-premise è perfetto per compliance ma operativamente insostenibile con 4 persone. La compliance elimina le soluzioni più semplici e la dimensione del team elimina la più sicura."
+    },
+    {
+      "prompt": "Una piattaforma SaaS con utenti in Europa, Nord America e Asia-Pacifico ha il backend in eu-west-1 (Irlanda). Gli utenti asiatici lamentano latenza di 280-350ms per le API call. Le opzioni: (A) CDN (CloudFront) davanti all'API — riduce la latenza per contenuti cacheable ma le API POST/PUT/DELETE non sono cacheable e restano a 300ms; (B) deploy multi-region con replica del backend in ap-northeast-1 (Tokyo) — latenza <50ms per l'Asia, ma il database deve essere replicato cross-region (Aurora Global Database: +800$/mese) e la consistenza diventa eventually consistent con lag di 200-500ms; (C) edge computing con CloudFront Functions o Lambda@Edge — risponde in <10ms per logica semplice, ma non può accedere al database e la logica è limitata a 10KB di codice; (D) API Gateway regional in Asia che proxy verso l'Europa con connection pooling ottimizzato — riduce overhead TLS handshake (da 3 round-trip a 1) ma la latenza fisica rimane 150ms. Budget: +2K$/mese max. Quale approccio?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["multi_region", "latenza", "cdn", "edge_computing", "aurora_global", "saas"],
+      "structural_conflict": "CDN non risolve il problema per API mutabili. Multi-region risolve la latenza ma costa troppo e introduce eventual consistency. Edge computing è veloce ma non può accedere ai dati. Il proxy riduce overhead ma non la fisica. Con 2K$/mese il multi-region completo è fuori budget — si è costretti a compromessi parziali che lasciano una parte del problema irrisolto."
+    },
+    {
+      "prompt": "Un'azienda decide di adottare una strategia multi-cloud: backend critico su AWS, data analytics su GCP BigQuery, e Active Directory + Office su Azure. La motivazione è evitare vendor lock-in e sfruttare i best-of-breed di ogni provider. Il team è di 8 persone (4 dev, 2 ops, 1 security, 1 architect). L'architetto stima che il multi-cloud triplica la complessità operativa: 3 IAM diversi, 3 sistemi di networking, 3 tool di monitoring, 3 modelli di billing. Il costo stimato del multi-cloud è +40% rispetto al single-cloud per overhead operativo. Contro-argomento: nel 2024 un outage di us-east-1 ha causato 8 ore di downtime — con multi-cloud si poteva fare failover. Il team ha esperienza solo su AWS. È giustificato il multi-cloud?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["multi_cloud", "vendor_lock_in", "complessita_operativa", "resilienza", "team_expertise"],
+      "structural_conflict": "Il multi-cloud elimina il vendor lock-in ma triplica la complessità per un team di 8 persone che ne conosce solo uno. Il failover cross-cloud richiede architettura active-active che è essa stessa un progetto da 6+ mesi. Il 40% di overhead è continuo, l'outage è un evento raro (1-2 volte/anno, <12h). Si paga un costo certo per mitigare un rischio incerto. Con 8 persone, il multi-cloud rischia di degradare la qualità su tutti e 3 i provider."
+    },
+    {
+      "prompt": "Un'azienda ha 200 sviluppatori che deployano su AWS. L'IAM è gestito con policy manuali: ogni sviluppatore ha un IAM user con access key e una policy custom. Ci sono 200 IAM users con 200 policy diverse, molte con `Action: *` su specifici servizi. L'audit rivela che il 40% degli utenti ha permessi che non usa da 6+ mesi. Le opzioni per ripulire: (A) AWS IAM Access Analyzer + policy generation basata su CloudTrail degli ultimi 90 giorni — genera policy least-privilege automatiche, ma 90 giorni potrebbe non coprire operazioni trimestrali; (B) migrare a AWS SSO (IAM Identity Center) con permission sets centralizzati per ruolo (dev, ops, admin) — elimina le access key, ma richiede 3-6 mesi di migrazione e ogni team ha esigenze diverse; (C) implementare HashiCorp Vault con dynamic AWS credentials (TTL 1h) — zero credenziali persistenti, ma la complessità operativa è elevata e Vault stesso diventa un single point of failure. Quale strategia?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["iam", "least_privilege", "aws_sso", "vault", "sicurezza", "governance"],
+      "structural_conflict": "Access Analyzer è il meno invasivo ma 90 giorni è una finestra troppo corta per catturare tutte le operazioni legittime. SSO è la soluzione enterprise corretta ma 3-6 mesi di migrazione per 200 utenti è un progetto enorme. Vault è il gold standard per zero standing privileges ma introduce un SPOF critico e una complessità che richiede personale dedicato. Ogni soluzione risolve il problema di sicurezza ma introduce un rischio operativo diverso."
+    },
+    {
+      "prompt": "Un'applicazione monolitica su un singolo EC2 c5.4xlarge (16 vCPU, 32GB RAM, $0.68/h = $490/mese) deve essere migrata a un'architettura serverless. L'applicazione ha: un API REST (200 endpoint), job di background (cron ogni 5 minuti), websocket per notifiche real-time, e un processo di elaborazione PDF (CPU-intensive, 30 secondi per file). Le opzioni serverless: (A) tutto su Lambda — API via API Gateway, cron via EventBridge, ma Lambda ha timeout 15 minuti, no websocket nativo, cold start 1-3s, e il PDF processing da 30s costa di più su Lambda che su EC2; (B) API su Lambda + websocket su Fargate + PDF su Step Functions con Lambda — architettura ibrida ottimale, ma 3 paradigmi diversi da gestire e monitorare; (C) restare su EC2 ma containerizzare con Docker + ECS — nessun refactoring serverless, ma si mantiene un modello mentale unico. Il team è di 3 backend developer. Migrare o restare?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["serverless", "lambda", "monolite", "migrazione", "fargate", "costo"],
+      "structural_conflict": "Lambda è il più economico per API a basso traffico ma non supporta websocket e il PDF processing è più costoso. L'ibrido è architetturalmente corretto ma triplica la complessità per 3 persone. Restare su EC2+container è pragmatico ma non sfrutta i vantaggi serverless. Il conflitto è tra ottimizzazione dei costi e complessità operativa — e per un team di 3, la complessità è il vero costo."
+    },
+    {
+      "prompt": "Un'azienda con 50 microservizi su Kubernetes (EKS) spende 12K$/mese in cluster costs. Un consulente propone di migrare i 30 servizi stateless a Lambda per risparmiare. I 30 servizi ricevono in totale 500M invocazioni/mese con durata media 200ms e 256MB di memoria. Costo Lambda stimato: 500M × $0.0000002083 (per 200ms a 256MB) + 500M × $0.20/1M = $204.15/mese. Ma: 15 dei 30 servizi comunicano tra loro via gRPC (non supportato nativamente da API Gateway), 8 servizi richiedono connessioni persistenti a Redis, e il tempo di cold start (2-5s per container image Lambda) è inaccettabile per il servizio di checkout. È corretto il calcolo del consulente?",
+      "conflict_type": ["technical_disagreement", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["lambda", "kubernetes", "migrazione", "costo_reale", "grpc", "cold_start"],
+      "structural_conflict": "Il calcolo del consulente considera solo il costo di compute Lambda ma ignora: costo API Gateway ($3.50/M req = $1,750/mese), costo data transfer, impossibilita' di gRPC nativo, cold start inaccettabile per checkout, e connessioni Redis persistenti impossibili su Lambda. Il costo reale di Lambda e' molto superiore al calcolo presentato. L'analisi converge: la migrazione e' sconsigliata per i vincoli architetturali (gRPC, Redis, cold start), non solo per il costo. Il conflitto computazionale e' moderato perche' la risposta e' quasi unanime una volta considerati tutti i fattori."
+    },
+    {
+      "prompt": "Un'azienda ha il database PostgreSQL 14 su un EC2 r5.2xlarge (8 vCPU, 64GB RAM, 1TB gp3) gestito manualmente dal team ops (2 persone). Il database ha 500GB di dati, 3K query/secondo, e l'azienda deve garantire RPO < 1 minuto e RTO < 15 minuti. Le opzioni: (A) migrare a RDS PostgreSQL — managed, backup automatici, Multi-AZ failover in <60s, ma costa 40% in più ($1,800/mese vs $1,280/mese) e non supporta certe estensioni (pg_cron, custom C extensions); (B) restare self-hosted ma implementare Patroni + etcd per high-availability — RPO ~0 con streaming replication sincrona, ma richiede 3 nodi etcd + 2 nodi PostgreSQL + gestione operativa che le 2 persone ops faticano a sostenere; (C) migrare a Aurora PostgreSQL — 3x più veloce per read, storage auto-scaling, 6 repliche cross-AZ, ma costa 2x RDS e ha incompatibilità con il query planner di PostgreSQL community. L'azienda usa pg_cron e 3 estensioni C custom. Quale scelta?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["rds", "aurora", "postgresql", "self_hosted", "high_availability", "managed_vs_selfhosted"],
+      "structural_conflict": "RDS è managed ma le estensioni C custom non sono supportate — costringendo a un refactoring dell'applicazione. Patroni è il più flessibile ma operativamente insostenibile per 2 persone. Aurora è il più performante ma costa il doppio e ha incompatibilità col query planner. Le estensioni C custom sono il vincolo che elimina le soluzioni managed, ma restare self-hosted senza HA è un rischio inaccettabile per RPO <1 min."
+    },
+    {
+      "prompt": "Un'applicazione real-time (gaming backend) richiede latenza <10ms per le API call in Europa. L'architettura attuale: ALB → 4 EC2 c5.xlarge in eu-west-1 → ElastiCache Redis → RDS PostgreSQL. La latenza media è 25ms (15ms applicazione + 10ms rete). Il P99 è 180ms durante spike. Le opzioni per scendere sotto 10ms: (A) passare a EC2 c5n con enhanced networking (placement group cluster) — riduce la latenza rete a 1-2ms tra istanze, ma il placement group limita la distribuzione AZ; (B) usare DAX (DynamoDB Accelerator) al posto di Redis — latenza <1ms per cache hit, ma richiede migrazione a DynamoDB (3 mesi di lavoro); (C) pre-computare le risposte e servirle da CloudFront edge cache — <5ms, ma le risposte sono personalizzate per utente e non cacheable; (D) migrare a Rust/C++ per il backend al posto di Node.js — dimezza il tempo applicazione, ma il refactoring è 6+ mesi. Quale approccio è realistico?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["latenza", "gaming", "enhanced_networking", "dax", "ottimizzazione", "p99"],
+      "structural_conflict": "Enhanced networking riduce la latenza rete ma il placement group singolo elimina la multi-AZ resilienza. DAX è il più veloce ma richiede 3 mesi di migrazione a un modello dati diverso. Edge cache non funziona per risposte personalizzate. Il refactoring in Rust richiede 6 mesi. Nessuna soluzione raggiunge <10ms senza sacrificare resilienza (AZ), tempo (migrazione), o funzionalità (personalizzazione). Il requisito stesso potrebbe essere irrealistico con l'architettura attuale."
+    },
+    {
+      "prompt": "Un'azienda farmaceutica deve migrare un workload HPC (High Performance Computing) di simulazione molecolare dal datacenter on-premise al cloud. Il workload richiede 1.000 vCPU per 72 ore consecutive, con comunicazione inter-nodo a bassa latenza (MPI). I dati di input sono 2TB, l'output 500GB. Le opzioni: (A) AWS ParallelCluster con istanze hpc6a.48xlarge (96 vCPU, EFA networking) — managed HPC, auto-scaling, ma il costo per un burst di 72h è ~$15K e il setup di EFA richiede placement group + configurazione specifica; (B) Azure CycleCloud con HBv3 (120 vCPU, InfiniBand 200Gb/s) — InfiniBand nativo è superiore a EFA per MPI, ma il data transfer in ingresso (2TB) e il costo orario delle HBv3 ($3.60/h × 10 nodi × 72h = $2,592 solo compute) sono competitivi; (C) mantenere on-premise e usare il cloud solo per burst — zero data movement, hardware ottimizzato, ma il cluster on-premise ha 5 anni ed è ammortizzato, e i nuovi nodi costano $500K. Il workload viene eseguito 4 volte/anno. Quale strategia?",
+      "conflict_type": ["strategy_choice", "risk_assessment", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["hpc", "simulazione", "mpi", "efa", "infiniband", "burst_computing", "pharma"],
+      "structural_conflict": "AWS ha il setup più semplice ma EFA è inferiore a InfiniBand per MPI intensivo. Azure ha l'hardware migliore per HPC ma il data movement di 2TB per ogni run è un overhead. On-premise è ammortizzato ma il hardware è vecchio e un refresh costa $500K — per 4 run/anno il cloud costa $10-60K/anno, 10x meno. Il conflitto è tra ottimizzazione hardware (Azure InfiniBand), semplicità operativa (AWS), e zero data movement (on-premise)."
+    },
+    {
+      "prompt": "Un'azienda di e-learning con 100K utenti concorrenti durante le ore di punta (corsi live) usa WebSocket per streaming video e chat in real-time. L'infrastruttura attuale: 10 EC2 c5.2xlarge dietro un NLB con sticky sessions. Durante i picchi, lo scaling out di nuove istanze causa disconnessione degli utenti (le websocket non sono ribilanciabili). Le opzioni: (A) AWS API Gateway WebSocket API — managed, auto-scaling, ma il costo è $1.00/1M messages + $0.25/1M connection minutes, e con 100K utenti per 2 ore = 12M connection minutes = $3.00 solo per le connessioni, più i messaggi; (B) implementare un layer di WebSocket con Redis Pub/Sub per condividere lo stato tra istanze — le nuove istanze ricevono il contesto via Redis, reconnect trasparente, ma la complessità è elevata; (C) passare a Server-Sent Events (SSE) per lo streaming unidirezionale + HTTP polling per la chat — elimina il problema WebSocket, ma aumenta la latenza della chat da 50ms a 500ms e il polling genera 10x più richieste. Quale architettura?",
+      "conflict_type": ["technical_disagreement", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["websocket", "scaling", "real_time", "redis_pubsub", "api_gateway", "sse"],
+      "structural_conflict": "API Gateway WebSocket è managed ma il costo per 100K utenti concorrenti è significativo e imprevedibile. Redis Pub/Sub risolve il problema architetturalmente ma aggiunge complessità e Redis diventa un SPOF. SSE+polling degrada l'esperienza utente. Il problema fondamentale è che WebSocket è stateful in un mondo di scaling stateless — qualsiasi soluzione è un compromesso tra costo, complessità e qualità dell'esperienza."
+    },
+    {
+      "prompt": "Un'azienda vuole implementare edge computing per un'applicazione IoT industriale. 500 sensori in una fabbrica generano 1GB/ora di dati. I dati devono essere processati con latenza <100ms per controllare i macchinari in real-time. Le opzioni: (A) AWS IoT Greengrass su gateway locali (Raspberry Pi 4 o Intel NUC) — processing locale, sync con il cloud quando disponibile, ma il Raspberry Pi ha solo 8GB RAM e l'SDK Greengrass consuma 500MB; (B) Azure IoT Edge su mini-PC industriali (Dell Edge Gateway, $2.5K cadauno) — più robusto, supporta container Docker locali, ma il costo di 10 gateway è $25K; (C) processing completamente on-premise con un server locale (Dell PowerEdge T350, $3K) — zero dipendenza cloud, latenza <5ms, ma nessun monitoring centralizzato e il firmware update dei sensori diventa manuale; (D) 5G private network con MEC (Multi-access Edge Computing) — latenza <10ms, gestione centralizzata, ma il costo di una rete 5G privata è $200K+ e richiede spettro dedicato. Budget: $30K one-time + $500/mese. Quale architettura?",
+      "conflict_type": ["technical_disagreement", "strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["edge_computing", "iot", "greengrass", "latenza", "industria", "5g"],
+      "structural_conflict": "Greengrass su Raspberry Pi è economico ma sotto-dimensionato per 1GB/h di processing real-time. Azure IoT Edge è robusto ma costa quasi tutto il budget in hardware. Il server locale è la soluzione più semplice ma elimina il monitoring cloud. 5G MEC è la soluzione ideale ma costa 7x il budget. Con $30K e requisito <100ms, nessuna soluzione cloud pura funziona — serve processing locale, ma il grado di connessione al cloud è il vero trade-off."
+    },
+    {
+      "prompt": "Un'azienda con 500 EC2 istanze distribuite su 3 region vuole centralizzare il logging. Il volume è 2TB/giorno di log. Le opzioni: (A) CloudWatch Logs con cross-account log aggregation — nativo, ma il costo di ingest è $0.50/GB = $1,000/giorno = $30K/mese, e le query su CloudWatch Insights sono lente oltre i 500GB; (B) ELK stack self-hosted (Elasticsearch + Logstash + Kibana) su 5 nodi r5.2xlarge — potente, query veloci, ma Elasticsearch richiede tuning continuo, i nodi costano $4.5K/mese, e un cluster mal configurato perde dati; (C) Amazon OpenSearch Serverless — managed Elasticsearch, auto-scaling, ma il costo è $0.24/OCU/h con minimo 4 OCU = $700/mese solo per l'infra + $0.25/GB ingest = $15K/mese; (D) Grafana Loki su S3 — log storage su S3 ($0.023/GB = $1,380/mese), query più lente di Elasticsearch ma 10x più economico, e Loki non indicizza il contenuto dei log. Budget: 8K$/mese. Quale stack?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["logging", "cloudwatch", "elasticsearch", "loki", "costo", "centralizzazione"],
+      "structural_conflict": "CloudWatch è nativo ma 30K$/mese è 4x il budget. ELK è potente ma 4.5K$/mese + rischio operativo per cluster instabili. OpenSearch Serverless è 15K$/mese, fuori budget. Loki su S3 è l'unico nel budget ma le query non indicizzate sono lente per troubleshooting urgente. Con 2TB/giorno e 8K$/mese di budget, nessuna soluzione offre sia performance che costo adeguato — il vero trade-off è tra velocità di ricerca e costo di storage."
+    },
+    {
+      "prompt": "Un'azienda di fintech europea (licenza PSD2) deve decidere dove hostare il sistema di pagamenti. I requisiti: data residency EU, encryption at rest e in transit, audit trail immutabile, penetration test annuale, e disaster recovery con RPO <5 minuti. Le opzioni: (A) AWS con un account dedicato in eu-central-1 (Francoforte) — tutti i servizi managed (RDS Multi-AZ, KMS, CloudTrail, Config), compliance PCI DSS Level 1, ma il costo dei servizi managed di sicurezza è +3K€/mese; (B) bare metal su OVH/Hetzner in Germania — costo 80% inferiore, controllo totale sull'hardware, ma la compliance PCI DSS è responsabilità completa dell'azienda (audit a 200K€/anno) e non ci sono servizi managed per backup/monitoring; (C) Google Cloud con Assured Workloads (EU sovereignty controls) — data residency EU garantita contrattualmente, ma i servizi disponibili con Assured Workloads sono limitati (no Pub/Sub, no Cloud Functions) e il team non conosce GCP. La licenza PSD2 richiede che l'auditor certifichi l'infrastruttura entro 6 mesi. Quale scelta?",
+      "conflict_type": ["risk_assessment", "strategy_choice"],
+      "difficulty": "hard",
+      "tags": ["fintech", "psd2", "pci_dss", "data_residency", "compliance", "bare_metal", "sovereignty"],
+      "structural_conflict": "AWS ha tutto per la compliance ma il costo è elevato. Bare metal è economico in hardware ma l'audit PCI DSS autonomo costa più del risparmio infrastrutturale. GCP Assured Workloads è il più forte su sovereignty ma i servizi limitati costringono a workaround architetturali. Per una fintech PSD2 con deadline di 6 mesi, la certificazione dell'auditor è il vincolo dominante — e AWS è l'unico con un track record di certificazioni rapide in EU."
+    },
+    {
+      "prompt": "Un team deve implementare CI/CD per 30 microservizi su EKS. Attualmente il deploy è manuale (kubectl apply). Le opzioni: (A) GitHub Actions con self-hosted runners su EC2 (per accesso al cluster EKS privato) — integrato con il repository, ma i self-hosted runners richiedono manutenzione e sono un rischio di sicurezza (un runner compromesso ha accesso al cluster); (B) AWS CodePipeline + CodeBuild — nativo AWS, accesso IAM role-based al cluster, ma la configurazione è verbosa (buildspec.yml + pipeline definition) e CodePipeline non supporta monorepo nativamente; (C) GitLab CI con agent Kubernetes — supporto monorepo nativo, agent sicuro nel cluster, ma richiede migrazione da GitHub a GitLab e il team non lo conosce; (D) Tekton Pipelines nel cluster EKS stesso — cloud-native, nessuna dipendenza esterna, ma la curva di apprendimento è ripida e la community è piccola. Il codice è su GitHub, il team ha 2 DevOps. Quale piattaforma CI/CD?",
+      "conflict_type": ["strategy_choice", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["cicd", "github_actions", "codepipeline", "gitlab", "tekton", "kubernetes", "devops"],
+      "structural_conflict": "GitHub Actions è il più naturale (codice su GitHub) ma i self-hosted runners sono un rischio. CodePipeline è sicuro ma verboso e non gestisce monorepo. GitLab è il più completo ma richiede migrazione. Tekton è cloud-native ma la community è piccola. Per 2 DevOps con codice su GitHub, le opzioni realistiche sono GitHub Actions (con hardening dei runner) o CodePipeline (con workaround per monorepo) — entrambe con compromessi significativi."
+    },
+    {
+      "prompt": "Un'azienda con 200 dipendenti deve scegliere la strategia di disaster recovery per un'applicazione business-critical (ERP interno). L'applicazione gira su 5 EC2 in eu-west-1 con un RDS Multi-AZ e 2TB di dati. L'RTO target è 4 ore, l'RPO target è 1 ora. Le strategie DR: (A) Backup & Restore — AMI e snapshot RDS replicati in eu-central-1 ($50/mese per storage cross-region), RTO stimato 4-6 ore (tempo di launch + restore), RPO = ultimo snapshot (1h interval); (B) Pilot Light — RDS read replica cross-region attiva ($400/mese), EC2 AMI pronte, RTO stimato 30-60 minuti (promote replica + launch EC2), RPO <5 minuti (replication lag); (C) Warm Standby — tutto attivo in eu-central-1 a capacità ridotta (50%), RTO <15 minuti (scale up), RPO <1 minuto, ma costo +$2,000/mese; (D) Active-Active multi-region — zero RTO/RPO, ma $4,000+/mese e complessità estrema per un ERP interno con 200 utenti. Quale strategia dato RTO 4h e RPO 1h?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "medium",
+      "tags": ["disaster_recovery", "rto", "rpo", "cross_region", "backup", "pilot_light"],
+      "structural_conflict": "Backup & Restore soddisfa l'RPO (1h snapshot) ma l'RTO stimato (4-6h) sfora il target di 4h in un cattivo scenario. Pilot Light soddisfa ampiamente entrambi i target ma costa 8x di più. Warm Standby e Active-Active sono sovradimensionati per i requisiti. Il trade-off è tra risparmiare $350/mese (Backup vs Pilot Light) e il rischio che un restore sfori le 4 ore — per un ERP con 200 utenti, il costo del downtime per ora è probabilmente superiore a $350. L'analisi costi/benefici converge rapidamente verso Pilot Light."
+    },
+    {
+      "prompt": "Un'azienda vuole migrare un monolite Java (Spring Boot, 500K LOC) al cloud. L'applicazione gira su 2 server fisici da 64GB RAM e 16 core, con un database Oracle da 2TB. Le strategie di migrazione (6 R's di AWS): (A) Rehost (lift-and-shift) — migrare i server come EC2 m5.4xlarge, Oracle su RDS — funzionante in 2-4 settimane, ma si pagano licenze Oracle su cloud (BYOL o $10/h per RDS Oracle) e non si sfruttano i vantaggi cloud; (B) Replatform — migrare a EC2 + PostgreSQL (migrare schema e stored procedures) — 3-6 mesi, risparmio licensing Oracle ($120K/anno), ma il rischio di incompatibilità è alto con 2TB di dati e 800 stored procedures; (C) Refactor — scomporre in microservizi su EKS + PostgreSQL + servizi managed — 12-18 mesi, architettura cloud-native, ma il costo del progetto è 500K€+ e il business non vuole aspettare. L'azienda deve lasciare il datacenter tra 8 mesi (fine contratto hosting). Quale strategia?",
+      "conflict_type": ["strategy_choice", "risk_assessment"],
+      "difficulty": "hard",
+      "tags": ["migrazione_cloud", "6rs", "monolite", "oracle", "rehost", "refactor", "deadline"],
+      "structural_conflict": "Rehost è l'unico che rispetta la deadline di 8 mesi ma perpetua il debito tecnico e il costo Oracle. Replatform risparmia su Oracle ma 3-6 mesi di migrazione database è rischioso con 800 stored procedures. Refactor è la scelta corretta a lungo termine ma 12-18 mesi sfora la deadline. La deadline fisica (fine contratto) forza un rehost iniziale, con replatform/refactor successivo — ma il 'successivo' spesso non arriva mai, creando debito tecnico permanente."
+    }
+  ]
+}

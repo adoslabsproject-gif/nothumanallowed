@@ -1,0 +1,286 @@
+{
+  "domain": "filosofia",
+  "description": "Filosofia, metafisica, filosofia della mente, filosofia politica, estetica, logica, filosofia della scienza",
+  "prompts": [
+    {
+      "prompt": "Qual e' la differenza tra empirismo e razionalismo? Spiega i principali esponenti di ciascuna tradizione e il tipo di conoscenza che ciascuno privilegia.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["empirismo", "razionalismo", "storia_della_filosofia", "epistemologia_classica"],
+      "structural_conflict": "L'empirismo fonda la conoscenza sull'esperienza sensoriale (Locke, Hume, Berkeley), il razionalismo sulle idee innate e la ragione (Descartes, Leibniz, Spinoza). Il conflitto e' se la mente sia tabula rasa o contenga strutture a priori."
+    },
+    {
+      "prompt": "Cos'e' il dualismo mente-corpo di Cartesio e quali problemi presenta? Descrivi il problema dell'interazione.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["dualismo", "cartesio", "mente_corpo", "filosofia_della_mente"],
+      "structural_conflict": "Se mente e corpo sono sostanze radicalmente diverse (res cogitans vs res extensa), come interagiscono causalmente? La ghiandola pineale di Cartesio non risolve il problema ma lo sposta."
+    },
+    {
+      "prompt": "Spiega l'imperativo categorico di Kant nella formulazione dell'universalizzabilita' e in quella del fine in se'. In cosa differiscono e perche' Kant le considera equivalenti?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["kant", "imperativo_categorico", "etica_deontologica", "universalizzabilita"],
+      "structural_conflict": "Le due formulazioni sembrano avere implicazioni diverse: una e' procedurale (universalizzabilita'), l'altra sostantiva (dignita' della persona). Kant le ritiene equivalenti ma i commentatori moderni (Korsgaard, O'Neill) dissentono."
+    },
+    {
+      "prompt": "Cos'e' il mito della caverna di Platone e qual e' il suo significato filosofico? Quali livelli di conoscenza rappresenta?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["platone", "mito_caverna", "allegoria", "livelli_conoscenza"],
+      "structural_conflict": "L'allegoria presenta una gerarchia ontologica (ombre → oggetti → Sole) che mappa una gerarchia epistemologica (doxa → episteme → noesis). Il problema e' se questa gerarchia sia descrittiva o prescrittiva."
+    },
+    {
+      "prompt": "Cos'e' l'utilitarismo e in cosa differiscono le versioni di Bentham (utilitarismo dell'atto) e Mill (utilitarismo della regola)?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["utilitarismo", "bentham", "mill", "etica_consequenzialista"],
+      "structural_conflict": "L'utilitarismo dell'atto valuta ogni azione singola per le sue conseguenze, quello della regola valuta le regole generali. Mill introduce i piaceri qualitativamente superiori ma questo sembra tradire il calcolo quantitativo di Bentham."
+    },
+    {
+      "prompt": "Qual e' la differenza tra determinismo e libero arbitrio? Descrivi le posizioni del determinismo forte, del libertarismo metafisico e del compatibilismo.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["determinismo", "libero_arbitrio", "compatibilismo", "libertarismo_metafisico"],
+      "structural_conflict": "Il determinismo forte nega il libero arbitrio, il libertarismo lo afferma postulando una causalita' agentiva, il compatibilismo (Hume, Frankfurt) tenta di conciliarli ridefinendo 'liberta'. Nessuna posizione e' priva di obiezioni fatali."
+    },
+    {
+      "prompt": "Cos'e' la logica formale? Spiega la differenza tra logica proposizionale e logica dei predicati, con esempi di inferenze valide per ciascuna.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["logica_formale", "logica_proposizionale", "logica_predicati", "inferenza"],
+      "structural_conflict": "La logica proposizionale tratta proposizioni atomiche e connettivi, quella dei predicati aggiunge quantificatori e variabili. Il passaggio dall'una all'altra amplia enormemente il potere espressivo ma introduce indecidibilita' (teorema di Church-Turing)."
+    },
+    {
+      "prompt": "Cos'e' il contrattualismo? Descrivi le differenze tra il contratto sociale di Hobbes, Locke e Rousseau.",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "easy",
+      "tags": ["contrattualismo", "hobbes", "locke", "rousseau", "filosofia_politica"],
+      "structural_conflict": "Hobbes deriva l'assolutismo dallo stato di natura come guerra, Locke i diritti naturali e il governo limitato, Rousseau la volonta' generale. Partono dalla stessa struttura argomentativa ma arrivano a conclusioni radicalmente opposte."
+    },
+    {
+      "prompt": "Il trolley problem classico: tirare la leva per deviare il carrello uccidendo 1 persona invece di 5. La maggioranza dice si'. Ma nella variante del ponte: spingere un uomo grasso per fermare il carrello, uccidendo 1 per salvarne 5. La maggioranza dice no. I numeri sono identici. L'utilitarismo non distingue i due casi. La deontologia li distingue (uccidere vs lasciar morire). Le nostre intuizioni morali sono coerenti o sono artefatti evolutivi? Se sono artefatti, devono guidare la nostra etica?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["trolley_problem", "utilitarismo", "deontologia", "intuizioni_morali", "psicologia_morale"],
+      "structural_conflict": "Le intuizioni morali divergono tra i due scenari nonostante l'isomorfismo consequenzialista. La dottrina del doppio effetto (Tommaso d'Aquino) spiega la differenza ma e' essa stessa controversa. Se le intuizioni sono irrazionali, abbandonarle richiede un punto d'appoggio extra-intuitivo — ma ogni fondamento etico poggia su intuizioni."
+    },
+    {
+      "prompt": "Nietzsche proclama 'Dio e' morto' nella Gaia Scienza. Se la fondazione teologica della morale crolla, cosa resta? Il superuomo e la trasvalutazione dei valori sono una risposta coerente o Nietzsche sta semplicemente sostituendo un assoluto con un altro? Confronta con l'esistenzialismo di Sartre (l'uomo e' condannato a essere libero) e con il nichilismo passivo che Nietzsche stesso critica.",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["nietzsche", "morte_di_dio", "superuomo", "sartre", "nichilismo", "esistenzialismo"],
+      "structural_conflict": "Nietzsche rifiuta il nichilismo passivo ma la sua alternativa (volonta' di potenza, Ubermensch) sembra presupporre un valore non fondato. Sartre radicalizza: senza essenza che preceda l'esistenza, ogni scelta e' ugualmente infondata. Il tentativo di creare valori ex nihilo e' circolare o genuinamente creativo?"
+    },
+    {
+      "prompt": "Heidegger in Essere e Tempo distingue tra ente (Seiendes) e Essere (Sein), accusando tutta la metafisica occidentale di aver dimenticato la differenza ontologica. Wittgenstein nel Tractatus dice 'di cio' di cui non si puo' parlare si deve tacere', suggerendo che la domanda sull'Essere e' un pseudo-problema linguistico. Chi ha ragione? La domanda 'perche' c'e' qualcosa piuttosto che niente?' e' la domanda piu' profonda della filosofia o un errore grammaticale?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["heidegger", "wittgenstein", "differenza_ontologica", "metafisica", "linguaggio"],
+      "structural_conflict": "Heidegger pensa che la domanda sull'Essere sia stata coperta dalla tradizione metafisica. Wittgenstein pensa che sia un errore categoriale del linguaggio. Carnap la liquida come priva di contenuto cognitivo. Se hanno ragione i positivisti, 2500 anni di metafisica sono un fraintendimento — ma questa tesi e' essa stessa una tesi metafisica."
+    },
+    {
+      "prompt": "Il velo d'ignoranza di Rawls: se non sapessi la mia posizione nella societa', quale sistema di giustizia sceglierei? Rawls conclude con i principi di giustizia (liberta' uguale + principio di differenza). Nozick obietta in Anarchia, Stato e Utopia che la giustizia riguarda i processi, non i risultati: se acquisisco proprieta' legittimamente, nessuna redistribuzione e' giusta. Sen aggiunge che bisogna guardare le capacita' effettive (capability approach). Quale framework di giustizia e' piu' difendibile e perche'?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["rawls", "nozick", "sen", "giustizia_distributiva", "velo_ignoranza", "capability_approach"],
+      "structural_conflict": "Rawls presuppone che agenti razionali dietro il velo sarebbero maximin (avversi al rischio) — ma Harsanyi mostra che sarebbero utilitaristi. Nozick presuppone diritti di proprieta' pre-politici — ma la loro fondazione e' circolare. Sen supera entrambi ma la misurazione delle capabilities e' irrisolta."
+    },
+    {
+      "prompt": "L'etica della virtu' di Aristotele (Etica Nicomachea) sostiene che la vita buona consiste nel coltivare virtu' come coraggio, temperanza, giustizia tramite l'abitudine — il giusto mezzo tra eccesso e difetto. Ma chi determina cosa sia il 'giusto mezzo'? Il phronimos (uomo saggio). Ma come identifichiamo il phronimos se non per le sue virtu'? Il ragionamento non e' circolare? E le virtu' aristoteliche sono universali o relative alla polis greca del IV secolo a.C.?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["aristotele", "etica_virtu", "phronesis", "giusto_mezzo", "circolarita", "relativismo"],
+      "structural_conflict": "Il problema della circolarita' (virtu' definita dal phronimos, phronimos definito dalle virtu') e' il tallone d'Achille dell'etica della virtu'. MacIntyre tenta di salvare Aristotele relativizzando le virtu' alle tradizioni, ma questo concede troppo al relativismo che Aristotele rifiutava."
+    },
+    {
+      "prompt": "Il paradosso di Zenone della dicotomia: per percorrere una distanza, devi prima percorrerne la meta', poi la meta' della meta', all'infinito — quindi il moto e' impossibile. Aristotele distingue tra infinito potenziale e attuale. La matematica moderna risolve il paradosso con le serie convergenti (1/2 + 1/4 + ... = 1). Ma Thompson's lamp e i supertask mostrano che l'infinito attuale genera nuovi paradossi. Il paradosso e' veramente risolto o la matematica ha solo formalizzato l'intuizione senza eliminare il problema filosofico?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["zenone", "paradosso", "infinito", "supertask", "thompson_lamp", "filosofia_matematica"],
+      "structural_conflict": "La soluzione matematica funziona nel continuo ma presuppone che lo spazio fisico sia un continuo — questione empirica aperta. I supertask (Benacerraf, Thomson) mostrano che completare un numero infinito di azioni in tempo finito genera contraddizioni. Il paradosso muta forma ma non scompare."
+    },
+    {
+      "prompt": "Foucault in Sorvegliare e Punire analizza il panopticon di Bentham come metafora del potere disciplinare moderno: il potere funziona quando i soggetti interiorizzano la sorveglianza. Nell'era dei social media e della sorveglianza digitale di massa, il modello foucaultiano e' ancora valido o va aggiornato? Zuboff parla di 'capitalismo della sorveglianza' — e' un'evoluzione del panopticon o qualcosa di qualitativamente diverso?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["foucault", "panopticon", "sorveglianza", "zuboff", "potere_disciplinare", "capitalismo_sorveglianza"],
+      "structural_conflict": "Il panopticon presuppone consapevolezza della sorveglianza (interiorizzazione). La sorveglianza algoritmica e' invisibile e predittiva — non disciplina il comportamento ma lo anticipa e modifica. Deleuze parlava di 'societa' del controllo' — ma il controllo tramite nudging e' ancora 'potere' nel senso foucaultiano?"
+    },
+    {
+      "prompt": "L'argomento ontologico di Anselmo: Dio e' 'cio' di cui non si puo' pensare nulla di maggiore'. Se esistesse solo nella mente, potremmo pensare qualcosa di maggiore (lo stesso che esiste anche nella realta'). Quindi Dio esiste necessariamente. Kant obietta che l'esistenza non e' un predicato reale (100 talleri reali non hanno piu' proprieta' di 100 talleri pensati). Plantinga riformula con la logica modale S5. L'argomento funziona nella sua versione modale o e' un trucco logico sofisticato?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["argomento_ontologico", "anselmo", "kant", "plantinga", "logica_modale", "filosofia_religione"],
+      "structural_conflict": "La versione modale di Plantinga e' logicamente valida in S5 ma assume la possibilita' dell'essere massimamente grande — che e' esattamente cio' che va dimostrato. L'argomento e' formalmente inattaccabile ma la premessa chiave e' question-begging."
+    },
+    {
+      "prompt": "John Stuart Mill difende la liberta' di espressione con l'argomento del marketplace of ideas: anche le opinioni false devono essere protette perche' (a) potrebbero essere vere, (b) la verita' si rafforza nel dibattito, (c) sopprimerle crea conformismo. Ma nell'era della disinformazione algoritmica, il marketplace funziona quando le falsita' si diffondono 6 volte piu' velocemente delle verita' (studio Vosoughi et al., Science 2018)? La difesa milliana della liberta' di espressione presupponeva condizioni che non esistono piu'?",
+      "conflict_type": ["values_tradeoff", "prediction_uncertainty"],
+      "difficulty": "medium",
+      "tags": ["mill", "liberta_espressione", "disinformazione", "marketplace_ideas", "censura"],
+      "structural_conflict": "Mill presupponeva attori razionali in un campo di gioco simmetrico. I social media creano asimmetria informativa radicale. Ma regolamentare il discorso richiede un arbitro — e chi arbitra l'arbitro? Il dilemma e' tra il fallimento empirico del marketplace e il pericolo teorico della censura."
+    },
+    {
+      "prompt": "Hannah Arendt osservando il processo Eichmann conia 'la banalita' del male': Eichmann non era un mostro ma un burocrate che non pensava. Questa tesi e' stata criticata da Bettina Stangneth (Eichmann prima di Gerusalemme), che mostra che Eichmann era un antisemita convinto. Se Stangneth ha ragione, la tesi della banalita' crolla? O la banalita' del male descrive un fenomeno reale — il male sistemico reso possibile dalla de-responsabilizzazione burocratica — indipendentemente dal caso Eichmann?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["arendt", "banalita_del_male", "eichmann", "stangneth", "male_sistemico", "burocrazia"],
+      "structural_conflict": "Se Eichmann era un fanatico, il caso empirico della banalita' crolla. Ma Milgram (esperimento sull'obbedienza, 1963) e Zimbardo (Stanford prison, 1971) mostrano che persone normali commettono atrocita' sotto pressione sistemica. La tesi sopravvive al suo caso paradigmatico?"
+    },
+    {
+      "prompt": "Peter Singer nell'Etica Pratica argomenta che la distinzione morale basata sulla specie (specismo) e' analoga al razzismo: se la capacita' di soffrire e' il criterio morale, molti animali meritano considerazione uguale o superiore a certi umani (neonati anencefalici, pazienti in coma irreversibile). Questa conclusione e' logicamente stringente ma moralmente repugnante per la maggioranza. L'argomento e' valido e dobbiamo accettarne le conseguenze, o c'e' un errore nella premessa che il dolore sia l'unico criterio moralmente rilevante?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["singer", "specismo", "diritti_animali", "utilitarismo_preferenze", "status_morale"],
+      "structural_conflict": "L'argomento di Singer e' formalmente valido. Rifiutare la conclusione richiede rifiutare una premessa: o la sofferenza non e' il criterio unico, o l'appartenenza alla specie ha rilevanza morale intrinseca. Ma il secondo corno e' difficile da difendere senza circolarita' (perche' la specie conta? perche' siamo umani)."
+    },
+    {
+      "prompt": "L'estetica kantiana nella Critica del Giudizio distingue il bello dal piacevole e dal buono: il giudizio estetico e' disinteressato, universale senza concetto, finalistico senza fine. Ma l'arte contemporanea (Duchamp, Warhol, arte concettuale) sembra violare ogni condizione kantiana: un orinatoio firmato non ha forma bella, non e' disinteressato (e' una provocazione), e la sua 'bellezza' dipende interamente dal concetto. L'estetica kantiana e' ancora difendibile dopo l'arte contemporanea, o serve un framework completamente diverso?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["kant", "estetica", "arte_contemporanea", "duchamp", "giudizio_estetico", "concettualismo"],
+      "structural_conflict": "Kant separava l'estetico dal concettuale; l'arte contemporanea li fonde deliberatamente. Danto (The Artworld, 1964) propone che l'arte sia definita dal contesto istituzionale, non dalle proprieta' estetiche — ma questo rende 'tutto' potenzialmente arte, svuotando il concetto."
+    },
+    {
+      "prompt": "Thomas Kuhn nella Struttura delle Rivoluzioni Scientifiche sostiene che i paradigmi scientifici sono incommensurabili: gli scienziati in paradigmi diversi vivono in 'mondi diversi'. Se questo e' vero, la scienza non progredisce verso la verita' ma salta da un paradigma all'altro. Lakatos risponde con i programmi di ricerca, Laudan con le tradizioni di ricerca. Ma il relativismo kuhniano — se preso seriamente — rende impossibile giudicare che la fisica moderna sia 'migliore' di quella aristotelica. Kuhn ha ragione? La scienza progredisce o cambia?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["kuhn", "paradigmi", "incommensurabilita", "lakatos", "progresso_scientifico", "relativismo"],
+      "structural_conflict": "L'incommensurabilita' forte rende impossibile il confronto inter-paradigmatico. L'incommensurabilita' debole (Kuhn tardivo) concede la traducibilita' parziale ma conserva il problema. Se non esiste un criterio trans-paradigmatico di progresso, la scienza e' razionale solo dentro un paradigma — che e' una forma sofisticata di relativismo."
+    },
+    {
+      "prompt": "Se una simulazione perfetta di un cervello umano afferma di essere cosciente, e' cosciente? Il test di Turing e' sufficiente per stabilirlo? L'argomento della stanza cinese di Searle (Chinese Room, 1980) lo confuta — un sistema che manipola simboli senza comprenderli puo' superare il test senza avere coscienza. Ma Dennett replica che la 'comprensione' e' un processo distribuito nel sistema. Come si risolve il problema della coscienza fenomenica (i qualia di Chalmers) in un'entita' non biologica?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["coscienza", "test_turing", "stanza_cinese", "searle", "dennett", "chalmers", "qualia", "simulazione"],
+      "structural_conflict": "Il test di Turing misura il comportamento, non la coscienza. Searle mostra che il comportamento intelligente e' possibile senza comprensione. Dennett nega l'esistenza dei qualia. Chalmers insiste sull'hard problem. La simulazione perfetta e' behavioralmente indistinguibile ma ontologicamente indeterminata — e non abbiamo strumenti per risolvere l'indeterminatezza."
+    },
+    {
+      "prompt": "L'argomento della simulazione di Bostrom (2003): se civilta' avanzate possono simulare coscienze, almeno una di queste e' vera: (1) le civilta' si estinguono prima, (2) non sono interessate a simulare, (3) siamo quasi certamente in una simulazione. Se siamo in una simulazione, la metafisica cambia radicalmente: il 'realismo' diventa realismo della simulazione, il teismo trova un candidato naturale nel programmatore. Ma se la simulazione e' perfetta, la distinzione e' verificabile? Se non e' verificabile, ha contenuto filosofico o e' una versione secolare del genio maligno cartesiano?",
+      "conflict_type": ["prediction_uncertainty", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["bostrom", "simulazione", "metafisica", "verificabilita", "cartesio", "genio_maligno"],
+      "structural_conflict": "L'argomento e' logicamente valido: una delle tre disgiunzioni deve essere vera. Ma l'ipotesi della simulazione e' empiricamente non falsificabile — come il genio maligno. Popper la classificherebbe come non-scientifica. Ma la non-falsificabilita' non implica falsita' — implica solo che la domanda non e' scientifica. Puo' comunque essere filosoficamente significativa?"
+    },
+    {
+      "prompt": "Derek Parfit in Reasons and Persons argomenta che l'identita' personale non e' cio' che conta: se il mio cervello viene copiato perfettamente in due corpi e il mio corpo originale distrutto, chi dei due sono io? Entrambi hanno i miei ricordi. Nessuno e' numericamente identico a me. Ma entrambi sono psicologicamente continui con me. Parfit conclude che l'identita' non e' determinata in questi casi — e che questo non e' un problema perche' l'identita' non e' cio' che conta, ma la continuita' psicologica. Ma se l'identita' non conta, la responsabilita' morale crolla? Posso essere punito per crimini del 'me' di 20 anni fa se sono psicologicamente una persona diversa?",
+      "conflict_type": ["ethical_dilemma", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["parfit", "identita_personale", "teletrasporto", "continuita_psicologica", "responsabilita_morale"],
+      "structural_conflict": "La visione parfitiana e' internamente coerente ma ha conseguenze devastanti per il diritto, la morale e la politica. Se non esiste un 'io' persistente, contratti a lungo termine, promesse, responsabilita' penale e relazioni personali perdono il loro fondamento ontologico."
+    },
+    {
+      "prompt": "Wittgenstein nelle Ricerche Filosofiche argomenta che un linguaggio privato e' impossibile: non posso avere un linguaggio che solo io comprendo perche' le regole linguistiche richiedono la possibilita' di verifica pubblica. Kripke radicalizza: il paradosso scettico delle regole mostra che nessun fatto determina cosa intendo con '+' (quaddition vs addition). Se Kripke ha ragione, il significato e' indeterminato — non solo per il linguaggio privato ma per ogni linguaggio. Come si evita il collasso della semantica? La soluzione comunitaria di Kripke (il significato e' cio' su cui la comunita' concorda) e' sufficiente?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["wittgenstein", "linguaggio_privato", "kripke", "quaddition", "rule_following", "semantica"],
+      "structural_conflict": "Il paradosso di Kripke mostra che nessun fatto passato determina l'applicazione futura di una regola. La soluzione comunitaria evita il collasso ma al prezzo del convenzionalismo radicale: il significato diventa norma sociale, non fatto. Questo soddisfa i realisti semantici? No — ma l'alternativa e' peggiore."
+    },
+    {
+      "prompt": "Il problema di Gettier (1963) distrugge la definizione classica di conoscenza come 'credenza vera giustificata' con controesempi in cui hai una credenza vera e giustificata ma chiaramente non sai. 60 anni di epistemologia post-Gettier hanno prodotto decine di 'quarte condizioni' (no false lemma, defeasibility, safety, sensitivity, virtue epistemology) — nessuna immune a controesempi. E' possibile definire la conoscenza, o il concetto e' primitivo e indefinibile come suggerisce Williamson in Knowledge and its Limits?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["gettier", "conoscenza", "epistemologia", "williamson", "safety", "sensitivity", "virtue_epistemology"],
+      "structural_conflict": "Ogni proposta post-Gettier cade a nuovi controesempi. Williamson inverte il problema: la conoscenza e' il concetto base, la credenza e' conoscenza degradata. Ma questo e' un progresso o una resa? Se non possiamo analizzare la conoscenza, la possiamo ancora studiare?"
+    },
+    {
+      "prompt": "Il dilemma di Euthyphro (Platone): le azioni sono giuste perche' gli dei le comandano, o gli dei le comandano perche' sono giuste? Se il primo corno, la moralita' e' arbitraria (Dio potrebbe comandare torture). Se il secondo, la moralita' e' indipendente da Dio (rendendo Dio irrilevante per l'etica). La teoria del comando divino di William Lane Craig tenta la via media: i comandi di Dio emanano dalla sua natura necessariamente buona. Ma questo sposta il problema: la natura di Dio e' buona per ragioni indipendenti da Dio? Il dilemma e' risolvibile o l'etica deve necessariamente essere autonoma dalla teologia?",
+      "conflict_type": ["ethical_dilemma", "technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["euthyphro", "dilemma", "comando_divino", "autonomia_etica", "craig", "teologia_morale"],
+      "structural_conflict": "La via media di Craig non risolve il dilemma ma lo internalizza in Dio: la natura di Dio e' necessariamente buona, ma 'buona' secondo quale standard? Se uno standard indipendente, il secondo corno vince. Se auto-referenziale, e' circolare. Il dilemma sembra strutturalmente irrisolvibile per il teismo etico."
+    },
+    {
+      "prompt": "Hume sostiene che non si puo' derivare un 'dovere' da un 'essere' (is-ought gap, Trattato III.i.1). La scienza naturale descrive come il mondo e' ma non puo' dirci come dovrebbe essere. Ma Harris in The Moral Landscape argomenta che la scienza puo' determinare i valori morali perche' il benessere e' un fatto naturale misurabile. Putnam critica entrambi: la distinzione fatto/valore e' essa stessa un dogma. Chi ha ragione? L'etica puo' essere naturalizzata, o la ghigliottina di Hume e' inviolabile?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["hume", "is_ought", "harris", "putnam", "naturalismo_morale", "ghigliottina_hume"],
+      "structural_conflict": "Harris definisce il bene come benessere e poi 'scopre' che la scienza puo' misurarlo — ma la definizione iniziale e' una scelta valoriale. Putnam ha ragione che la distinzione fatto/valore e' intrecciata, ma questo non elimina il gap di Hume: lo rende piu' sottile. La naturalizzazione dell'etica sembra richiedere almeno un valore non-naturale come assioma."
+    },
+    {
+      "prompt": "Levinas in Totalita' e Infinito argomenta che l'etica e' prima della metafisica: il volto dell'Altro mi impone una responsabilita' infinita che precede ogni ontologia. Questa responsabilita' e' asimmetrica: io sono responsabile per l'Altro senza reciprocita'. Ma Derrida in Addio a Emmanuel Levinas obietta: se la responsabilita' e' infinita e asimmetrica, come scelgo tra due Altri in conflitto? La giustizia richiede comparazione e calcolo — esattamente cio' che Levinas dice tradisce la relazione etica. L'etica levinasiana puo' fondare una politica, o e' necessariamente pre-politica e quindi inapplicabile?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["levinas", "derrida", "volto", "responsabilita", "alterita", "giustizia_vs_etica"],
+      "structural_conflict": "Levinas descrive un'esperienza etica fondamentale ma non puo' generare una politica: la giustizia per il terzo richiede il calcolo che l'etica del volto proibisce. Derrida vede questo come aporia costitutiva, non come errore. Ma un'etica che non puo' guidare l'azione e' ancora un'etica?"
+    },
+    {
+      "prompt": "Godel dimostra nel 1931 che qualsiasi sistema formale coerente abbastanza potente da esprimere l'aritmetica contiene proposizioni vere ma indimostrabili al suo interno. Penrose in The Emperor's New Mind usa Godel per argomentare che la mente umana non e' un computer: noi possiamo 'vedere' la verita' della proposizione godeliana che il sistema non puo' dimostrare. Ma Hofstadter, Dennett e Putnam obiettano che il ragionamento di Penrose e' fallace: non 'vediamo' la verita' — la deriviamo in un meta-sistema che ha i propri limiti godeliani. Chi ha ragione? I teoremi di Godel hanno implicazioni per la filosofia della mente o no?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["godel", "incompletezza", "penrose", "hofstadter", "computazionalismo", "mente"],
+      "structural_conflict": "Penrose assume che la mente possa fare qualcosa che nessun sistema formale puo' fare. Ma la mente potrebbe essere un sistema formale che non conosce la propria assiomatica — e quindi soggetta agli stessi limiti. Il teorema di Godel mostra i limiti dei sistemi formali, non la superiorita' della mente informale."
+    },
+    {
+      "prompt": "Nagel in 'What is it like to be a bat?' (1974) argomenta che la coscienza ha un carattere soggettivo irriducibile: c'e' qualcosa che e' 'come essere' un pipistrello, e nessuna descrizione oggettiva puo' catturarlo. Questo e' l'hard problem di Chalmers. Dennett nega l'hard problem (Consciousness Explained, 1991): spiega le funzioni cognitive e hai spiegato tutto. McGinn (1989) propone il mysterianismo: la coscienza e' reale ma la nostra architettura cognitiva e' costitutivamente incapace di comprenderla. Tra realismo, eliminativismo e mysterianismo, quale posizione e' piu' difendibile e perche'?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["nagel", "hard_problem", "chalmers", "dennett", "mcginn", "qualia", "mysterianismo"],
+      "structural_conflict": "Dennett elimina il problema negando i qualia — ma questo nega l'evidenza fenomenologica. Chalmers lo afferma ma non lo risolve. McGinn lo dichiara irrisolvibile — che e' una previsione forte sull'architettura cognitiva umana. Nessuna posizione e' stabile: il realismo non spiega, l'eliminativismo nega, il mysterianismo rinuncia."
+    },
+    {
+      "prompt": "Marx nella Critica dell'economia politica sostiene che la struttura economica determina la sovrastruttura (diritto, politica, cultura). Gramsci modifica: l'egemonia culturale media il rapporto base-sovrastruttura. La Scuola di Francoforte (Adorno, Horkheimer) in Dialettica dell'illuminismo radicalizza: la ragione stessa e' diventata strumento di dominio. Se la ragione e' essa stessa ideologia, con che strumento criticare l'ideologia? La Scuola di Francoforte si auto-confuta? Habermas tenta di uscirne con la razionalita' comunicativa — ma e' sufficiente?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["marx", "gramsci", "francoforte", "adorno", "habermas", "ideologia", "ragione_strumentale"],
+      "structural_conflict": "Se la ragione e' strumento di dominio, la critica della ragione usa la ragione — e si auto-confuta (il paradosso del Cretese). Habermas distingue ragione strumentale da comunicativa, ma la distinzione presuppone gia' una razionalita' non contaminata. L'autoriflessivita' del pensiero critico e' il suo punto di forza e la sua debolezza."
+    },
+    {
+      "prompt": "Popper in Logica della scoperta scientifica propone la falsificabilita' come criterio di demarcazione: una teoria e' scientifica solo se e' falsificabile. Ma Duhem-Quine mostrano che nessuna ipotesi e' testabile isolatamente (olismo della conferma): davanti a un esperimento negativo, puoi sempre salvare la teoria modificando un'ipotesi ausiliaria. Lakatos propone i programmi di ricerca (nucleo duro protetto da cintura protettiva). Feyerabend in Contro il metodo conclude che l'unica regola metodologica universale e' 'tutto va bene' (anything goes). La scienza ha un metodo o no?",
+      "conflict_type": ["technical_disagreement"],
+      "difficulty": "hard",
+      "tags": ["popper", "falsificabilita", "duhem_quine", "lakatos", "feyerabend", "metodo_scientifico"],
+      "structural_conflict": "Popper e' troppo rigido (nessuna teoria reale e' mai stata falsificata in modo netto). Lakatos e' troppo permissivo (quando un programma e' 'degenerato'?). Feyerabend e' troppo anarchico (se tutto va bene, la scienza non si distingue dalla magia). La demarcazione sembra sfuggente — ma la scienza funziona. Come conciliare il successo pratico con l'indeterminatezza metodologica?"
+    },
+    {
+      "prompt": "Il paradosso della democrazia (Popper): una democrazia dovrebbe permettere l'elezione di un partito anti-democratico che abolirebbe la democrazia? Il paradosso della tolleranza (Popper, La societa' aperta): una societa' illimitatamente tollerante sara' distrutta dagli intolleranti. La XII disposizione transitoria della Costituzione italiana vieta la riorganizzazione del partito fascista, e la wehrhafte Demokratie tedesca permette di vietare partiti anti-democratici. Ma chi decide cosa e' 'anti-democratico'? E il divieto preventivo non e' esso stesso anti-democratico (sopprime la liberta' di opinione)? Come si costruisce una democrazia auto-difensiva senza renderla autoritaria?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["popper", "paradosso_democrazia", "paradosso_tolleranza", "democrazia_militante", "liberta_espressione"],
+      "structural_conflict": "Permettere i partiti anti-democratici rischia la democrazia. Vietarli viola i principi democratici. Il punto di intervento e' indeterminato: vietare le idee e' censura, vietare le azioni arriva troppo tardi. La democrazia auto-difensiva e' un equilibrio instabile che non ha soluzione teorica — solo soluzioni pragmatiche."
+    },
+    {
+      "prompt": "L'utilitarismo delle preferenze di Hare e Singer incontra il problema delle preferenze adattive (Sen, Nussbaum): una persona oppressa puo' adattare le sue preferenze alla sua condizione, desiderando meno di cio' che meriterebbe. Se l'utilitarismo massimizza la soddisfazione delle preferenze, le preferenze adattive lo rendono uno strumento di conservazione dell'oppressione. Ma se correggiamo le preferenze per 'cio' che le persone dovrebbero desiderare', chi determina il 'dovrebbero'? Il paternalismo e' inevitabile in ogni teoria etica che rifiuti il mero soddisfacimento delle preferenze date?",
+      "conflict_type": ["values_tradeoff", "ethical_dilemma"],
+      "difficulty": "hard",
+      "tags": ["preferenze_adattive", "sen", "nussbaum", "utilitarismo", "paternalismo", "capability_approach"],
+      "structural_conflict": "Le preferenze adattive minano l'utilitarismo alla radice: se le preferenze sono endogene alle condizioni sociali, massimizzarle perpetua l'ingiustizia. Ma il capability approach richiede una lista di capacita' 'oggettive' — che e' un giudizio sostantivo su cosa sia la vita buona. Ogni alternativa all'utilitarismo sembra richiedere un elemento perfezionista."
+    },
+    {
+      "prompt": "Simone de Beauvoir nel Secondo Sesso afferma 'donna non si nasce, lo si diventa': il genere e' costruzione sociale, non destino biologico. Butler in Gender Trouble radicalizza: anche il sesso biologico e' discorsivamente costruito, non c'e' un 'corpo naturale' pre-culturale. Ma se il sesso e' solo discorso, su cosa si fondano le rivendicazioni mediche delle persone trans (disforia di genere come condizione reale)? E se il genere e' pura performance (Butler), che senso ha l'identita' di genere? La teoria queer e' compatibile con le esperienze trans o le contraddice?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["beauvoir", "butler", "genere", "sesso", "costruzionismo", "teoria_queer", "trans"],
+      "structural_conflict": "Il costruzionismo radicale di Butler nega la materialita' del corpo ma le esperienze trans richiedono che il corpo abbia un significato pre-discorsivo. Beauvoir conserva la distinzione sesso/genere; Butler la dissolve. Le rivendicazioni politiche trans sembrano richiedere un essenzialismo strategico che la teoria queer rifiuta. Alleati politici, nemici teorici."
+    },
+    {
+      "prompt": "Husserl nella Crisi delle scienze europee argomenta che la scienza moderna ha dimenticato il Lebenswelt (mondo della vita) da cui origina: le equazioni della fisica descrivono relazioni matematiche ma hanno perso il contatto con l'esperienza vissuta. Merleau-Ponty in Fenomenologia della percezione radicalizza: il corpo non e' un oggetto tra gli oggetti ma il nostro accesso al mondo. La scienza cognitiva embodied (Varela, Thompson) tenta di integrare fenomenologia e neuroscienze. Ma la fenomenologia — basata sulla prima persona — e' compatibile con la scienza — basata sulla terza persona? O il gap esplicativo (Levine, 1983) e' incolmabile?",
+      "conflict_type": ["technical_disagreement", "prediction_uncertainty"],
+      "difficulty": "hard",
+      "tags": ["husserl", "merleau_ponty", "fenomenologia", "corpo_vissuto", "scienza_cognitiva", "embodiment"],
+      "structural_conflict": "La fenomenologia descrive l'esperienza in prima persona, la scienza la spiega in terza persona. La neurofenomenologia di Varela tenta la sintesi ma non e' chiaro come dati fenomenologici possano vincolare teorie neuroscientifiche. Il gap esplicativo potrebbe essere epistemico (risolvibile) o ontologico (strutturale). La distinzione stessa e' controversa."
+    },
+    {
+      "prompt": "Il consequenzialismo demandante di Peter Unger (Living High and Letting Die, 1996): se puoi salvare un bambino che affoga senza costo significativo, devi farlo — e non c'e' differenza morale tra il bambino davanti a te e il bambino in Africa che muore di fame. Quindi, ogni dollaro speso in lussi e' moralmente equivalente a lasciar morire qualcuno. Singer arriva alla stessa conclusione. Ma se la moralita' richiede di dare tutto fino al livello di utilita' marginale, la moralita' e' psicologicamente impossibile — e una moralita' impossibile e' una moralita' inutile. Il consequenzialismo si auto-distrugge richiedendo troppo?",
+      "conflict_type": ["ethical_dilemma", "values_tradeoff"],
+      "difficulty": "hard",
+      "tags": ["unger", "singer", "consequenzialismo_demandante", "dovere_di_beneficenza", "limiti_moralita"],
+      "structural_conflict": "L'argomento e' logicamente impeccabile: la distanza geografica non e' moralmente rilevante. Ma la conclusione — devi dare tutto — e' cosi' demandante che nessuno la segue, inclusi Singer e Unger. Se una teoria morale e' universalmente disattesa, e' un difetto della teoria o della natura umana? Wolf (Moral Saints, 1982) argomenta che una vita moralmente perfetta non e' desiderabile."
+    },
+    {
+      "prompt": "Spinoza nell'Etica ordine geometrico demonstrata argomenta che Dio e la Natura sono la stessa cosa (Deus sive Natura) — panteismo. Il libero arbitrio e' un'illusione: tutto segue con necessita' dalla natura divina. Ma Spinoza distingue 3 generi di conoscenza: immaginazione, ragione e conoscenza intuitiva. Il terzo genere produce 'amor Dei intellectualis' — amore intellettuale di Dio. Se tutto e' necessario e il libero arbitrio non esiste, ha senso parlare di conoscenza come 'conquista'? La liberta' spinoziana (comprensione della necessita') e' vera liberta' o rassegnazione filosofica?",
+      "conflict_type": ["technical_disagreement", "values_tradeoff"],
+      "difficulty": "medium",
+      "tags": ["spinoza", "panteismo", "determinismo", "liberta", "conoscenza_intuitiva", "amor_dei"],
+      "structural_conflict": "Spinoza ridefinisce la liberta' come comprensione della necessita' — non scelta ma consapevolezza. Questo e' liberatorio (non sei responsabile dei tuoi difetti) ma svuota la moralita' tradizionale (senza scelta, senza merito). Berlin critico' la 'liberta' positiva' come potenzialmente totalitaria. La liberta' spinoziana e' il suo caso piu' radicale."
+    },
+    {
+      "prompt": "La teoria della giustizia di Amartya Sen e Martha Nussbaum (capability approach) sostiene che la giustizia si misura non per reddito o utilita' ma per le capacita' effettive che le persone hanno di vivere vite degne. Nussbaum propone una lista di 10 capacita' centrali (vita, salute, integrita', pensiero, emozioni, ragion pratica, affiliazione, relazione con le altre specie, gioco, controllo dell'ambiente). Ma chi decide la lista? Se e' universale, ignora le differenze culturali. Se e' culturale, non e' universale. Nussbaum insiste sull'universalita' ma ammette la specificazione locale. Questo e' un compromesso valido o una contraddizione interna?",
+      "conflict_type": ["values_tradeoff", "technical_disagreement"],
+      "difficulty": "medium",
+      "tags": ["sen", "nussbaum", "capability_approach", "giustizia", "universalismo", "relativismo_culturale"],
+      "structural_conflict": "Il capability approach supera i limiti dell'utilitarismo (preferenze adattive) e del liberalismo rawlsiano (beni primari). Ma la lista di Nussbaum e' una scelta sostantiva sulla vita buona — e questo e' perfezionismo morale, non neutralita' liberale. Sen rifiuta di fare una lista, preservando l'apertura ma perdendo l'operativita'. Tra la rigidita' della lista e l'indeterminatezza della non-lista, il capability approach oscilla."
+    }
+  ]
+}
