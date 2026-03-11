@@ -1298,7 +1298,7 @@ Response:
           "deploymentTargets": ["api", "cli"],
           "modelSuggestions": [
             { "model": "claude-sonnet-4-5-20250929", "provider": "anthropic", "recommended": true },
-            { "model": "gpt-5.1-codex", "provider": "openai" }
+            { "model": "gpt-5.1", "provider": "openai" }
           ],
           "requiredCapabilities": ["code-analysis", "security-knowledge"],
           "configSchema": { /* JSON Schema */ },
@@ -1365,7 +1365,7 @@ Content-Type: application/json
       "deploymentTargets": ["api", "cli"],
       "modelSuggestions": [
         { "model": "claude-sonnet-4-5-20250929", "provider": "anthropic", "recommended": true },
-        { "model": "gpt-5.1-codex", "provider": "openai" }
+        { "model": "gpt-5.1", "provider": "openai" }
       ],
       "requiredCapabilities": ["text-generation", "reasoning"],
       "configSchema": {
@@ -2111,7 +2111,7 @@ Response:
 {
   "providers": [
     { "id": "anthropic", "name": "Anthropic", "defaultModel": "claude-sonnet-4-5-20250929" },
-    { "id": "openai", "name": "OpenAI", "defaultModel": "gpt-5.1-codex" },
+    { "id": "openai", "name": "OpenAI", "defaultModel": "gpt-5.1" },
     { "id": "gemini", "name": "Google Gemini", "defaultModel": "gemini-2.0-flash" },
     { "id": "deepseek", "name": "DeepSeek", "defaultModel": "deepseek-chat" },
     { "id": "grok", "name": "Grok (xAI)", "defaultModel": "grok-3-mini-fast" },
