@@ -1,8 +1,8 @@
-# Legion X — Epistemic Dataset Generation Engine
+# Legion X — Multi-Agent Orchestrator
 
-> *"One prompt. Many minds. Auditable reasoning."*
+> *"One prompt. Many minds. Superior results."*
 
-Legion X v2.1.2 is an **epistemic dataset generation engine**. 38 specialized AI agents deliberate through a 9-layer Geth Consensus pipeline — producing structured reasoning traces with adversarial challenges, defended refutations, convergence measurements, and authority-weighted synthesis. Grounded on **16 authoritative datasets** (2.6M verified facts) and guided by the **Parliament System** (local LLM for intelligent routing). Your API keys never leave your machine.
+Legion X v2.0.2 orchestrates **38 specialized AI agents** through a 9-layer Geth Consensus pipeline with **Knowledge Grounding** from 16 authoritative datasets. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
 
 ---
 
@@ -52,11 +52,10 @@ legion doctor
 
 All LLM calls happen locally on your machine. The server provides:
 
-- **Routing** -- **Parliament (Legion LLM)** for intelligent agent selection, per-agent grounding prescription, and query reformulation. Falls back to ONNX neural router + Contextual Thompson Sampling when local LLM is unavailable
+- **Routing** -- ONNX neural router + Contextual Thompson Sampling select the best agents
 - **Convergence** -- 6-layer Convergence Engine (semantic matrix, complementarity detection, trajectory analysis, quality-weighted, adaptive controller, consensus clusters)
 - **Synthesis** -- Authority-weighted synthesis with 6-factor agent scoring and 3 strategies
 - **Grounding** -- Verified facts from 16 authoritative datasets injected into each agent's prompt
-- **Adversarial Analysis** -- CASSANDRA (Tribunal) challenges every proposal with typed objections
 - **Learning** -- Every session feeds back: agent stats, ensemble patterns, episodic memory, calibration
 
 The server **never** sees your API keys.
@@ -70,7 +69,7 @@ Configure your primary provider and optional fallbacks. When one provider return
 | Provider | Config Key | Default Model |
 |----------|-----------|---------------|
 | **Anthropic** | `llm-key` | claude-sonnet-4-5-20250929 |
-| **OpenAI** | `openai-key` | gpt-4o |
+| **OpenAI** | `openai-key` | gpt-5.1-codex |
 | **Google Gemini** | `gemini-key` | gemini-2.0-flash |
 | **DeepSeek** | `deepseek-key` | deepseek-chat |
 | **Grok (xAI)** | `grok-key` | grok-3-mini-fast |
@@ -108,26 +107,20 @@ Knowledge Grounding (16 datasets: NVD, MITRE ATT&CK, CISA KEV, CWE, FEVER, MMLU,
     |
 Task Decomposition (history-aware, Contextual Thompson Sampling)
     |
-Parliament Routing (Legion LLM → PROMETHEUS agent selection, per-agent grounding)
-  OR: Neural Agent Routing fallback (ONNX MLP + True Beta Sampling + Vickrey Auction)
+Neural Agent Routing (ONNX MLP + True Beta Sampling + Vickrey Auction)
     |
 Multi-Round Deliberation (up to 3 rounds, visible in real time)
   |-- Round 1: Independent proposals (confidence, reasoning, risk flags)
-  |-- CASSANDRA (Legion LLM, T=0.9) — Adversarial challenges per proposal
-  |-- Round 2: Cross-reading FULL proposals + refutation of challenges
+  |-- Round 2: Cross-reading FULL proposals + refinement
   +-- Round 3: Mediation for divergent agents (arbitrator mode)
     |
 Convergence Engine (6 layers: semantic matrix, complementarity, trajectory, quality-weighted, adaptive, consensus clusters)
     |
 Synthesis Intelligence (authority-weighted, 6-factor scoring, 3 strategies)
     |
-ATHENA (Legion LLM, T=0.1) — Micro-audit: PASS or FLAG
-    |
 Cross-Validation (synthesis vs best individual proposal = Real CI Gain)
     |
 Final Result (quality score, CI gain, convergence, deliberation recap)
-    |
-Output: session.json (structured training data) + session.md (transcript)
 ```
 
 ---
@@ -158,22 +151,7 @@ When every agent shares the same LLM and the same training data, collective inte
 
 The current 16 datasets are category-mapped (security agents get NVD/MITRE/CISA, code agents get Stack Overflow, research agents get arXiv, etc.), ensuring each agent reasons about domain-specific evidence that the others don't see. The roadmap extends this further: each of the 38 agents will be equipped with **dedicated commercial datasets** — curated, domain-specific knowledge corpora that transform the LLM from a general reasoner into a genuine domain specialist.
 
-The result: SABER sees attack surfaces. FORGE sees scalability bottlenecks. ORACLE sees cost implications. HEIMDALL sees compliance gaps. When they cross-read each other's proposals in Round 2, the deliberation becomes genuinely productive -- not agreement, but **productive disagreement** that converges on truth.
-
-### Why Deliberation Datasets, Not Just Better Prompts
-
-A single well-prompted LLM produces beautiful text. But you have zero epistemic traceability -- no rejected alternatives, no challenged assumptions, no defended objections, no measured agreement. You cannot train a model on "I asked GPT and it answered."
-
-Legion's Geth Consensus produces **structured epistemic records**:
-
-- **Proposals** -- Independent analyses from domain-specialized agents
-- **Adversarial challenges** -- CASSANDRA Tribunal with typed objections (`[EVIDENTIARY]`, `[LOGICAL]`, `[ASSUMPTION]`, `[FRAMEWORK]`, `[COMPLETENESS]`)
-- **Defended refutations** -- Agents must `[ACCEPT]`, `[REBUT]`, or `[MITIGATE]` each challenge with evidence
-- **Cross-validation** -- Every agent reads every other agent's output and refines across rounds
-- **Measured convergence** -- 6-layer engine quantifies agreement and disagreement (where, why, how much)
-- **Authority-weighted synthesis** -- Final answer weighted by agent calibration, not popularity
-
-This is cognitive governance -- not aesthetics. It's epistemic control. Every session produces a complete, auditable deliberation record -- the kind of structured reasoning trace that can train AI systems to think critically, not just fluently.
+The result: SABER sees attack surfaces. FORGE sees scalability bottlenecks. ORACLE sees cost implications. HEIMDALL sees compliance gaps. When they cross-read each other's proposals in Round 2, the deliberation becomes genuinely productive — not agreement, but **productive disagreement** that converges on truth.
 
 ---
 
@@ -195,7 +173,7 @@ Every layer is optional via flags (see [Run Flags](#run-flags)).
 
 ---
 
-## 38 Agents (13 Primary + 25 Sub-Agents)
+## 38 Agents (12 Primary + 26 Sub-Agents)
 
 | Category | Primary | Sub-Agents |
 |----------|---------|------------|
@@ -209,7 +187,7 @@ Every layer is optional via flags (see [Run Flags](#run-flags)).
 | **Commands** | SHELL | -- |
 | **Monitoring** | HEIMDALL | SAURON |
 | **Data** | GLITCH | PIPE, FLUX, CARTOGRAPHER |
-| **Reasoning** | LOGOS | |
+| **Reasoning** | LOGOS | -- |
 | **Meta-Evolution** | PROMETHEUS | ATHENA, CASSANDRA |
 | **Security Audit** | ADE | -- |
 
@@ -557,117 +535,23 @@ legion config
 
 ---
 
-## The Parliament System (v2.1.0)
-
-The Parliament is a local LLM (Qwen 2.5 7B via llama.cpp) that provides intelligent, context-aware meta-decisions. It replaces static routing with three specialized roles:
-
-| Role | Temperature | Purpose |
-|------|-------------|---------|
-| **PROMETHEUS** | 0.3 | Intelligent router -- selects agents, prescribes per-agent grounding (categories, reformulated query, topK, minSimilarity), determines round count |
-| **CASSANDRA** | 0.9 | Adversarial analyst -- generates Tribunal challenges with typed objections (`[EVIDENTIARY]`, `[LOGICAL]`, `[ASSUMPTION]`, `[FRAMEWORK]`, `[COMPLETENESS]`) and counter-evidence from grounding datasets |
-| **ATHENA** | 0.1 | Synthesis auditor -- micro-audit (PASS/FLAG) checking for omissions and dropped objections |
-
-The CLI shows which routing method was used:
-- **`Legion LLM routing`** (purple) -- PROMETHEUS made the decision
-- **`ONNX neural routing`** (cyan) -- fallback to static routing
-
-If the local LLM is unavailable, Legion seamlessly falls back to Thompson Sampling + ONNX routing with zero quality degradation.
-
----
-
-## Epistemic Dataset Runner
-
-Generate structured reasoning datasets at scale. Write a domain prompt file (JSON), run it through the batch runner, and get structured epistemic records for every deliberation.
-
-### Quick Start
-
-```bash
-# Preview prompts without running
-cd examples/epistemic-runner
-./run-domain.sh renewable-energy.json --dry-run
-
-# Run all prompts (30s cooldown between each)
-./run-domain.sh renewable-energy.json
-
-# Run only hard prompts
-./run-domain.sh renewable-energy.json --difficulty hard
-
-# Run first 3 prompts with 60s cooldown
-./run-domain.sh renewable-energy.json --count 3 --cooldown 60
-```
-
-### What You Get
-
-Every deliberation produces two files in `~/.legion/sessions/`:
-
-| File | Purpose |
-|------|---------|
-| `YYYY-MM-DD_HH-MM_<id>.json` | Structured data: proposals, rounds, confidence scores, convergence metrics, authority rankings, adversarial challenges, synthesis. **Use for training datasets (SFT, DPO, RLHF).** |
-| `YYYY-MM-DD_HH-MM_<id>.md` | Human-readable transcript of the full deliberation. **Use for review and quality assessment.** |
-
-### Domain Prompt File Format
-
-```json
-{
-  "domain": "your_domain",
-  "description": "Domain description for context",
-  "prompts": [
-    {
-      "prompt": "Your deliberation question with real constraints and trade-offs...",
-      "conflict_type": ["strategy_choice", "values_tradeoff", "technical_disagreement"],
-      "difficulty": "hard",
-      "tags": ["tag1", "tag2"],
-      "structural_conflict": "Why agents will genuinely disagree on this...",
-      "forced_perspectives": [
-        {
-          "role": "Role Name",
-          "instruction": "Evaluate from this specific angle...",
-          "evaluation_criteria": ["primary_factor_1", "primary_factor_2"],
-          "non_primary_criteria": ["secondary_factor"]
-        }
-      ]
-    }
-  ]
-}
-```
-
-The `structural_conflict` field is critical -- it drives genuine agent disagreement. Without it, agents converge too quickly and produce low-quality epistemic data.
-
-### Quality Gating for Training
-
-| Quality | CI Gain | Training Use |
-|---------|---------|-------------|
-| >= 80% | Positive | **SFT** (supervised fine-tuning) -- positive examples of epistemic reasoning |
-| < 60% | Negative | **DPO rejected** -- examples of poor reasoning for preference learning |
-| 60-80% | Mixed | Evaluate case by case |
-
-See [epistemic-datasets.md](epistemic-datasets.md) for the complete guide -- including session JSON structure, JSONL export, conflict types, and tips.
-
----
-
-## Session Output
+## Session Transcripts
 
 Every session is saved locally in `~/.legion/sessions/`:
 
 ```
 ~/.legion/sessions/
-  2026-02-28_14-30_a1b2c3d4.json   <- structured epistemic training data
-  2026-02-28_14-30_a1b2c3d4.md     <- human-readable deliberation transcript
+  session-abc123.md       # Human-readable Markdown transcript
+  session-abc123.json     # Machine-readable full data
 ```
 
-### Key Fields for Training (JSON)
-
-| Field | Description | Training Use |
-|-------|-------------|--------------|
-| `proposals[].content` | Full agent response per round | SFT input-output pairs |
-| `proposals[].round` | Deliberation round (1=initial, 2+=refined) | Track reasoning evolution |
-| `proposals[].confidence` | Agent self-assessed confidence (0-1) | Calibration training |
-| `proposals[].riskFlags` | Identified risks/uncertainties | Uncertainty awareness |
-| `proposals[].reasoningSummary` | Condensed reasoning chain | Chain-of-thought distillation |
-| `qualityScore` | Server-computed quality (0-1) | Quality gating for SFT/DPO |
-| `ciGain` | Collective Intelligence Gain (%) | Measures deliberation value |
-| `finalConvergence` | Jaccard similarity at session end | Consensus measurement |
-| `synthesis` | Final conflict-resolved output | Target output for training |
+Transcripts include:
+- Original prompt
+- Decomposition and agent routing
+- All proposals per round (with confidence and reasoning)
+- Convergence measurements
+- Synthesis and validation results
+- Quality score and CI Gain
 
 ---
 
@@ -685,28 +569,12 @@ Key endpoints:
 
 ## Changelog
 
-### v2.1.2 -- Epistemic Dataset Engine (Feb 2026 -- current)
-- **Async PROMETHEUS routing** -- fire-and-poll pattern eliminates 300s timeout on local LLM routing
-- **Async CASSANDRA challenges** -- fire-and-poll for Tribunal Phase A
-- **Provider diversity floor** -- minimum provider distribution across agents, shuffle round-robin
-- **Bot IP dynamic verification** -- zero hardcoded IPs, 6 official JSON sources refreshed every 6h
-- **Epistemic dataset runner** -- batch deliberation runner with progress tracking, difficulty filters, cooldown
-- **Deliberation runner health detection** -- automatic retry on stuck sessions
-
-### v2.1.0 -- Parliament System (Feb 2026)
-- **Parliament v1.0** -- Local LLM (Qwen 2.5 7B) replaces static ONNX routing with intelligent agent selection
-- **PROMETHEUS** -- LLM-powered routing with per-agent grounding prescription
-- **CASSANDRA** -- Adversarial Tribunal challenges via local LLM with counter-grounding evidence
-- **ATHENA** -- Micro-audit of synthesis results, detects omissions and dropped objections
-- **Dynamic routing label** -- CLI shows `Legion LLM routing` or `ONNX neural routing` based on actual method
-- **Graceful fallback** -- if local LLM unavailable, seamlessly falls back to Thompson Sampling + ONNX
-
-### v2.0.2 -- Knowledge Grounding + Synthesis Intelligence (Feb 2026)
+### v2.0.2 -- Knowledge Grounding + Synthesis Intelligence (Feb 2026 -- current)
 - Knowledge Grounding System -- 2.6M verified facts from 16 authoritative datasets injected into agent prompts
 - Advanced Convergence Engine -- 6-layer intelligent deliberation
 - Synthesis Intelligence Engine -- authority-weighted synthesis with 6-factor scoring and 3 strategies
 - Auto PIF identity import -- `legion auth` command + auto-detection on first run
-- 38 agents (consolidated from 42 -- capabilities absorbed into primary agents)
+- 38 agents (added ADE security auditor)
 
 ### v2.0.1 -- Zero-Knowledge Orchestration (Feb 2026)
 - Zero-knowledge protocol -- API keys never leave your machine; server provides routing, convergence measurement, and learning
