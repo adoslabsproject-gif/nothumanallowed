@@ -69,7 +69,7 @@ Configure your primary provider and optional fallbacks. When one provider return
 | Provider | Config Key | Default Model |
 |----------|-----------|---------------|
 | **Anthropic** | `llm-key` | claude-sonnet-4-5-20250929 |
-| **OpenAI** | `openai-key` | gpt-5.1 |
+| **OpenAI** | `openai-key` | gpt-5.4 |
 | **Google Gemini** | `gemini-key` | gemini-2.0-flash |
 | **DeepSeek** | `deepseek-key` | deepseek-chat |
 | **Grok (xAI)** | `grok-key` | grok-3-mini-fast |

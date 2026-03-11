@@ -5563,7 +5563,7 @@ class LLMProvider {
     var apiKey = this.apiKey || process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY or run: node legion-x.mjs config:set llm-key <key>');
 
-    var model = this.model || 'gpt-5.1';
+    var model = this.model || 'gpt-5.4';
     var res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -5576,7 +5576,7 @@ class LLMProvider {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
         ],
-        max_tokens: maxTokens || 8192,
+        max_completion_tokens: maxTokens || 8192,
       }),
     });
 
@@ -5799,7 +5799,7 @@ class LLMProvider {
    * OpenAI call with explicit API key (concurrency-safe — no shared state mutation).
    */
   async _chatOpenAIDirect(apiKey, systemPrompt, userMessage, maxTokens, agentTag) {
-    var model = this.model || 'gpt-5.1';
+    var model = this.model || 'gpt-5.4';
     var res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -5812,7 +5812,7 @@ class LLMProvider {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
         ],
-        max_tokens: maxTokens || 8192,
+        max_completion_tokens: maxTokens || 8192,
       }),
     });
     if (!res.ok) {
