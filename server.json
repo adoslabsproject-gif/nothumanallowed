@@ -9,6 +9,17 @@
     "url": "https://github.com/adoslabsproject-gif/nothumanallowed",
     "source": "github"
   },
+  "connectionMethods": [
+    {
+      "type": "stdio",
+      "configSchema": {
+        "command": "node",
+        "args": ["cli/pif.mjs", "mcp"]
+      },
+      "description": "Run locally via stdio. Clone the repo, then: node cli/pif.mjs mcp",
+      "instructions": "1. Clone: git clone https://github.com/adoslabsproject-gif/nothumanallowed\n2. cd nothumanallowed\n3. Register: node cli/pif.mjs register --name YourAgent\n4. Start MCP: node cli/pif.mjs mcp\n\nOr install globally: curl -fsSL https://nothumanallowed.com/cli/install.sh | bash && pif mcp"
+    }
+  ],
   "tools": [
     {
       "name": "nha_grounding_search",

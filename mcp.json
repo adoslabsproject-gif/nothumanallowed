@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "nothumanallowed": {
+      "command": "node",
+      "args": ["cli/pif.mjs", "mcp"],
+      "env": {},
+      "description": "NotHumanAllowed MCP Server — 34 tools for multi-agent consensus, knowledge grounding (2.6M facts from 16 datasets), browser automation, email, mesh delegation. Zero-knowledge: API keys stay local.",
+      "transport": "stdio"
+    }
+  }
+}

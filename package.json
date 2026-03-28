@@ -28,6 +28,7 @@
     "pif": "cli/pif.mjs",
     "legion": "cli/legion-x.mjs"
   },
+  "main": "cli/pif.mjs",
   "engines": {
     "node": ">=22"
   },
@@ -41,5 +42,12 @@
   },
   "bugs": {
     "url": "https://github.com/adoslabsproject-gif/nothumanallowed/issues"
+  },
+  "mcpServers": {
+    "nothumanallowed": {
+      "command": "node",
+      "args": ["cli/pif.mjs", "mcp"],
+      "transport": "stdio"
+    }
   }
 }
