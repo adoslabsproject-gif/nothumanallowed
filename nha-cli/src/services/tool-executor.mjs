@@ -36,6 +36,10 @@ import {
   addTask,
   completeTask,
   moveTask,
+  deleteTask,
+  clearTasks,
+  editTask,
+  editTaskPriority,
 } from './task-store.mjs';
 
 import { notify } from './notification.mjs';
@@ -53,6 +57,8 @@ export const DESTRUCTIVE_ACTIONS = new Set([
   'calendar_update',
   'contact_delete',
   'task_done',
+  'task_delete',
+  'task_clear',
   'notify_remind',
   'slack_send',
   'github_create_issue',
@@ -156,6 +162,15 @@ TOOLS:
 
 23. task_move(id: number, toDate: string)
     Move a task to another date (YYYY-MM-DD).
+
+24. task_delete(id: number)
+    Delete a specific task permanently. ALWAYS confirm before deleting.
+
+25. task_clear(mode?: "all"|"done")
+    Clear tasks. mode="done" removes only completed tasks. mode="all" removes ALL tasks. Default: "all". ALWAYS confirm before clearing.
+
+26. task_edit(id: number, description?: string, priority?: "low"|"medium"|"high"|"critical")
+    Edit a task's description and/or priority.
 
 --- CONTACTS ---
 
@@ -381,6 +396,10 @@ export function describeAction(action, params) {
       return `Delete contact "${params.query}"`;
     case 'task_done':
       return `Mark task #${params.id} as completed`;
+    case 'task_delete':
+      return `Delete task #${params.id} permanently`;
+    case 'task_clear':
+      return `Clear ${params.mode === 'done' ? 'completed' : 'ALL'} tasks`;
     case 'notify_remind':
       return `Set reminder: "${params.message}" at ${params.atTime}`;
     case 'slack_send':
@@ -757,6 +776,32 @@ export async function executeTool(action, params, config) {
         : params.toDate;
       const success = moveTask(params.id, todayStr, toDate);
       return success ? `Task #${params.id} moved to ${toDate}.` : `Task #${params.id} not found.`;
+    }
+
+    case 'task_delete': {
+      const success = deleteTask(params.id);
+      return success ? `Task #${params.id} deleted.` : `Task #${params.id} not found.`;
+    }
+
+    case 'task_clear': {
+      const mode = params.mode || 'all';
+      const count = clearTasks(mode);
+      return count > 0
+        ? `${count} task${count !== 1 ? 's' : ''} ${mode === 'done' ? 'completed' : ''} removed.`
+        : 'No tasks to remove.';
+    }
+
+    case 'task_edit': {
+      if (params.description) {
+        editTask(params.id, params.description);
+      }
+      if (params.priority) {
+        editTaskPriority(params.id, params.priority);
+      }
+      const parts = [];
+      if (params.description) parts.push(`description updated`);
+      if (params.priority) parts.push(`priority set to ${params.priority}`);
+      return parts.length > 0 ? `Task #${params.id}: ${parts.join(', ')}.` : `No changes specified for task #${params.id}.`;
     }
 
     // ── Notifications ─────────────────────────────────────────────────────

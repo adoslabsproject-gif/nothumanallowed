@@ -360,10 +360,13 @@ function sendChat(){
 function renderTasks(el){
   var t=dash.tasks;
   var h='<div class="task-bar"><input id="taskInput" placeholder="Add a new task..."><select id="taskPriority"><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option><option value="low">Low</option></select><button onclick="addTaskUI()">Add</button></div>';
+  if(t.length>0){
+    h+='<div style="display:flex;gap:8px;margin-bottom:12px"><button onclick="clearTasksUI(\\x27done\\x27)" style="background:var(--bg3);color:var(--dim);border:1px solid var(--border);padding:6px 12px;border-radius:var(--r);font-size:11px;cursor:pointer">Clear completed</button><button onclick="clearTasksUI(\\x27all\\x27)" style="background:var(--bg3);color:var(--red);border:1px solid var(--border);padding:6px 12px;border-radius:var(--r);font-size:11px;cursor:pointer">Clear all</button></div>';
+  }
   t.sort(function(a,b){if(a.status==='done'&&b.status!=='done')return 1;if(a.status!=='done'&&b.status==='done')return -1;return 0});
   t.forEach(function(x){
     var isDone=x.status==='done';
-    h+='<div class="card task'+(isDone?' task--done':'')+'" onclick="toggleTask('+x.id+')"><span class="task__check'+(isDone?' task__check--done':'')+'">'+(isDone?'\\u2713':'')+'</span><span class="task__desc">'+esc(x.description)+'</span><span class="task__priority task__priority--'+esc(x.priority)+'">'+esc(x.priority)+'</span></div>';
+    h+='<div class="card task'+(isDone?' task--done':'')+'"><span class="task__check'+(isDone?' task__check--done':'')+'" onclick="toggleTask('+x.id+')">'+(isDone?'\\u2713':'')+'</span><span class="task__desc" onclick="toggleTask('+x.id+')">'+esc(x.description)+'</span><span class="task__priority task__priority--'+esc(x.priority)+'">'+esc(x.priority)+'</span><span onclick="deleteTaskUI('+x.id+')" style="color:var(--dim);cursor:pointer;padding:4px 8px;font-size:14px;opacity:0.5" title="Delete task">&times;</span></div>';
   });
   el.innerHTML=h;
   var inp=document.getElementById('taskInput');
@@ -377,7 +380,16 @@ function addTaskUI(){
   });
 }
 function toggleTask(id){
-  apiPatch('/api/tasks/'+id+'/done').then(function(){loadDash().then(function(){if(currentView==='tasks')render()})});
+  apiPatch('/api/tasks/'+id+'/done').then(function(){loadDash().then(function(){if(currentView==='tasks'||currentView==='dashboard')render()})});
+}
+function deleteTaskUI(id){
+  if(!confirm('Delete task #'+id+'?'))return;
+  apiPost('/api/tasks/'+id+'/delete',{}).then(function(){loadDash().then(function(){render()})});
+}
+function clearTasksUI(mode){
+  var msg=mode==='all'?'Delete ALL tasks? This cannot be undone.':'Remove all completed tasks?';
+  if(!confirm(msg))return;
+  apiPost('/api/tasks/clear',{mode:mode}).then(function(){loadDash().then(function(){render()})});
 }
 
 // ---- PLAN ----

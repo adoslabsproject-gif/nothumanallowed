@@ -114,6 +114,55 @@ export function moveTask(taskId, fromDate, toDate) {
 }
 
 /**
+ * Delete a single task by ID.
+ * @param {number} taskId
+ * @param {string} [date]
+ * @returns {boolean} success
+ */
+export function deleteTask(taskId, date) {
+  const data = loadDay(date);
+  const idx = data.tasks.findIndex(t => t.id === taskId);
+  if (idx === -1) return false;
+  data.tasks.splice(idx, 1);
+  saveDay(date, data);
+  return true;
+}
+
+/**
+ * Clear all tasks for a date (delete completed, or all).
+ * @param {'done'|'all'} mode — 'done' removes only completed, 'all' removes everything
+ * @param {string} [date]
+ * @returns {number} count of removed tasks
+ */
+export function clearTasks(mode = 'all', date) {
+  const data = loadDay(date);
+  const before = data.tasks.length;
+  if (mode === 'done') {
+    data.tasks = data.tasks.filter(t => t.status !== 'done');
+  } else {
+    data.tasks = [];
+  }
+  saveDay(date, data);
+  return before - data.tasks.length;
+}
+
+/**
+ * Edit task priority.
+ * @param {number} taskId
+ * @param {string} priority
+ * @param {string} [date]
+ * @returns {boolean}
+ */
+export function editTaskPriority(taskId, priority, date) {
+  const data = loadDay(date);
+  const task = data.tasks.find(t => t.id === taskId);
+  if (!task) return false;
+  task.priority = priority;
+  saveDay(date, data);
+  return true;
+}
+
+/**
  * Get tasks for the week (Mon-Sun).
  */
 export function getWeekTasks() {

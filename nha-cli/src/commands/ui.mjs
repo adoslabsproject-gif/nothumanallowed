@@ -575,6 +575,28 @@ export async function cmdUI(args) {
         return;
       }
 
+      // POST /api/tasks/:id/delete
+      const taskDeleteMatch = pathname.match(/^\/api\/tasks\/(\d+)\/delete$/);
+      if (method === 'POST' && taskDeleteMatch) {
+        const { deleteTask } = await import('../services/task-store.mjs');
+        const taskId = parseInt(taskDeleteMatch[1], 10);
+        const success = deleteTask(taskId);
+        sendJSON(res, 200, { ok: success, id: taskId });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/tasks/clear
+      if (method === 'POST' && pathname === '/api/tasks/clear') {
+        const { clearTasks } = await import('../services/task-store.mjs');
+        const body = await parseBody(req);
+        const mode = body.mode || 'all';
+        const count = clearTasks(mode);
+        sendJSON(res, 200, { ok: true, removed: count });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
       // GET /api/plan
       if (method === 'GET' && pathname === '/api/plan') {
         const plan = loadTodayPlan();
