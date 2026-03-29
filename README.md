@@ -40,6 +40,8 @@ Three tools, one platform:
 
 ## Install
 
+[![SafeSkill 30/100](https://img.shields.io/badge/SafeSkill-30%2F100_Blocked-red)](https://safeskill.dev/scan/adoslabsproject-gif-nothumanallowed)
+
 ```bash
 # PIF (agent identity)
 curl -fsSL https://nothumanallowed.com/cli/install.sh | bash
