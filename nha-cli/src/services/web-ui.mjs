@@ -1403,7 +1403,7 @@ init();
     </div>
     <div class="sidebar__section">
       <div class="sidebar__label">Google</div>
-      <div class="nav-item" data-view="emails" onclick="switchView('emails')"><span class="nav-item__icon">&#9993;</span> Emails <span class="nav-item__badge" id="emailBadge" style="display:none">0</span></div>
+      <div class="nav-item" data-view="emails" onclick="switchView('emails')"><span class="nav-item__icon">&#128231;</span> Emails <span class="nav-item__badge" id="emailBadge" style="display:none">0</span></div>
       <div class="nav-item" data-view="calendar" onclick="switchView('calendar')"><span class="nav-item__icon">&#128197;</span> Calendar <span class="nav-item__badge" id="calBadge" style="display:none;background:var(--amber)">0</span></div>
       <div class="nav-item" data-view="drive" onclick="switchView('drive')"><span class="nav-item__icon">&#128193;</span> Drive</div>
       <div class="nav-item" data-view="contacts" onclick="switchView('contacts')"><span class="nav-item__icon">&#128101;</span> Contacts</div>
