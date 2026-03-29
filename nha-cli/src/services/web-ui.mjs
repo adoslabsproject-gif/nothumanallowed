@@ -2,6 +2,8 @@
  * Web UI v2 — Rewritten from scratch. Mobile-first. BEM CSS. No escape hell.
  */
 
+import { VERSION } from '../constants.mjs';
+
 export function getHTML(port) {
   const ts = Date.now();
 
@@ -1420,6 +1422,7 @@ init();
       <div class="sidebar__label">Config</div>
       <div class="nav-item" data-view="settings" onclick="switchView('settings')"><span class="nav-item__icon">&#9881;</span> Settings</div>
     </div>
+    <div style="padding:12px 16px;margin-top:auto;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">NHA v${VERSION}</div>
   </nav>
 
   <div class="header">
