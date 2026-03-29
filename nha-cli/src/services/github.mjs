@@ -107,3 +107,80 @@ export async function createIssue(config, repo, title, body = '', labels = []) {
 
   return `Issue #${issue.number} created: "${issue.title}" — ${issue.html_url}`;
 }
+
+// ── Raw JSON functions for UI (structured data, not text) ──────────────
+
+/**
+ * List notifications as structured JSON for the web UI.
+ */
+export async function listNotificationsRaw(config, maxResults = 15) {
+  const data = await ghFetch(config, `/notifications?per_page=${maxResults}`);
+  return (Array.isArray(data) ? data : []).map(n => ({
+    id: n.id,
+    repo: n.repository?.full_name || '',
+    type: n.subject?.type || '',
+    title: n.subject?.title || '',
+    reason: n.reason || '',
+    url: n.subject?.url ? buildHtmlUrl(n.subject.url, n.subject.type) : '',
+    updated: n.updated_at?.split('T')[0] || '',
+  }));
+}
+
+/**
+ * List issues as structured JSON for the web UI.
+ */
+export async function listIssuesRaw(config, repo, state = 'open', maxResults = 15) {
+  if (!repo) return [];
+  const data = await ghFetch(config, `/repos/${repo}/issues?state=${state}&per_page=${maxResults}&sort=updated&direction=desc`);
+  return (Array.isArray(data) ? data : []).filter(i => !i.pull_request).map(i => ({
+    number: i.number,
+    title: i.title,
+    state: i.state,
+    labels: i.labels.map(l => l.name).join(', '),
+    assignee: i.assignee?.login || '',
+    updated: i.updated_at?.split('T')[0] || '',
+    url: i.html_url,
+  }));
+}
+
+/**
+ * List PRs as structured JSON for the web UI.
+ */
+export async function listPRsRaw(config, repo, state = 'open', maxResults = 15) {
+  if (!repo) return [];
+  const data = await ghFetch(config, `/repos/${repo}/pulls?state=${state}&per_page=${maxResults}&sort=updated&direction=desc`);
+  return (Array.isArray(data) ? data : []).map(pr => ({
+    number: pr.number,
+    title: pr.title,
+    state: pr.state,
+    draft: pr.draft || false,
+    author: pr.user?.login || '',
+    reviewers: pr.requested_reviewers?.map(r => r.login).join(', ') || '',
+    updated: pr.updated_at?.split('T')[0] || '',
+    url: pr.html_url,
+    additions: pr.additions || 0,
+    deletions: pr.deletions || 0,
+  }));
+}
+
+/**
+ * Mark all notifications as read.
+ */
+export async function markNotificationsRead(config) {
+  await ghFetch(config, '/notifications', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ last_read_at: new Date().toISOString() }),
+  });
+}
+
+/**
+ * Convert API URL to browser HTML URL.
+ */
+function buildHtmlUrl(apiUrl, type) {
+  if (!apiUrl) return '';
+  // api.github.com/repos/owner/repo/issues/1 → github.com/owner/repo/issues/1
+  let htmlUrl = apiUrl.replace('https://api.github.com/repos/', 'https://github.com/');
+  if (type === 'PullRequest') htmlUrl = htmlUrl.replace('/pulls/', '/pull/');
+  return htmlUrl;
+}

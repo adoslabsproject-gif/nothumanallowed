@@ -787,13 +787,8 @@ export async function cmdUI(args) {
       if (method === 'GET' && pathname === '/api/github') {
         try {
           const gh = await import('../services/github.mjs');
-          const notifications = await gh.listNotifications(config, 15).catch(() => '');
-          // Parse notifications text into structured data
-          const notifLines = notifications ? notifications.split('\n').filter(Boolean).map(l => {
-            const m = l.match(/^\d+\.\s+\[([^\]]*)\]\s+(\w+):\s+(.+)\s+\((\w+)\)$/);
-            return m ? { repo: m[1], type: m[2], title: m[3], reason: m[4] } : { repo: '', type: '', title: l, reason: '' };
-          }) : [];
-          sendJSON(res, 200, { notifications: notifLines });
+          const raw = await gh.listNotificationsRaw(config, 15);
+          sendJSON(res, 200, { notifications: raw });
         } catch (e) {
           sendJSON(res, 200, { error: e.message, notifications: [] });
         }
@@ -805,12 +800,8 @@ export async function cmdUI(args) {
         try {
           const gh = await import('../services/github.mjs');
           const repo = url.searchParams.get('repo');
-          const text = await gh.listIssues(config, repo, 'open', 15);
-          const issues = text.split('\n').filter(Boolean).map(l => {
-            const m = l.match(/^\d+\.\s+#(\d+)\s+(.+?)(?:\s+\[([^\]]*)\])?\s+\((\d{4}-\d{2}-\d{2})\)$/);
-            return m ? { number: parseInt(m[1]), title: m[2].trim(), labels: m[3] || '', updated: m[4] } : { number: 0, title: l, labels: '', updated: '' };
-          });
-          sendJSON(res, 200, { issues });
+          const raw = await gh.listIssuesRaw(config, repo, 'open', 15);
+          sendJSON(res, 200, { issues: raw, repo });
         } catch (e) {
           sendJSON(res, 200, { issues: [], error: e.message });
         }
@@ -822,14 +813,23 @@ export async function cmdUI(args) {
         try {
           const gh = await import('../services/github.mjs');
           const repo = url.searchParams.get('repo');
-          const text = await gh.listPRs(config, repo, 'open', 15);
-          const prs = text.split('\n').filter(Boolean).map(l => {
-            const m = l.match(/^\d+\.\s+#(\d+)\s+(.+?)(?:\s+\[DRAFT\])?\s+by\s+(\S+)/);
-            return m ? { number: parseInt(m[1]), title: m[2].trim(), author: m[3], draft: l.includes('[DRAFT]') } : { number: 0, title: l, author: '', draft: false };
-          });
-          sendJSON(res, 200, { prs });
+          const raw = await gh.listPRsRaw(config, repo, 'open', 15);
+          sendJSON(res, 200, { prs: raw, repo });
         } catch (e) {
           sendJSON(res, 200, { prs: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/github/mark-read — mark all notifications as read
+      if (method === 'POST' && pathname === '/api/github/mark-read') {
+        try {
+          const gh = await import('../services/github.mjs');
+          await gh.markNotificationsRead(config);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) {
+          sendJSON(res, 200, { error: e.message });
         }
         logRequest(method, pathname, 200, Date.now() - start);
         return;

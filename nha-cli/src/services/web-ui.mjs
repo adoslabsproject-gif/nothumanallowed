@@ -606,31 +606,33 @@ function openDayDetail(dateStr){
 }
 
 // ---- GITHUB ----
-var ghData=null;
+var ghData=null;var ghRepo='';
 function renderGitHub(el){
   el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="color:var(--dim)">Loading GitHub...</div></div>';
   apiGet('/api/github').then(function(r){
     if(r&&r.error){el.innerHTML='<div class="card" style="text-align:center;padding:30px"><div style="color:var(--dim);margin-bottom:8px">'+esc(r.error)+'</div><div style="font-size:11px;color:var(--dim)">Run: nha config set github-token YOUR_PAT</div></div>';return}
     ghData=r;
-    var h='<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"><input type="text" id="ghRepo" placeholder="owner/repo" value="'+esc(r.defaultRepo||'')+'" style="flex:1;min-width:180px;font-size:13px;padding:10px 14px"><button onclick="loadGhIssues()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Issues</button><button onclick="loadGhPRs()" style="background:var(--cyan);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">PRs</button></div>';
-    if(r.notifications&&r.notifications.length>0){
-      h+='<div class="section-title">Notifications ('+r.notifications.length+')</div>';
-      r.notifications.forEach(function(n){h+='<div class="card" style="padding:10px 14px"><span style="color:var(--cyan);font-size:11px">'+esc(n.repo)+'</span> <span style="color:var(--dim);font-size:10px">['+esc(n.type)+']</span><div style="font-size:13px;margin-top:2px">'+esc(n.title)+'</div><div style="font-size:10px;color:var(--dim)">'+esc(n.reason)+'</div></div>'});
+    var h='<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"><input type="text" id="ghRepo" placeholder="owner/repo" value="'+esc(ghRepo)+'" style="flex:1;min-width:180px;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)loadGhIssues()"><button onclick="loadGhIssues()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Issues</button><button onclick="loadGhPRs()" style="background:var(--cyan);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">PRs</button></div>';
+    var notifs=r.notifications||[];
+    if(notifs.length>0){
+      h+='<div style="display:flex;align-items:center;justify-content:space-between"><div class="section-title">Notifications ('+notifs.length+')</div><button onclick="ghMarkRead()" style="background:var(--bg3);color:var(--dim);border:1px solid var(--border);padding:4px 10px;border-radius:var(--r);font-size:10px;cursor:pointer">Mark all read</button></div>';
+      notifs.forEach(function(n){h+='<div class="card" style="padding:10px 14px;cursor:pointer" onclick="window.open(\\x27'+esc(n.url)+'\\x27,\\x27_blank\\x27)"><span style="color:var(--cyan);font-size:11px">'+esc(n.repo)+'</span> <span style="color:var(--dim);font-size:10px">['+esc(n.type)+']</span><div style="font-size:13px;margin-top:2px">'+esc(n.title)+'</div><div style="font-size:10px;color:var(--dim)">'+esc(n.reason)+' &middot; '+esc(n.updated)+'</div></div>'});
     }
     if(r.issues&&r.issues.length>0){
       h+='<div class="section-title">Issues</div>';
-      r.issues.forEach(function(i){h+='<div class="card" style="padding:10px 14px"><span style="color:var(--green);font-weight:700">#'+i.number+'</span> '+esc(i.title)+'<div style="font-size:10px;color:var(--dim)">'+esc(i.labels||'')+' '+esc(i.updated||'')+'</div></div>'});
+      r.issues.forEach(function(i){h+='<div class="card" style="padding:10px 14px;cursor:pointer" onclick="window.open(\\x27'+esc(i.url)+'\\x27,\\x27_blank\\x27)"><span style="color:var(--green);font-weight:700">#'+i.number+'</span> '+esc(i.title)+(i.assignee?' <span style="font-size:10px;color:var(--cyan)">\\u2192 '+esc(i.assignee)+'</span>':'')+(i.labels?'<span style="font-size:9px;color:var(--amber);margin-left:6px">['+esc(i.labels)+']</span>':'')+'<div style="font-size:10px;color:var(--dim)">'+esc(i.updated)+'</div></div>'});
     }
     if(r.prs&&r.prs.length>0){
       h+='<div class="section-title">Pull Requests</div>';
-      r.prs.forEach(function(p){h+='<div class="card" style="padding:10px 14px"><span style="color:var(--cyan);font-weight:700">#'+p.number+'</span> '+esc(p.title)+' <span style="font-size:10px;color:var(--dim)">by '+esc(p.author)+'</span>'+(p.draft?'<span style="font-size:9px;color:var(--amber)"> DRAFT</span>':'')+'</div>'});
+      r.prs.forEach(function(p){h+='<div class="card" style="padding:10px 14px;cursor:pointer" onclick="window.open(\\x27'+esc(p.url)+'\\x27,\\x27_blank\\x27)"><span style="color:var(--cyan);font-weight:700">#'+p.number+'</span> '+esc(p.title)+' <span style="font-size:10px;color:var(--dim)">by '+esc(p.author)+'</span>'+(p.draft?'<span style="font-size:9px;color:var(--amber)"> DRAFT</span>':'')+'<div style="font-size:10px;color:var(--dim)">'+esc(p.updated)+'</div></div>'});
     }
-    if(!r.notifications?.length&&!r.issues?.length&&!r.prs?.length){h+='<div class="card" style="text-align:center;color:var(--dim);padding:20px">Enter a repo above and click Issues or PRs. Notifications are loaded automatically.</div>'}
+    if(!notifs.length&&!r.issues?.length&&!r.prs?.length){h+='<div class="card" style="text-align:center;color:var(--dim);padding:20px">Enter a repo above (e.g. owner/repo) and click Issues or PRs.<br>Notifications load automatically.</div>'}
     el.innerHTML=h;
   });
 }
-function loadGhIssues(){var repo=document.getElementById('ghRepo');if(!repo||!repo.value.trim())return;apiGet('/api/github/issues?repo='+encodeURIComponent(repo.value.trim())).then(function(r){if(ghData)ghData.issues=r.issues||[];render()})}
-function loadGhPRs(){var repo=document.getElementById('ghRepo');if(!repo||!repo.value.trim())return;apiGet('/api/github/prs?repo='+encodeURIComponent(repo.value.trim())).then(function(r){if(ghData)ghData.prs=r.prs||[];render()})}
+function loadGhIssues(){var inp=document.getElementById('ghRepo');if(!inp||!inp.value.trim())return;ghRepo=inp.value.trim();var el=document.getElementById('content');el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';apiGet('/api/github/issues?repo='+encodeURIComponent(ghRepo)).then(function(r){if(ghData){ghData.issues=r.issues||[];ghData.repo=r.repo}render()})}
+function loadGhPRs(){var inp=document.getElementById('ghRepo');if(!inp||!inp.value.trim())return;ghRepo=inp.value.trim();var el=document.getElementById('content');el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';apiGet('/api/github/prs?repo='+encodeURIComponent(ghRepo)).then(function(r){if(ghData){ghData.prs=r.prs||[];ghData.repo=r.repo}render()})}
+function ghMarkRead(){apiPost('/api/github/mark-read',{}).then(function(){if(ghData)ghData.notifications=[];render()})}
 
 // ---- NOTION ----
 function renderNotion(el){

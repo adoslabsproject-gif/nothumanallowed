@@ -260,6 +260,9 @@ TOOLS:
 45. birthdays_upcoming(days?: number)
     Check upcoming birthdays from Google Contacts in the next N days (default 30).
 
+46. birthday_add(name: string, date: string)
+    Add or update a birthday for a contact. Name is the contact name (must exist in Google Contacts — creates one if not found). Date is MM-DD (e.g. "04-06" for April 6) or YYYY-MM-DD.
+
 RULES:
 - For search/read operations, execute immediately and present results conversationally.
 - For write/send/delete operations (gmail_send, gmail_reply, gmail_delete, calendar_create, calendar_move, calendar_update, contact_delete, task_done, notify_remind), DESCRIBE what you're about to do and include the JSON block so the system can ask the user for confirmation.
@@ -989,6 +992,34 @@ export async function executeTool(action, params, config) {
         const label = u.daysUntil === 0 ? 'TODAY!' : u.daysUntil === 1 ? 'Tomorrow' : `in ${u.daysUntil} days`;
         return `${i + 1}. ${u.name} — ${dateStr} (${label})`;
       }).join('\n');
+    }
+
+    // ── Birthday Add ──────────────────────────────────────────────────
+    case 'birthday_add': {
+      const gc = await import('./google-contacts.mjs');
+      const name = params.name;
+      const date = params.date;
+      if (!name || !date) return 'Both name and date are required. Date format: MM-DD or YYYY-MM-DD.';
+
+      // Search for existing contact
+      let contacts = await gc.searchContacts(config, name, 5);
+      let contact = contacts.find(c => c.name.toLowerCase().includes(name.toLowerCase()));
+
+      if (!contact) {
+        // Create the contact first
+        contact = await gc.createContact(config, { name });
+      }
+
+      // Update birthday
+      await gc.updateContact(config, contact.resourceName, { birthday: date });
+
+      // Parse date for display
+      const parts = date.split('-').map(Number);
+      const month = parts.length === 3 ? parts[1] : parts[0];
+      const day = parts.length === 3 ? parts[2] : parts[1];
+      const monthName = new Date(2000, month - 1, 1).toLocaleDateString('en-US', { month: 'long' });
+
+      return `Birthday set for ${contact.name}: ${monthName} ${day}. It will appear in the Birthdays tab.`;
     }
 
     default:

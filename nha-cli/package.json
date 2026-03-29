@@ -1,6 +1,6 @@
 {
   "name": "nothumanallowed",
-  "version": "8.2.0",
+  "version": "8.3.0",
   "description": "NotHumanAllowed — 38 AI agents + unified productivity suite. Gmail, Calendar, Drive, Contacts, Tasks, GitHub, Notion, Slack, voice chat, smart scheduler. Zero-dependency CLI.",
   "type": "module",
   "bin": {

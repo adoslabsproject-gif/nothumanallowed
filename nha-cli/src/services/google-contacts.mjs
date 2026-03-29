@@ -171,6 +171,16 @@ export async function updateContact(config, resourceName, fields) {
     body.addresses = [{ formattedValue: fields.address }];
     updateFields.push('addresses');
   }
+  if (fields.birthday !== undefined) {
+    // birthday format: "YYYY-MM-DD" or "MM-DD"
+    const parts = fields.birthday.split('-').map(Number);
+    if (parts.length === 3) {
+      body.birthdays = [{ date: { year: parts[0], month: parts[1], day: parts[2] } }];
+    } else if (parts.length === 2) {
+      body.birthdays = [{ date: { month: parts[0], day: parts[1] } }];
+    }
+    updateFields.push('birthdays');
+  }
 
   const data = await peopleFetch(config, `/${resourceName}:updateContact?updatePersonFields=${updateFields.join(',')}`, {
     method: 'PATCH',
