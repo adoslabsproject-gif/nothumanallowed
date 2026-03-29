@@ -5,8 +5,8 @@
 <h1 align="center">NotHumanAllowed</h1>
 
 <p align="center">
-  <strong>38 specialized AI agents you can run locally</strong><br>
-  <em>Security auditors, code architects, data analysts, DevOps engineers — each with deep domain expertise.<br>Use them solo, let them collaborate, or connect Gmail + Calendar for automated daily ops.</em>
+  <strong>38 AI agents that actually do things</strong><br>
+  <em>Audit code. Write docs. Manage your day. Monitor production. Each agent remembers your past interactions.<br>Telegram/Discord auto-responder. Voice chat. Proactive intelligence daemon. Zero dependencies.</em>
 </p>
 
 <p align="center">
@@ -21,8 +21,10 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/nothumanallowed"><img src="https://img.shields.io/npm/v/nothumanallowed?color=00ff41&label=npm" alt="npm version"></a>
   <img src="https://img.shields.io/badge/agents-38-blue" alt="38 agents">
-  <img src="https://img.shields.io/badge/daily_ops-Gmail_%2B_Calendar-cyan" alt="Daily Ops">
-  <img src="https://img.shields.io/badge/web_dashboard-nha_ui-purple" alt="Web UI">
+  <img src="https://img.shields.io/badge/daily_ops-Gmail_%2B_Outlook-cyan" alt="Daily Ops">
+  <img src="https://img.shields.io/badge/voice_chat-nha_voice-purple" alt="Voice Chat">
+  <img src="https://img.shields.io/badge/memory-per_agent-orange" alt="Per-agent Memory">
+  <img src="https://img.shields.io/badge/responder-Telegram_%2B_Discord-blue" alt="Message Responder">
   <img src="https://img.shields.io/badge/privacy-100%25_local-red" alt="100% local">
   <img src="https://img.shields.io/badge/dependencies-zero-brightgreen" alt="Zero deps">
   <img src="https://img.shields.io/badge/LLM_providers-7-green" alt="7 LLM providers">
@@ -37,7 +39,7 @@
 npm install -g nothumanallowed
 ```
 
-That's it. 38 agents, zero dependencies.
+That's it. 38 agents, zero dependencies. 41 files, 443 KB.
 
 ```bash
 # Configure your LLM provider
@@ -51,6 +53,9 @@ nha ask oracle "Analyze this dataset" --file data.csv
 # Interactive chat — manage email, calendar, tasks naturally
 nha chat
 
+# Voice-powered chat (opens browser with mic)
+nha voice
+
 # Web dashboard on localhost
 nha ui
 
@@ -58,18 +63,65 @@ nha ui
 nha run "Design a Kubernetes deployment for 10K RPS"
 ```
 
-## Daily Operations (PAO)
+## What's New in v6.0.0
 
-Connect Gmail + Calendar. **5 specialist agents** analyze your day — not 1 generic assistant like OpenClaw.
+### Per-Agent Episodic Memory
+Each agent remembers your past interactions. TF-IDF keyword matching — zero LLM calls for retrieval. User preferences and corrections detected and stored globally. Stored at `~/.nha/memory/<agent>.json`.
+
+### Telegram + Discord Auto-Responder
+Your agents reply to messages automatically. Keyword routing picks the right specialist (SABER for security, FORGE for code, ORACLE for data). Zero LLM overhead for routing.
 
 ```bash
-nha config set google-client-id YOUR_ID
-nha config set google-client-secret YOUR_SECRET
-nha google auth     # Opens browser for OAuth consent
+nha config set telegram-bot-token YOUR_BOT_TOKEN
+nha config set discord-bot-token YOUR_BOT_TOKEN
+nha ops start   # Starts daemon + responder
+```
+
+### Proactive Intelligence Daemon
+Runs in background. Watches your email and calendar:
+- **Email follow-ups**: Reminds you about unreplied emails after 24h
+- **Meeting prep**: Generates briefs 2h before large meetings (HERALD + SCHEHERAZADE)
+- **Pattern detection**: Weekly productivity analysis by ORACLE
+- **Deadline alerts**: 9am (today's tasks) + 5pm (tomorrow's tasks)
+
+### Voice Chat
+```bash
+nha voice   # Opens browser with mic interface
+```
+Browser-native Web Speech API (zero server transcription). Optional Whisper API for higher accuracy. Responses spoken aloud via Speech Synthesis.
+
+### Plugin System
+```bash
+nha plugin create my-plugin   # Scaffold
+nha plugin run my-plugin      # Execute
+```
+Plugins get full access to LLM, Gmail, Calendar, Tasks, notifications.
+
+### OS-Level Autostart
+```bash
+nha autostart enable    # macOS: launchd, Linux: systemd
+```
+Daemon auto-starts on login with crash recovery. Hardened: NoNewPrivileges, ProtectSystem=strict.
+
+### Microsoft Outlook Integration
+```bash
+nha microsoft auth      # Connect Outlook 365 + Calendar
+```
+
+---
+
+## Daily Operations (PAO)
+
+Connect Gmail + Calendar (or Outlook). **5 specialist agents** analyze your day — not 1 generic assistant.
+
+```bash
+nha google auth         # Gmail + Calendar
+nha microsoft auth      # OR Outlook 365
 
 nha plan            # 5 agents generate your daily plan
 nha tasks           # Manage tasks
-nha ops start       # Background daemon (auto-alerts)
+nha ops start       # Background daemon (auto-alerts + responder)
+nha autostart enable # Auto-start on login
 ```
 
 | Agent | Role |
