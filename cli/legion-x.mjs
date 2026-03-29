@@ -43,8 +43,8 @@ var __dirname = path.dirname(__filename);
 
 var VERSION = '2.1.2';
 var API_BASE = 'https://nothumanallowed.com/api/v1';
-var AGENTS_DIR = path.join(__dirname, 'agents');
-var CONFIG_FILE = path.join(process.env.HOME || '.', '.legion-config.json');
+var AGENTS_DIR = process.env.NHA_AGENTS_DIR || path.join(__dirname, 'agents');
+var CONFIG_FILE = process.env.NHA_CONFIG_FILE || path.join(process.env.HOME || '.', '.legion-config.json');
 
 /**
  * LegionConfig — Persistent configuration manager
@@ -5563,7 +5563,7 @@ class LLMProvider {
     var apiKey = this.apiKey || process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY or run: node legion-x.mjs config:set llm-key <key>');
 
-    var model = this.model || 'gpt-5.4';
+    var model = this.model || 'gpt-4.1';
     var res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -5799,7 +5799,7 @@ class LLMProvider {
    * OpenAI call with explicit API key (concurrency-safe — no shared state mutation).
    */
   async _chatOpenAIDirect(apiKey, systemPrompt, userMessage, maxTokens, agentTag) {
-    var model = this.model || 'gpt-5.4';
+    var model = this.model || 'gpt-4.1';
     var res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -7018,15 +7018,18 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
       } catch (decompErr) {
         var isDecompRetryable = decompErr.message && (
           decompErr.message.includes('429') ||
+          decompErr.message.includes('503') ||
           decompErr.message.includes('529') ||
           decompErr.message.includes('overloaded') ||
           decompErr.message.includes('Overloaded') ||
           decompErr.message.includes('RESOURCE_EXHAUSTED') ||
+          decompErr.message.includes('UNAVAILABLE') ||
+          decompErr.message.includes('high demand') ||
           decompErr.message.includes('rate')
         );
         if (isDecompRetryable && dpi < decompProviderOrder.length - 1) {
           console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + colors.yellow + tryDecompProv + ' unavailable (' +
-            (decompErr.message.includes('529') || decompErr.message.includes('overloaded') || decompErr.message.includes('Overloaded') ? 'overloaded' : 'rate-limited') +
+            (decompErr.message.includes('529') || decompErr.message.includes('503') || decompErr.message.includes('overloaded') || decompErr.message.includes('Overloaded') || decompErr.message.includes('UNAVAILABLE') || decompErr.message.includes('high demand') ? 'overloaded' : 'rate-limited') +
             '), trying ' + decompProviderOrder[dpi + 1] + '...' + colors.reset);
           continue;
         }
@@ -7401,10 +7404,13 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
               } catch (agentProvErr) {
                 var isAgentRetryable = agentProvErr.message && (
                   agentProvErr.message.includes('429') ||
+                  agentProvErr.message.includes('503') ||
                   agentProvErr.message.includes('529') ||
                   agentProvErr.message.includes('overloaded') ||
                   agentProvErr.message.includes('Overloaded') ||
                   agentProvErr.message.includes('RESOURCE_EXHAUSTED') ||
+                  agentProvErr.message.includes('UNAVAILABLE') ||
+                  agentProvErr.message.includes('high demand') ||
                   agentProvErr.message.includes('rate')
                 );
                 if (isAgentRetryable && api < agentProviderOrder.length - 1) {
@@ -7771,7 +7777,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
         synthProvider = tryProv;
         break;
       } catch (synthErr) {
-        var isSynthRetryable = synthErr.message && (synthErr.message.includes('429') || synthErr.message.includes('529') || synthErr.message.includes('overloaded') || synthErr.message.includes('Overloaded') || synthErr.message.includes('RESOURCE_EXHAUSTED') || synthErr.message.includes('rate') || synthErr.message.includes('max_tokens') || synthErr.message.includes('invalid_request'));
+        var isSynthRetryable = synthErr.message && (synthErr.message.includes('429') || synthErr.message.includes('503') || synthErr.message.includes('529') || synthErr.message.includes('overloaded') || synthErr.message.includes('Overloaded') || synthErr.message.includes('RESOURCE_EXHAUSTED') || synthErr.message.includes('UNAVAILABLE') || synthErr.message.includes('high demand') || synthErr.message.includes('rate') || synthErr.message.includes('max_tokens') || synthErr.message.includes('invalid_request'));
         if (isSynthRetryable && spi < synthProviderOrder.length - 1) {
           console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + tryProv + ' failed, trying ' + synthProviderOrder[spi + 1] + '...' + colors.reset);
           continue;
@@ -7828,7 +7834,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
             valProvider = valProvOrder[vpi];
             break;
           } catch (valRetryErr) {
-            var isValRL = valRetryErr.message && (valRetryErr.message.includes('429') || valRetryErr.message.includes('529') || valRetryErr.message.includes('overloaded') || valRetryErr.message.includes('Overloaded') || valRetryErr.message.includes('RESOURCE_EXHAUSTED') || valRetryErr.message.includes('rate'));
+            var isValRL = valRetryErr.message && (valRetryErr.message.includes('429') || valRetryErr.message.includes('503') || valRetryErr.message.includes('529') || valRetryErr.message.includes('overloaded') || valRetryErr.message.includes('Overloaded') || valRetryErr.message.includes('RESOURCE_EXHAUSTED') || valRetryErr.message.includes('UNAVAILABLE') || valRetryErr.message.includes('high demand') || valRetryErr.message.includes('rate'));
             if (isValRL && vpi < valProvOrder.length - 1) continue;
             throw valRetryErr;
           }
@@ -7899,7 +7905,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client) {
               });
               break;
             } catch (bpRetryErr) {
-              var isBpRL = bpRetryErr.message && (bpRetryErr.message.includes('429') || bpRetryErr.message.includes('529') || bpRetryErr.message.includes('overloaded') || bpRetryErr.message.includes('Overloaded') || bpRetryErr.message.includes('RESOURCE_EXHAUSTED') || bpRetryErr.message.includes('rate'));
+              var isBpRL = bpRetryErr.message && (bpRetryErr.message.includes('429') || bpRetryErr.message.includes('503') || bpRetryErr.message.includes('529') || bpRetryErr.message.includes('overloaded') || bpRetryErr.message.includes('Overloaded') || bpRetryErr.message.includes('RESOURCE_EXHAUSTED') || bpRetryErr.message.includes('UNAVAILABLE') || bpRetryErr.message.includes('high demand') || bpRetryErr.message.includes('rate'));
               if (isBpRL && bpi < bpProvOrder.length - 1) continue;
               throw bpRetryErr;
             }
@@ -9094,10 +9100,36 @@ async function runServerConsensus(prompt, options, legionConfig, client) {
 async function runOrchestration(prompt, options) {
   var config = new LegionConfig();
 
-  // Auto-import NHA credentials from PIF if not yet configured
+  // Auto-import NHA credentials from PIF or ~/.nha/config.json if not yet configured
   if (!config.get('nhaAgentId') || !config.get('nhaPrivateKeyPem')) {
+    // Try ~/.nha/config.json first (npm install path)
+    var nhaConfigPath = path.join(os.homedir(), '.nha', 'config.json');
+    if (fs.existsSync(nhaConfigPath)) {
+      try {
+        var nhaConf = JSON.parse(fs.readFileSync(nhaConfigPath, 'utf-8'));
+        if (nhaConf.agent && nhaConf.agent.id && nhaConf.agent.privateKeyPem) {
+          config.set('nhaAgentId', nhaConf.agent.id);
+          config.set('nhaAgentName', nhaConf.agent.name || '');
+          config.set('nhaPrivateKeyPem', nhaConf.agent.privateKeyPem);
+          config.set('nhaPublicKeyHex', nhaConf.agent.publicKeyHex || '');
+          // Also import LLM config if present and not already set
+          if (nhaConf.llm && nhaConf.llm.apiKey && !config.get('llmApiKey')) {
+            config.set('provider', nhaConf.llm.provider || 'anthropic');
+            config.set('llmApiKey', nhaConf.llm.apiKey);
+            if (nhaConf.llm.openaiKey) config.set('openaiKey', nhaConf.llm.openaiKey);
+            if (nhaConf.llm.geminiKey) config.set('geminiKey', nhaConf.llm.geminiKey);
+            if (nhaConf.llm.deepseekKey) config.set('deepseekKey', nhaConf.llm.deepseekKey);
+            if (nhaConf.llm.grokKey) config.set('grokKey', nhaConf.llm.grokKey);
+            if (nhaConf.llm.mistralKey) config.set('mistralKey', nhaConf.llm.mistralKey);
+            if (nhaConf.llm.cohereKey) config.set('cohereKey', nhaConf.llm.cohereKey);
+          }
+          console.log(colors.green + '[AUTH] Auto-linked NHA identity from ~/.nha/config.json (' + (nhaConf.agent.name || nhaConf.agent.id) + ')' + colors.reset);
+        }
+      } catch (_) { /* ignore parse errors */ }
+    }
+    // Fallback to legacy ~/.pif/config.json
     var pifConfigPath = path.join(os.homedir(), '.pif', 'config.json');
-    if (fs.existsSync(pifConfigPath)) {
+    if ((!config.get('nhaAgentId') || !config.get('nhaPrivateKeyPem')) && fs.existsSync(pifConfigPath)) {
       try {
         var pifConfig = JSON.parse(fs.readFileSync(pifConfigPath, 'utf-8'));
         if (pifConfig.agentId && pifConfig.privateKeyPem) {
