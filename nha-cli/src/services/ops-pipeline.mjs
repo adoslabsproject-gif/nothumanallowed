@@ -140,13 +140,16 @@ export async function runPlanningPipeline(config, opts = {}) {
   // ── Phase 6: CONDUCTOR — Synthesize daily plan ─────────────────────────
   info('Phase 6: CONDUCTOR synthesizing daily plan...');
 
-  const conductorPrompt = `You are the NHA Daily Planner. Synthesize intelligence from 4 specialist agents into a structured, practical daily plan.
+  const conductorPrompt = `You are the NHA Daily Planner. Synthesize intelligence from specialist agents into a structured daily plan.
 
-IMPORTANT GUIDELINES:
-- Be PRACTICAL, not alarmist. Routine notifications (Google login alerts from your own devices, npm publish confirmations, GitHub security notices) are NOT security incidents.
-- Only escalate to "security_alerts" if there is a GENUINE, actionable threat (unknown logins from strange locations, actual phishing, credential leaks).
-- Focus on making the user's day productive, not on creating false urgency.
-- Suggest realistic time blocks based on the actual task complexity.
+CRITICAL RULES — READ CAREFULLY:
+1. ONLY include events that appear in the CALENDAR section below. NEVER invent, hallucinate, or assume meetings/appointments that are not listed.
+2. If there are 0 events in the calendar, the schedule section must ONLY contain suggested focus blocks and task time — NO invented meetings.
+3. Be PRACTICAL, not alarmist. Routine notifications (Google login alerts from your own devices, npm publish confirmations, GitHub 2FA, password change emails) are NOT security threats. Mark them as SAFE.
+4. Only put items in "security_alerts" for GENUINE threats: phishing, unknown device access from unexpected locations, credential leaks, social engineering.
+5. Security alerts must be simple strings, NOT JSON objects. Example: "Verify Google login from unknown Mac device in Italy"
+6. The "schedule" section should reflect REAL calendar events + suggested blocks for tasks. Do not fabricate appointments.
+7. Do not create new_tasks that duplicate existing tasks.
 
 AGENT REPORTS:
 ${agentResults.saber ? `\n[SABER — Security Scan]\n${agentResults.saber}` : ''}
@@ -160,22 +163,22 @@ Events: ${events.length}
 Unread emails: ${emails.length}
 Tasks: ${tasks.length}
 
-CALENDAR:
-${calendarContext || 'No events.'}
+CALENDAR (these are the ONLY real events — do NOT add any others):
+${calendarContext || 'No events scheduled.'}
 
-EXISTING TASKS:
+EXISTING TASKS (do NOT duplicate these):
 ${taskContext || 'No tasks.'}
 
-Create a comprehensive daily plan. Output strict JSON:
+Output strict JSON:
 {
   "date": "${dateStr}",
-  "executive_summary": "2-3 sentence overview",
+  "executive_summary": "2-3 sentence overview of the ACTUAL day based on real data",
   "priority_actions": [{ "time": "HH:MM", "action": "...", "source": "email|calendar|task", "priority": "critical|high|medium|low" }],
   "schedule": [{ "time_start": "HH:MM", "time_end": "HH:MM", "type": "meeting|focus|break|task", "title": "...", "notes": "...", "preparation": "..." }],
   "email_actions": [{ "from": "...", "subject": "...", "action": "reply|archive|flag|defer", "suggested_reply": "..." }],
-  "security_alerts": [],
-  "new_tasks": [{ "description": "...", "priority": "high|medium|low", "estimated_minutes": N, "suggested_slot": "HH:MM" }],
-  "insights": []
+  "security_alerts": ["simple string descriptions only"],
+  "new_tasks": [{ "description": "...", "priority": "high|medium|low", "estimated_minutes": 30, "suggested_slot": "HH:MM" }],
+  "insights": ["simple string insights only"]
 }`;
 
   let plan;
@@ -266,7 +269,8 @@ function displayPlan(plan) {
   if (plan.security_alerts?.length > 0) {
     console.log(`  ${BOLD}\x1b[0;31mSecurity Alerts${NC}`);
     for (const a of plan.security_alerts) {
-      console.log(`  \x1b[0;31m!\x1b[0m ${typeof a === 'string' ? a : a.message || JSON.stringify(a)}`);
+      const text = typeof a === 'string' ? a : a.description || a.message || a.action_required || `[${a.type || 'alert'}] ${a.severity || ''} — ${JSON.stringify(a)}`;
+      console.log(`  \x1b[0;31m!\x1b[0m ${text}`);
     }
     console.log('');
   }
@@ -274,7 +278,8 @@ function displayPlan(plan) {
   if (plan.insights?.length > 0) {
     console.log(`  ${BOLD}${D}Insights${NC}`);
     for (const i of plan.insights) {
-      console.log(`  ${D}→ ${typeof i === 'string' ? i : i.message || JSON.stringify(i)}${NC}`);
+      const text = typeof i === 'string' ? i : i.message || i.insight || JSON.stringify(i);
+      console.log(`  ${D}→ ${text}${NC}`);
     }
     console.log('');
   }
