@@ -285,6 +285,10 @@ function render(){
     case 'notes':renderNotes(el);break;
     case 'onedrive':renderOneDrive(el);break;
     case 'mstodo':renderMsTodo(el);break;
+    case 'github':renderGitHub(el);break;
+    case 'notion':renderNotion(el);break;
+    case 'slack':renderSlack(el);break;
+    case 'birthdays':renderBirthdays(el);break;
     case 'agents':renderAgents(el);break;
     case 'settings':renderSettings(el);break;
   }
@@ -599,6 +603,101 @@ function openDayDetail(dateStr){
   document.getElementById('agentModal').classList.add('modal-overlay--open');
   var sendBtn=document.getElementById('agentModal').querySelector('.btn--primary');
   if(sendBtn)sendBtn.style.display='none';
+}
+
+// ---- GITHUB ----
+var ghData=null;
+function renderGitHub(el){
+  el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="color:var(--dim)">Loading GitHub...</div></div>';
+  apiGet('/api/github').then(function(r){
+    if(r&&r.error){el.innerHTML='<div class="card" style="text-align:center;padding:30px"><div style="color:var(--dim);margin-bottom:8px">'+esc(r.error)+'</div><div style="font-size:11px;color:var(--dim)">Run: nha config set github-token YOUR_PAT</div></div>';return}
+    ghData=r;
+    var h='<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"><input type="text" id="ghRepo" placeholder="owner/repo" value="'+esc(r.defaultRepo||'')+'" style="flex:1;min-width:180px;font-size:13px;padding:10px 14px"><button onclick="loadGhIssues()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Issues</button><button onclick="loadGhPRs()" style="background:var(--cyan);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">PRs</button></div>';
+    if(r.notifications&&r.notifications.length>0){
+      h+='<div class="section-title">Notifications ('+r.notifications.length+')</div>';
+      r.notifications.forEach(function(n){h+='<div class="card" style="padding:10px 14px"><span style="color:var(--cyan);font-size:11px">'+esc(n.repo)+'</span> <span style="color:var(--dim);font-size:10px">['+esc(n.type)+']</span><div style="font-size:13px;margin-top:2px">'+esc(n.title)+'</div><div style="font-size:10px;color:var(--dim)">'+esc(n.reason)+'</div></div>'});
+    }
+    if(r.issues&&r.issues.length>0){
+      h+='<div class="section-title">Issues</div>';
+      r.issues.forEach(function(i){h+='<div class="card" style="padding:10px 14px"><span style="color:var(--green);font-weight:700">#'+i.number+'</span> '+esc(i.title)+'<div style="font-size:10px;color:var(--dim)">'+esc(i.labels||'')+' '+esc(i.updated||'')+'</div></div>'});
+    }
+    if(r.prs&&r.prs.length>0){
+      h+='<div class="section-title">Pull Requests</div>';
+      r.prs.forEach(function(p){h+='<div class="card" style="padding:10px 14px"><span style="color:var(--cyan);font-weight:700">#'+p.number+'</span> '+esc(p.title)+' <span style="font-size:10px;color:var(--dim)">by '+esc(p.author)+'</span>'+(p.draft?'<span style="font-size:9px;color:var(--amber)"> DRAFT</span>':'')+'</div>'});
+    }
+    if(!r.notifications?.length&&!r.issues?.length&&!r.prs?.length){h+='<div class="card" style="text-align:center;color:var(--dim);padding:20px">Enter a repo above and click Issues or PRs. Notifications are loaded automatically.</div>'}
+    el.innerHTML=h;
+  });
+}
+function loadGhIssues(){var repo=document.getElementById('ghRepo');if(!repo||!repo.value.trim())return;apiGet('/api/github/issues?repo='+encodeURIComponent(repo.value.trim())).then(function(r){if(ghData)ghData.issues=r.issues||[];render()})}
+function loadGhPRs(){var repo=document.getElementById('ghRepo');if(!repo||!repo.value.trim())return;apiGet('/api/github/prs?repo='+encodeURIComponent(repo.value.trim())).then(function(r){if(ghData)ghData.prs=r.prs||[];render()})}
+
+// ---- NOTION ----
+function renderNotion(el){
+  el.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" id="notionQuery" placeholder="Search Notion pages..." style="flex:1;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)searchNotion()"><button onclick="searchNotion()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Search</button></div><div id="notionResults"><div class="card" style="text-align:center;color:var(--dim);padding:20px">Search your Notion workspace. Requires: nha config set notion-token YOUR_TOKEN</div></div>';
+}
+function searchNotion(){
+  var q=document.getElementById('notionQuery');if(!q||!q.value.trim())return;
+  var res=document.getElementById('notionResults');res.innerHTML='<div style="text-align:center;padding:20px"><div class="spinner"></div></div>';
+  apiGet('/api/notion/search?q='+encodeURIComponent(q.value.trim())).then(function(r){
+    if(r&&r.error){res.innerHTML='<div class="card" style="color:var(--red);padding:14px">'+esc(r.error)+'</div>';return}
+    var pages=r.pages||[];
+    if(pages.length===0){res.innerHTML='<div class="card" style="text-align:center;color:var(--dim);padding:20px">No results for "'+esc(q.value)+'"</div>';return}
+    var h='';pages.forEach(function(p){h+='<div class="card" style="padding:12px 14px;cursor:pointer" onclick="loadNotionPage(\\x27'+esc(p.id)+'\\x27)"><span style="font-size:14px">'+esc(p.icon||'')+'</span> <span style="font-weight:700">'+esc(p.title)+'</span> <span style="font-size:10px;color:var(--dim)">['+esc(p.type)+'] edited '+esc(p.edited)+'</span></div>'});
+    res.innerHTML=h;
+  });
+}
+function loadNotionPage(id){
+  var res=document.getElementById('notionResults');res.innerHTML='<div style="text-align:center;padding:20px"><div class="spinner"></div></div>';
+  apiGet('/api/notion/page?id='+encodeURIComponent(id)).then(function(r){
+    if(r&&r.error){res.innerHTML='<div class="card" style="color:var(--red);padding:14px">'+esc(r.error)+'</div>';return}
+    res.innerHTML='<div class="card" style="padding:16px"><div style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--green)">'+esc(r.title||'Page')+'</div><div style="white-space:pre-wrap;font-size:13px;line-height:1.6">'+esc(r.content||'(empty)')+'</div></div><button onclick="searchNotion()" style="margin-top:8px;background:var(--bg3);color:var(--dim);border:1px solid var(--border);padding:6px 12px;border-radius:var(--r);font-size:11px;cursor:pointer">Back to results</button>';
+  });
+}
+
+// ---- SLACK ----
+var slackData=null;
+function renderSlack(el){
+  el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="color:var(--dim)">Loading Slack channels...</div></div>';
+  apiGet('/api/slack/channels').then(function(r){
+    if(r&&r.error){el.innerHTML='<div class="card" style="text-align:center;padding:30px"><div style="color:var(--dim);margin-bottom:8px">'+esc(r.error)+'</div><div style="font-size:11px;color:var(--dim)">Run: nha config set slack-token xoxb-YOUR_TOKEN</div></div>';return}
+    slackData=r;
+    var channels=r.channels||[];
+    var h='<div class="section-title">Channels ('+channels.length+')</div>';
+    if(channels.length===0){h+='<div class="card" style="text-align:center;color:var(--dim);padding:20px">No channels found</div>'}
+    channels.forEach(function(c){h+='<div class="card" style="padding:10px 14px;cursor:pointer" onclick="loadSlackChannel(\\x27'+esc(c.id)+'\\x27,\\x27'+esc(c.name)+'\\x27)"><span style="color:var(--green);font-weight:700">#'+esc(c.name)+'</span> <span style="font-size:10px;color:var(--dim)">'+c.members+' members</span>'+(c.purpose?'<div style="font-size:11px;color:var(--dim);margin-top:2px">'+esc(c.purpose)+'</div>':'')+'</div>'});
+    h+='<div id="slackMessages"></div>';
+    el.innerHTML=h;
+  });
+}
+function loadSlackChannel(id,name){
+  var res=document.getElementById('slackMessages');if(!res)return;
+  res.innerHTML='<div style="text-align:center;padding:20px"><div class="spinner"></div><div style="color:var(--dim)">Loading #'+esc(name)+'...</div></div>';
+  apiGet('/api/slack/messages?channel='+encodeURIComponent(id)).then(function(r){
+    if(r&&r.error){res.innerHTML='<div class="card" style="color:var(--red);padding:14px">'+esc(r.error)+'</div>';return}
+    var msgs=r.messages||[];
+    var h='<div class="section-title" style="margin-top:16px">#'+esc(name)+' ('+msgs.length+' messages)</div>';
+    msgs.forEach(function(m){h+='<div style="padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--cyan);font-size:11px;font-weight:700">'+esc(m.user)+'</span> <span style="font-size:10px;color:var(--dim)">'+esc(m.time)+'</span><div style="font-size:13px;margin-top:2px">'+esc(m.text)+'</div></div>'});
+    if(msgs.length===0)h+='<div style="color:var(--dim);padding:16px;text-align:center">No recent messages</div>';
+    res.innerHTML=h;
+  });
+}
+
+// ---- BIRTHDAYS ----
+function renderBirthdays(el){
+  el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="color:var(--dim)">Loading birthdays...</div></div>';
+  apiGet('/api/birthdays').then(function(r){
+    if(r&&r.error){el.innerHTML='<div class="card" style="text-align:center;padding:30px"><div style="color:var(--dim)">'+esc(r.error)+'</div></div>';return}
+    var bdays=r.birthdays||[];
+    if(bdays.length===0){el.innerHTML='<div class="card" style="text-align:center;padding:30px;color:var(--dim)">No upcoming birthdays found. Make sure your Google Contacts have birthday info.</div>';return}
+    var h='<div class="section-title">Upcoming Birthdays</div>';
+    bdays.forEach(function(b){
+      var isToday=b.daysUntil===0;
+      var label=isToday?'<span style="color:var(--red);font-weight:700">TODAY!</span>':b.daysUntil===1?'<span style="color:var(--amber)">Tomorrow</span>':'<span style="color:var(--dim)">in '+b.daysUntil+' days</span>';
+      h+='<div class="card" style="padding:12px 14px'+(isToday?';border-color:var(--red)':'')+'"><span style="font-size:16px">&#127874;</span> <span style="font-weight:700">'+esc(b.name)+'</span> — '+esc(b.date)+' '+label+'</div>';
+    });
+    el.innerHTML=h;
+  });
 }
 
 // ---- AGENTS ----
@@ -1425,6 +1524,13 @@ init();
       <div class="sidebar__label">Microsoft</div>
       <div class="nav-item" data-view="onedrive" onclick="switchView('onedrive')"><span class="nav-item__icon">&#9729;</span> OneDrive</div>
       <div class="nav-item" data-view="mstodo" onclick="switchView('mstodo')"><span class="nav-item__icon">&#128203;</span> To Do</div>
+    </div>
+    <div class="sidebar__section">
+      <div class="sidebar__label">Integrations</div>
+      <div class="nav-item" data-view="github" onclick="switchView('github')"><span class="nav-item__icon">&#128736;</span> GitHub</div>
+      <div class="nav-item" data-view="notion" onclick="switchView('notion')"><span class="nav-item__icon">&#128214;</span> Notion</div>
+      <div class="nav-item" data-view="slack" onclick="switchView('slack')"><span class="nav-item__icon">&#128488;</span> Slack</div>
+      <div class="nav-item" data-view="birthdays" onclick="switchView('birthdays')"><span class="nav-item__icon">&#127874;</span> Birthdays</div>
     </div>
     <div class="sidebar__section">
       <div class="sidebar__label">AI</div>

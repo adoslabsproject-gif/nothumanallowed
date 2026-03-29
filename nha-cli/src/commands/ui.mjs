@@ -783,6 +783,154 @@ export async function cmdUI(args) {
         return;
       }
 
+      // ── GitHub ───────────────────────────────────────────────────────
+      if (method === 'GET' && pathname === '/api/github') {
+        try {
+          const gh = await import('../services/github.mjs');
+          const notifications = await gh.listNotifications(config, 15).catch(() => '');
+          // Parse notifications text into structured data
+          const notifLines = notifications ? notifications.split('\n').filter(Boolean).map(l => {
+            const m = l.match(/^\d+\.\s+\[([^\]]*)\]\s+(\w+):\s+(.+)\s+\((\w+)\)$/);
+            return m ? { repo: m[1], type: m[2], title: m[3], reason: m[4] } : { repo: '', type: '', title: l, reason: '' };
+          }) : [];
+          sendJSON(res, 200, { notifications: notifLines });
+        } catch (e) {
+          sendJSON(res, 200, { error: e.message, notifications: [] });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      if (method === 'GET' && pathname === '/api/github/issues') {
+        try {
+          const gh = await import('../services/github.mjs');
+          const repo = url.searchParams.get('repo');
+          const text = await gh.listIssues(config, repo, 'open', 15);
+          const issues = text.split('\n').filter(Boolean).map(l => {
+            const m = l.match(/^\d+\.\s+#(\d+)\s+(.+?)(?:\s+\[([^\]]*)\])?\s+\((\d{4}-\d{2}-\d{2})\)$/);
+            return m ? { number: parseInt(m[1]), title: m[2].trim(), labels: m[3] || '', updated: m[4] } : { number: 0, title: l, labels: '', updated: '' };
+          });
+          sendJSON(res, 200, { issues });
+        } catch (e) {
+          sendJSON(res, 200, { issues: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      if (method === 'GET' && pathname === '/api/github/prs') {
+        try {
+          const gh = await import('../services/github.mjs');
+          const repo = url.searchParams.get('repo');
+          const text = await gh.listPRs(config, repo, 'open', 15);
+          const prs = text.split('\n').filter(Boolean).map(l => {
+            const m = l.match(/^\d+\.\s+#(\d+)\s+(.+?)(?:\s+\[DRAFT\])?\s+by\s+(\S+)/);
+            return m ? { number: parseInt(m[1]), title: m[2].trim(), author: m[3], draft: l.includes('[DRAFT]') } : { number: 0, title: l, author: '', draft: false };
+          });
+          sendJSON(res, 200, { prs });
+        } catch (e) {
+          sendJSON(res, 200, { prs: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── Notion ──────────────────────────────────────────────────────────
+      if (method === 'GET' && pathname === '/api/notion/search') {
+        try {
+          const nt = await import('../services/notion.mjs');
+          const q = url.searchParams.get('q') || '';
+          const text = await nt.search(config, q, 15);
+          const pages = text.split('\n').filter(Boolean).map(l => {
+            const m = l.match(/^\d+\.\s+\[(\w+)\]\s+(.?)\s+(.+?)\s+\(edited:\s+(\S+)\)\s+—\s+ID:\s+(\S+)$/);
+            return m ? { type: m[1], icon: m[2], title: m[3], edited: m[4], id: m[5] } : { type: 'Page', icon: '', title: l, edited: '', id: '' };
+          });
+          sendJSON(res, 200, { pages });
+        } catch (e) {
+          sendJSON(res, 200, { pages: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      if (method === 'GET' && pathname === '/api/notion/page') {
+        try {
+          const nt = await import('../services/notion.mjs');
+          const id = url.searchParams.get('id') || '';
+          const text = await nt.getPage(config, id);
+          const titleMatch = text.match(/^Title:\s+(.+?)$/m);
+          const content = text.replace(/^Title:.*\n\n?/, '');
+          sendJSON(res, 200, { title: titleMatch ? titleMatch[1] : 'Page', content });
+        } catch (e) {
+          sendJSON(res, 200, { error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── Slack ───────────────────────────────────────────────────────────
+      if (method === 'GET' && pathname === '/api/slack/channels') {
+        try {
+          const sl = await import('../services/slack.mjs');
+          const text = await sl.listChannels(config, 30);
+          const channels = text.split('\n').filter(Boolean).map(l => {
+            const m = l.match(/^\d+\.\s+#(\S+)\s+\((\d+)\s+members\)(?:\s+—\s+(.+))?$/);
+            return m ? { id: m[1], name: m[1], members: parseInt(m[2]), purpose: m[3] || '' } : { id: l, name: l, members: 0, purpose: '' };
+          });
+          sendJSON(res, 200, { channels });
+        } catch (e) {
+          sendJSON(res, 200, { channels: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      if (method === 'GET' && pathname === '/api/slack/messages') {
+        try {
+          const sl = await import('../services/slack.mjs');
+          const channel = url.searchParams.get('channel') || '';
+          const text = await sl.listMessages(config, channel, 20);
+          const messages = text.split('\n').filter(Boolean).map(l => {
+            const m = l.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s+\[([^\]]+)\]:\s+(.+)$/);
+            return m ? { time: m[1], user: m[2], text: m[3] } : { time: '', user: '', text: l };
+          });
+          sendJSON(res, 200, { messages });
+        } catch (e) {
+          sendJSON(res, 200, { messages: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── Birthdays ───────────────────────────────────────────────────────
+      if (method === 'GET' && pathname === '/api/birthdays') {
+        try {
+          const gc = await import('../services/google-contacts.mjs');
+          const contacts = await gc.getBirthdays(config);
+          const today = new Date();
+          const upcoming = [];
+          for (const c of contacts) {
+            if (!c.birthday) continue;
+            const parts = c.birthday.split('-');
+            const month = parseInt(parts.length === 3 ? parts[1] : parts[0], 10);
+            const day = parseInt(parts.length === 3 ? parts[2] : parts[1], 10);
+            const thisYear = new Date(today.getFullYear(), month - 1, day);
+            if (thisYear < today) thisYear.setFullYear(today.getFullYear() + 1);
+            const daysUntil = Math.ceil((thisYear - today) / 86400000);
+            if (daysUntil <= 90) {
+              const dateStr = thisYear.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+              upcoming.push({ name: c.name, date: dateStr, daysUntil });
+            }
+          }
+          upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
+          sendJSON(res, 200, { birthdays: upcoming });
+        } catch (e) {
+          sendJSON(res, 200, { birthdays: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
       // ── 404 ──────────────────────────────────────────────────────────
       sendJSON(res, 404, { error: 'Not found' });
       logRequest(method, pathname, 404, Date.now() - start);
