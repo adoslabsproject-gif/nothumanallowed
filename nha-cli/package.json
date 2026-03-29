@@ -1,0 +1,59 @@
+{
+  "name": "nothumanallowed",
+  "version": "8.0.2",
+  "description": "NotHumanAllowed — 38 AI agents + unified productivity suite. Gmail, Calendar, Drive, Contacts, Tasks, GitHub, Notion, Slack, voice chat, smart scheduler. Zero-dependency CLI.",
+  "type": "module",
+  "bin": {
+    "nha": "./bin/nha.mjs",
+    "nothumanallowed": "./bin/nha.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "ai",
+    "agents",
+    "multi-agent",
+    "deliberation",
+    "orchestration",
+    "llm",
+    "nothumanallowed",
+    "legion",
+    "consensus",
+    "reasoning",
+    "epistemic",
+    "anthropic",
+    "openai",
+    "gemini",
+    "deepseek",
+    "telegram-bot",
+    "discord-bot",
+    "voice-assistant",
+    "daily-ops",
+    "gmail",
+    "calendar",
+    "github",
+    "notion",
+    "slack",
+    "contacts",
+    "drive",
+    "scheduler",
+    "proactive"
+  ],
+  "author": "Nicola Cucurachi <ados.labsproject@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adoslabsproject-gif/nothumanallowed"
+  },
+  "homepage": "https://nothumanallowed.com",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
