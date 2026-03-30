@@ -19,6 +19,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { loadConfig } from '../config.mjs';
 import { callLLM, callAgent } from '../services/llm.mjs';
 import { NHA_DIR, PLUGINS_DIR, BASE_URL, VERSION } from '../constants.mjs';
@@ -28,6 +29,7 @@ import { info, ok, warn, fail, C, G, Y, D, W, BOLD, NC, R } from '../ui.mjs';
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const PLUGINS_REGISTRY_URL = `${BASE_URL}/plugins/registry.json`;
+const LOCAL_REGISTRY_FILE = path.join(PLUGINS_DIR, '.registry.json');
 
 // ── Plugin Loader ──────────────────────────────────────────────────────────
 
@@ -42,7 +44,8 @@ export async function loadPlugin(name) {
   if (!fs.existsSync(pluginFile)) return null;
 
   try {
-    const mod = await import(`file://${pluginFile}`);
+    const { pathToFileURL } = await import('url');
+    const mod = await import(pathToFileURL(pluginFile).href);
     return {
       card: mod.PLUGIN_CARD || { name: sanitized, version: '0.0.0', description: '', commands: [] },
       run: typeof mod.run === 'function' ? mod.run : null,
@@ -151,17 +154,67 @@ async function buildPluginContext(config) {
   };
 }
 
+// ── SHA-256 Integrity Verification ───────────────────────────────────────────
+
+/**
+ * Compute SHA-256 hash of a file.
+ * @param {string} filePath
+ * @returns {string} hex hash
+ */
+function computeSHA256(filePath) {
+  const content = fs.readFileSync(filePath);
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+/**
+ * Verify a plugin file against its registry SHA-256 hash.
+ * @param {string} filePath — path to the downloaded plugin
+ * @param {string} expectedHash — SHA-256 hex from registry
+ * @returns {boolean}
+ */
+function verifyIntegrity(filePath, expectedHash) {
+  if (!expectedHash) return false;
+  const actual = computeSHA256(filePath);
+  return actual === expectedHash;
+}
+
 // ── Registry (available plugins from server) ────────────────────────────────
 
+/**
+ * Fetch the plugin registry from the server.
+ * Registry format: { plugins: [{ name, version, description, sha256, size, author }] }
+ * The sha256 field is the hex hash of the .mjs file — verified on install.
+ */
 async function fetchRegistry() {
   try {
     const res = await fetch(PLUGINS_REGISTRY_URL, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data.plugins) ? data.plugins : [];
+    const plugins = Array.isArray(data.plugins) ? data.plugins : [];
+
+    // Cache registry locally for offline reference
+    fs.mkdirSync(PLUGINS_DIR, { recursive: true });
+    fs.writeFileSync(LOCAL_REGISTRY_FILE, JSON.stringify(data, null, 2), 'utf-8');
+
+    return plugins;
   } catch {
+    // Fallback to local cached registry
+    try {
+      if (fs.existsSync(LOCAL_REGISTRY_FILE)) {
+        const data = JSON.parse(fs.readFileSync(LOCAL_REGISTRY_FILE, 'utf-8'));
+        return Array.isArray(data.plugins) ? data.plugins : [];
+      }
+    } catch {}
     return [];
   }
+}
+
+/**
+ * Get the registry entry for a plugin by name.
+ */
+async function getRegistryEntry(name) {
+  const registry = await fetchRegistry();
+  return registry.find(p => p.name === name) || null;
 }
 
 // ── Plugin Template ─────────────────────────────────────────────────────────
@@ -286,31 +339,61 @@ async function cmdInstall(name) {
   const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '').replace(/\.mjs$/, '');
   fs.mkdirSync(PLUGINS_DIR, { recursive: true });
 
+  // Step 1: Check registry for SHA-256 hash
+  info(`Checking registry for "${sanitized}"...`);
+  const entry = await getRegistryEntry(sanitized);
+
+  if (!entry) {
+    fail(`Plugin "${sanitized}" not found in registry.`);
+    info('Available plugins: nha plugin list');
+    info(`Or create your own: nha plugin create ${sanitized}`);
+    return;
+  }
+
+  if (!entry.sha256) {
+    fail(`Plugin "${sanitized}" has no integrity hash in registry. Aborting for security.`);
+    return;
+  }
+
+  // Step 2: Download the plugin
   const dest = path.join(PLUGINS_DIR, `${sanitized}.mjs`);
   const url = `${BASE_URL}/plugins/${sanitized}.mjs`;
 
-  info(`Installing plugin "${sanitized}" from ${url}...`);
-
+  info(`Downloading "${sanitized}" v${entry.version || '?'}...`);
   const success = await download(url, dest, { timeout: 15000 });
-  if (success) {
-    // Validate the downloaded plugin
-    const plugin = await loadPlugin(sanitized);
-    if (plugin && plugin.run) {
-      ok(`Plugin "${sanitized}" installed to ~/.nha/plugins/`);
-      if (plugin.card.description) {
-        info(plugin.card.description);
-      }
-      if (plugin.card.commands && plugin.card.commands.length > 0) {
-        info(`Commands: ${plugin.card.commands.join(', ')}`);
-      }
-    } else if (plugin) {
-      warn(`Plugin "${sanitized}" installed but has no run() function.`);
-    } else {
-      warn(`Plugin "${sanitized}" downloaded but could not be loaded. Check the file.`);
-    }
-  } else {
+
+  if (!success) {
     fail(`Could not download plugin "${sanitized}".`);
-    info(`Try: nha plugin create ${sanitized}  (to create it locally)`);
+    return;
+  }
+
+  // Step 3: Verify SHA-256 integrity
+  info('Verifying SHA-256 integrity...');
+  const isValid = verifyIntegrity(dest, entry.sha256);
+
+  if (!isValid) {
+    // CRITICAL: hash mismatch — file may be tampered
+    fs.rmSync(dest, { force: true });
+    fail(`INTEGRITY CHECK FAILED for "${sanitized}"!`);
+    fail(`Expected SHA-256: ${entry.sha256}`);
+    fail(`Got SHA-256:      ${computeSHA256(dest)}`);
+    fail('The downloaded file does not match the registry hash. File deleted for safety.');
+    fail('This could indicate a compromised server or man-in-the-middle attack.');
+    return;
+  }
+
+  ok(`SHA-256 verified: ${entry.sha256.slice(0, 16)}...`);
+
+  // Step 4: Load and validate the plugin
+  const plugin = await loadPlugin(sanitized);
+  if (plugin && plugin.run) {
+    ok(`Plugin "${sanitized}" v${entry.version || plugin.card.version} installed.`);
+    if (plugin.card.description) info(plugin.card.description);
+    if (plugin.card.commands?.length > 0) info(`Commands: ${plugin.card.commands.join(', ')}`);
+  } else if (plugin) {
+    warn(`Plugin "${sanitized}" installed but has no run() function.`);
+  } else {
+    warn(`Plugin "${sanitized}" downloaded but could not be loaded.`);
   }
 }
 
