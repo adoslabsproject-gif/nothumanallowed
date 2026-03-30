@@ -14,7 +14,7 @@
  *   npx nha update
  */
 
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,6 +29,8 @@ if (major < 20) {
 }
 
 // ── Launch CLI ──────────────────────────────────────────────────────────────
-const cli = path.join(__dirname, '..', 'src', 'cli.mjs');
-const { main } = await import(cli);
+// On Windows, dynamic import() requires file:// URLs, not raw paths like C:\...
+const cliPath = path.join(__dirname, '..', 'src', 'cli.mjs');
+const cliUrl = pathToFileURL(cliPath).href;
+const { main } = await import(cliUrl);
 await main(process.argv.slice(2));

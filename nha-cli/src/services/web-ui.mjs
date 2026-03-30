@@ -384,16 +384,24 @@ function addTaskUI(){
   });
 }
 function toggleTask(id){
-  apiPatch('/api/tasks/'+id+'/done').then(function(){loadDash().then(function(){if(currentView==='tasks'||currentView==='dashboard')render()})});
+  // Optimistic UI — update instantly, sync in background
+  var t=dash.tasks.find(function(x){return x.id===id});
+  if(t){t.status=t.status==='done'?'pending':'done';t.completedAt=t.status==='done'?new Date().toISOString():null}
+  render();
+  apiPatch('/api/tasks/'+id+'/done').then(function(){loadDash()});
 }
 function deleteTaskUI(id){
   if(!confirm('Delete task #'+id+'?'))return;
-  apiPost('/api/tasks/'+id+'/delete',{}).then(function(){loadDash().then(function(){render()})});
+  dash.tasks=dash.tasks.filter(function(x){return x.id!==id});
+  render();
+  apiPost('/api/tasks/'+id+'/delete',{}).then(function(){loadDash()});
 }
 function clearTasksUI(mode){
   var msg=mode==='all'?'Delete ALL tasks? This cannot be undone.':'Remove all completed tasks?';
   if(!confirm(msg))return;
-  apiPost('/api/tasks/clear',{mode:mode}).then(function(){loadDash().then(function(){render()})});
+  if(mode==='all'){dash.tasks=[]}else{dash.tasks=dash.tasks.filter(function(x){return x.status!=='done'})}
+  render();
+  apiPost('/api/tasks/clear',{mode:mode}).then(function(){loadDash()});
 }
 
 // ---- PLAN ----
