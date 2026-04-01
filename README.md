@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>38 AI agents that actually do things</strong><br>
-  <em>Audit code. Write docs. Manage your day. Monitor production. Each agent remembers your past interactions.<br>Telegram/Discord auto-responder. Voice chat. Proactive intelligence daemon. Zero dependencies.</em>
+  <em>Streaming chat. Web search. Multi-conversation. 50 tools. Audit code. Manage your day.<br>Each agent remembers past interactions. Voice chat. Proactive daemon. Zero dependencies.</em>
 </p>
 
 <p align="center">
@@ -39,7 +39,7 @@
 npm install -g nothumanallowed
 ```
 
-That's it. 38 agents, zero dependencies. 41 files, 443 KB.
+That's it. 38 agents, 50 tools, web search. Zero dependencies.
 
 ```bash
 # Configure your LLM provider
@@ -50,7 +50,7 @@ nha config set key sk-ant-api03-YOUR_KEY
 nha ask saber "Audit this Express app for OWASP Top 10"
 nha ask oracle "Analyze this dataset" --file data.csv
 
-# Interactive chat — manage email, calendar, tasks naturally
+# Interactive chat — streaming, web search, 50 tools
 nha chat
 
 # Voice-powered chat (opens browser with mic)
@@ -63,9 +63,17 @@ nha ui
 nha run "Design a Kubernetes deployment for 10K RPS"
 ```
 
-## What's New in v6.0.0
+## What's New in v9.1.0
 
-### Per-Agent Episodic Memory
+### Streaming Chat + Web Search
+Token-by-token streaming in `nha chat`. Built-in web search (DuckDuckGo, zero API key) and SSRF-protected URL fetch. Deep search mode fetches and extracts top results' full content.
+
+### Multi-Conversation Management
+`/new`, `/list`, `/switch`, `/rename`, `/delete` conversations. Auto-titled from first message. Stored in `~/.nha/conversations/`. Export as Markdown or JSON.
+
+### Previous versions
+
+**v6.0.0 — Per-Agent Episodic Memory**
 Each agent remembers your past interactions. TF-IDF keyword matching — zero LLM calls for retrieval. User preferences and corrections detected and stored globally. Stored at `~/.nha/memory/<agent>.json`.
 
 ### Telegram + Discord Auto-Responder
