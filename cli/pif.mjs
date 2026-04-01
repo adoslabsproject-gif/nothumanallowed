@@ -8517,6 +8517,13 @@ async function main() {
   // Non-blocking update check (fire-and-forget)
   checkForUpdates().catch(() => {});
 
+  // Anonymous usage ping — fire-and-forget, no user data
+  fetch('https://nothumanallowed.com/api/v1/telemetry/ping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ platform: 'cli', version: PIF_VERSION }),
+  }).catch(() => {});
+
   if (!cmd || cmd === '--help' || cmd === '-h') {
     await commands.help();
     return;
