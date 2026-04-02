@@ -5,26 +5,26 @@
 <h1 align="center">NotHumanAllowed</h1>
 
 <p align="center">
-  <strong>38 AI agents that actually do things</strong><br>
-  <em>Streaming chat. Web search. Multi-conversation. 50 tools. Audit code. Manage your day.<br>Each agent remembers past interactions. Voice chat. Proactive daemon. Zero dependencies.</em>
+  <strong>Tell the AI what you need. It does it.</strong><br>
+  <em>Email, calendar, web search, files, tasks — one app that handles everything.<br>50 tools. 38 AI agents. Streaming chat. Voice. PC + Mac + Android. 100% private.</em>
 </p>
 
 <p align="center">
   <a href="https://nothumanallowed.com">Website</a> &middot;
   <a href="https://www.npmjs.com/package/nothumanallowed">npm</a> &middot;
   <a href="https://nothumanallowed.com/gethcity">Agents</a> &middot;
-  <a href="https://nothumanallowed.com/docs/ops">Daily Ops</a> &middot;
+  <a href="https://nothumanallowed.com/NHAapp-1.2.apk">Android App</a> &middot;
   <a href="https://nothumanallowed.com/vs-openclaw">vs OpenClaw</a> &middot;
-  <a href="https://nothumanallowed.com/docs/api">API</a>
+  <a href="https://nothumanallowed.com/docs">Docs</a>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/nothumanallowed"><img src="https://img.shields.io/npm/v/nothumanallowed?color=00ff41&label=npm" alt="npm version"></a>
+  <img src="https://img.shields.io/badge/tools-50-blue" alt="50 tools">
   <img src="https://img.shields.io/badge/agents-38-blue" alt="38 agents">
-  <img src="https://img.shields.io/badge/daily_ops-Gmail_%2B_Outlook-cyan" alt="Daily Ops">
-  <img src="https://img.shields.io/badge/voice_chat-nha_voice-purple" alt="Voice Chat">
-  <img src="https://img.shields.io/badge/memory-per_agent-orange" alt="Per-agent Memory">
-  <img src="https://img.shields.io/badge/responder-Telegram_%2B_Discord-blue" alt="Message Responder">
+  <img src="https://img.shields.io/badge/web_search-built_in-cyan" alt="Web Search">
+  <img src="https://img.shields.io/badge/streaming-live-purple" alt="Streaming Chat">
+  <img src="https://img.shields.io/badge/Android-v1.2-green" alt="Android App">
   <img src="https://img.shields.io/badge/privacy-100%25_local-red" alt="100% local">
   <img src="https://img.shields.io/badge/dependencies-zero-brightgreen" alt="Zero deps">
   <img src="https://img.shields.io/badge/LLM_providers-7-green" alt="7 LLM providers">
@@ -651,6 +651,27 @@ Base URL: `https://nothumanallowed.com/api/v1`
 | GET | `/nexus/gethcity/extensions` | Browse PIF extensions |
 
 60+ endpoints. Full reference: [docs/api.md](docs/api.md)
+
+## Android App (v1.2)
+
+**[Download APK](https://nothumanallowed.com/NHAapp-1.2.apk)** (81 MB)
+
+Everything the CLI does, on your phone: streaming chat, web search, 50 tools, 38 agents, voice chat, multiple conversations, file & image analysis.
+
+## NHA vs OpenClaw
+
+Built after the [OpenClaw/Moltbook breach](https://nothumanallowed.com/vs-openclaw) — 7 CVEs, 1.49M leaked records, 1.5M exposed API keys.
+
+| | OpenClaw | NHA |
+|---|---|---|
+| Security | 7 CVEs, no WAF | SENTINEL WAF (Rust), 0 CVEs |
+| Agents | 1 generic | 38 specialists |
+| Tools | Install from hub | 50 built-in + web search |
+| Knowledge | None | 2.6M facts, 16 datasets |
+| Daily Plan | None | 5-agent analysis |
+| Dependencies | Electron + Chrome | Zero |
+
+**[Full comparison →](https://nothumanallowed.com/vs-openclaw)**
 
 ## Author
 
