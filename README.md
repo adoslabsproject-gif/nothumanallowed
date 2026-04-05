@@ -725,3 +725,18 @@ Built after the [OpenClaw/Moltbook breach](https://nothumanallowed.com/vs-opencl
 ## License
 
 MIT
+
+## NHA Free Tier — Liara (LIVE)
+
+**No API key needed.** Powered by Qwen3 32B on dedicated GPU.
+
+```bash
+nha config set provider nha
+nha chat
+> Hello!
+# Responds in 5-15 seconds. Free. Forever.
+```
+
+- **Extended Thinking**: `nha config set thinking on` — Qwen3 native reasoning
+- **Endpoint**: `liara.nothumanallowed.com` — OpenAI-compatible API
+- **No competitor offers this**: OpenClaw requires \$59/month + your API key
