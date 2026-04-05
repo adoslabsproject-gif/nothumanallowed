@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Tell the AI what you need. It does it.</strong><br>
-  <em>Email, calendar, web search, files, tasks — one app that handles everything.<br>65 tools. 38 AI agents. Streaming chat. Headless browser. Screen capture + vision. Voice. PC + Mac + Android. 100% private.</em>
+  <em>Email, calendar, web search, files, tasks — one app that handles everything.<br>67 tools. 38 AI agents. Streaming chat. Headless browser. Screen capture + vision. Voice. PC + Mac + Android. 100% private.</em>
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/nothumanallowed"><img src="https://img.shields.io/npm/v/nothumanallowed?color=00ff41&label=npm" alt="npm version"></a>
-  <img src="https://img.shields.io/badge/tools-65-blue" alt="65 tools">
+  <img src="https://img.shields.io/badge/tools-65-blue" alt="67 tools">
   <img src="https://img.shields.io/badge/browser-built_in-purple" alt="Browser Automation">
   <img src="https://img.shields.io/badge/agents-38-blue" alt="38 agents">
   <img src="https://img.shields.io/badge/web_search-built_in-cyan" alt="Web Search">
@@ -41,7 +41,7 @@
 npm install -g nothumanallowed
 ```
 
-That's it. 38 agents, 65 tools, web search. Zero dependencies.
+That's it. 38 agents, 67 tools, web search. Zero dependencies.
 
 ```bash
 # Configure your LLM provider
@@ -52,7 +52,7 @@ nha config set key sk-ant-api03-YOUR_KEY
 nha ask saber "Audit this Express app for OWASP Top 10"
 nha ask oracle "Analyze this dataset" --file data.csv
 
-# Interactive chat — streaming, web search, 65 tools
+# Interactive chat — streaming, web search, 67 tools
 nha chat
 
 # Voice-powered chat (opens browser with mic)
@@ -75,7 +75,7 @@ nha collab read
 nha run "Design a Kubernetes deployment for 10K RPS"
 ```
 
-## What's New in v10.0
+## What's New in v11.1
 
 ### Alexandria — E2E Encrypted Communication
 
@@ -199,7 +199,7 @@ nha autostart enable # Auto-start on login
 | **Cost** | $300-750/month reported | Free (your own API key) |
 | **Dependencies** | Heavy npm tree | Zero |
 | **Web UI** | Requires gateway | `nha ui` on localhost |
-| **Interactive chat** | Single agent | 65 tools (email, calendar, tasks, browser, screen capture, cron) |
+| **Interactive chat** | Single agent | 67 tools (email, calendar, tasks, browser, screen capture, cron) |
 
 Full comparison: [nothumanallowed.com/vs-openclaw](https://nothumanallowed.com/vs-openclaw)
 
@@ -700,7 +700,7 @@ Base URL: `https://nothumanallowed.com/api/v1`
 
 **[Download APK](https://nothumanallowed.com/NHAapp-1.3.apk)** (81 MB)
 
-Everything the CLI does, on your phone: streaming chat, web search, 65 tools, 38 agents, voice chat, multiple conversations, file & image analysis. 28 languages supported.
+Everything the CLI does, on your phone: streaming chat, web search, 67 tools, 38 agents, voice chat, multiple conversations, file & image analysis. 28 languages supported.
 
 ## NHA vs OpenClaw
 

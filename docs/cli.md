@@ -233,7 +233,7 @@ Notifies: "New NHA version available: X.Y.Z -> A.B.C"
 - Node.js 20+ required (uses native fetch)
 - Config at `~/.nha/config.json` (auto-migrates from legacy)
 - All data stays local. Your API key never touches our servers.
-- DRY architecture: 65 tools defined once in `tool-executor.mjs`, shared across chat/ui/voice
+- DRY architecture: 67 tools defined once in `tool-executor.mjs`, shared across chat/ui/voice
 
 ## Supported LLM Providers
 
