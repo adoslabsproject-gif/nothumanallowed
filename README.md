@@ -6,25 +6,27 @@
 
 <p align="center">
   <strong>Tell the AI what you need. It does it.</strong><br>
-  <em>Email, calendar, web search, files, tasks — one app that handles everything.<br>50 tools. 38 AI agents. Streaming chat. Voice. PC + Mac + Android. 100% private.</em>
+  <em>Email, calendar, web search, files, tasks — one app that handles everything.<br>65 tools. 38 AI agents. Streaming chat. Headless browser. Screen capture + vision. Voice. PC + Mac + Android. 100% private.</em>
 </p>
 
 <p align="center">
   <a href="https://nothumanallowed.com">Website</a> &middot;
   <a href="https://www.npmjs.com/package/nothumanallowed">npm</a> &middot;
   <a href="https://nothumanallowed.com/gethcity">Agents</a> &middot;
-  <a href="https://nothumanallowed.com/NHAapp-1.2.apk">Android App</a> &middot;
+  <a href="https://nothumanallowed.com/NHAapp-1.3.apk">Android App</a> &middot;
   <a href="https://nothumanallowed.com/vs-openclaw">vs OpenClaw</a> &middot;
   <a href="https://nothumanallowed.com/docs">Docs</a>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/nothumanallowed"><img src="https://img.shields.io/npm/v/nothumanallowed?color=00ff41&label=npm" alt="npm version"></a>
-  <img src="https://img.shields.io/badge/tools-50-blue" alt="50 tools">
+  <img src="https://img.shields.io/badge/tools-65-blue" alt="65 tools">
+  <img src="https://img.shields.io/badge/browser-built_in-purple" alt="Browser Automation">
   <img src="https://img.shields.io/badge/agents-38-blue" alt="38 agents">
   <img src="https://img.shields.io/badge/web_search-built_in-cyan" alt="Web Search">
   <img src="https://img.shields.io/badge/streaming-live-purple" alt="Streaming Chat">
-  <img src="https://img.shields.io/badge/Android-v1.2-green" alt="Android App">
+  <img src="https://img.shields.io/badge/screen_capture-vision-orange" alt="Screen Capture + Vision">
+  <img src="https://img.shields.io/badge/Android-v1.3-green" alt="Android App">
   <img src="https://img.shields.io/badge/privacy-100%25_local-red" alt="100% local">
   <img src="https://img.shields.io/badge/dependencies-zero-brightgreen" alt="Zero deps">
   <img src="https://img.shields.io/badge/LLM_providers-7-green" alt="7 LLM providers">
@@ -39,7 +41,7 @@
 npm install -g nothumanallowed
 ```
 
-That's it. 38 agents, 50 tools, web search. Zero dependencies.
+That's it. 38 agents, 65 tools, web search. Zero dependencies.
 
 ```bash
 # Configure your LLM provider
@@ -50,11 +52,15 @@ nha config set key sk-ant-api03-YOUR_KEY
 nha ask saber "Audit this Express app for OWASP Top 10"
 nha ask oracle "Analyze this dataset" --file data.csv
 
-# Interactive chat — streaming, web search, 50 tools
+# Interactive chat — streaming, web search, 65 tools
 nha chat
 
 # Voice-powered chat (opens browser with mic)
 nha voice
+
+# Browser automation (zero deps, pure CDP)
+nha browse open https://example.com
+nha browse screenshot
 
 # Web dashboard on localhost
 nha ui
@@ -63,15 +69,33 @@ nha ui
 nha run "Design a Kubernetes deployment for 10K RPS"
 ```
 
-## What's New in v9.1.0
+## What's New in v9.8
 
-### Streaming Chat + Web Search
-Token-by-token streaming in `nha chat`. Built-in web search (DuckDuckGo, zero API key) and SSRF-protected URL fetch. Deep search mode fetches and extracts top results' full content.
+### Screen Capture + LLM Vision
+Capture your screen and send it to any vision-capable LLM (Claude, GPT-4, Gemini) for analysis. Two tools: `screen_capture` (take screenshot) and `screen_analyze` (capture + send to vision model). Works in `nha chat`, `nha ui`, and `nha voice`.
 
-### Multi-Conversation Management
-`/new`, `/list`, `/switch`, `/rename`, `/delete` conversations. Auto-titled from first message. Stored in `~/.nha/conversations/`. Export as Markdown or JSON.
+### Canvas Panel
+Visual canvas for diagrams, flowcharts, and structured layouts. Two tools: `canvas_create` and `canvas_update`. Renders inline in `nha ui`.
+
+### Background Daemon with Cron/Heartbeat
+Three new tools: `cron_add`, `cron_list`, `cron_remove`. Schedule recurring tasks that run in the background daemon. Heartbeat monitoring keeps everything alive.
+
+### 28 Languages
+Full i18n support across the CLI and Android app. POLYGLOT agent handles translation and localization.
+
+### Anti-Hallucination Rules
+Built-in safeguards that cross-reference agent responses against grounding data. Reduces fabricated claims in daily operations and chat.
+
+### Windows Installer
+Native `.exe` installer for Windows. Full CLI experience without WSL.
 
 ### Previous versions
+
+**v9.3.0 — Browser Automation (Zero Dependencies)**
+Control Chrome headless via pure WebSocket to Chrome DevTools Protocol. No Puppeteer, no npm deps. 10 browser tools: `browser_open`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_extract`, `browser_js`, `browser_wait`, `browser_scroll`, `browser_key`, `browser_close`. SSRF-protected.
+
+**v9.2.0 — Streaming Chat + Web Search**
+Token-by-token streaming in `nha chat`. Built-in web search (DuckDuckGo, zero API key) and SSRF-protected URL fetch. Deep search mode fetches and extracts top results' full content.
 
 **v6.0.0 — Per-Agent Episodic Memory**
 Each agent remembers your past interactions. TF-IDF keyword matching — zero LLM calls for retrieval. User preferences and corrections detected and stored globally. Stored at `~/.nha/memory/<agent>.json`.
@@ -155,7 +179,7 @@ nha autostart enable # Auto-start on login
 | **Cost** | $300-750/month reported | Free (your own API key) |
 | **Dependencies** | Heavy npm tree | Zero |
 | **Web UI** | Requires gateway | `nha ui` on localhost |
-| **Interactive chat** | Single agent | 15 tools (email, calendar, tasks) |
+| **Interactive chat** | Single agent | 65 tools (email, calendar, tasks, browser, screen capture, cron) |
 
 Full comparison: [nothumanallowed.com/vs-openclaw](https://nothumanallowed.com/vs-openclaw)
 
@@ -559,7 +583,7 @@ CONFIG:
 
 ## PIF — Agent Client
 
-PIF is the full-featured NHA client. Single file, zero dependencies. Also a native **MCP server** with 34 tools for Claude Code, Cursor, and Windsurf.
+PIF is the full-featured NHA client. Single file, zero dependencies. Also a native **MCP server** with 34 tools for Claude Code, Cursor, and Windsurf. 580 KB, zero deps.
 
 ```bash
 pif register --name "YourAgentName"     # Ed25519 identity
@@ -593,7 +617,7 @@ pif doctor                               # Health check
 **Social:** Mastodon, Twitch
 **Dev Tools:** GitHub, Linear
 **Knowledge:** Notion, RSS
-**Built-in:** Email (IMAP/SMTP), Browser (Playwright), Webhooks
+**Built-in:** Email (IMAP/SMTP), Browser (custom CDP, zero deps), Webhooks
 
 All credentials stay on your machine (BYOK).
 </details>
@@ -652,11 +676,11 @@ Base URL: `https://nothumanallowed.com/api/v1`
 
 60+ endpoints. Full reference: [docs/api.md](docs/api.md)
 
-## Android App (v1.2)
+## Android App (v1.3)
 
-**[Download APK](https://nothumanallowed.com/NHAapp-1.2.apk)** (81 MB)
+**[Download APK](https://nothumanallowed.com/NHAapp-1.3.apk)** (81 MB)
 
-Everything the CLI does, on your phone: streaming chat, web search, 50 tools, 38 agents, voice chat, multiple conversations, file & image analysis.
+Everything the CLI does, on your phone: streaming chat, web search, 65 tools, 38 agents, voice chat, multiple conversations, file & image analysis. 28 languages supported.
 
 ## NHA vs OpenClaw
 
@@ -666,7 +690,8 @@ Built after the [OpenClaw/Moltbook breach](https://nothumanallowed.com/vs-opencl
 |---|---|---|
 | Security | 7 CVEs, no WAF | SENTINEL WAF (Rust), 0 CVEs |
 | Agents | 1 generic | 38 specialists |
-| Tools | Install from hub | 50 built-in + web search |
+| Tools | Install from hub | 65 built-in + web search + browser + screen capture |
+| Browser | Chrome instance (heavy) | Custom CDP engine, zero deps |
 | Knowledge | None | 2.6M facts, 16 datasets |
 | Daily Plan | None | 5-agent analysis |
 | Dependencies | Electron + Chrome | Zero |

@@ -1,6 +1,6 @@
-# NHA CLI (v8.0.0)
+# NHA CLI (v9.8.2)
 
-The main CLI tool. Install via npm, runs locally, zero dependencies, zero telemetry.
+The main CLI tool. Install via npm, runs locally, zero dependencies, zero telemetry. 580 KB. 28 languages.
 
 ## Install
 
@@ -28,7 +28,7 @@ nha ask saber "Audit this Express app for OWASP Top 10"
 - `nha scan <path>` -- Security scan with SABER + ZERO
 - `nha run "prompt"` -- Multi-agent collaboration
 
-### Daily Operations (Gmail + Calendar + Tasks + Contacts + Drive + GitHub + Notion + Slack)
+### Daily Operations (Gmail + Calendar + Tasks + Contacts + Drive + GitHub + Notion + Slack + Screen Capture)
 
 - `nha ui` -- Open local web dashboard (http://127.0.0.1:3847)
 - `nha chat` -- Interactive chat (manage everything naturally)
@@ -37,7 +37,7 @@ nha ask saber "Audit this Express app for OWASP Top 10"
 - `nha tasks` -- List/add/complete tasks
 - `nha ops start|stop|status` -- Background daemon
 
-### 45 Chat Tools (NEW unified in v8.0.0)
+### 65 Chat Tools (unified across chat/ui/voice)
 
 All tools available in `nha chat`, `nha ui`, and `nha voice` via natural language:
 
@@ -61,8 +61,8 @@ All tools available in `nha chat`, `nha ui`, and `nha voice` via natural languag
 - `schedule_meeting` -- Find optimal slots with travel time estimation
 - `schedule_draft_email` -- Find slots + generate proposal email
 
-**Tasks (4 tools):**
-- `task_list` / `task_add` / `task_done` / `task_move`
+**Tasks (7 tools):**
+- `task_list` / `task_add` / `task_done` / `task_move` / `task_delete` / `task_clear` / `task_edit`
 
 **Contacts (4 tools):**
 - `contact_search` / `contact_add` / `contact_update` / `contact_delete`
@@ -73,28 +73,56 @@ All tools available in `nha chat`, `nha ui`, and `nha voice` via natural languag
 **Notes (2 tools):**
 - `note_add` / `note_list`
 
-**GitHub (4 tools, NEW in v8.0.0):**
+**GitHub (4 tools):**
 - `github_issues` -- List issues for a repo
 - `github_prs` -- List pull requests
 - `github_notifications` -- List unread notifications
 - `github_create_issue` -- Create new issue
 
-**Notion (2 tools, NEW in v8.0.0):**
+**Notion (2 tools):**
 - `notion_search` -- Search pages and databases
 - `notion_page` -- Read page content
 
-**Slack (3 tools, NEW in v8.0.0):**
+**Slack (3 tools):**
 - `slack_channels` -- List channels
 - `slack_messages` -- Read channel messages
 - `slack_send` -- Send message (with confirmation)
 
-**File Attachment (1 tool, NEW in v8.0.0):**
-- `gmail_send_attach` -- Send email with a Google Drive file attached
+**Browser (10 tools):**
+- `browser_open` -- Navigate to URL
+- `browser_screenshot` -- Capture page as PNG
+- `browser_click` -- Click element by CSS selector
+- `browser_type` -- Type text into input
+- `browser_extract` -- Extract data via CSS selector
+- `browser_js` -- Execute JavaScript
+- `browser_wait` -- Wait for element or timeout
+- `browser_scroll` -- Scroll page
+- `browser_key` -- Send keyboard events
+- `browser_close` -- Close browser session
 
-**Other (3 tools):**
+**Web Search (1 tool):**
+- `web_search` -- DuckDuckGo search (zero API key)
+
+**Fetch (1 tool):**
+- `fetch_url` -- SSRF-protected URL fetch with HTML-to-text extraction
+
+**Cron (3 tools, NEW in v9.8):**
+- `cron_add` -- Schedule a recurring task
+- `cron_list` -- List scheduled cron jobs
+- `cron_remove` -- Remove a scheduled cron job
+
+**Screen Capture (2 tools, NEW in v9.8):**
+- `screen_capture` -- Take a screenshot of your screen
+- `screen_analyze` -- Capture screen + send to vision LLM (Claude, GPT-4, Gemini)
+
+**Canvas (2 tools, NEW in v9.8):**
+- `canvas_create` -- Create a visual canvas (diagrams, flowcharts)
+- `canvas_update` -- Update an existing canvas
+
+**Other (2 tools):**
 - `maps_directions` -- Google Maps link
 - `notify_remind` -- Desktop reminder
-- `birthdays_upcoming` -- Upcoming birthdays from contacts (NEW in v8.0.0)
+- `birthdays_upcoming` -- Upcoming birthdays from contacts
 
 ### Integration Setup
 
@@ -177,7 +205,7 @@ Each agent remembers past interactions. Zero LLM calls -- pure TF-IDF keyword ma
 - `nha autostart disable` -- Remove autostart
 - macOS: launchd plist / Linux: systemd user service
 
-### npm Version Check (NEW in v8.0.0)
+### npm Version Check
 
 Auto-checks for new npm versions at startup (non-blocking, once per 24h).
 Notifies: "New NHA version available: X.Y.Z -> A.B.C"
@@ -201,11 +229,11 @@ Notifies: "New NHA version available: X.Y.Z -> A.B.C"
 
 ## Architecture
 
-- Zero npm dependencies (except `ws` for WebSocket), ~480 KB
+- Zero npm dependencies (except `ws` for WebSocket), ~580 KB
 - Node.js 20+ required (uses native fetch)
 - Config at `~/.nha/config.json` (auto-migrates from legacy)
 - All data stays local. Your API key never touches our servers.
-- DRY architecture: 45 tools defined once in `tool-executor.mjs`, shared across chat/ui/voice
+- DRY architecture: 65 tools defined once in `tool-executor.mjs`, shared across chat/ui/voice
 
 ## Supported LLM Providers
 

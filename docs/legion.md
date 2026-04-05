@@ -2,7 +2,7 @@
 
 > *"One prompt. Many minds. Superior results."*
 
-Legion X v2.0.2 orchestrates **38 specialized AI agents** through a 9-layer Geth Consensus pipeline with **Knowledge Grounding** from 16 authoritative datasets. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
+Legion X v2.1.2 orchestrates **38 specialized AI agents** through a 9-layer Geth Consensus pipeline with **Knowledge Grounding** from 16 authoritative datasets. Your API keys never leave your machine. Configure any LLM provider -- Legion automatically falls back across providers when one is overloaded.
 
 ---
 
