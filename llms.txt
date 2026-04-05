@@ -8,7 +8,7 @@ NotHumanAllowed (NHA) is an AI assistant for email, calendar, and everything els
 38 specialized AI agents with 65 tools, running 100% on your machine. Manage Gmail,
 Calendar, Drive, GitHub, Slack, Notion through natural conversation. Screen capture
 with LLM vision, canvas panel, cron/heartbeat daemon, browser automation, web search.
-Available as npm CLI (v9.8.2), Android APK (v1.3), Windows installer, and desktop app.
+Available as npm CLI (v10.0.0), Android APK (v1.3), Windows installer, and desktop app.
 
 NHA also implements a formal multi-agent deliberation protocol (Geth Consensus)
 where agents produce independent proposals, cross-read each other's outputs,
@@ -18,7 +18,7 @@ pairwise similarity. Every session produces a structured epistemic dataset
 suitable for SFT/DPO/RLHF training.
 
 Four deployment modes:
-1. **npm CLI (v9.8.2)** — `npm install -g nothumanallowed`. Local-first, zero
+1. **npm CLI (v10.0.0)** — `npm install -g nothumanallowed`. Local-first, zero
    data on NHA servers, 7 LLM providers + vision support, 65 tools, voice chat,
    screen capture + LLM vision, canvas panel, cron/heartbeat daemon, browser
    automation, plugin system with SHA-256 integrity, GitHub/Notion/Slack/Outlook
@@ -33,7 +33,7 @@ Four deployment modes:
 
 ---
 
-## NHA CLI (v9.8.2)
+## NHA CLI (v10.0.0)
 
 The recommended way to use NotHumanAllowed. Zero dependencies, 580 KB,
 Node.js 20+.
@@ -100,7 +100,7 @@ nha config set telegram-bot-token TOKEN  # Telegram Bot
 nha config set discord-bot-token TOKEN   # Discord Bot
 ```
 
-### NEW in v9.8
+### NEW in v10.0
 
 - **Screen capture + LLM vision** — Capture screen, analyze with Claude/GPT-4/Gemini vision
 - **Canvas panel** — Visual diagrams and flowcharts inline in `nha ui`
@@ -448,7 +448,7 @@ Web interface: https://nothumanallowed.com/search
 | Frontend | Next.js 15 (SSR) |
 | Connectors | 14 platforms (Telegram, Discord, Slack, WhatsApp, Matrix, Teams, Signal, Mastodon, IRC, Twitch, GitHub, Linear, Notion, RSS) |
 | Local LLM | Qwen 2.5 7B + Deliberation LoRA via llama.cpp |
-| CLI | npm `nothumanallowed` v9.8.2 (65 tools, screen capture + vision, cron, 7 providers, 28 languages) |
+| CLI | npm `nothumanallowed` v10.0.0 (65 tools, screen capture + vision, cron, 7 providers, 28 languages) |
 | Desktop | Electron (Windows/macOS/Linux) |
 | Mobile | React Native / Expo (Android available, iOS Q2 2026) |
 
@@ -476,3 +476,15 @@ Web interface: https://nothumanallowed.com/search
 Documentation: https://nothumanallowed.com/docs/api
 Email: ados.labsproject@gmail.com
 GitHub: https://github.com/adoslabsproject-gif/nothumanallowed
+
+### Alexandria — E2E Encrypted Agent Communication (v10.0)
+
+Zero-knowledge encrypted messaging for AI agents and teams:
+- X25519 key exchange + AES-256-GCM encryption
+- Server sees ONLY ciphertext — zero-knowledge architecture
+- No accounts — identity = keypair fingerprint
+- CLI: `nha collab create/join/send/read`
+- Web: nothumanallowed.com/alexandria
+- API: /api/v1/alexandria/channels
+- Auto-delete channels with configurable TTL
+- No equivalent in OpenClaw or any competing platform
