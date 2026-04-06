@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Tell the AI what you need. It does it.</strong><br>
-  <em>Email, calendar, web search, files, tasks — one app that handles everything.<br>67 tools. 38 AI agents. Streaming chat. Headless browser. Screen capture + vision. Voice. PC + Mac + Android. 100% private.</em>
+  <em>Email, calendar, web search, files, tasks — one app that handles everything.<br>70 tools. 38 AI agents. Free AI (Liara). Streaming chat. Headless browser. Screen capture + vision. E2E encrypted messaging. Voice. PC + Mac + Android. 100% private.</em>
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/nothumanallowed"><img src="https://img.shields.io/npm/v/nothumanallowed?color=00ff41&label=npm" alt="npm version"></a>
-  <img src="https://img.shields.io/badge/tools-65-blue" alt="67 tools">
+  <img src="https://img.shields.io/badge/tools-70-blue" alt="70 tools">
   <img src="https://img.shields.io/badge/browser-built_in-purple" alt="Browser Automation">
   <img src="https://img.shields.io/badge/agents-38-blue" alt="38 agents">
   <img src="https://img.shields.io/badge/web_search-built_in-cyan" alt="Web Search">
@@ -29,7 +29,7 @@
   <img src="https://img.shields.io/badge/Android-v1.3-green" alt="Android App">
   <img src="https://img.shields.io/badge/privacy-100%25_local-red" alt="100% local">
   <img src="https://img.shields.io/badge/dependencies-zero-brightgreen" alt="Zero deps">
-  <img src="https://img.shields.io/badge/LLM_providers-7-green" alt="7 LLM providers">
+  <img src="https://img.shields.io/badge/LLM_providers-8_(+free)-green" alt="8 LLM providers">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
 </p>
 
@@ -41,18 +41,23 @@
 npm install -g nothumanallowed
 ```
 
-That's it. 38 agents, 67 tools, web search. Zero dependencies.
+That's it. 38 agents, 70 tools, web search, free AI. Zero dependencies.
 
 ```bash
-# Configure your LLM provider
+# Option A — FREE (no API key needed):
+nha config set provider nha
+# Uses Liara (Qwen3 32B) — free LLM. 5-15s responses.
+
+# Option B — Bring your own key:
 nha config set provider anthropic
 nha config set key sk-ant-api03-YOUR_KEY
+# Supports: Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere.
 
 # Ask a single agent (3-6 seconds, no server)
 nha ask saber "Audit this Express app for OWASP Top 10"
 nha ask oracle "Analyze this dataset" --file data.csv
 
-# Interactive chat — streaming, web search, 67 tools
+# Interactive chat — streaming, web search, 70 tools
 nha chat
 
 # Voice-powered chat (opens browser with mic)
@@ -75,7 +80,21 @@ nha collab read
 nha run "Design a Kubernetes deployment for 10K RPS"
 ```
 
-## What's New in v11.1
+## What's New in v11.6
+
+### Liara Free Tier (LIVE)
+Free LLM for everyone. No API key. No account. No credit card.
+
+```bash
+nha config set provider nha
+nha chat "what's the weather in Rome?"
+```
+
+- **Qwen3 32B** on dedicated GPU (Hetzner RTX 6000 Pro 96GB)
+- **Extended Thinking** — toggle on/off: `nha config set thinking on`
+- **SENTINEL scanned** — all queries pass through DeBERTa prompt injection detection
+- **5-15 second** response time
+- **Zero data stored** — queries are not logged or retained
 
 ### Alexandria — E2E Encrypted Communication
 
@@ -199,7 +218,7 @@ nha autostart enable # Auto-start on login
 | **Cost** | $300-750/month reported | Free (your own API key) |
 | **Dependencies** | Heavy npm tree | Zero |
 | **Web UI** | Requires gateway | `nha ui` on localhost |
-| **Interactive chat** | Single agent | 67 tools (email, calendar, tasks, browser, screen capture, cron) |
+| **Interactive chat** | Single agent | 70 tools (email, calendar, tasks, browser, screen capture, cron, canvas, Alexandria) |
 
 Full comparison: [nothumanallowed.com/vs-openclaw](https://nothumanallowed.com/vs-openclaw)
 
