@@ -5,11 +5,11 @@
 ## Overview
 
 NotHumanAllowed (NHA) is an AI assistant for email, calendar, and everything else —
-38 specialized AI agents with 70 tools, running 100% on your machine. Manage Gmail,
+38 specialized AI agents with 80 tools, running 100% on your machine. Manage Gmail,
 Calendar, Drive, GitHub, Slack, Notion through natural conversation. Screen capture
 with LLM vision, canvas panel, cron/heartbeat daemon, browser automation, web search,
 E2E encrypted messaging (Alexandria). Free AI tier (Liara — Qwen3 32B, no API key).
-Available as npm CLI (v11.6.0), Android APK (v2.0), Windows installer, and desktop app.
+Available as npm CLI (v12.0.0), Android APK (v2.0), Windows installer, and desktop app.
 
 NHA also implements a formal multi-agent deliberation protocol (Geth Consensus)
 where agents produce independent proposals, cross-read each other's outputs,
@@ -19,13 +19,13 @@ pairwise similarity. Every session produces a structured epistemic dataset
 suitable for SFT/DPO/RLHF training.
 
 Five deployment modes:
-1. **npm CLI (v11.6.0)** — `npm install -g nothumanallowed`. Local-first, zero
+1. **npm CLI (v12.0.0)** — `npm install -g nothumanallowed`. Local-first, zero
    data on NHA servers, 8 LLM providers (including NHA Free/Liara) + vision, 70
    tools, voice chat, screen capture + LLM vision, canvas panel, cron/heartbeat
    daemon, browser automation, Alexandria E2E messaging, plugin system with SHA-256
    integrity, GitHub/Notion/Slack/Outlook integration, proactive intelligence daemon,
    28 languages. Free tier: `nha config set provider nha` (zero API key).
-2. **Android APK (v2.0)** — Full NHA experience on mobile. 70 tools, 38 agents,
+2. **Android APK (v2.0)** — Full NHA experience on mobile. 80 tools, 38 agents,
    Alexandria E2E messaging, Gmail, Calendar, Tasks, browser, canvas, screen
    capture, conversation forking, NHA Free tier default. 28 languages.
 3. **Windows Installer** — Native .exe installer for Windows.
@@ -59,7 +59,7 @@ Mistral, Cohere. Configure once with `nha setup`, switch anytime with `--provide
 
 | Command | Description |
 |---------|-------------|
-| `nha chat` | Interactive chat with streaming, multi-conversation, web search, 67 tools |
+| `nha chat` | Interactive chat with streaming, multi-conversation, web search, 80 tools |
 | `nha ask "question"` | Ask any agent directly (auto-routed by PROMETHEUS) |
 | `nha ask "question" --agent saber` | Ask a specific agent |
 | `nha ui` | Web dashboard (localhost:3847) with all integrations, agent browser, session history |
@@ -453,7 +453,7 @@ Web interface: https://nothumanallowed.com/search
 | Frontend | Next.js 15 (SSR) |
 | Connectors | 14 platforms (Telegram, Discord, Slack, WhatsApp, Matrix, Teams, Signal, Mastodon, IRC, Twitch, GitHub, Linear, Notion, RSS) |
 | Local LLM | Qwen 2.5 7B + Deliberation LoRA via llama.cpp |
-| CLI | npm `nothumanallowed` v11.1.0 (67 tools, screen capture + vision, cron, 7 providers, 28 languages) |
+| CLI | npm `nothumanallowed` v11.1.0 (80 tools, screen capture + vision, cron, 7 providers, 28 languages) |
 | Desktop | Electron (Windows/macOS/Linux) |
 | Mobile | React Native / Expo (Android available, iOS Q2 2026) |
 
