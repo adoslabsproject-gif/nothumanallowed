@@ -149,6 +149,8 @@ input:focus,textarea:focus{border-color:var(--green3)}
   .header{padding:10px 12px}
   .header__title{font-size:15px}
   .content{padding:10px}
+  /* Conversation sidebar as overlay on mobile, not side panel */
+  #convSidebar{position:fixed!important;top:0!important;left:0!important;height:100dvh!important;width:260px!important;box-shadow:4px 0 20px rgba(0,0,0,0.8)!important;z-index:250!important}
 }
 .chat__stop{background:var(--red);color:var(--bright);padding:10px 16px;border-radius:var(--r);font-weight:700;font-size:12px;display:none}
 .chat__stop--visible{display:block}
@@ -426,7 +428,7 @@ var chatReady=false;
 function renderChat(el){
   if(!chatReady||!document.getElementById('chatMessages')){
     el.innerHTML='<div style="display:flex;height:calc(100vh - 56px)">'+
-      '<div id="convSidebar" style="width:220px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0;background:var(--bg);display:'+(localStorage.getItem('nha_conv_sidebar')==='hidden'?'none':'')+'">'+
+      '<div id="convSidebar" style="width:220px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0;background:var(--bg);z-index:100;display:'+(localStorage.getItem('nha_conv_sidebar')==='hidden'||(typeof window!=='undefined'&&window.innerWidth<600)?'none':'')+'">'+
         '<div style="padding:8px"><button onclick="createNewConv()" style="width:100%;padding:8px;border-radius:var(--r);border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;font-size:11px">+ New Chat</button></div>'+
         '<div id="convList"></div>'+
       '</div>'+
