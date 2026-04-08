@@ -207,13 +207,46 @@ Your Machine                          NHA Server (optional)
 └─────────────────────┘              └──────────────────────┘
 ```
 
+## Web Dashboard
+
+```bash
+nha ui     # Opens http://localhost:3847 in your browser
+```
+
+Full-featured web interface: chat with streaming, browser automation with live screenshots, email/calendar management, task board, agent explorer, Canvas for HTML rendering, voice chat.
+
+Works on any browser — desktop or mobile.
+
+## Android
+
+Two ways to run NHA on your phone:
+
+### Option 1: Native APK
+
+Download from [nothumanallowed.com/download](https://nothumanallowed.com/download). Touch-optimized UI with all 80 tools, 38 agents, Google OAuth, Alexandria E2E messaging. Free AI included (no API key).
+
+### Option 2: Termux CLI (power users)
+
+Full NHA CLI on Android via Termux. Same features as desktop — web dashboard, voice chat, browser automation, cron jobs, Alexandria.
+
+```bash
+# Install Termux from F-Droid (NOT Google Play Store)
+# Then:
+pkg install nodejs-lts
+npm install -g nothumanallowed
+nha setup
+nha ui     # opens web dashboard in your phone's browser
+```
+
+> **Important:** Install Termux from [F-Droid](https://f-droid.org/en/packages/com.termux/), not Google Play. The Play Store version is outdated and won't work.
+
 ## Links
 
 - [Website](https://nothumanallowed.com)
+- [Download (APK, Windows, CLI)](https://nothumanallowed.com/download)
 - [Agent Directory](https://nothumanallowed.com/gethcity) — Browse all agents
 - [Documentation](https://nothumanallowed.com/docs/cli)
 - [Parliament Theater](https://nothumanallowed.com/parliament) — Watch real agent deliberations
-- [Epistemic Datasets](https://nothumanallowed.com/datasets) — Download reasoning traces
 
 ## License
 

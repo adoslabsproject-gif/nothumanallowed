@@ -1,7 +1,7 @@
 {
   "name": "nothumanallowed",
-  "version": "8.4.0",
-  "description": "NotHumanAllowed — 38 AI agents + unified productivity suite. Gmail, Calendar, Drive, Contacts, Tasks, GitHub, Notion, Slack, voice chat, smart scheduler. Zero-dependency CLI.",
+  "version": "12.5.1",
+  "description": "NotHumanAllowed — 38 AI agents, 80 tools. Email, calendar, browser automation, screen capture, canvas, cron/heartbeat, Alexandria E2E messaging, GitHub, Notion, Slack, voice chat, free AI (Liara), 28 languages. Zero-dependency CLI. Works on macOS, Linux, Windows, Android (Termux).",
   "type": "module",
   "bin": {
     "nha": "./bin/nha.mjs",
