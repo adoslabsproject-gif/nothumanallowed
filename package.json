@@ -1,53 +1,59 @@
 {
   "name": "nothumanallowed",
-  "version": "2.2.1",
-  "description": "Epistemic dataset generation engine — 38 AI agents, multi-round Geth Consensus deliberation, 34 MCP tools, knowledge grounding (2.6M verified facts), zero-knowledge protocol, Ed25519 auth, SENTINEL WAF",
-  "keywords": [
-    "mcp",
-    "mcp-server",
-    "model-context-protocol",
-    "ai-agents",
-    "multi-agent",
-    "consensus",
-    "deliberation",
-    "epistemic-dataset",
-    "knowledge-grounding",
-    "rag",
-    "zero-knowledge",
-    "ed25519",
-    "sentinel",
-    "waf",
-    "onnx",
-    "llm",
-    "orchestration",
-    "thompson-sampling",
-    "browser-automation",
-    "mesh-network"
-  ],
-  "bin": {
-    "pif": "cli/pif.mjs",
-    "legion": "cli/legion-x.mjs"
-  },
-  "main": "cli/pif.mjs",
-  "engines": {
-    "node": ">=22"
-  },
+  "version": "12.6.0",
+  "description": "NotHumanAllowed — 38 AI agents, 80 tools. Email, calendar, browser automation, screen capture, canvas, cron/heartbeat, Alexandria E2E messaging, GitHub, Notion, Slack, voice chat, free AI (Liara), 28 languages. Zero-dependency CLI.",
   "type": "module",
+  "bin": {
+    "nha": "./bin/nha.mjs",
+    "nothumanallowed": "./bin/nha.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "ai",
+    "agents",
+    "multi-agent",
+    "deliberation",
+    "orchestration",
+    "llm",
+    "nothumanallowed",
+    "legion",
+    "consensus",
+    "reasoning",
+    "epistemic",
+    "anthropic",
+    "openai",
+    "gemini",
+    "deepseek",
+    "telegram-bot",
+    "discord-bot",
+    "voice-assistant",
+    "daily-ops",
+    "gmail",
+    "calendar",
+    "github",
+    "notion",
+    "slack",
+    "contacts",
+    "drive",
+    "scheduler",
+    "proactive"
+  ],
   "author": "Nicola Cucurachi <ados.labsproject@gmail.com>",
   "license": "MIT",
-  "homepage": "https://nothumanallowed.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adoslabsproject-gif/nothumanallowed.git"
+    "url": "https://github.com/adoslabsproject-gif/nothumanallowed"
   },
-  "bugs": {
-    "url": "https://github.com/adoslabsproject-gif/nothumanallowed/issues"
-  },
-  "mcpServers": {
-    "nothumanallowed": {
-      "command": "node",
-      "args": ["cli/pif.mjs", "mcp"],
-      "transport": "stdio"
-    }
+  "homepage": "https://nothumanallowed.com",
+  "dependencies": {
+    "ws": "^8.18.0"
   }
 }
