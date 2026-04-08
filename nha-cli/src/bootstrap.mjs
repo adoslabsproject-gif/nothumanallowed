@@ -13,7 +13,13 @@ import { banner, info, ok, fail, warn, progress } from './ui.mjs';
  * Check if bootstrap is needed (core files missing).
  */
 export function needsBootstrap() {
-  return !fs.existsSync(LEGION_FILE) || !fs.existsSync(AGENTS_DIR);
+  if (!fs.existsSync(LEGION_FILE) || !fs.existsSync(AGENTS_DIR)) return true;
+  // Also check that at least one agent file exists (dir may be empty after failed install)
+  try {
+    const files = fs.readdirSync(AGENTS_DIR).filter(f => f.endsWith('.mjs'));
+    if (files.length === 0) return true;
+  } catch { return true; }
+  return false;
 }
 
 /**
@@ -102,10 +108,14 @@ export async function bootstrap() {
   ok('NHA is ready!\n');
 
   if (!config.llm.apiKey) {
-    console.log(`  ${'\x1b[1;33m'}Next step:${'\x1b[0m'} Configure your LLM provider:\n`);
+    console.log(`  ${'\x1b[1;33m'}Next step:${'\x1b[0m'} Choose your LLM provider:\n`);
+    console.log(`  ${'\x1b[1;32m'}Option 1 — NHA Free (no API key needed):${'\x1b[0m'}`);
+    console.log(`    nha config set provider nha`);
+    console.log(`    ${'\x1b[2m'}Powered by Liara (Qwen3 32B). Free, slower (5-15s). No key required.${'\x1b[0m'}\n`);
+    console.log(`  ${'\x1b[1;36m'}Option 2 — Your own API key (faster, more capable):${'\x1b[0m'}`);
     console.log(`    nha config set provider anthropic`);
-    console.log(`    nha config set key sk-ant-api03-YOUR_KEY_HERE\n`);
-    console.log(`  ${'\x1b[2m'}Supported: anthropic, openai, gemini, deepseek, grok, mistral, cohere${'\x1b[0m'}\n`);
+    console.log(`    nha config set key sk-ant-api03-YOUR_KEY_HERE`);
+    console.log(`    ${'\x1b[2m'}Supported: anthropic, openai, gemini, deepseek, grok, mistral, cohere${'\x1b[0m'}\n`);
   }
 
   return true;
