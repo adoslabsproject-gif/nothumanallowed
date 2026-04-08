@@ -11,11 +11,11 @@ export function getHTML(port) {
   const CSS = `
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0a0a0a;--bg2:#111;--bg3:#1a1a1a;--bg4:#222;
-  --green:#00ff41;--green2:#00cc33;--green3:#00aa28;--greendim:#0a3a12;
-  --cyan:#00e5ff;--amber:#ffb300;--red:#ff1744;
-  --text:#d4d4d8;--dim:#9ca3af;--bright:#fff;
-  --border:#1e1e1e;--border2:#333;
+  --bg:#0a0a0a;--bg2:#111;--bg3:#1a1a2e;--bg4:#222;
+  --green:#a5b4fc;--green2:#818cf8;--green3:#6366f1;--greendim:#12121e;
+  --cyan:#38bdf8;--amber:#fbbf24;--red:#ef4444;
+  --text:#e4e4e7;--dim:#9ca3af;--bright:#fff;
+  --border:#1e1e2e;--border2:#3f3f5e;
   --font:'JetBrains Mono','Fira Code','SF Mono','Consolas',monospace;
   --r:6px;
 }
@@ -134,17 +134,22 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .browser-viewer__status{padding:4px 10px;font-size:9px;color:var(--dim);border-top:1px solid var(--border)}
 @media(max-width:600px){.browser-viewer{width:calc(100vw - 24px);top:8px;left:8px}}
 @media(min-width:901px){.browser-viewer{left:232px}}
-.chat__bar{display:flex;gap:8px;padding:10px 0 12px 0;border-top:1px solid var(--border);flex-shrink:0}
+.chat__bar{display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 12px 0;border-top:1px solid var(--border);flex-shrink:0;align-items:flex-end}
+.chat__bar-tools{display:flex;gap:4px;align-items:center;width:100%}
 .chat__input{flex:1;resize:none;min-height:44px;max-height:120px;padding:10px 14px;font-size:14px}
-.chat__send{background:var(--green3);color:var(--bg);padding:10px 20px;border-radius:var(--r);font-weight:700;font-size:14px}
+.chat__send{background:var(--green3);color:var(--bg);padding:10px 20px;border-radius:var(--r);font-weight:700;font-size:14px;white-space:nowrap}
 .chat__send:disabled{opacity:.4}
+.chat__stop{white-space:nowrap}
 
 /* ---- MOBILE TOUCH (Termux / small screens) ---- */
 @media(max-width:600px){
-  .msg--user .msg__bubble,.msg--assistant .msg__bubble{font-size:14px;padding:12px 14px;max-width:92%;line-height:1.55}
+  .msg--user .msg__bubble,.msg--assistant .msg__bubble{font-size:14px;padding:12px 14px;max-width:94%;line-height:1.55}
   .msg__label{font-size:11px}
-  .chat__input{min-height:48px;font-size:15px;padding:12px 14px}
-  .chat__send{padding:12px 20px;font-size:15px}
+  .chat__bar{flex-wrap:wrap;gap:6px;padding:8px 4px 10px 4px}
+  .chat__bar-tools{flex-wrap:wrap;gap:4px}
+  .chat__input{min-height:48px;font-size:15px;padding:12px 14px;width:100%;flex-basis:100%}
+  .chat__send{padding:12px 20px;font-size:15px;flex-grow:1}
+  .chat__stop{flex-grow:1}
   .chat__empty-title{font-size:22px}
   .header{padding:10px 12px}
   .header__title{font-size:15px}
@@ -441,7 +446,23 @@ function renderChat(el){
         '</div>'+
         '<div class="chat"><div class="chat__messages" id="chatMessages"></div>'+
         '<div id="chatAttachInfo" style="display:none;padding:4px 12px;font-size:11px;color:var(--cyan);background:var(--bg2);border-top:1px solid var(--border)"><span id="chatAttachName"></span> <button onclick="clearChatAttach()" style="background:none;border:none;color:#f44;cursor:pointer;font-size:14px;font-weight:700">&times;</button></div>'+
-        '<div class="chat__bar"><button class="chat__mic" id="chatMic" onclick="toggleVoiceInput()" title="Voice input">&#127908;</button><button onclick="document.getElementById(\\x27chatFileInput\\x27).click()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px" title="Attach file">&#128206;</button><button onclick="document.getElementById(\\x27chatImageInput\\x27).click()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px" title="Attach image">&#128247;</button><input type="file" id="chatFileInput" style="display:none" onchange="handleChatFile(this)"><input type="file" id="chatImageInput" accept="image/*" style="display:none" onchange="handleChatImage(this)"><textarea class="chat__input" id="chatInput" placeholder="Ask anything... (or attach file/image first)" rows="1"></textarea><button class="chat__send" id="chatSend">Send</button><button class="chat__stop" id="chatStop" onclick="stopChat()">Stop</button><button onclick="reopenCanvas()" style="background:none;border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:11px;padding:4px 8px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px" title="Open Canvas / Browser panel"><span style="font-size:13px">&#x25A3;</span>Panel</button><button id="thinkingToggle" onclick="toggleThinking()" style="background:none;border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:10px;padding:4px 8px;color:var(--dim);font-family:var(--mono)" title="Toggle Extended Thinking (NHA Free only)">Think: off</button></div>'+
+        '<div class="chat__bar">'+
+          '<div class="chat__bar-tools">'+
+            '<button class="chat__mic" id="chatMic" onclick="toggleVoiceInput()" title="Voice input" style="font-size:16px;padding:4px 6px;background:none;border:none;cursor:pointer">&#127908;</button>'+
+            '<button onclick="document.getElementById(\\x27chatFileInput\\x27).click()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px" title="Attach file">&#128206;</button>'+
+            '<button onclick="document.getElementById(\\x27chatImageInput\\x27).click()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px" title="Attach image">&#128247;</button>'+
+            '<input type="file" id="chatFileInput" style="display:none" onchange="handleChatFile(this)">'+
+            '<input type="file" id="chatImageInput" accept="image/*" style="display:none" onchange="handleChatImage(this)">'+
+            '<span style="flex:1"></span>'+
+            '<button id="thinkingToggle" onclick="toggleThinking()" style="background:none;border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:10px;padding:4px 8px;color:var(--dim);font-family:var(--font);white-space:nowrap" title="Toggle Extended Thinking">Think: off</button>'+
+            '<button onclick="reopenCanvas()" style="background:none;border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:10px;padding:4px 8px;color:var(--dim);font-family:var(--font);white-space:nowrap;display:flex;align-items:center;gap:3px" title="Panel"><span style="font-size:12px">&#x25A3;</span>Panel</button>'+
+          '</div>'+
+          '<div style="display:flex;gap:8px;width:100%;align-items:flex-end">'+
+            '<textarea class="chat__input" id="chatInput" placeholder="Ask anything..." rows="1"></textarea>'+
+            '<button class="chat__send" id="chatSend">Send</button>'+
+            '<button class="chat__stop" id="chatStop" onclick="stopChat()">Stop</button>'+
+          '</div>'+
+        '</div>'+
         '</div>'+
       '</div>'+
     '</div>';
