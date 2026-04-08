@@ -11,7 +11,7 @@ const LEGACY_PIF = path.join(os.homedir(), '.pif-agent.json');
 const DEFAULT_CONFIG = {
   version: 1,
   llm: {
-    provider: 'anthropic',
+    provider: 'nha',
     apiKey: '',
     openaiKey: '',
     geminiKey: '',
@@ -283,6 +283,9 @@ export function setConfigValue(key, value) {
     'my-role': 'profile.role',
     'role': 'profile.role',
     'profile-notes': 'profile.notes',
+    'thinking': 'thinking',
+    'extended-thinking': 'thinking',
+    'language': 'language',
   };
 
   const resolved = aliases[key] || key;
@@ -295,7 +298,14 @@ export function setConfigValue(key, value) {
   }
 
   const lastKey = resolvedParts[resolvedParts.length - 1];
-  if (obj[lastKey] === undefined) return false;
+  // Allow creating new keys (don't reject undefined)
+
+  // Empty value = clear the field
+  if (value === '' || value === null || value === undefined) {
+    obj[lastKey] = '';
+    saveConfig(config);
+    return true;
+  }
 
   // Type coercion based on existing type
   const existing = obj[lastKey];
