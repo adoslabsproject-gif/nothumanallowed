@@ -939,7 +939,15 @@ function sendChat(){
   var payload={message:msg,history:allHistory,conversationId:activeConvId,isRetry:isRetry};
 
   fetch(API+'/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:chatAbortController.signal}).then(function(response){
-    if(!response.ok||!response.body){chatHistory[streamIdx].content='Error: connection failed';endStreaming();renderMessages();return;}
+    if(!response.ok||!response.body||typeof response.body.getReader!=='function'){
+      // Fallback for browsers without ReadableStream support — use non-streaming endpoint
+      chatHistory[streamIdx].content='Thinking...';renderMessages();
+      apiPost('/api/chat',{message:msg,history:allHistory,conversationId:activeConvId,isRetry:isRetry}).then(function(r){
+        chatHistory[streamIdx].content=(r&&r.response)||(r&&r.error?'Error: '+r.error:'Error: no response');
+        endStreaming();renderMessages();loadConvList();
+      });
+      return;
+    }
     var reader=response.body.getReader();var decoder=new TextDecoder();var buffer='';var currentEvent='';
     function pump(){
       reader.read().then(function(result){
@@ -2465,7 +2473,9 @@ function askAgent(){
   }
 
   apiPost('/api/ask', payload).then(function(r){
-    resp.textContent=(r&&r.response)||'Error: no response';
+    if(r&&r.error) resp.textContent='Error: '+r.error;
+    else if(r&&r.response) resp.textContent=r.response;
+    else resp.textContent='Error: no response. Run "nha update" in Termux to download agents.';
     // Reset file after ask
     attachedFileContent = null;
     attachedFileName = null;
