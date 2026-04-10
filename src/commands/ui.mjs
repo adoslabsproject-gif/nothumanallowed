@@ -335,15 +335,40 @@ export async function cmdUI(args) {
 
       // POST /api/google/auth — trigger Google OAuth flow from web UI
       if (method === 'POST' && pathname === '/api/google/auth') {
+        // Check if Google credentials are configured first
+        const clientId = config.google?.clientId || '';
+        const clientSecret = config.google?.clientSecret || '';
+        if (!clientId) {
+          sendJSON(res, 200, {
+            ok: false,
+            needsSetup: true,
+            message: 'Google OAuth not configured yet.\n\n' +
+              'To connect Google services, you need OAuth credentials:\n\n' +
+              '1. Go to https://console.cloud.google.com/apis/credentials\n' +
+              '2. Create an OAuth 2.0 Client ID (Desktop app type)\n' +
+              '3. Enable Gmail API, Calendar API, Drive API, People API, Tasks API\n' +
+              '4. Add authorized redirect URIs: http://127.0.0.1:19847/callback through http://127.0.0.1:19851/callback\n' +
+              '5. In the NHA terminal, run:\n' +
+              '   nha config set google-client-id YOUR_CLIENT_ID\n' +
+              '   nha config set google-client-secret YOUR_CLIENT_SECRET\n' +
+              '6. Then click "Connect Google" again.',
+          });
+          logRequest(method, pathname, 200, Date.now() - start);
+          return;
+        }
         try {
           const { runAuthFlow } = await import('../services/google-oauth.mjs');
-          // Run auth flow in background — opens browser
-          runAuthFlow(config).then(success => {
-            if (success) config._googleConnected = true;
-          }).catch(() => {});
-          sendJSON(res, 200, { ok: true, message: 'OAuth flow started. Check the browser window that opened.' });
+          const success = await runAuthFlow(config);
+          if (success) {
+            config._googleConnected = true;
+            const freshConfig = await loadConfig();
+            Object.assign(config, freshConfig);
+            sendJSON(res, 200, { ok: true, message: 'Google connected successfully! You can now use email, calendar, contacts, and Drive.' });
+          } else {
+            sendJSON(res, 200, { ok: false, message: 'Google OAuth failed. The browser window should have opened at accounts.google.com. If it didn\'t, try running "nha google" from the terminal.' });
+          }
         } catch (e) {
-          sendJSON(res, 500, { error: e.message });
+          sendJSON(res, 500, { error: `Google OAuth error: ${e.message}. Try running "nha google" from the terminal.` });
         }
         logRequest(method, pathname, 200, Date.now() - start);
         return;
@@ -1257,18 +1282,51 @@ export async function cmdUI(args) {
           if (sLines.length > 0) parts.push(`[CONTEXT — ${sLines.length} earlier exchanges]\n${sLines.join('\n')}\n[END CONTEXT]`);
         }
         for (const turn of requestHistory.slice(-RECENT)) {
-          parts.push(`${turn.role === 'user' ? '[User]' : '[Assistant]'} ${turn.content.slice(0, 2000)}`);
+          // Use llmContent (file context) when available, otherwise display content
+          const turnContent = turn.llmContent || turn.content;
+          parts.push(`${turn.role === 'user' ? '[User]' : '[Assistant]'} ${turnContent.slice(0, 4000)}`);
         }
         parts.push(`[User] ${body.message}`);
         let userMessage = parts.join('\n\n');
 
-        // Inject episodic memory context into the system prompt
+        // Inject episodic memory + cross-conversation memory into the system prompt
         const basePrompt = effectiveSystemPrompt || chatSystemPrompt;
         let enrichedSystemPrompt = basePrompt;
         try {
           const memCtx = buildMemoryContext('chat', body.message);
           if (memCtx) enrichedSystemPrompt = basePrompt + memCtx;
         } catch { /* memory unavailable */ }
+
+        // Cross-conversation memory — summaries of recent conversations
+        try {
+          const allConvs = listConversations();
+          if (allConvs.length > 1) {
+            const summaries = [];
+            let totalChars = 0;
+            for (const c of allConvs) {
+              if (c.id === (body.conversationId || activeConvId)) continue;
+              if (summaries.length >= 8 || totalChars > 2000) break;
+              if (!c.messages || c.messages.length === 0) continue;
+              const firstUser = c.messages.find(m => m.role === 'user');
+              const lastAssistant = [...c.messages].reverse().find(m => m.role === 'assistant');
+              if (!firstUser) continue;
+              const date = c.updatedAt?.split('T')[0] || '?';
+              const title = c.title !== 'New Chat' ? c.title : firstUser.content.slice(0, 60);
+              let s = `• [${date}] "${title}" (${c.messages.length} msgs)`;
+              s += `\n  User: ${firstUser.content.replace(/\s+/g, ' ').slice(0, 120)}`;
+              if (lastAssistant) {
+                const preview = lastAssistant.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/\s+/g, ' ').slice(0, 150);
+                s += `\n  Result: ${preview}`;
+              }
+              if (totalChars + s.length > 2000) break;
+              summaries.push(s);
+              totalChars += s.length;
+            }
+            if (summaries.length > 0) {
+              enrichedSystemPrompt += `\n\n--- CONVERSATION MEMORY ---\nYou remember these past conversations:\n\n${summaries.join('\n\n')}\n\nUse this to maintain continuity. Never say "I don't have access to previous conversations".\n--- END MEMORY ---`;
+            }
+          }
+        } catch { /* non-critical */ }
 
         // Handle image attachment — vision API
         if (body.imageBase64 && body.imageMimeType) {
@@ -1362,13 +1420,33 @@ export async function cmdUI(args) {
             const pdfPrompt = body.message || `Read and analyze this PDF document "${body.pdfName}". Extract all text content, summarize key information.`;
             let pdfResponse = '';
 
-            if (provider === 'nha') {
-              // NHA Free tier: extract text from PDF, then send to Liara chat
-              // Decode PDF base64 and extract text content
+            // Step 1: Extract text — try server (pdftotext) first, then local fallback
+            let pdfText = '';
+            try {
+              const extractRes = await fetch('https://nothumanallowed.com/api/v1/tools/extract-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-NHA-Client': 'desktop' },
+                body: JSON.stringify({ base64: body.pdfBase64 }),
+                signal: AbortSignal.timeout(30000),
+              });
+              if (extractRes.ok) {
+                const d = await extractRes.json();
+                pdfText = d.text || '';
+              }
+            } catch { /* server unreachable */ }
+            // Local fallback if server extraction failed
+            if (pdfText.length < 20) {
               const pdfBuffer = Buffer.from(body.pdfBase64, 'base64');
-              const pdfText = extractTextFromPdf(pdfBuffer);
+              pdfText = extractTextFromPdf(pdfBuffer);
+            }
+
+            // Save extracted text as llmContent so it persists across turns
+            const pdfLlmContent = pdfText.length > 20
+              ? `[PDF: ${body.pdfName}]\n\n${pdfText.slice(0, 12000)}\n\n---\n\nUser question: ${pdfPrompt}`
+              : '';
+
+            if (provider === 'nha') {
               if (!pdfText || pdfText.length < 10) {
-                // Fallback: send first page as image to vision model
                 const r = await fetch('https://nothumanallowed.com/api/v1/liara/vision', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -1381,7 +1459,6 @@ export async function cmdUI(args) {
                   pdfResponse = 'Could not read this PDF. Try a text-based PDF or use Claude/Gemini for scanned documents.';
                 }
               } else {
-                // Send extracted text to Liara chat
                 const truncatedText = pdfText.slice(0, 12000);
                 const r = await fetch('https://nothumanallowed.com/api/v1/liara/chat', {
                   method: 'POST',
@@ -1439,7 +1516,8 @@ export async function cmdUI(args) {
               pdfResponse = `PDF reading requires Anthropic (Claude) or Gemini. Your provider "${provider}" does not support native PDF documents.`;
             }
 
-            sendJSON(res, 200, { response: pdfResponse });
+            // Return llmContent so frontend can persist the PDF text across turns
+            sendJSON(res, 200, { response: pdfResponse, llmContent: pdfLlmContent || undefined });
             logRequest(method, pathname, 200, Date.now() - start);
             return;
           } catch (e) {
@@ -1449,12 +1527,14 @@ export async function cmdUI(args) {
           }
         }
 
-        // Handle text file attachment
+        // Handle text file attachment — include file content as llmContent for persistence
+        let fileLlmContent = '';
         if (body.fileContent && body.fileName) {
           const filePrompt = body.message
             ? `User asks about file "${body.fileName}": ${body.message}\n\nFile content:\n${body.fileContent.slice(0, 8000)}`
             : `Analyze this file "${body.fileName}":\n\n${body.fileContent.slice(0, 8000)}`;
           userMessage = filePrompt;
+          fileLlmContent = filePrompt;
         }
 
         try {
@@ -1551,7 +1631,7 @@ export async function cmdUI(args) {
           } catch { /* non-critical */ }
           try { extractMemory('chat', body.message, fullResponse); } catch { /* non-critical */ }
 
-          sendJSON(res, 200, { response: fullResponse, toolResults, actions });
+          sendJSON(res, 200, { response: fullResponse, toolResults, actions, ...(fileLlmContent ? { llmContent: fileLlmContent } : {}) });
         } catch (e) {
           sendJSON(res, 200, { response: null, error: e.message });
         }

@@ -925,6 +925,11 @@ function sendChat(){
     clearChatAttach();
     apiPost('/api/chat',payload).then(function(r){
       chatHistory.pop();
+      // Save llmContent in the user message so file context persists across turns
+      if(r&&r.llmContent){
+        var lastUser=chatHistory[chatHistory.length-1];
+        if(lastUser&&lastUser.role==='user')lastUser.llmContent=r.llmContent;
+      }
       if(r&&r.response){chatHistory.push({role:'assistant',content:r.response})}
       else if(r&&r.error){chatHistory.push({role:'assistant',content:'Error: '+r.error})}
       else{chatHistory.push({role:'assistant',content:'Error: no response'})}
@@ -943,7 +948,7 @@ function sendChat(){
   chatHistory.push({role:'assistant',content:''});
   renderMessages();
   var streamIdx=chatHistory.length-1;
-  var allHistory=chatHistory.slice(0,-1).map(function(m){return{role:m.role,content:(m.content||'').replace(/!\\[Screenshot\\]\\(data:image\\/[^)]+\\)/g,'[Screenshot taken]')};});
+  var allHistory=chatHistory.slice(0,-1).map(function(m){var h={role:m.role,content:(m.content||'').replace(/!\\[Screenshot\\]\\(data:image\\/[^)]+\\)/g,'[Screenshot taken]')};if(m.llmContent)h.llmContent=m.llmContent;return h;});
   var payload={message:msg,history:allHistory,conversationId:activeConvId,isRetry:isRetry};
 
   fetch(API+'/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:chatAbortController.signal}).then(function(response){
