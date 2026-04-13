@@ -631,6 +631,14 @@ export async function cmdUI(args) {
       // GET /api/config — read config values for settings UI
       if (method === 'GET' && pathname === '/api/config') {
         // Return non-sensitive config for the settings form
+        // Sanitize email accounts — don't expose passwords to frontend
+        const safeAccounts = (config.emailAccounts || []).map(a => ({
+          label: a.label,
+          address: a.address,
+          isDefault: a.isDefault,
+          hasImap: !!(a.imap?.host),
+          hasSmtp: !!(a.smtp?.host),
+        }));
         sendJSON(res, 200, {
           profile: config.profile || {},
           provider: config.llm?.provider || '',
@@ -641,6 +649,8 @@ export async function cmdUI(args) {
           meetingAlert: config.ops?.meetingAlertMinutes || 30,
           hasTelegram: !!config.responder?.telegram?.token,
           hasDiscord: !!config.responder?.discord?.token,
+          hasGoogle: !!config._googleConnected,
+          emailAccounts: safeAccounts,
         });
         logRequest(method, pathname, 200, Date.now() - start);
         return;

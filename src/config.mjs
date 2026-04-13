@@ -109,6 +109,16 @@ const DEFAULT_CONFIG = {
   slack: {
     token: '',
   },
+  emailAccounts: [
+    // Example:
+    // {
+    //   label: 'Work',
+    //   address: 'you@company.com',
+    //   imap: { host: 'imap.company.com', port: 993, user: 'you@company.com', pass: '', tls: true },
+    //   smtp: { host: 'smtp.company.com', port: 587, user: 'you@company.com', pass: '', tls: false },
+    //   isDefault: false,
+    // }
+  ],
   profile: {
     name: '',
     email: '',
@@ -287,6 +297,42 @@ export function setConfigValue(key, value) {
     'extended-thinking': 'thinking',
     'language': 'language',
   };
+
+  // Special handler for email account management
+  if (key.startsWith('email-add')) {
+    // nha config set email-add "label|address|imap-host|imap-port|imap-user|imap-pass|smtp-host|smtp-port|smtp-user|smtp-pass"
+    const parts = value.split('|').map(p => p.trim());
+    if (parts.length < 6) return false;
+    const [label, address, imapHost, imapPort, imapUser, imapPass, smtpHost, smtpPort, smtpUser, smtpPass] = parts;
+    if (!config.emailAccounts) config.emailAccounts = [];
+    config.emailAccounts.push({
+      label: label || 'Email',
+      address: address || imapUser,
+      imap: { host: imapHost, port: parseInt(imapPort) || 993, user: imapUser, pass: imapPass, tls: true },
+      smtp: smtpHost ? { host: smtpHost, port: parseInt(smtpPort) || 587, user: smtpUser || imapUser, pass: smtpPass || imapPass, tls: false } : null,
+      isDefault: config.emailAccounts.length === 0,
+    });
+    saveConfig(config);
+    return true;
+  }
+
+  if (key === 'email-remove') {
+    if (!config.emailAccounts) return false;
+    const idx = parseInt(value);
+    if (isNaN(idx) || idx < 0 || idx >= config.emailAccounts.length) return false;
+    config.emailAccounts.splice(idx, 1);
+    saveConfig(config);
+    return true;
+  }
+
+  if (key === 'email-default') {
+    if (!config.emailAccounts) return false;
+    const idx = parseInt(value);
+    if (isNaN(idx) || idx < 0 || idx >= config.emailAccounts.length) return false;
+    config.emailAccounts.forEach((a, i) => a.isDefault = i === idx);
+    saveConfig(config);
+    return true;
+  }
 
   const resolved = aliases[key] || key;
   const resolvedParts = resolved.split('.');

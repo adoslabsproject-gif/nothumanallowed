@@ -2321,6 +2321,7 @@ function renderSettings(el) {
       ['summary-time', 'Summary Time', '18:00'],
       ['meeting-alert', 'Meeting Alert (minutes)', '30'],
     ]) +
+    renderEmailAccountsSection() +
     '<div class="card" style="margin-top:16px"><div class="card__title">Google Account</div>' +
     '<div style="font-size:11px;color:var(--dim);margin-bottom:8px">Connect Gmail, Calendar, Drive, Contacts, and Tasks. Opens a browser window for Google sign-in.</div>' +
     (settingsData.hasGoogle ? '<div style="color:var(--green);font-size:12px;margin-bottom:8px">\\u2705 Connected</div>' : '') +
@@ -2338,6 +2339,92 @@ function connectGoogle() {
     if (s) s.style.color = 'var(--green)';
   }).catch(function(e) {
     if (s) { s.textContent = 'Error: ' + e.message; s.style.color = 'var(--red)'; }
+  });
+}
+
+function renderEmailAccountsSection() {
+  var accounts = settingsData.emailAccounts || [];
+  var h = '<div class="card" style="margin-bottom:16px"><div class="card__title" style="color:var(--green);font-size:14px;margin-bottom:4px">Email Accounts (IMAP/SMTP)</div>';
+  h += '<div style="font-size:11px;color:var(--dim);margin-bottom:12px">Add email accounts for multi-provider inbox. Read-only IMAP (never deletes from server) + SMTP for sending. Works alongside Gmail.</div>';
+
+  if (accounts.length > 0) {
+    for (var i = 0; i < accounts.length; i++) {
+      var a = accounts[i];
+      h += '<div style="padding:8px 12px;margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:space-between">';
+      h += '<div><span style="color:var(--green);font-weight:700;font-size:12px">' + esc(a.label || 'Email') + '</span>';
+      h += '<span style="color:var(--dim);font-size:11px;margin-left:8px">' + esc(a.address || '') + '</span>';
+      if (a.isDefault) h += '<span style="color:var(--amber);font-size:9px;margin-left:6px">(default)</span>';
+      h += '</div>';
+      h += '<div><button onclick="setDefaultEmail(' + i + ')" style="background:none;border:1px solid var(--border);color:var(--dim);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px;margin-right:4px" title="Set as default">Default</button>';
+      h += '<button onclick="removeEmailAccount(' + i + ')" style="background:none;border:1px solid var(--red3);color:var(--red);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px" title="Remove">Remove</button></div></div>';
+    }
+  } else {
+    h += '<div style="color:var(--dim);font-size:11px;padding:8px 0">No email accounts configured.</div>';
+  }
+
+  h += '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">';
+  h += '<div style="font-size:12px;color:var(--fg);font-weight:700;margin-bottom:8px">Add Email Account</div>';
+  var fields = [
+    ['ea_label', 'Label', 'e.g. Work, Personal'],
+    ['ea_address', 'Email Address', 'e.g. you@company.com'],
+    ['ea_imap_host', 'IMAP Host', 'e.g. imap.company.com'],
+    ['ea_imap_port', 'IMAP Port', '993'],
+    ['ea_imap_user', 'IMAP User', 'Usually your email address'],
+    ['ea_imap_pass', 'IMAP Password', 'App password recommended', true],
+    ['ea_smtp_host', 'SMTP Host', 'e.g. smtp.company.com'],
+    ['ea_smtp_port', 'SMTP Port', '587'],
+    ['ea_smtp_user', 'SMTP User', 'Usually same as IMAP'],
+    ['ea_smtp_pass', 'SMTP Password', 'Usually same as IMAP', true],
+  ];
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i];
+    h += '<div style="margin-bottom:6px"><label style="display:block;font-size:10px;color:var(--dim);margin-bottom:2px">' + esc(f[1]) + '</label>';
+    h += '<input id="' + f[0] + '" type="' + (f[3] ? 'password' : 'text') + '" placeholder="' + esc(f[2]) + '" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-size:12px;font-family:var(--mono)"></div>';
+  }
+  h += '<button onclick="addEmailAccount()" style="margin-top:8px;padding:8px 20px;background:var(--green3);color:var(--bg);border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px">Add Account</button>';
+  h += '<div id="emailAccountStatus" style="margin-top:6px;font-size:10px;color:var(--dim)"></div>';
+  h += '</div></div>';
+  return h;
+}
+
+function addEmailAccount() {
+  var label = document.getElementById('ea_label').value.trim();
+  var address = document.getElementById('ea_address').value.trim();
+  var imapHost = document.getElementById('ea_imap_host').value.trim();
+  var imapPort = document.getElementById('ea_imap_port').value.trim() || '993';
+  var imapUser = document.getElementById('ea_imap_user').value.trim() || address;
+  var imapPass = document.getElementById('ea_imap_pass').value;
+  var smtpHost = document.getElementById('ea_smtp_host').value.trim();
+  var smtpPort = document.getElementById('ea_smtp_port').value.trim() || '587';
+  var smtpUser = document.getElementById('ea_smtp_user').value.trim() || imapUser;
+  var smtpPass = document.getElementById('ea_smtp_pass').value || imapPass;
+
+  if (!address || !imapHost) {
+    var s = document.getElementById('emailAccountStatus');
+    if (s) { s.textContent = 'Email address and IMAP host are required.'; s.style.color = 'var(--red)'; }
+    return;
+  }
+
+  var val = [label, address, imapHost, imapPort, imapUser, imapPass, smtpHost, smtpPort, smtpUser, smtpPass].join('|');
+  apiPost('/api/config', { key: 'email-add', value: val }).then(function() {
+    var s = document.getElementById('emailAccountStatus');
+    if (s) { s.textContent = 'Account added!'; s.style.color = 'var(--green)'; }
+    settingsLoaded = false;
+    renderSettings(document.getElementById('mainContent'));
+  });
+}
+
+function removeEmailAccount(idx) {
+  apiPost('/api/config', { key: 'email-remove', value: String(idx) }).then(function() {
+    settingsLoaded = false;
+    renderSettings(document.getElementById('mainContent'));
+  });
+}
+
+function setDefaultEmail(idx) {
+  apiPost('/api/config', { key: 'email-default', value: String(idx) }).then(function() {
+    settingsLoaded = false;
+    renderSettings(document.getElementById('mainContent'));
   });
 }
 
