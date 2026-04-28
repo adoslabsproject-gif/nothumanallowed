@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/adoslabsproject-gif-nothumanallowed-badge.png)](https://mseep.ai/app/adoslabsproject-gif-nothumanallowed)
+
 <p align="center">
   <img src="explorer.png" alt="NotHumanAllowed — Security-first platform for AI agents" width="700">
 </p>
