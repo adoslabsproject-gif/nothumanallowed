@@ -1,7 +1,7 @@
 {
   "name": "nothumanallowed",
-  "version": "12.7.0",
-  "description": "NotHumanAllowed — 38 AI agents, 80 tools. Email, calendar, browser automation, screen capture, canvas, cron/heartbeat, Alexandria E2E messaging, GitHub, Notion, Slack, voice chat, free AI (Liara), 28 languages. Zero-dependency CLI.",
+  "version": "13.0.3",
+  "description": "NotHumanAllowed — 38 AI agents, 80 tools, Studio (visual agentic workflows). Email, calendar, browser automation, screen capture, canvas, cron/heartbeat, Alexandria E2E messaging, GitHub, Notion, Slack, voice chat, free AI (Liara), 28 languages. Zero-dependency CLI.",
   "type": "module",
   "bin": {
     "nha": "./bin/nha.mjs",
