@@ -2658,11 +2658,14 @@ Respond with ONLY valid JSON, no markdown:
         // Keepalive: send a comment every 5s so the connection doesn't time out during slow tool calls
         const keepalive = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 5000);
 
-        // Timeout wrapper for tool calls — 25s max
-        const withTimeout = (promise, label) => Promise.race([
-          promise,
-          new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after 25s`)), 25000)),
-        ]);
+        // Timeout wrapper — ms param optional (default 25s for tool calls)
+        const withTimeout = (promise, ms) => {
+          const delay = typeof ms === 'number' ? ms : 25000;
+          return Promise.race([
+            promise,
+            new Promise((_, rej) => setTimeout(() => rej(new Error(`Step timed out after ${delay/1000}s`)), delay)),
+          ]);
+        };
 
         try {
           const stepPrompt = stepDef?.prompt || task;
