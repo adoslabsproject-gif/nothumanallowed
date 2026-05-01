@@ -2562,19 +2562,36 @@ Example output:
 {"steps":[{"icon":"🔍","agent":"WebSearchAgent","label":"Cerca notizie","prompt":"Cerca le ultime notizie su intelligenza artificiale oggi"},{"icon":"📰","agent":"HERALD","label":"Analisi notizie","prompt":"Analizza le notizie trovate e crea un briefing esecutivo"},{"icon":"📊","agent":"CanvasAgent","label":"Dashboard HTML","prompt":"Crea una dashboard HTML visuale con i risultati"}]}`;
 
         try {
-          const planRaw = await callLLM(config, 'You are a JSON workflow planner. Respond only with valid JSON, no markdown, no explanation.', planPrompt, { max_tokens: 1200 });
+          // Force thinking OFF for planner — we need deterministic JSON, not reasoning chains
+          const planConfig = Object.assign({}, config, { thinking: 'off' });
+          const planRaw = await callLLM(planConfig, 'You are a JSON workflow planner. Output ONLY valid JSON. No thinking, no explanation, no markdown.', planPrompt, { max_tokens: 1500 });
+          process.stderr.write('[STUDIO PLAN RAW] ' + planRaw.slice(0, 400) + '\n');
           let steps;
           try {
-            // Strip <think>...</think> blocks and markdown fences before parsing
-            let clean = planRaw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-            clean = clean.replace(/^```[\w]*\n?/,'').replace(/\n?```$/,'').trim();
+            // Strip ALL <think>...</think> blocks (greedy — handles nested/multiple)
+            let clean = planRaw;
+            let prev = '';
+            while (prev !== clean) { prev = clean; clean = clean.replace(/<think>[\s\S]*?<\/think>/g, ''); }
+            clean = clean.trim();
+            // Strip markdown fences
+            clean = clean.replace(/^```[\w]*\r?\n?/,'').replace(/\r?\n?```$/,'').trim();
+            // Extract first complete JSON object
             const jsonMatch = clean.match(/\{[\s\S]*\}/);
             const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
             steps = parsed.steps;
-          } catch {
-            sendJSON(res, 500, { error: 'Failed to parse workflow plan' });
-            logRequest(method, pathname, 500, Date.now() - start);
-            return;
+          } catch (parseErr) {
+            process.stderr.write('[STUDIO PLAN PARSE ERR] ' + parseErr.message + '\n');
+            // Fallback: build a sensible default plan from the task keywords
+            const hasEmail = /email|mail/i.test(task);
+            const hasCalendar = /calendar|agenda|calendari/i.test(task);
+            const hasSearch = /cerca|search|notizie|news/i.test(task);
+            const hasCanvas = /html|dashboard|visua|report/i.test(task);
+            steps = [];
+            if (hasEmail) steps.push({icon:'📧',agent:'EmailAgent',label:'Controlla email',prompt:task});
+            if (hasCalendar) steps.push({icon:'📅',agent:'CalendarAgent',label:'Rivedi calendario',prompt:task});
+            if (hasSearch || steps.length === 0) steps.push({icon:'🔍',agent:'WebSearchAgent',label:'Ricerca web',prompt:task});
+            steps.push({icon:'📰',agent:'HERALD',label:'Analisi e briefing',prompt:task});
+            if (hasCanvas) steps.push({icon:'📊',agent:'CanvasAgent',label:'Dashboard HTML',prompt:task});
           }
           if (!Array.isArray(steps) || !steps.length) {
             sendJSON(res, 500, { error: 'Empty workflow plan' });

@@ -2749,6 +2749,104 @@ function stopVoiceInput() {
 }
 
 // ---- STUDIO ----
+// ── i18n — UI string translations ────────────────────────────────────────────
+var I18N = {
+  en: {
+    chat:'Chat', studio:'Studio', settings:'Settings', agents:'Agents',
+    run:'▶ Run', stop:'⬛ Stop', reset:'New workflow',
+    placeholder_chat:'Message NHA... (Enter to send)',
+    placeholder_studio:'Describe what you want to accomplish... (Ctrl+Enter to run)',
+    planning:'Planning...', workflow_complete:'Workflow complete.',
+    workflow_stopped:'Workflow stopped by user.',
+    canvas_open:'Open Canvas', canvas_generated:'HTML Dashboard generated in Canvas panel.',
+    saved:'Saved!', lang_set:'Language set to',
+    agents_respond:'All agents will respond in',
+    examples:'Examples', recent_sessions:'Recent sessions',
+    restore:'Restore', delete:'Delete',
+    send:'Send', attach:'Attach',
+    settings_save:'Save',
+    no_output:'(no output)', done:'(done)',
+    token_label:'Tokens',
+  },
+  it: {
+    chat:'Chat', studio:'Studio', settings:'Impostazioni', agents:'Agenti',
+    run:'▶ Avvia', stop:'⬛ Ferma', reset:'Nuovo workflow',
+    placeholder_chat:'Scrivi a NHA... (Invio per inviare)',
+    placeholder_studio:'Descrivi cosa vuoi fare... (Ctrl+Invio per avviare)',
+    planning:'Pianificazione...', workflow_complete:'Workflow completato.',
+    workflow_stopped:'Workflow fermato dall\'utente.',
+    canvas_open:'Apri Canvas', canvas_generated:'Dashboard HTML generata nel pannello Canvas.',
+    saved:'Salvato!', lang_set:'Lingua impostata su',
+    agents_respond:'Tutti gli agenti risponderanno in',
+    examples:'Esempi', recent_sessions:'Sessioni recenti',
+    restore:'Ripristina', delete:'Elimina',
+    send:'Invia', attach:'Allega',
+    settings_save:'Salva',
+    no_output:'(nessun output)', done:'(completato)',
+    token_label:'Token',
+  },
+  es: {
+    chat:'Chat', studio:'Studio', settings:'Configuración', agents:'Agentes',
+    run:'▶ Ejecutar', stop:'⬛ Detener', reset:'Nuevo flujo',
+    placeholder_chat:'Mensaje a NHA... (Enter para enviar)',
+    placeholder_studio:'Describe lo que quieres hacer... (Ctrl+Enter para ejecutar)',
+    planning:'Planificando...', workflow_complete:'Flujo completado.',
+    workflow_stopped:'Flujo detenido por el usuario.',
+    canvas_open:'Abrir Canvas', canvas_generated:'Panel HTML generado en Canvas.',
+    saved:'¡Guardado!', lang_set:'Idioma establecido en',
+    agents_respond:'Todos los agentes responderán en',
+    examples:'Ejemplos', recent_sessions:'Sesiones recientes',
+    restore:'Restaurar', delete:'Eliminar',
+    send:'Enviar', attach:'Adjuntar',
+    settings_save:'Guardar',
+    no_output:'(sin salida)', done:'(hecho)',
+    token_label:'Tokens',
+  },
+  fr: {
+    chat:'Chat', studio:'Studio', settings:'Paramètres', agents:'Agents',
+    run:'▶ Lancer', stop:'⬛ Arrêter', reset:'Nouveau flux',
+    placeholder_chat:'Message à NHA... (Entrée pour envoyer)',
+    placeholder_studio:'Décrivez ce que vous voulez faire... (Ctrl+Entrée pour lancer)',
+    planning:'Planification...', workflow_complete:'Flux terminé.',
+    workflow_stopped:'Flux arrêté par l\'utilisateur.',
+    canvas_open:'Ouvrir Canvas', canvas_generated:'Tableau de bord HTML généré dans Canvas.',
+    saved:'Sauvegardé!', lang_set:'Langue définie sur',
+    agents_respond:'Tous les agents répondront en',
+    examples:'Exemples', recent_sessions:'Sessions récentes',
+    restore:'Restaurer', delete:'Supprimer',
+    send:'Envoyer', attach:'Joindre',
+    settings_save:'Sauvegarder',
+    no_output:'(aucune sortie)', done:'(terminé)',
+    token_label:'Tokens',
+  },
+  de: {
+    chat:'Chat', studio:'Studio', settings:'Einstellungen', agents:'Agenten',
+    run:'▶ Starten', stop:'⬛ Stopp', reset:'Neuer Workflow',
+    placeholder_chat:'Nachricht an NHA... (Enter zum Senden)',
+    placeholder_studio:'Beschreibe was du tun möchtest... (Strg+Enter zum Starten)',
+    planning:'Planung...', workflow_complete:'Workflow abgeschlossen.',
+    workflow_stopped:'Workflow vom Benutzer gestoppt.',
+    canvas_open:'Canvas öffnen', canvas_generated:'HTML-Dashboard im Canvas-Panel generiert.',
+    saved:'Gespeichert!', lang_set:'Sprache auf',
+    agents_respond:'Alle Agenten antworten auf',
+    examples:'Beispiele', recent_sessions:'Letzte Sitzungen',
+    restore:'Wiederherstellen', delete:'Löschen',
+    send:'Senden', attach:'Anhängen',
+    settings_save:'Speichern',
+    no_output:'(keine Ausgabe)', done:'(erledigt)',
+    token_label:'Token',
+  },
+};
+// Fallback to 'en' for unmapped languages
+function t(key) {
+  try {
+    var cfg = JSON.parse(localStorage.getItem('nha_config_cache') || '{}');
+    var lang = (cfg.lang || 'it').slice(0,2);
+    var map = I18N[lang] || I18N.en;
+    return map[key] || I18N.en[key] || key;
+  } catch(e) { return I18N.en[key] || key; }
+}
+
 var studioState = {
   task: '',
   nodes: [],       // [{icon,agent,label,status:'waiting'|'running'|'done'|'error'}]
@@ -2765,10 +2863,10 @@ function stopStudio() {
   if (studioAbortController) { try { studioAbortController.abort(); } catch(e) {} studioAbortController = null; }
   studioState.running = false;
   var btn = document.getElementById('studioRunBtn');
-  if (btn) { btn.disabled = false; btn.textContent = '▶ Run'; }
+  if (btn) { btn.disabled = false; btn.textContent = t('run'); }
   var stopBtn = document.getElementById('studioStopBtn');
   if (stopBtn) stopBtn.style.display = 'none';
-  studioLog('Studio', '⬛', 'Workflow stopped by user.', 'system');
+  studioLog('Studio', '⬛', t('workflow_stopped'), 'system');
   // Mark any still-running nodes as error
   studioState.nodes.forEach(function(n) { if (n.status === 'running') n.status = 'error'; });
   renderStudioNodes();
@@ -2875,7 +2973,7 @@ function renderStudioResult() {
   el.style.display = 'block';
   var isHtml = studioState.result.trimStart().startsWith('<');
   var body = isHtml
-    ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:var(--dim);font-size:13px">&#10003; Dashboard HTML generata nel pannello Canvas.</span><button onclick="openCanvasPanel()" style="padding:6px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;cursor:pointer;font-weight:700">&#x25A3; Apri Canvas</button></div>'
+    ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:var(--dim);font-size:13px">&#10003; ' + t('canvas_generated') + '</span><button onclick="openCanvasPanel()" style="padding:6px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;cursor:pointer;font-weight:700">&#x25A3; ' + t('canvas_open') + '</button></div>'
     : '<div class="md-body">' + renderMd(studioState.result) + '</div>';
   el.innerHTML = '<div class="studio-result__title">&#10003; Workflow completato</div>' + body;
 }
@@ -2906,7 +3004,7 @@ async function runStudio() {
   studioAbortController = new AbortController();
 
   var btn = document.getElementById('studioRunBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Planning...'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('planning'); }
   var stopBtn = document.getElementById('studioStopBtn');
   if (stopBtn) stopBtn.style.display = '';
 
@@ -2969,7 +3067,7 @@ async function runStudio() {
     // Final result is the last step's output
     studioState.result = context;
     renderStudioResult();
-    studioLog('Studio', '&#127881;', 'Workflow complete.', 'system');
+    studioLog('Studio', '&#127881;', t('workflow_complete'), 'system');
 
     // Save session to localStorage for reuse in Chat
     saveStudioSession(task, studioState.nodes, studioState.log, context);
@@ -3015,7 +3113,7 @@ function renderStudioSessionsBar() {
   var sessions = loadStudioSessions();
   if (!sessions.length) { el.style.display = 'none'; return; }
   el.style.display = 'block';
-  el.innerHTML = '<div style="font-size:10px;color:var(--dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Recent sessions</div>' +
+  el.innerHTML = '<div style="font-size:10px;color:var(--dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">' + t('recent_sessions') + '</div>' +
     '<div style="max-height:220px;overflow-y:auto;padding-right:4px">' +
     sessions.map(function(s,i) {
       return '<div class="studio-session-item">' +
@@ -3262,15 +3360,15 @@ function renderStudio(el) {
         // ── AUTO MODE ──
         '<div id="studioAutoMode">' +
           '<div style="margin-bottom:10px">' +
-            '<div style="font-size:10px;color:var(--dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Examples</div>' +
+            '<div style="font-size:10px;color:var(--dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">' + t('examples') + '</div>' +
             examplesHtml +
           '</div>' +
           '<div class="studio-input-row">' +
-            '<textarea id="studioTaskInput" placeholder="Describe what you want to accomplish... (Ctrl+Enter to run)" onkeydown="if(event.key===\\x27Enter\\x27&&(event.ctrlKey||event.metaKey)){runStudio();event.preventDefault()}">' + esc(studioState.task) + '</textarea>' +
+            '<textarea id="studioTaskInput" placeholder="' + t('placeholder_studio') + '" onkeydown="if(event.key===\\x27Enter\\x27&&(event.ctrlKey||event.metaKey)){runStudio();event.preventDefault()}">' + esc(studioState.task) + '</textarea>' +
             '<div style="display:flex;gap:6px">' +
-              '<button id="studioRunBtn" class="studio-run-btn" onclick="runStudio()" style="flex:1" ' + (studioState.running ? 'disabled' : '') + '>&#9654; Run</button>' +
-              '<button id="studioStopBtn" onclick="stopStudio()" title="Stop workflow" style="padding:8px 14px;background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;color:#ef4444;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;' + (studioState.running ? '' : 'display:none') + '">&#9632; Stop</button>' +
-              '<button onclick="studioReset()" title="New workflow" style="padding:8px 12px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:16px;line-height:1" ' + (studioState.running ? 'disabled' : '') + '>&#8635;</button>' +
+              '<button id="studioRunBtn" class="studio-run-btn" onclick="runStudio()" style="flex:1" ' + (studioState.running ? 'disabled' : '') + '>' + t('run') + '</button>' +
+              '<button id="studioStopBtn" onclick="stopStudio()" title="' + t('stop') + '" style="padding:8px 14px;background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;color:#ef4444;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;' + (studioState.running ? '' : 'display:none') + '">&#9632; ' + t('stop') + '</button>' +
+              '<button onclick="studioReset()" title="' + t('reset') + '" style="padding:8px 12px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:16px;line-height:1" ' + (studioState.running ? 'disabled' : '') + '>&#8635;</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
