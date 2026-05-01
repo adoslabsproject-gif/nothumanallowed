@@ -2830,7 +2830,11 @@ function renderStudioResult() {
   if (!el) return;
   if (!studioState.result) { el.style.display = 'none'; return; }
   el.style.display = 'block';
-  el.innerHTML = '<div class="studio-result__title">&#10003; Final Result</div><div class="studio-result__body md-body">' + renderMd(studioState.result) + '</div>';
+  var isHtml = studioState.result.trimStart().startsWith('<');
+  var body = isHtml
+    ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:var(--dim);font-size:13px">&#10003; Dashboard HTML generata nel pannello Canvas.</span><button onclick="var cp=document.getElementById(\'canvasPanel\');if(cp)cp.classList.add(\'open\')" style="padding:6px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;cursor:pointer;font-weight:700">&#x25A3; Apri Canvas</button></div>'
+    : '<div class="md-body">' + renderMd(studioState.result) + '</div>';
+  el.innerHTML = '<div class="studio-result__title">&#10003; Workflow completato</div>' + body;
 }
 
 function studioSetNodeStatus(idx, status) {
@@ -2903,7 +2907,8 @@ async function runStudio() {
         break;
       }
       studioSetNodeStatus(i, 'done');
-      studioLog(node.label, node.icon, stepResult.output || '(done)', 'agent', true);
+      var realOutput = (stepResult.output && stepResult.output !== '(no output)') ? stepResult.output : null;
+      studioLog(node.label, node.icon, realOutput || (stepResult.canvas ? '[Canvas report generated]' : '(done)'), 'agent', true);
       // If CanvasAgent produced HTML, open it in the canvas panel
       if (stepResult.canvas) {
         var cf = document.getElementById('canvasFrame');
@@ -2915,7 +2920,7 @@ async function runStudio() {
           if (ct) ct.textContent = node.label + ' Report';
         }
       }
-      context = stepResult.output || stepResult.canvas || context;
+      context = realOutput || stepResult.canvas || context;
     }
 
     // Final result is the last step's output
@@ -3419,13 +3424,14 @@ async function runManualWorkflow() {
         break;
       }
       studioSetNodeStatus(i, 'done');
-      studioLog(s.label, s.icon, stepResult.output || '(done)', 'agent', true);
+      var realOut2 = (stepResult.output && stepResult.output !== '(no output)') ? stepResult.output : null;
+      studioLog(s.label, s.icon, realOut2 || (stepResult.canvas ? '[Canvas report generated]' : '(done)'), 'agent', true);
       if (stepResult.canvas) {
         var cf = document.getElementById('canvasFrame');
         var cp = document.getElementById('canvasPanel');
         if (cf && cp) { cf.srcdoc = stepResult.canvas; cp.classList.add('open'); var ct3=document.getElementById('canvasTitle'); if(ct3) ct3.textContent='Studio Report'; }
       }
-      context = stepResult.output || stepResult.canvas || context;
+      context = realOut2 || stepResult.canvas || context;
     }
     studioState.result = context;
     renderStudioResult();
