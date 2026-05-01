@@ -3218,7 +3218,16 @@ RULES:
           if (isCanvasAgent) {
             sysPrompt = canvasSystemPrompt;
             const canvasData = [attachmentText, context].filter(Boolean).join('\n\n');
-            userMsg = `Create a professional dashboard report for this data. Output ONLY the inner HTML body content (starting with <div class="header">):\n\n${canvasData}`;
+            userMsg = `Create a professional dashboard report in ${language}. CRITICAL RULES:
+1. Start immediately with <div class="header"> — no preamble
+2. Every <div class="section"> MUST contain actual content from the data below — NEVER leave a section empty
+3. If data for a section exists, include it verbatim with all details
+4. If data for a section does NOT exist, omit that section entirely — do NOT create empty placeholder sections
+5. Copy specific facts, names, dates, numbers exactly as they appear in the data
+6. Output ONLY HTML starting with <div class="header">
+
+DATA FROM AGENTS:
+${canvasData}`;
           } else if (isLiveDataAgent) {
             // These agents fetched real data — use a focused prompt (no tool definitions to avoid JSON output)
             // Live data agents that fetched their own data: do NOT inject previous context
