@@ -204,9 +204,8 @@ function switchView(v) {
   document.querySelectorAll('.nav-item').forEach(function(el){
     if(el.dataset.view===v){el.classList.add('nav-item--active')}else{el.classList.remove('nav-item--active')}
   });
-  var titles = {dashboard:'Dashboard',chat:'Chat',plan:'Daily Plan',tasks:'Tasks',emails:'Emails',calendar:'Calendar',drive:'Drive',contacts:'Contacts',notes:'Notes',onedrive:'OneDrive',mstodo:'Microsoft To Do',agents:'Agents',studio:'Studio',settings:'Settings'};
   var spt=document.getElementById('sidebarPageTitle');
-  if(spt)spt.textContent=titles[v]||v;
+  if(spt)spt.textContent=t('nav_'+v)||v;
   // Toggle content--chat class for proper chat layout (no overflow, flex column)
   var ct=document.getElementById('content');
   if(ct){if(v==='chat'){ct.classList.add('content--chat')}else{ct.classList.remove('content--chat')}}
@@ -2438,8 +2437,11 @@ function saveSettingsSection(sectionId) {
           try {
             var cfg2 = JSON.parse(localStorage.getItem('nha_config_cache') || '{}');
             var ln = langNames[cfg2.lang] || cfg2.lang || 'Italian';
-            statusEl.textContent = '✓ Language set to ' + ln + '. All agents and Studio will now respond in ' + ln + '.';
-          } catch(e) { statusEl.textContent = '✓ Saved!'; }
+            statusEl.textContent = t('lang_set') + ' ' + ln + '. ' + t('agents_respond') + ' ' + ln + '.';
+            // Re-render sidebar and current view in new language
+            renderSidebar();
+            render();
+          } catch(e) { statusEl.textContent = t('saved'); }
         } else {
           statusEl.textContent = 'Saved!';
         }
@@ -2767,6 +2769,16 @@ var I18N = {
     settings_save:'Save',
     no_output:'(no output)', done:'(done)',
     token_label:'Tokens',
+    // Sidebar
+    nav_overview:'Overview', nav_google:'Google', nav_microsoft:'Microsoft',
+    nav_integrations:'Integrations', nav_ai:'AI', nav_config:'Config', nav_help:'Help',
+    nav_dashboard:'Dashboard', nav_chat:'Chat', nav_plan:'Plan', nav_tasks:'Tasks',
+    nav_emails:'Emails', nav_calendar:'Calendar', nav_drive:'Drive',
+    nav_contacts:'Contacts', nav_notes:'Notes', nav_onedrive:'OneDrive',
+    nav_mstodo:'To Do', nav_github:'GitHub', nav_notion:'Notion',
+    nav_slack:'Slack', nav_birthdays:'Birthdays', nav_agents:'Agents',
+    nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Settings',
+    nav_docs:'Documentation', nav_agents_guide:'Agents Guide', nav_mobile:'Mobile App',
   },
   it: {
     chat:'Chat', studio:'Studio', settings:'Impostazioni', agents:'Agenti',
@@ -2784,6 +2796,16 @@ var I18N = {
     settings_save:'Salva',
     no_output:'(nessun output)', done:'(completato)',
     token_label:'Token',
+    // Sidebar
+    nav_overview:'Panoramica', nav_google:'Google', nav_microsoft:'Microsoft',
+    nav_integrations:'Integrazioni', nav_ai:'AI', nav_config:'Config', nav_help:'Aiuto',
+    nav_dashboard:'Dashboard', nav_chat:'Chat', nav_plan:'Piano', nav_tasks:'Attivit\u00e0',
+    nav_emails:'Email', nav_calendar:'Calendario', nav_drive:'Drive',
+    nav_contacts:'Contatti', nav_notes:'Note', nav_onedrive:'OneDrive',
+    nav_mstodo:'To Do', nav_github:'GitHub', nav_notion:'Notion',
+    nav_slack:'Slack', nav_birthdays:'Compleanni', nav_agents:'Agenti',
+    nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Impostazioni',
+    nav_docs:'Documentazione', nav_agents_guide:'Guida Agenti', nav_mobile:'App Mobile',
   },
   es: {
     chat:'Chat', studio:'Studio', settings:'Configuración', agents:'Agentes',
@@ -2801,6 +2823,15 @@ var I18N = {
     settings_save:'Guardar',
     no_output:'(sin salida)', done:'(hecho)',
     token_label:'Tokens',
+    nav_overview:'Resumen', nav_google:'Google', nav_microsoft:'Microsoft',
+    nav_integrations:'Integraciones', nav_ai:'IA', nav_config:'Config', nav_help:'Ayuda',
+    nav_dashboard:'Panel', nav_chat:'Chat', nav_plan:'Plan', nav_tasks:'Tareas',
+    nav_emails:'Correos', nav_calendar:'Calendario', nav_drive:'Drive',
+    nav_contacts:'Contactos', nav_notes:'Notas', nav_onedrive:'OneDrive',
+    nav_mstodo:'Tareas MS', nav_github:'GitHub', nav_notion:'Notion',
+    nav_slack:'Slack', nav_birthdays:'Cumplea\u00f1os', nav_agents:'Agentes',
+    nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Configuraci\u00f3n',
+    nav_docs:'Documentaci\u00f3n', nav_agents_guide:'Gu\u00eda Agentes', nav_mobile:'App M\u00f3vil',
   },
   fr: {
     chat:'Chat', studio:'Studio', settings:'Paramètres', agents:'Agents',
@@ -2818,6 +2849,15 @@ var I18N = {
     settings_save:'Sauvegarder',
     no_output:'(aucune sortie)', done:'(terminé)',
     token_label:'Tokens',
+    nav_overview:'Aperçu', nav_google:'Google', nav_microsoft:'Microsoft',
+    nav_integrations:'Intégrations', nav_ai:'IA', nav_config:'Config', nav_help:'Aide',
+    nav_dashboard:'Tableau de bord', nav_chat:'Chat', nav_plan:'Plan', nav_tasks:'T\u00e2ches',
+    nav_emails:'Courriels', nav_calendar:'Calendrier', nav_drive:'Drive',
+    nav_contacts:'Contacts', nav_notes:'Notes', nav_onedrive:'OneDrive',
+    nav_mstodo:'To Do', nav_github:'GitHub', nav_notion:'Notion',
+    nav_slack:'Slack', nav_birthdays:'Anniversaires', nav_agents:'Agents',
+    nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Param\u00e8tres',
+    nav_docs:'Documentation', nav_agents_guide:'Guide Agents', nav_mobile:'App Mobile',
   },
   de: {
     chat:'Chat', studio:'Studio', settings:'Einstellungen', agents:'Agenten',
@@ -2835,6 +2875,15 @@ var I18N = {
     settings_save:'Speichern',
     no_output:'(keine Ausgabe)', done:'(erledigt)',
     token_label:'Token',
+    nav_overview:'Übersicht', nav_google:'Google', nav_microsoft:'Microsoft',
+    nav_integrations:'Integrationen', nav_ai:'KI', nav_config:'Konfig', nav_help:'Hilfe',
+    nav_dashboard:'Dashboard', nav_chat:'Chat', nav_plan:'Plan', nav_tasks:'Aufgaben',
+    nav_emails:'E-Mails', nav_calendar:'Kalender', nav_drive:'Drive',
+    nav_contacts:'Kontakte', nav_notes:'Notizen', nav_onedrive:'OneDrive',
+    nav_mstodo:'To Do', nav_github:'GitHub', nav_notion:'Notion',
+    nav_slack:'Slack', nav_birthdays:'Geburtstage', nav_agents:'Agenten',
+    nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Einstellungen',
+    nav_docs:'Dokumentation', nav_agents_guide:'Agenten-Leitfaden', nav_mobile:'Mobile App',
   },
 };
 // Fallback to 'en' for unmapped languages
@@ -2847,13 +2896,88 @@ function t(key) {
   } catch(e) { return I18N.en[key] || key; }
 }
 
+function renderSidebar() {
+  var sb = document.getElementById('sidebar');
+  if (!sb) return;
+  var activeView = typeof currentView !== \x27undefined\x27 ? currentView : \x27dashboard\x27;
+  function ni(view, icon, labelKey, badgeId, badgeStyle, extra) {
+    var active = view === activeView ? \x27 nav-item--active\x27 : \x27\x27;
+    var badge = badgeId ? \x27<span class="nav-item__badge" id="\x27+badgeId+\x27" style="display:none\x27+(badgeStyle?(\x27;\x27+badgeStyle):\x27\x27)+\x27">0</span>\x27 : \x27\x27;
+    var ext = extra || \x27\x27;
+    return \x27<div class="nav-item\x27+active+\x27" data-view="\x27+view+\x27" onclick="switchView(\\\x27\x27+view+\x27\\\x27)">\x27+
+      \x27<span class="nav-item__icon">\x27+icon+\x27</span> \x27+t(\x27nav_\x27+labelKey)+badge+ext+\x27</div>\x27;
+  }
+  sb.innerHTML =
+    \x27<div class="sidebar__brand">\x27+
+      \x27<button class="sidebar__close" onclick="closeSidebar()" title="Close menu">&times;</button>\x27+
+      \x27<div style="display:flex;align-items:center;gap:8px">\x27+
+        \x27<div class="sidebar__brand-name">NHA</div>\x27+
+        \x27<span id="wsIndicator" style="color:var(--dim);font-size:8px" title="Daemon WebSocket">&#9679;</span>\x27+
+      \x27</div>\x27+
+      \x27<div id="sidebarPageTitle" style="font-size:11px;color:var(--bright);margin-top:4px;font-weight:600">\x27+t(\x27nav_dashboard\x27)+\x27</div>\x27+
+      \x27<div class="sidebar__brand-sub" id="clock"></div>\x27+
+    \x27</div>\x27+
+    \x27<div class="sidebar__section">\x27+
+      \x27<div class="sidebar__label">\x27+t(\x27nav_overview\x27)+\x27</div>\x27+
+      ni(\x27dashboard\x27,\x27&#9632;\x27,\x27dashboard\x27)+
+      ni(\x27chat\x27,\x27&#128172;\x27,\x27chat\x27)+
+      ni(\x27plan\x27,\x27&#9733;\x27,\x27plan\x27)+
+      ni(\x27tasks\x27,\x27&#9745;\x27,\x27tasks\x27,\x27taskBadge\x27)+
+    \x27</div>\x27+
+    \x27<div class="sidebar__section">\x27+
+      \x27<div class="sidebar__label">\x27+t(\x27nav_google\x27)+\x27</div>\x27+
+      ni(\x27emails\x27,\x27&#128231;\x27,\x27emails\x27,\x27emailBadge\x27)+
+      ni(\x27calendar\x27,\x27&#128197;\x27,\x27calendar\x27,\x27calBadge\x27,\x27background:var(--amber)\x27)+
+      ni(\x27drive\x27,\x27&#128193;\x27,\x27drive\x27)+
+      ni(\x27contacts\x27,\x27&#128101;\x27,\x27contacts\x27)+
+      ni(\x27notes\x27,\x27&#128221;\x27,\x27notes\x27)+
+    \x27</div>\x27+
+    \x27<div class="sidebar__section">\x27+
+      \x27<div class="sidebar__label">\x27+t(\x27nav_microsoft\x27)+\x27</div>\x27+
+      ni(\x27onedrive\x27,\x27&#9729;\x27,\x27onedrive\x27)+
+      ni(\x27mstodo\x27,\x27&#128203;\x27,\x27mstodo\x27)+
+    \x27</div>\x27+
+    \x27<div class="sidebar__section">\x27+
+      \x27<div class="sidebar__label">\x27+t(\x27nav_integrations\x27)+\x27</div>\x27+
+      ni(\x27github\x27,\x27&#128736;\x27,\x27github\x27)+
+      ni(\x27notion\x27,\x27&#128214;\x27,\x27notion\x27)+
+      ni(\x27slack\x27,\x27&#128488;\x27,\x27slack\x27)+
+      ni(\x27birthdays\x27,\x27&#127874;\x27,\x27birthdays\x27)+
+    \x27</div>\x27+
+    \x27<div class="sidebar__section">\x27+
+      \x27<div class="sidebar__label">\x27+t(\x27nav_ai\x27)+\x27</div>\x27+
+      ni(\x27agents\x27,\x27&#129302;\x27,\x27agents\x27)+
+      \x27<div class="nav-item\x27+(activeView===\x27studio\x27?\x27 nav-item--active\x27:\x27\x27)+\x27" data-view="studio" onclick="switchView(\\\x27studio\\\x27)">\x27+
+        \x27<span class="nav-item__icon">&#9881;</span> \x27+t(\x27nav_studio\x27)+
+        \x27<span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(99,102,241,.25);color:var(--green);margin-left:4px;font-weight:700">NEW</span>\x27+
+      \x27</div>\x27+
+      \x27<div class="nav-item\x27+(activeView===\x27collab\x27?\x27 nav-item--active\x27:\x27\x27)+\x27" data-view="collab" onclick="switchView(\\\x27collab\\\x27)">\x27+
+        \x27<span class="nav-item__icon">&#128274;</span> \x27+t(\x27nav_collab\x27)+
+        \x27<span id="collabBadge" style="display:none;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px;font-family:var(--mono)">0</span>\x27+
+      \x27</div>\x27+
+    \x27</div>\x27+
+    \x27<div class="sidebar__section">\x27+
+      \x27<div class="sidebar__label">\x27+t(\x27nav_config\x27)+\x27</div>\x27+
+      ni(\x27settings\x27,\x27&#9881;\x27,\x27settings\x27)+
+    \x27</div>\x27+
+    \x27<div class="sidebar__section">\x27+
+      \x27<div class="sidebar__label">\x27+t(\x27nav_help\x27)+\x27</div>\x27+
+      \x27<a href="https://nothumanallowed.com/docs" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#128214;</span> \x27+t(\x27nav_docs\x27)+\x27</a>\x27+
+      \x27<a href="https://nothumanallowed.com/docs/agents" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#129302;</span> \x27+t(\x27nav_agents_guide\x27)+\x27</a>\x27+
+      \x27<a href="https://nothumanallowed.com/docs/mobile" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#128241;</span> \x27+t(\x27nav_mobile\x27)+\x27</a>\x27+
+    \x27</div>\x27+
+    \x27<div style="padding:12px 16px;margin-top:auto;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">nothumanallowed.com</div>\x27;
+}
+
 var studioState = {
   task: '',
-  nodes: [],       // [{icon,agent,label,status:'waiting'|'running'|'done'|'error'}]
+  nodes: [],       // [{icon,agent,label,status:'waiting'|'running'|'done'|'error',output:''}]
   log: [],         // [{agent,icon,text,time,type:'agent'|'system'|'error'}]
   result: '',
+  canvas: null,    // HTML canvas content if generated
   running: false,
-  planned: false
+  planned: false,
+  parliamentMode: false
 };
 
 var studioAbortController = null;
@@ -2878,6 +3002,7 @@ function studioReset() {
   studioState.nodes = [];
   studioState.log = [];
   studioState.result = '';
+  studioState.canvas = null;
   studioState.running = false;
   studioState.planned = false;
   studioTokens = {in:0, out:0};
@@ -2971,11 +3096,14 @@ function renderStudioResult() {
   if (!el) return;
   if (!studioState.result) { el.style.display = 'none'; return; }
   el.style.display = 'block';
-  var isHtml = studioState.result.trimStart().startsWith('<');
-  var body = isHtml
+  var hasCanvas = !!(studioState.canvas);
+  var body = hasCanvas
     ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:var(--dim);font-size:13px">&#10003; ' + t('canvas_generated') + '</span><button onclick="openCanvasPanel()" style="padding:6px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;cursor:pointer;font-weight:700">&#x25A3; ' + t('canvas_open') + '</button></div>'
     : '<div class="md-body">' + renderMd(studioState.result) + '</div>';
-  el.innerHTML = '<div class="studio-result__title">&#10003; Workflow completato</div>' + body;
+  el.innerHTML = '<div class="studio-result__title">&#10003; ' + t('workflow_complete') + '</div>' + body;
+  // Show canvas button in toolbar whenever canvas data exists
+  var canvasBtn = document.getElementById('studioCanvasBtn');
+  if (canvasBtn) canvasBtn.style.display = hasCanvas ? '' : 'none';
 }
 
 function studioSetNodeStatus(idx, status) {
@@ -2995,6 +3123,7 @@ async function runStudio() {
   studioState.nodes = [];
   studioState.log = [];
   studioState.result = '';
+  studioState.canvas = null;
   studioState.running = true;
   studioState.planned = false;
   renderStudioNodes();
@@ -3049,6 +3178,7 @@ async function runStudio() {
       }
       studioSetNodeStatus(i, 'done');
       var realOutput = (stepResult.output && stepResult.output !== '(no output)') ? stepResult.output : null;
+      studioState.nodes[i].output = realOutput || '';
       studioLog(node.label, node.icon, realOutput || (stepResult.canvas ? '[Canvas report generated]' : '(done)'), 'agent', true);
       // If CanvasAgent produced HTML, open it in the canvas panel
       if (stepResult.canvas) {
@@ -3062,6 +3192,68 @@ async function runStudio() {
         }
       }
       context = realOutput || stepResult.canvas || context;
+    }
+
+    // Parliament mode: Round 2 cross-reading deliberation
+    var parliamentChk = document.getElementById(\x27studioParliamentMode\x27);
+    if (parliamentChk && parliamentChk.checked && studioState.nodes.length >= 2) {
+      var proposals = studioState.nodes
+        .filter(function(n) { return n.output && n.output !== \x27(no output)\x27 && n.agent !== \x27CanvasAgent\x27; })
+        .map(function(n) { return {agent: n.agent, label: n.label, output: n.output}; });
+      if (proposals.length >= 2) {
+        studioLog(\x27Parlamento\x27, \x27&#x2656;\x27, \x27Avvio deliberazione — Round 2 cross-reading tra agenti...\x27, \x27system\x27);
+        var deliberateBody = JSON.stringify({task: task, proposals: proposals, language: document.getElementById(\x27langSelect\x27) ? document.getElementById(\x27langSelect\x27).value : \x27it\x27});
+        try {
+          var delRes = await fetch(\x27/api/studio/deliberate\x27, {method:\x27POST\x27, headers:{\x27Content-Type\x27:\x27application/json\x27}, body: deliberateBody, signal: studioAbortController ? studioAbortController.signal : undefined});
+          if (delRes.ok) {
+            var delReader = delRes.body.getReader();
+            var delDecoder = new TextDecoder();
+            var delBuf = \x27\x27;
+            var delDone = false;
+            while (!delDone) {
+              var delChunk = await delReader.read();
+              if (delChunk.done) break;
+              delBuf += delDecoder.decode(delChunk.value, {stream:true});
+              var delLines = delBuf.split(\x27\\n\x27);
+              delBuf = delLines.pop();
+              delLines.forEach(function(ln) {
+                if (!ln.startsWith(\x27data: \x27)) return;
+                var dd = ln.slice(6).trim();
+                if (dd === \x27[DONE]\x27) { delDone = true; return; }
+                try {
+                  var dev = JSON.parse(dd);
+                  if (dev.token) {
+                    // Status tokens from server — update last log entry text inline
+                    var delEntries = document.querySelectorAll(\x27.studio-log-entry\x27);
+                    var delLast = delEntries[delEntries.length - 1];
+                    if (delLast) { var delTb = delLast.querySelector(\x27.studio-log-entry__text\x27); if (delTb) delTb.textContent = dev.token; }
+                  } else if (dev.deliberation_r2) {
+                    var r2d = dev.deliberation_r2;
+                    studioLog(r2d.label || r2d.agent, \x27&#x2656;\x27, \x27[R2] \x27 + (r2d.output || \x27\x27).slice(0, 300), \x27agent\x27, true);
+                    var ni2 = studioState.nodes.findIndex(function(x){return x.agent===r2d.agent;});
+                    if (ni2 >= 0) { studioState.nodes[ni2].output = r2d.output; }
+                    context = r2d.output || context;
+                  } else if (dev.deliberation_r3) {
+                    studioLog(\x27HERALD\x27, \x27&#128295;\x27, \x27[Mediazione] \x27 + (dev.deliberation_r3.output || \x27\x27).slice(0, 300), \x27system\x27, true);
+                    context = dev.deliberation_r3.output || context;
+                  } else if (dev.deliberation_done) {
+                    var r2Conv = Math.round((dev.r2_convergence || 0) * 100);
+                    studioLog(\x27Parlamento\x27, \x27&#x2656;\x27, \x27Deliberazione completa — convergenza R2: \x27 + r2Conv + \x27%\x27, \x27system\x27);
+                    if (dev.mediation) { context = dev.mediation; }
+                    delDone = true;
+                  } else if (dev.done) {
+                    delDone = true;
+                  }
+                } catch(e2) {}
+              });
+            }
+          }
+        } catch(e3) {
+          if (e3.name !== \x27AbortError\x27) {
+            studioLog(\x27Parlamento\x27, \x27&#x2656;\x27, \x27Deliberazione non disponibile: \x27 + (e3.message || String(e3)), \x27error\x27);
+          }
+        }
+      }
     }
 
     // Final result is the last step's output
@@ -3213,25 +3405,24 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
             try {
               var ev = JSON.parse(d);
               if (ev.token) {
-                // Tool status tokens (start with '[') shown in dim color, LLM output streamed normally
-                var isStatus = ev.token.charAt(0) === '[' && ev.token.indexOf(']') > 0 && ev.token.length < 80;
-                if (!isStatus) output += ev.token;
-                // Update live log entry
-                var entries = document.querySelectorAll('.studio-log-entry');
+                var isStatus = ev.token.charAt(0) === \x27[\x27 && ev.token.indexOf(\x27]\x27) > 0 && ev.token.length < 80;
+                if (!isStatus) { output += ev.token; }
+                // Update live log: show status tokens as text, LLM output as animated dots
+                var entries = document.querySelectorAll(\x27.studio-log-entry\x27);
                 var last = entries[entries.length - 1];
                 if (last) {
-                  var tb = last.querySelector('.studio-log-entry__text');
+                  var tb = last.querySelector(\x27.studio-log-entry__text\x27);
                   if (tb) {
                     if (isStatus) {
-                      tb.textContent = ev.token.split('\\r').join('').split('\\n').join(' ');
-                    } else {
-                      tb.innerHTML = renderMd(output);
+                      tb.textContent = ev.token.replace(new RegExp(\x27[\\\\r\\\\n]+\x27,\x27g\x27), \x27 \x27);
                     }
+                    // LLM output: don\x27t show raw tokens — just keep the animated dots from CSS
                   }
                 }
               }
               if (ev.canvas) {
                 canvasHtml = ev.canvas;
+                studioState.canvas = ev.canvas;
                 // Render canvas immediately when received — don't wait for step resolution
                 var cf2 = document.getElementById('canvasFrame');
                 var cp2 = document.getElementById('canvasPanel');
@@ -3239,10 +3430,10 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
                   cf2.srcdoc = canvasHtml;
                   cp2.classList.add('open');
                   var ct2 = document.getElementById('canvasTitle');
-                  if (ct2) ct2.textContent = 'Studio Report';
+                  if (ct2) ct2.textContent = \x27Studio Report\x27;
                 }
                 var scb = document.getElementById('studioCanvasBtn');
-                if (scb) scb.style.display = '';
+                if (scb) scb.style.display = \x27\x27;
               }
               if (ev.usage) { studioAddTokens(ev.usage.input||0, ev.usage.output||0); }
               else if (ev.token && !isStatus) { studioTokens.out += Math.ceil(ev.token.length/4); studioUpdateTokenBar(); }
@@ -3295,44 +3486,44 @@ function renderStudio(el) {
 
   // 38 specialist agents sidebar
   var SPECIALIST_AGENTS = [
-    {icon:'\\u{1F6E1}',name:'saber',desc:'Security audits, pentest, OWASP'},
-    {icon:'\\u{1F50D}',name:'zero',desc:'Vulnerability & dependency audit'},
-    {icon:'\\u2713',name:'veritas',desc:'Fact-checking & hallucination detection'},
-    {icon:'\\u{1F52C}',name:'ade',desc:'Full security review, forensics'},
-    {icon:'\\u{1F512}',name:'heimdall',desc:'OAuth, JWT, RBAC design'},
-    {icon:'\\u{1F4BB}',name:'jarvis',desc:'Full-stack architecture & API'},
-    {icon:'\\u2699',name:'forge',desc:'CI/CD, deployment, infra'},
-    {icon:'\\u{1F527}',name:'pipe',desc:'Build systems, Airflow, automation'},
-    {icon:'\\u{1F4DF}',name:'shell',desc:'Shell scripts, CLI tools'},
-    {icon:'\\u{1F41B}',name:'glitch',desc:'Debugging & root cause'},
-    {icon:'\\u{1F4CA}',name:'oracle',desc:'Data analysis, stats, ML'},
-    {icon:'\\u{1F9EE}',name:'logos',desc:'Logic, proofs, formal reasoning'},
-    {icon:'\\u{1F5FA}',name:'atlas',desc:'Terraform, CloudFormation, IaC'},
-    {icon:'\\u{1F30D}',name:'cartographer',desc:'Geo data, mapping, routing'},
-    {icon:'\\u270D',name:'scheherazade',desc:'Docs, tutorials, blog posts'},
-    {icon:'\\u{1F4DD}',name:'quill',desc:'Posts, summaries, abstracts'},
-    {icon:'\\u{1F3A8}',name:'muse',desc:'Creative brainstorming & ideation'},
-    {icon:'\\u{1F58C}',name:'murasaki',desc:'UI/UX design, accessibility'},
-    {icon:'\\u{1F517}',name:'hermes',desc:'Kafka, RabbitMQ, event-driven'},
-    {icon:'\\u{1F50C}',name:'link',desc:'Community, reputation, engagement'},
-    {icon:'\\u{1F310}',name:'mercury',desc:'Finance, market, ROI analysis'},
-    {icon:'\\u2638',name:'shogun',desc:'Kubernetes, Helm, pod security'},
-    {icon:'\\u{1F504}',name:'flux',desc:'GitOps, rollback planning'},
-    {icon:'\\u23F0',name:'cron',desc:'GitHub Actions, GitLab CI'},
-    {icon:'\\u{1F30E}',name:'babel',desc:'API integration, microservices'},
-    {icon:'\\u{1F5E3}',name:'polyglot',desc:'i18n, localization, translation'},
-    {icon:'\\u{1F4E2}',name:'herald',desc:'News analysis, trend detection'},
-    {icon:'\\u{1F4E1}',name:'echo',desc:'Content repurposing: blog→social'},
-    {icon:'\\u26A1',name:'macro',desc:'Batch processing, data migration'},
-    {icon:'\\u{1F525}',name:'prometheus',desc:'Strategy, architecture trade-offs'},
-    {icon:'\\u26A0',name:'cassandra',desc:'Risk prediction, worst-case analysis'},
-    {icon:'\\u{1F9E0}',name:'athena',desc:'Tech evaluation, benchmarks'},
-    {icon:'\\u{1F441}',name:'sauron',desc:'Performance profiling, bottlenecks'},
-    {icon:'\\u{1F3BC}',name:'conductor',desc:'Workflow orchestration'},
-    {icon:'\\u{1F9ED}',name:'navi',desc:'Data profiling, schema inference'},
-    {icon:'\\u{1F4C8}',name:'edi',desc:'A/B testing, hypothesis testing'},
-    {icon:'\\u26C8',name:'tempest',desc:'Climate, weather, environmental'},
-    {icon:'\\u{1F37D}',name:'epicure',desc:'Recipes, nutrition, dietary'},
+    {icon:'\u{1F6E1}',name:'saber',desc:'Security audits, pentest, OWASP'},
+    {icon:'\u{1F50D}',name:'zero',desc:'Vulnerability & dependency audit'},
+    {icon:'\u2713',name:'veritas',desc:'Fact-checking & hallucination detection'},
+    {icon:'\u{1F52C}',name:'ade',desc:'Full security review, forensics'},
+    {icon:'\u{1F512}',name:'heimdall',desc:'OAuth, JWT, RBAC design'},
+    {icon:'\u{1F4BB}',name:'jarvis',desc:'Full-stack architecture & API'},
+    {icon:'\u2699',name:'forge',desc:'CI/CD, deployment, infra'},
+    {icon:'\u{1F527}',name:'pipe',desc:'Build systems, Airflow, automation'},
+    {icon:'\u{1F4DF}',name:'shell',desc:'Shell scripts, CLI tools'},
+    {icon:'\u{1F41B}',name:'glitch',desc:'Debugging & root cause'},
+    {icon:'\u{1F4CA}',name:'oracle',desc:'Data analysis, stats, ML'},
+    {icon:'\u{1F9EE}',name:'logos',desc:'Logic, proofs, formal reasoning'},
+    {icon:'\u{1F5FA}',name:'atlas',desc:'Terraform, CloudFormation, IaC'},
+    {icon:'\u{1F30D}',name:'cartographer',desc:'Geo data, mapping, routing'},
+    {icon:'\u270D',name:'scheherazade',desc:'Docs, tutorials, blog posts'},
+    {icon:'\u{1F4DD}',name:'quill',desc:'Posts, summaries, abstracts'},
+    {icon:'\u{1F3A8}',name:'muse',desc:'Creative brainstorming & ideation'},
+    {icon:'\u{1F58C}',name:'murasaki',desc:'UI/UX design, accessibility'},
+    {icon:'\u{1F517}',name:'hermes',desc:'Kafka, RabbitMQ, event-driven'},
+    {icon:'\u{1F50C}',name:'link',desc:'Community, reputation, engagement'},
+    {icon:'\u{1F310}',name:'mercury',desc:'Finance, market, ROI analysis'},
+    {icon:'\u2638',name:'shogun',desc:'Kubernetes, Helm, pod security'},
+    {icon:'\u{1F504}',name:'flux',desc:'GitOps, rollback planning'},
+    {icon:'\u23F0',name:'cron',desc:'GitHub Actions, GitLab CI'},
+    {icon:'\u{1F30E}',name:'babel',desc:'API integration, microservices'},
+    {icon:'\u{1F5E3}',name:'polyglot',desc:'i18n, localization, translation'},
+    {icon:'\u{1F4E2}',name:'herald',desc:'News analysis, trend detection'},
+    {icon:'\u{1F4E1}',name:'echo',desc:'Content repurposing: blog\u2192social'},
+    {icon:'\u26A1',name:'macro',desc:'Batch processing, data migration'},
+    {icon:'\u{1F525}',name:'prometheus',desc:'Strategy, architecture trade-offs'},
+    {icon:'\u26A0',name:'cassandra',desc:'Risk prediction, worst-case analysis'},
+    {icon:'\u{1F9E0}',name:'athena',desc:'Tech evaluation, benchmarks'},
+    {icon:'\u{1F441}',name:'sauron',desc:'Performance profiling, bottlenecks'},
+    {icon:'\u{1F3BC}',name:'conductor',desc:'Workflow orchestration'},
+    {icon:'\u{1F9ED}',name:'navi',desc:'Data profiling, schema inference'},
+    {icon:'\u{1F4C8}',name:'edi',desc:'A/B testing, hypothesis testing'},
+    {icon:'\u26C8',name:'tempest',desc:'Climate, weather, environmental'},
+    {icon:'\u{1F37D}',name:'epicure',desc:'Recipes, nutrition, dietary'},
   ];
   var specialistHtml = SPECIALIST_AGENTS.map(function(t){
     var ic = t.icon;
@@ -3371,6 +3562,10 @@ function renderStudio(el) {
               '<button onclick="studioReset()" title="' + t('reset') + '" style="padding:8px 12px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:16px;line-height:1" ' + (studioState.running ? 'disabled' : '') + '>&#8635;</button>' +
             '</div>' +
           '</div>' +
+          '<label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;user-select:none">' +
+            '<input type="checkbox" id="studioParliamentMode" style="width:15px;height:15px;accent-color:var(--green3)" ' + (studioState.parliamentMode ? \x27checked\x27 : \x27\x27) + ' onchange="studioState.parliamentMode=this.checked">' +
+            '<span style="font-size:12px;color:var(--dim)">&#x2656; <strong style="color:var(--green)">Parlamento</strong> — Round 2 cross-reading tra agenti (2x token)</span>' +
+          '</label>' +
         '</div>' +
 
         // ── MANUAL BUILDER MODE ──
@@ -3389,7 +3584,7 @@ function renderStudio(el) {
 
         '<div style="display:flex;align-items:center;gap:8px;margin:8px 0">' +
           '<div id="studioTokenBar" style="font-size:10px;color:var(--dim);font-family:var(--mono);flex:1"></div>' +
-          '<button id="studioCanvasBtn" onclick="var p=document.getElementById(\\x27canvasPanel\\x27);if(p)p.classList.add(\\x27open\\x27)" style="display:none;font-size:10px;padding:3px 9px;background:none;border:1px solid var(--green3);border-radius:5px;color:var(--green);cursor:pointer;font-family:var(--mono)">&#9632; Open Canvas</button>' +
+          '<button id="studioCanvasBtn" onclick="openCanvasPanel()" style="display:none;font-size:12px;padding:5px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:6px;color:var(--green);cursor:pointer;font-weight:700">&#9632; ' + t('canvas_open') + '</button>' +
         '</div>' +
         '<div class="studio-canvas" id="studioNodes"></div>' +
         '<div class="studio-log" id="studioLog" style="display:none"></div>' +
@@ -3593,18 +3788,17 @@ async function runManualWorkflow() {
 
 // ---- INIT ----
 function init(){
+  renderSidebar();
   var el=document.getElementById('content');
-  if(el)el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:50vh;flex-direction:column"><div class="spinner"></div><div style="color:var(--dim)">Loading...</div></div>';
+  if(el)el.innerHTML=\x27<div style="display:flex;align-items:center;justify-content:center;height:50vh;flex-direction:column"><div class="spinner"></div><div style="color:var(--dim)">Loading...</div></div>\x27;
   loadDash().then(function(){render()}).catch(function(){render()});
   loadAgents().catch(function(){});
-  setInterval(function(){loadDash().then(function(){if(currentView==='dashboard')render()}).catch(function(){})},120000);
-  // Connect to daemon WebSocket for real-time notifications
+  setInterval(function(){loadDash().then(function(){if(currentView===\x27dashboard\x27)render()}).catch(function(){})},120000);
   connectWebSocket();
-  // Make floating panels draggable
   var bv=document.getElementById('browserViewer');
-  if(bv)makeDraggable(bv,'.browser-viewer__header');
+  if(bv)makeDraggable(bv,\x27.browser-viewer__header\x27);
   var cp=document.getElementById('canvasPanel');
-  if(cp)makeDraggable(cp,'.cvs-header');
+  if(cp)makeDraggable(cp,\x27.cvs-header\x27);
 }
 init();
 `;
@@ -3998,62 +4192,7 @@ input:focus,textarea:focus{border-color:var(--green3)}
 <div class="sidebar__overlay" id="overlay" onclick="closeSidebar()"></div>
 
 <div class="app">
-  <nav class="sidebar" id="sidebar">
-    <div class="sidebar__brand">
-      <button class="sidebar__close" onclick="closeSidebar()" title="Close menu">&times;</button>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div class="sidebar__brand-name">NHA</div>
-        <span id="wsIndicator" style="color:var(--dim);font-size:8px" title="Daemon WebSocket">&#9679;</span>
-        <span style="font-size:9px;color:var(--dim)">v${VERSION}</span>
-      </div>
-      <div id="sidebarPageTitle" style="font-size:11px;color:var(--bright);margin-top:4px;font-weight:600">Dashboard</div>
-      <div class="sidebar__brand-sub" id="clock"></div>
-    </div>
-    <div class="sidebar__section">
-      <div class="sidebar__label">Overview</div>
-      <div class="nav-item nav-item--active" data-view="dashboard" onclick="switchView('dashboard')"><span class="nav-item__icon">&#9632;</span> Dashboard</div>
-      <div class="nav-item" data-view="chat" onclick="switchView('chat')"><span class="nav-item__icon">&#128172;</span> Chat</div>
-      <div class="nav-item" data-view="plan" onclick="switchView('plan')"><span class="nav-item__icon">&#9733;</span> Plan</div>
-      <div class="nav-item" data-view="tasks" onclick="switchView('tasks')"><span class="nav-item__icon">&#9745;</span> Tasks <span class="nav-item__badge" id="taskBadge" style="display:none">0</span></div>
-    </div>
-    <div class="sidebar__section">
-      <div class="sidebar__label">Google</div>
-      <div class="nav-item" data-view="emails" onclick="switchView('emails')"><span class="nav-item__icon">&#128231;</span> Emails <span class="nav-item__badge" id="emailBadge" style="display:none">0</span></div>
-      <div class="nav-item" data-view="calendar" onclick="switchView('calendar')"><span class="nav-item__icon">&#128197;</span> Calendar <span class="nav-item__badge" id="calBadge" style="display:none;background:var(--amber)">0</span></div>
-      <div class="nav-item" data-view="drive" onclick="switchView('drive')"><span class="nav-item__icon">&#128193;</span> Drive</div>
-      <div class="nav-item" data-view="contacts" onclick="switchView('contacts')"><span class="nav-item__icon">&#128101;</span> Contacts</div>
-      <div class="nav-item" data-view="notes" onclick="switchView('notes')"><span class="nav-item__icon">&#128221;</span> Notes</div>
-    </div>
-    <div class="sidebar__section">
-      <div class="sidebar__label">Microsoft</div>
-      <div class="nav-item" data-view="onedrive" onclick="switchView('onedrive')"><span class="nav-item__icon">&#9729;</span> OneDrive</div>
-      <div class="nav-item" data-view="mstodo" onclick="switchView('mstodo')"><span class="nav-item__icon">&#128203;</span> To Do</div>
-    </div>
-    <div class="sidebar__section">
-      <div class="sidebar__label">Integrations</div>
-      <div class="nav-item" data-view="github" onclick="switchView('github')"><span class="nav-item__icon">&#128736;</span> GitHub</div>
-      <div class="nav-item" data-view="notion" onclick="switchView('notion')"><span class="nav-item__icon">&#128214;</span> Notion</div>
-      <div class="nav-item" data-view="slack" onclick="switchView('slack')"><span class="nav-item__icon">&#128488;</span> Slack</div>
-      <div class="nav-item" data-view="birthdays" onclick="switchView('birthdays')"><span class="nav-item__icon">&#127874;</span> Birthdays</div>
-    </div>
-    <div class="sidebar__section">
-      <div class="sidebar__label">AI</div>
-      <div class="nav-item" data-view="agents" onclick="switchView('agents')"><span class="nav-item__icon">&#129302;</span> Agents</div>
-      <div class="nav-item" data-view="studio" onclick="switchView('studio')"><span class="nav-item__icon">&#9881;</span> Studio <span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(99,102,241,.25);color:var(--green);margin-left:4px;font-weight:700">NEW</span></div>
-      <div class="nav-item" data-view="collab" onclick="switchView('collab')"><span class="nav-item__icon">&#128274;</span> AgentMessenger <span id="collabBadge" style="display:none;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px;font-family:var(--mono)">0</span></div>
-    </div>
-    <div class="sidebar__section">
-      <div class="sidebar__label">Config</div>
-      <div class="nav-item" data-view="settings" onclick="switchView('settings')"><span class="nav-item__icon">&#9881;</span> Settings</div>
-    </div>
-    <div class="sidebar__section">
-      <div class="sidebar__label">Help</div>
-      <a href="https://nothumanallowed.com/docs" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#128214;</span> Documentation</a>
-      <a href="https://nothumanallowed.com/docs/agents" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#129302;</span> Agents Guide</a>
-      <a href="https://nothumanallowed.com/docs/mobile" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#128241;</span> Mobile App</a>
-    </div>
-    <div style="padding:12px 16px;margin-top:auto;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">nothumanallowed.com</div>
-  </nav>
+  <nav class="sidebar" id="sidebar"></nav>
 
   <button onclick="openSidebar()" style="position:fixed;top:6px;left:6px;z-index:100;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);color:var(--green);font-size:16px;padding:4px 8px;cursor:pointer;line-height:1;opacity:0.85" id="mobileBurger">&#9776;</button>
 

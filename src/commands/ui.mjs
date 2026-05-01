@@ -290,7 +290,7 @@ export async function cmdUI(args) {
       if (method === 'GET' && pathname.startsWith('/nha-ui.js')) {
         res.writeHead(200, {
           'Content-Type': 'application/javascript; charset=utf-8',
-          'Cache-Control': 'public, max-age=3600',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
         });
         res.end(jsBundle);
         logRequest(method, pathname, 200, Date.now() - start);
@@ -2544,54 +2544,100 @@ export async function cmdUI(args) {
         if (!task) { sendJSON(res, 400, { error: 'task required' }); logRequest(method, pathname, 400, Date.now() - start); return; }
 
         const plannerLang = (() => { const LANG_MAP2 = {en:'English',it:'Italian',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',zh:'Chinese',ja:'Japanese',ar:'Arabic',hi:'Hindi',ru:'Russian',nl:'Dutch',pl:'Polish',tr:'Turkish',ko:'Korean'}; const lc = (config?.language||'it').slice(0,2); return LANG_MAP2[lc]||'Italian'; })();
-        const planPrompt = `You are a workflow planner. Task: "${task}"
-Language: ${plannerLang}. All prompts must be in ${plannerLang}.
 
-Output ONLY valid JSON (no markdown, no explanation, no thinking):
-{"steps":[{"icon":"EMOJI","agent":"AGENT_NAME","label":"SHORT LABEL","prompt":"INSTRUCTION IN ${plannerLang}"}]}
+        // ── Fast keyword-based planning (no LLM call needed for common patterns) ──────
+        const taskLow = task.toLowerCase();
+        const hasEmail      = /email|mail|inbox|posta/i.test(taskLow);
+        const hasCalendar   = /calendar|agenda|calendari|eventi|schedule/i.test(taskLow);
+        const hasSearch     = /cerca|search|notizie|news|ultime|latest|web|internet|tendenz|trend/i.test(taskLow);
+        const hasCanvas     = /html|dashboard|visua|report|grafico|chart/i.test(taskLow);
+        const hasGitHub     = /github|git|issue|pr|pull request/i.test(taskLow);
+        const hasSlack      = /slack|channel|messag/i.test(taskLow);
+        const hasNotion     = /notion|note|page/i.test(taskLow);
+        const hasBriefing   = /briefing|analisi|analizza|summary|sommario|riassunto|riepiloga|valutazione|valuta/i.test(taskLow);
+        const hasFinance    = /finance|mercato|market|stock|trading|finanz|investiment|cripto/i.test(taskLow);
+        const hasSecurity   = /security|sicurezza|vulnerabilit|audit|pentest|rischi|dipendenz/i.test(taskLow);
+        const hasStrategy   = /strateg|competitiv|posizionament|raccomandaz|competitive|positioning/i.test(taskLow);
+        const hasReputation = /reputazion|reputation|online|brand|review|recension/i.test(taskLow);
+        const hasCode       = /codice|code|refactor|debug|bug|sviluppo|software|npm|package/i.test(taskLow);
+        const hasWriting    = /scrivi|write|articolo|article|blog|testo|text|documento|document/i.test(taskLow);
+        const hasData       = /dati|data|dataset|csv|json|analizza i dati|pattern|statistich/i.test(taskLow);
+        const hasTranslate  = /traduci|translate|traduzione|translation/i.test(taskLow);
 
-Rules:
-- 2-5 steps max
-- Use WebSearchAgent to fetch live web data
-- Use EmailAgent/CalendarAgent/GitHubAgent/SlackAgent for personal live data
-- Use HERALD for news briefings, ORACLE for business analysis, NAVI for data analysis, ATHENA for tech evaluation, CASSANDRA for risk, MERCURY for finance, HERALD for trends, QUILL for summaries
-- Use CanvasAgent LAST only if user explicitly asks for HTML/visual/dashboard
-- icon must be a real emoji character
+        const it = plannerLang === 'Italian';
 
-Example output:
-{"steps":[{"icon":"🔍","agent":"WebSearchAgent","label":"Cerca notizie","prompt":"Cerca le ultime notizie su intelligenza artificiale oggi"},{"icon":"📰","agent":"HERALD","label":"Analisi notizie","prompt":"Analizza le notizie trovate e crea un briefing esecutivo"},{"icon":"📊","agent":"CanvasAgent","label":"Dashboard HTML","prompt":"Crea una dashboard HTML visuale con i risultati"}]}`;
+        // Extract a clean short search query from the task (to avoid SENTINEL flagging long task strings)
+        const extractSearchQuery = (t) => {
+          const m = t.match(/(?:cerca|search|find|ricerca|notizie su|news about|latest on|aggiornamenti su|ultime su|tendenz|trend)\s+(.{5,80}?)(?:\s+(?:e |and |per |for |poi |then )|[,\n]|$)/i);
+          if (m) return m[1].trim();
+          const stripped = t.replace(/^[^:]+:\s*/,'').split(/[,\n]/)[0].slice(0,100).trim();
+          return stripped || t.slice(0,80).trim();
+        };
+        const searchQuery = extractSearchQuery(task);
+
+        // Build plan directly from keywords — reliable, fast, no SENTINEL risk
+        const buildKeywordPlan = () => {
+          const steps = [];
+          if (hasEmail)    steps.push({icon:'\u{1F4E7}',agent:'EmailAgent',   label:it?'Controlla email':'Check emails',       prompt:'Read the latest unread emails and identify urgent items, deadlines, and required actions'});
+          if (hasCalendar) steps.push({icon:'\u{1F4C5}',agent:'CalendarAgent', label:it?'Rivedi calendario':'Review calendar',   prompt:'Check today\'s events and identify any scheduling conflicts or important meetings'});
+          if (hasGitHub)   steps.push({icon:'\u{1F4BB}',agent:'GitHubAgent',   label:'GitHub',                                  prompt:'Read open issues and pull requests, identify what needs attention'});
+          if (hasSlack)    steps.push({icon:'\u{1F4AC}',agent:'SlackAgent',    label:'Slack',                                   prompt:'Check recent Slack messages and identify important conversations'});
+          if (hasNotion)   steps.push({icon:'\u{1F4DD}',agent:'NotionAgent',   label:'Notion',                                  prompt:'Search Notion for relevant pages and notes'});
+          if (hasSearch || hasReputation || (!hasEmail && !hasCalendar && !hasGitHub && !hasSlack)) {
+            steps.push({icon:'\u{1F50D}',agent:'WebSearchAgent',label:it?'Ricerca web':'Web search',prompt:searchQuery});
+          }
+          // Specialist agents — can stack multiple
+          if (hasSecurity)   steps.push({icon:'\u{1F6E1}',agent:'cassandra',   label:it?'CASSANDRA \u2014 Rischi sicurezza':'CASSANDRA \u2014 Security risks',    prompt:'Analyze the collected data and identify security risks, vulnerabilities and concrete recommendations'});
+          if (hasFinance)    steps.push({icon:'\u{1F4B0}',agent:'mercury',     label:it?'MERCURY \u2014 Analisi mercato':'MERCURY \u2014 Market analysis',          prompt:'Analyze the financial data and market trends from the collected information'});
+          if (hasStrategy)   steps.push({icon:'\u{265F}', agent:'athena',      label:it?'ATHENA \u2014 Strategia':'ATHENA \u2014 Strategy',                        prompt:'Based on the collected data, produce strategic analysis with competitive positioning and concrete recommendations'});
+          if (hasReputation) steps.push({icon:'\u{1F52D}',agent:'oracle',      label:it?'ORACLE \u2014 Reputazione':'ORACLE \u2014 Reputation',                    prompt:'Analyze the online reputation data, sentiment and brand positioning from the collected information'});
+          if (hasCode)       steps.push({icon:'\u{1F527}',agent:'forge',       label:it?'FORGE \u2014 Analisi codice':'FORGE \u2014 Code analysis',                prompt:'Analyze the code, dependencies and technical issues identified in the data'});
+          if (hasWriting)    steps.push({icon:'\u{1F58A}',agent:'quill',       label:it?'QUILL \u2014 Redazione':'QUILL \u2014 Writing',                           prompt:'Write a polished, professional document based on all the collected information'});
+          if (hasData)       steps.push({icon:'\u{1F4CA}',agent:'DataAnalystAgent',label:it?'Analisi dati':'Data analysis',                                        prompt:'Analyze the data and extract key patterns, trends and insights'});
+          if (hasTranslate)  steps.push({icon:'\u{1F310}',agent:'polyglot',    label:it?'POLYGLOT \u2014 Traduzione':'POLYGLOT \u2014 Translation',                prompt:'Translate the content as requested, maintaining meaning and style'});
+          // If no specialist added but we have data, add HERALD for synthesis
+          const hasSpecialist = hasSecurity || hasFinance || hasStrategy || hasReputation || hasCode || hasWriting || hasData || hasTranslate;
+          if (!hasSpecialist && (hasBriefing || steps.length > 0)) {
+            steps.push({icon:'\u{1F4F0}',agent:'HERALD',label:it?'HERALD \u2014 Briefing esecutivo':'HERALD \u2014 Executive briefing',prompt:'Based on ALL the data collected by the previous steps, write a complete executive briefing with priorities, findings, and strategic recommendations. Do NOT invent data — only use what was provided.'});
+          }
+          // Add CanvasAgent: always when explicitly requested OR when 2+ specialist agents ran (complex analysis deserves a visual report)
+          const specialistCount = [hasSecurity,hasFinance,hasStrategy,hasReputation,hasCode,hasWriting,hasData].filter(Boolean).length;
+          if (hasCanvas || specialistCount >= 2 || (hasSpecialist && hasBriefing)) {
+            steps.push({icon:'\u{1F4CA}',agent:'CanvasAgent',label:it?'Dashboard HTML':'HTML Dashboard',prompt:'Create a professional HTML dashboard report summarizing all findings from the previous agents'});
+          }
+          return steps;
+        };
+
+        // Use keyword plan directly — only fall back to LLM for genuinely ambiguous tasks
+        const keywordSteps = buildKeywordPlan();
+        const taskIsComplex = !hasEmail && !hasCalendar && !hasSearch && !hasGitHub && !hasSlack && !hasBriefing && !hasStrategy && !hasReputation && !hasCode && !hasWriting && !hasData && keywordSteps.length <= 1;
 
         try {
-          // Force thinking OFF for planner — we need deterministic JSON, not reasoning chains
-          const planConfig = Object.assign({}, config, { thinking: 'off' });
-          const planRaw = await callLLM(planConfig, 'You are a JSON workflow planner. Output ONLY valid JSON. No thinking, no explanation, no markdown.', planPrompt, { max_tokens: 1500 });
-          process.stderr.write('[STUDIO PLAN RAW] ' + planRaw.slice(0, 400) + '\n');
           let steps;
-          try {
-            // Strip ALL <think>...</think> blocks (greedy — handles nested/multiple)
-            let clean = planRaw;
-            let prev = '';
-            while (prev !== clean) { prev = clean; clean = clean.replace(/<think>[\s\S]*?<\/think>/g, ''); }
-            clean = clean.trim();
-            // Strip markdown fences
-            clean = clean.replace(/^```[\w]*\r?\n?/,'').replace(/\r?\n?```$/,'').trim();
-            // Extract first complete JSON object
-            const jsonMatch = clean.match(/\{[\s\S]*\}/);
-            const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
-            steps = parsed.steps;
-          } catch (parseErr) {
-            process.stderr.write('[STUDIO PLAN PARSE ERR] ' + parseErr.message + '\n');
-            // Fallback: build a sensible default plan from the task keywords
-            const hasEmail = /email|mail/i.test(task);
-            const hasCalendar = /calendar|agenda|calendari/i.test(task);
-            const hasSearch = /cerca|search|notizie|news/i.test(task);
-            const hasCanvas = /html|dashboard|visua|report/i.test(task);
-            steps = [];
-            if (hasEmail) steps.push({icon:'📧',agent:'EmailAgent',label:'Controlla email',prompt:task});
-            if (hasCalendar) steps.push({icon:'📅',agent:'CalendarAgent',label:'Rivedi calendario',prompt:task});
-            if (hasSearch || steps.length === 0) steps.push({icon:'🔍',agent:'WebSearchAgent',label:'Ricerca web',prompt:task});
-            steps.push({icon:'📰',agent:'HERALD',label:'Analisi e briefing',prompt:task});
-            if (hasCanvas) steps.push({icon:'📊',agent:'CanvasAgent',label:'Dashboard HTML',prompt:task});
+          if (!taskIsComplex) {
+            // Use keyword plan directly — no LLM, no SENTINEL risk
+            process.stderr.write('[STUDIO PLAN KEYWORD] steps=' + keywordSteps.length + '\n');
+            steps = keywordSteps;
+          } else {
+            // Task is ambiguous — use LLM planner with sanitized short description
+            const shortTask = task.slice(0, 200).replace(/[`'"]/g, ' ');
+            const plannerLangStr = plannerLang;
+            const planPrompt = `Workflow planner. Goal: ${shortTask}\nLanguage: ${plannerLangStr}.\nOutput ONLY JSON:\n{"steps":[{"icon":"EMOJI","agent":"AGENT_NAME","label":"LABEL","prompt":"INSTRUCTION"}]}\nAgents: WebSearchAgent, EmailAgent, CalendarAgent, HERALD, ORACLE, ATHENA, CASSANDRA, MERCURY, QUILL, CanvasAgent (last, only if visual needed). 2-5 steps.`;
+            const planConfig = Object.assign({}, config, { thinking: 'off' });
+            const planRaw = await callLLM(planConfig, 'Output ONLY valid JSON. No explanation.', planPrompt, { max_tokens: 800 });
+            process.stderr.write('[STUDIO PLAN LLM RAW] ' + planRaw.slice(0, 400) + '\n');
+            try {
+              let clean = planRaw;
+              let prev = '';
+              while (prev !== clean) { prev = clean; clean = clean.replace(/<think>[\s\S]*?<\/think>/g, ''); }
+              clean = clean.trim().replace(/^```[\w]*\r?\n?/,'').replace(/\r?\n?```$/,'').trim();
+              const jsonMatch = clean.match(/\{[\s\S]*\}/);
+              const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
+              steps = parsed.steps;
+            } catch (parseErr) {
+              process.stderr.write('[STUDIO PLAN PARSE ERR] ' + parseErr.message + '\n');
+              steps = keywordSteps;
+            }
           }
           if (!Array.isArray(steps) || !steps.length) {
             sendJSON(res, 500, { error: 'Empty workflow plan' });
@@ -2661,9 +2707,24 @@ Example output:
             } catch (e) { toolData = `Calendar read failed: ${e.message}`; }
 
           } else if (agent === 'WebSearchAgent' || agent === 'ResearchAgent') {
-            sendToken('[Searching the web...] ');
+            sendToken('[Searching the web and reading pages...] ');
             try {
-              const searchResult = await withTimeout(executeTool('web_search', { query: stepPrompt }, config), 'WebSearch');
+              // Extract a concise search query from the step prompt (avoid sending the whole task as query)
+              // The planner should provide a short query, but if not, extract key terms
+              let searchQuery = stepPrompt;
+              // If the prompt is very long (> 120 chars), extract the core search terms
+              if (searchQuery.length > 120) {
+                // Try to extract a meaningful short query
+                const keywordMatch = searchQuery.match(/(?:cerca|search|find|ricerca|notizie su|news about|latest on|aggiornamenti su)\s+(.{5,80}?)(?:\s+(?:e|and|per|for|poi|then)|$)/i);
+                if (keywordMatch) {
+                  searchQuery = keywordMatch[1].trim();
+                } else {
+                  // Take first meaningful clause before comma/period
+                  searchQuery = searchQuery.split(/[,\.\n]/)[0].slice(0, 100).trim();
+                }
+              }
+              // Use deep search: fetches and reads top 3 pages for real content
+              const searchResult = await withTimeout(executeTool('web_search', { query: searchQuery, deep: true }, config), 25000);
               toolData = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
             } catch (e) { toolData = `Web search failed: ${e.message}`; }
 
@@ -2725,128 +2786,85 @@ Example output:
           // Tool-data agents: fetch real live data and use buildSystemPrompt (tool calls allowed)
           const isLiveDataAgent = ['CalendarAgent','EmailAgent','GitHubAgent','NotionAgent','SlackAgent','DriveAgent','BrowserAgent','WebSearchAgent','ResearchAgent'].includes(agent);
 
-          const canvasSystemPrompt = `You are an HTML report generator. Output ONLY a single complete HTML document in ${language}. No preamble, no explanation, no markdown.
-STRICT RULES:
-- Your ENTIRE response must be valid HTML starting with <!DOCTYPE html>
-- Do NOT output markdown code blocks, JSON, or any wrapper text
-- ALL text content (titles, descriptions, labels, body text) must be in ${language}
-- Use EXACTLY this CSS template structure — only change the content inside, never the style
+          // ── Canvas HTML template — built server-side, guaranteed CSS ─────
+          // The LLM outputs ONLY the <body> inner HTML (no <html>, no <style>)
+          // Server wraps it in the full template. This prevents the model from ignoring CSS.
+          const NHA_CSS = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',system-ui,sans-serif;background:#0d0d14;color:#f0f0f5;min-height:100vh;padding:24px;font-size:14px;line-height:1.65}a{color:#22d3ee;text-decoration:underline}a:hover{color:#818cf8}strong{color:#f0f0f5;font-weight:700}em{color:#a5b4fc;font-style:italic}u{text-decoration-color:#ef4444;text-underline-offset:2px}blockquote{border-left:3px solid #6366f1;padding:10px 16px;margin:12px 0;background:#15151f;border-radius:0 8px 8px 0;color:#8b8b9e;font-style:italic}.header{background:linear-gradient(135deg,#4f46e5 0%,#06b6d4 100%);border-radius:16px;padding:28px 36px;margin-bottom:20px}.header h1{font-size:24px;font-weight:800;color:#fff;margin-bottom:6px}.header p{font-size:13px;color:rgba(255,255,255,.85);margin:0}.meta{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}.meta span{background:rgba(255,255,255,.18);border-radius:20px;padding:3px 12px;font-size:11px;color:#fff;font-weight:500}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}.card{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:18px}.card-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;font-weight:700;margin-bottom:8px}.card h3{font-size:20px;font-weight:700;color:#f0f0f5;margin-bottom:4px}.card p{font-size:12px;color:#8b8b9e;margin:0}.section{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:22px;margin-bottom:16px}.section-title{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#22d3ee;font-weight:700;margin-bottom:16px}.section h3{font-size:15px;font-weight:600;color:#f0f0f5;margin-bottom:6px;margin-top:14px}.section p{font-size:13px;color:#8b8b9e;line-height:1.7;margin-bottom:10px}ul{list-style:none;padding:0;margin:8px 0}ul li{padding:4px 0 4px 18px;position:relative;font-size:13px;color:#8b8b9e}ul li::before{content:'›';position:absolute;left:0;color:#6366f1;font-weight:700}ol{padding-left:20px;margin:8px 0}ol li{padding:4px 0;font-size:13px;color:#8b8b9e;line-height:1.6}.priority-list{display:flex;flex-direction:column;gap:8px}.priority-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#1c1c28;border-radius:8px}.priority-num{width:26px;height:26px;border-radius:50%;background:#6366f1;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}.priority-item h4{font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:3px}.priority-item p{font-size:12px;color:#8b8b9e;line-height:1.5;margin:0}.source-item{padding:14px;background:#1c1c28;border-radius:8px;margin-bottom:10px;border-left:3px solid #6366f1}.source-item h4{font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:4px}.source-item p{font-size:12px;color:#8b8b9e;line-height:1.6;margin:4px 0}.source-item a{font-size:11px}.bar-row{margin-bottom:10px}.bar-label{font-size:12px;color:#8b8b9e;margin-bottom:4px;display:flex;justify-content:space-between}.bar-track{background:#1c1c28;border-radius:4px;height:8px;overflow:hidden}.bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#6366f1,#22d3ee)}.badge-high{display:inline-block;background:#7f1d1d;color:#ef4444;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-med{display:inline-block;background:#713f12;color:#f59e0b;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-low{display:inline-block;background:#14532d;color:#34d399;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-info{display:inline-block;background:#1e1b4b;color:#a5b4fc;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.divider{border:none;border-top:1px solid #2a2a38;margin:16px 0}.footer{text-align:center;padding:18px;font-size:11px;color:#4a4a5e;margin-top:8px}`;
 
-USE THIS EXACT HTML STRUCTURE (replace placeholders with real content):
-<!DOCTYPE html>
-<html lang="${language.slice(0,2).toLowerCase()}">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>REPORT TITLE HERE</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',system-ui,sans-serif;background:#0d0d14;color:#f0f0f5;min-height:100vh;padding:24px}
-.header{background:linear-gradient(135deg,#6366f1 0%,#22d3ee 100%);border-radius:16px;padding:32px 40px;margin-bottom:24px}
-.header h1{font-size:28px;font-weight:700;color:#fff;margin-bottom:8px}
-.header p{font-size:14px;color:rgba(255,255,255,0.8)}
-.meta{display:flex;gap:16px;margin-top:16px;flex-wrap:wrap}
-.meta span{background:rgba(255,255,255,0.2);border-radius:20px;padding:4px 12px;font-size:12px;color:#fff}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px}
-.card{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:20px}
-.card h2{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;margin-bottom:12px;font-weight:600}
-.card h3{font-size:16px;font-weight:600;color:#f0f0f5;margin-bottom:8px}
-.card p{font-size:13px;color:#8b8b9e;line-height:1.6}
-.card ul{list-style:none;padding:0}
-.card ul li{font-size:13px;color:#8b8b9e;line-height:1.8;padding-left:16px;position:relative}
-.card ul li::before{content:'›';position:absolute;left:0;color:#6366f1}
-.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;margin-right:6px;margin-bottom:4px}
-.badge-high{background:#7f1d1d;color:#ef4444}
-.badge-med{background:#713f12;color:#f59e0b}
-.badge-low{background:#14532d;color:#34d399}
-.badge-info{background:#1e1b4b;color:#6366f1}
-.section{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:24px;margin-bottom:16px}
-.section h2{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#22d3ee;margin-bottom:16px;font-weight:600}
-.section h3{font-size:15px;font-weight:600;color:#f0f0f5;margin-bottom:6px}
-.section p{font-size:13px;color:#8b8b9e;line-height:1.7;margin-bottom:12px}
-.priority-list{display:flex;flex-direction:column;gap:10px}
-.priority-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#1c1c28;border-radius:8px}
-.priority-num{width:28px;height:28px;border-radius:50%;background:#6366f1;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.priority-item h4{font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:2px}
-.priority-item p{font-size:12px;color:#8b8b9e;line-height:1.5;margin:0}
-.footer{text-align:center;padding:20px;font-size:11px;color:#4a4a5e;margin-top:8px}
-</style>
-</head>
-<body>
-<!-- HEADER: put report title, subtitle, date, and 2-3 meta tags -->
-<div class="header">
-  <h1>REPLACE WITH REPORT TITLE</h1>
-  <p>REPLACE WITH SUBTITLE/DESCRIPTION</p>
-  <div class="meta">
-    <span>📅 ${today}</span>
-    <span>META TAG 2</span>
-    <span>META TAG 3</span>
-  </div>
-</div>
+          const wrapInNHATemplate = (bodyHtml, title) => `<!DOCTYPE html><html lang="${langCode}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${(title||'NHA Report').replace(/</g,'&lt;')}</title><style>${NHA_CSS}</style></head><body>${bodyHtml}</body></html>`;
 
-<!-- STATS GRID: 3-4 cards with key numbers/stats -->
-<div class="grid">
-  <div class="card">
-    <h2>LABEL 1</h2>
-    <h3>STAT OR TITLE</h3>
-    <p>DESCRIPTION</p>
-  </div>
-  <!-- Add more cards for other stats -->
-</div>
+          const canvasSystemPrompt = `You are a professional HTML content generator. Output ONLY the HTML content that goes INSIDE the <body> tag. Do NOT output <!DOCTYPE>, <html>, <head>, <style>, or any wrapper tags — the CSS and document structure are already provided by the system.
 
-<!-- MAIN SECTIONS: 2-4 sections with content -->
-<div class="section">
-  <h2>SECTION LABEL</h2>
-  <div class="priority-list">
-    <div class="priority-item">
-      <div class="priority-num">1</div>
-      <div><h4>ITEM TITLE</h4><p>ITEM DESCRIPTION</p></div>
-    </div>
-    <!-- Add more priority items -->
-  </div>
-</div>
+AVAILABLE CSS CLASSES (use these, they are pre-defined):
+- .header > h1, p, .meta > span (gradient header banner)
+- .grid > .card > .card-label, h3, p (stat grid)
+- .section > .section-title, h3, p (content sections)
+- .source-item > h4, p, a (news/source items with left accent)
+- .priority-list > .priority-item > .priority-num, h4, p (ranked list)
+- .bar-row > .bar-label, .bar-track > .bar-fill[style="width:X%"] (bar charts)
+- .badge-high .badge-med .badge-low .badge-info (colored badges)
+- ul > li, ol > li (bullet/numbered lists with custom styling)
+- blockquote (quoted excerpts)
+- .divider (horizontal rule)
+- .footer (footer)
+- <strong> <em> <u> (inline formatting)
+- <a href="URL" target="_blank"> (clickable links — use for ALL URLs in the data)
 
-<div class="footer">Generated by NHA Studio · ${today}</div>
-</body>
-</html>
-
-Fill ALL placeholder text with the actual content from the data provided. Keep ALL CSS exactly as above. Output ONLY the HTML.`;
+RULES:
+- Language: ${language}. ALL text must be in ${language}.
+- Use REAL data from the input — do NOT invent or fabricate
+- URLs from the data: ALWAYS wrap in <a href="URL" target="_blank">clickable text</a>
+- Use .priority-list for action items, .source-item for each email/news source, .bar-row for any percentage data
+- Output must start with <div class="header"> and end with <div class="footer">`;
 
           let sysPrompt, userMsg;
 
           if (isCanvasAgent) {
             sysPrompt = canvasSystemPrompt;
-            userMsg = `Generate a beautiful HTML dashboard report for this content. Start immediately with <!DOCTYPE html>:\n\n${context.slice(0, 8000)}`;
+            userMsg = `Create a professional dashboard report for this data. Output ONLY the inner HTML body content (starting with <div class="header">):\n\n${context.slice(0, 10000)}`;
           } else if (isLiveDataAgent) {
-            // These agents fetched real data — use buildSystemPrompt so they can call tools too
-            const agentInstruction = `You are ${agent}, a specialist AI agent inside NHA Studio. Respond in ${language}.\nYour task: ${stepPrompt}\n` +
-              (toolData ? `\n## DATA FROM TOOLS:\n${toolData.slice(0, 4000)}\n` : '') +
-              (context ? `\n## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 3000)}\n` : '') +
-              `\nWrite your analysis in plain text in ${language}. Do NOT output JSON, tool calls, or code blocks. Summarize the data clearly.`;
-            sysPrompt = buildSystemPrompt(agent, agentInstruction, config);
+            // These agents fetched real data — use a focused prompt (no tool definitions to avoid JSON output)
+            const agentInstruction = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. Respond entirely in ${language}.
+
+## OVERALL WORKFLOW GOAL:
+${task}
+
+CRITICAL: Do NOT invent, hallucinate, or add any data not present in the DATA sections below. ONLY use the exact data provided.
+Do NOT output JSON, tool calls, or code blocks. Write in plain text with markdown headers.
+Always apply your analysis specifically to the subject mentioned in the WORKFLOW GOAL.
+
+${toolData ? `## DATA FROM TOOLS:\n${toolData.slice(0, 6000)}\n` : '## DATA: No data was retrieved by this agent.\n'}
+${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 4000)}\n` : ''}
+
+Your task: ${stepPrompt}`;
+            sysPrompt = agentInstruction;
             userMsg = toolData
-              ? `Summarize the data above for: ${stepPrompt}`
+              ? `Summarize and analyze the REAL data above. Do not add anything not present in the data.`
               : context
-              ? `Based on the previous output, complete: ${stepPrompt}`
+              ? `Based ONLY on the previous agent outputs above, complete: ${stepPrompt}`
               : stepPrompt;
           } else {
             // All other agents (WriterAgent, DataAnalystAgent, specialist agents, etc.)
-            // Use a focused prompt with NO TOOL_DEFINITIONS to prevent JSON/tool-call output
+            const hasRealData = !!(toolData || context);
             sysPrompt = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. You MUST respond entirely in ${language}.
+
+## OVERALL WORKFLOW GOAL:
+${task}
 
 CRITICAL RULES:
 - Do NOT output JSON, tool calls, function calls, or code blocks
-- Do NOT ask for more information — use only the data provided below
-- Write in plain prose, structured with headers and bullet points where appropriate
-- Be thorough and specific — this is for an executive briefing
+- NEVER invent, fabricate, or hallucinate data, events, emails, meetings, or news
+- ONLY use the EXACT data provided in the DATA sections below — if no data is provided, say so clearly
+- Do NOT add fictional examples, placeholder content, or generic suggestions not grounded in the data
+- Write in plain prose, structured with markdown headers (##) and bullet points (-)
+- Be thorough and specific — this is for an executive briefing based on REAL data only
+- Always keep the OVERALL WORKFLOW GOAL in mind — apply your analysis specifically to the subject mentioned
 
-${toolData ? `## LIVE DATA:\n${toolData.slice(0, 4000)}\n` : ''}
-${context ? `## CONTEXT FROM PREVIOUS AGENTS:\n${context.slice(0, 5000)}\n` : ''}`;
-            userMsg = toolData
-              ? `Use the live data and context above to complete this task: ${stepPrompt}`
-              : context
-              ? `Using the context from previous steps, complete this task: ${stepPrompt}`
-              : stepPrompt;
+${toolData ? `## LIVE DATA FROM TOOLS:\n${toolData.slice(0, 6000)}\n` : '## LIVE DATA: No tool data was fetched for this step.\n'}
+${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 6000)}\n` : ''}`;
+            userMsg = hasRealData
+              ? `Based ONLY on the real data above, complete this task specifically for the subject in the WORKFLOW GOAL: ${stepPrompt}`
+              : `No real data is available for "${task}". State this clearly and explain what data would be needed to complete: ${stepPrompt}`;
           }
 
           // ── Stream LLM response ───────────────────────────────────────
@@ -2879,50 +2897,37 @@ ${context ? `## CONTEXT FROM PREVIOUS AGENTS:\n${context.slice(0, 5000)}\n` : ''
           }
 
           if (isCanvasAgent) {
-            let html = fullOutput.trim();
-            // Strip thinking tags if not already filtered
-            html = html.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-            // Extract from markdown code block
-            const mdMatch = html.match(/```html?\s*([\s\S]*?)```/i);
-            if (mdMatch) html = mdMatch[1].trim();
-            // Find <!DOCTYPE or <html start if there's preamble text
-            const doctypeIdx = html.indexOf('<!DOCTYPE');
-            const htmlTagIdx = html.indexOf('<html');
-            const startIdx = doctypeIdx >= 0 ? doctypeIdx : (htmlTagIdx >= 0 ? htmlTagIdx : -1);
-            if (startIdx > 0) html = html.slice(startIdx);
-            // Fallback: build clean HTML from the context directly (no LLM needed)
-            if (!html.trim() || !html.includes('<')) {
-              // Try splitting on markdown headings first, then numbered items, then double newlines
-              let sections = context.split(/\n#{1,3} /).filter(s => s.trim());
-              if (sections.length <= 1) sections = context.split(/\n(?=\*\*\d+[\.\)])|(?=^\d+[\.\)])/).filter(s => s.trim());
-              if (sections.length <= 1) sections = context.split(/\n{2,}/).filter(s => s.trim());
-              const reportTitle = (task.slice(0, 80) || 'NHA Studio Report').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-              const cardsHtml = sections.map(s => {
-                const clean = s.replace(/\*\*/g, '').replace(/\*/g, '').trim();
-                const lines = clean.split('\n').filter(Boolean);
-                const titleLine = lines[0] || '';
-                const bodyLines = lines.slice(1).join('\n').trim();
-                return `<div class="card">${titleLine ? `<h2>${titleLine.replace(/</g,'&lt;')}</h2>` : ''}<p>${(bodyLines || titleLine).replace(/\n/g, '</p><p>').replace(/</g,'&lt;')}</p></div>`;
-              }).join('');
-              const safeContext = context.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'</p><p>');
-              html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report</title><style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e293b;padding:0}
-.header{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:48px 40px;margin-bottom:32px}
-.header h1{font-size:1.8em;font-weight:700;margin-bottom:8px}
-.header p{opacity:.85;font-size:1em}
-.content{max-width:900px;margin:0 auto;padding:0 32px 48px}
-.card{background:#fff;border-radius:12px;padding:28px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);border:1px solid #e2e8f0}
-.card h2{color:#6366f1;font-size:1.05em;font-weight:700;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #f1f5f9}
-.card p{color:#475569;line-height:1.75;margin-bottom:8px}
-.card p:last-child{margin-bottom:0}
-</style></head><body>
-<div class="header"><h1>${reportTitle}</h1><p>Report generated by NHA Studio</p></div>
-<div class="content">${cardsHtml || '<div class="card"><p>' + safeContext + '</p></div>'}</div>
-</body></html>`;
+            let bodyHtml = fullOutput.trim();
+            // Strip thinking tags
+            bodyHtml = bodyHtml.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            // Strip markdown code fences
+            const mdMatch = bodyHtml.match(/```html?\s*([\s\S]*?)```/i);
+            if (mdMatch) bodyHtml = mdMatch[1].trim();
+            // If model returned full HTML despite instructions, extract body content
+            const bodyTagMatch = bodyHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+            if (bodyTagMatch) bodyHtml = bodyTagMatch[1].trim();
+            // If model returned <!DOCTYPE (full doc), extract everything after <body> open tag
+            else if (bodyHtml.includes('<!DOCTYPE') || bodyHtml.includes('<html')) {
+              const bodyStart = bodyHtml.search(/<body[^>]*>/i);
+              if (bodyStart >= 0) bodyHtml = bodyHtml.slice(bodyStart).replace(/<body[^>]*>/i, '').replace(/<\/body>[\s\S]*/i, '').trim();
             }
+            // Fallback: if LLM output is empty or has no HTML tags, build body from context using markdown→HTML conversion
+            if (!bodyHtml || !bodyHtml.includes('<')) {
+              const reportTitle = task.slice(0, 80).replace(/</g,'&lt;');
+              const sections = context.split(/\n#{1,3} |(?=\n\n)/).filter(s => s.trim()).slice(0, 12);
+              bodyHtml = `<div class="header"><h1>${reportTitle}</h1><p>NHA Studio Report \u00b7 ${today}</p><div class="meta"><span>${today}</span></div></div>` +
+                sections.map(s => {
+                  const lines = s.replace(/\*\*/g,'').replace(/\*/g,'').trim().split('\n').filter(Boolean);
+                  const title = lines[0] || '';
+                  const body = lines.slice(1).map(l => `<p>${l.replace(/</g,'&lt;')}</p>`).join('');
+                  return `<div class="section"><div class="section-title">${title.replace(/</g,'&lt;')}</div>${body}</div>`;
+                }).join('') +
+                `<div class="footer">NHA Studio \u00b7 ${today}</div>`;
+            }
+            // Always wrap in the guaranteed NHA dark CSS template
+            const finalHtml = wrapInNHATemplate(bodyHtml, task.slice(0, 60));
             sendToken('\n\n[Report generato]');
-            sendEvent({ canvas: html });
+            sendEvent({ canvas: finalHtml });
           }
 
           // Estimate token usage (aprox: 1 token ≈ 4 chars)
@@ -2936,6 +2941,164 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e
         } catch (e) {
           clearInterval(keepalive);
           sendEvent({ error: e.message });
+          res.end();
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── Studio: Parliament deliberation (SSE streaming) ──────────────────
+      // Implements the Legion DeliberationEngine protocol adapted for Studio:
+      // Round 1 outputs already exist (from normal workflow steps).
+      // Round 2: each agent cross-reads all others' Round 1 outputs and refines.
+      // Convergence: Jaccard similarity on key terms between R1 and R2 outputs.
+      // Round 3 (optional): if divergence > threshold, HERALD mediates.
+      if (pathname === '/api/studio/deliberate' && method === 'POST') {
+        const body = await parseBody(req);
+        const { task, proposals, language: bodyLang } = body;
+        if (!task || !Array.isArray(proposals) || proposals.length < 2) {
+          sendJSON(res, 400, { error: 'task and at least 2 proposals required' });
+          logRequest(method, pathname, 400, Date.now() - start);
+          return;
+        }
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        });
+
+        const sendEv2 = (data) => { try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {} };
+        const sendTok2 = (t) => sendEv2({ token: t });
+        const keepaliveD = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 5000);
+        const language = bodyLang || 'Italian';
+        const today = new Date().toISOString().slice(0, 10);
+
+        // Jaccard similarity between two texts (key terms 4+ chars)
+        const jaccard = (a, b) => {
+          const terms = (s) => new Set(s.toLowerCase().match(/\b\w{4,}\b/g) || []);
+          const sa = terms(a), sb = terms(b);
+          let inter = 0;
+          for (const w of sa) { if (sb.has(w)) inter++; }
+          const union = sa.size + sb.size - inter;
+          return union > 0 ? inter / union : 1;
+        };
+
+        const measureConvergence = (outputs) => {
+          if (outputs.length < 2) return 1.0;
+          let total = 0, pairs = 0;
+          for (let i = 0; i < outputs.length; i++) {
+            for (let j = i + 1; j < outputs.length; j++) {
+              total += jaccard(outputs[i], outputs[j]);
+              pairs++;
+            }
+          }
+          return pairs > 0 ? total / pairs : 1.0;
+        };
+
+        try {
+          const eligibleProposals = proposals.filter(p => p.agent !== 'CanvasAgent' && p.agent !== 'GitHubAgent' && p.agent !== 'EmailAgent' && p.agent !== 'CalendarAgent');
+          if (eligibleProposals.length < 2) {
+            sendEv2({ deliberation_done: true, skipped: true, reason: 'not enough specialist agents' });
+            sendEv2({ done: true });
+            res.write('data: [DONE]\n\n');
+            res.end();
+            clearInterval(keepaliveD);
+            logRequest(method, pathname, 200, Date.now() - start);
+            return;
+          }
+
+          // Round 1 convergence
+          const r1Convergence = measureConvergence(eligibleProposals.map(p => p.output));
+          sendTok2(`[Parlamento — Round 1 convergenza: ${(r1Convergence * 100).toFixed(0)}%] `);
+
+          const buildCrossReadCtx = (excludeAgent) =>
+            eligibleProposals
+              .filter(p => p.agent !== excludeAgent)
+              .map(p => `## ${p.label || p.agent} (Round 1):\n${p.output.slice(0, 2000)}`)
+              .join('\n\n---\n\n');
+
+          // Round 2: cross-reading + refinement (sequential to save tokens)
+          sendTok2('[Parlamento — Round 2: Cross-Reading & Refinamento] ');
+          const r2Results = [];
+
+          for (const proposal of eligibleProposals) {
+            sendTok2(`[Round 2: ${proposal.label || proposal.agent}] `);
+            const crossCtx = buildCrossReadCtx(proposal.agent);
+            const r2Sys = `You are ${proposal.agent}, a specialist AI agent in NHA Studio Parliament. Today is ${today}. Respond entirely in ${language}.
+
+## WORKFLOW GOAL: ${task}
+
+## YOUR ROUND 1 RESPONSE:
+${proposal.output.slice(0, 1500)}
+
+## OTHER AGENTS' ROUND 1 PROPOSALS:
+${crossCtx}
+
+DELIBERATION ROUND 2 — REFINEMENT:
+1. Review the other agents' proposals
+2. Incorporate valid points where you AGREE — mark with [ASSIST]
+3. Flag genuine disagreements with [CONTRADICTION] and explain your reasoning
+4. Produce your COMPLETE REFINED response (full answer, not a diff)
+5. Keep your analysis focused on: ${task}`;
+
+            let r2Out = '';
+            try {
+              await callLLMStream(config, r2Sys, 'Produce your refined Round 2 response.',
+                (tok) => { r2Out += tok; }, { max_tokens: 2048 });
+            } catch (e) { r2Out = proposal.output; }
+            r2Results.push({ agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out });
+            sendEv2({ deliberation_r2: { agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out } });
+          }
+
+          // Round 2 convergence
+          const r2Convergence = measureConvergence(r2Results.map(r => r.output));
+          sendTok2(`[Parlamento — Round 2 convergenza: ${(r2Convergence * 100).toFixed(0)}%] `);
+          const converged = r2Convergence >= 0.30;
+
+          // Round 3: mediation only if still divergent
+          let mediationOutput = '';
+          if (!converged) {
+            sendTok2('[Parlamento — Round 3: Mediazione...] ');
+            const allR2Ctx = r2Results
+              .map(r => `## ${r.label || r.agent}:\n${r.output.slice(0, 1500)}`)
+              .join('\n\n---\n\n');
+            const medSys = `You are HERALD, the Parliament Mediator in NHA Studio. Today is ${today}. Respond entirely in ${language}.
+
+## WORKFLOW GOAL: ${task}
+
+## ALL AGENTS' REFINED POSITIONS (Round 2):
+${allR2Ctx}
+
+MEDIATION TASK:
+1. Identify core points of AGREEMENT across all agents
+2. For each disagreement, evaluate which position has stronger evidence
+3. Produce a UNIFIED synthesis preserving genuine insights from each agent
+4. Make clear editorial choices — do NOT blend blindly
+5. Output a complete executive summary with concrete action items for: ${task}`;
+            try {
+              await callLLMStream(config, medSys, 'Produce the mediated Parliament consensus.',
+                (tok) => { mediationOutput += tok; }, { max_tokens: 3000 });
+            } catch (e) { mediationOutput = ''; }
+            sendEv2({ deliberation_r3: { output: mediationOutput } });
+          }
+
+          clearInterval(keepaliveD);
+          sendEv2({
+            deliberation_done: true,
+            r1_convergence: r1Convergence,
+            r2_convergence: r2Convergence,
+            converged,
+            r2_results: r2Results,
+            mediation: mediationOutput || null,
+          });
+          sendEv2({ done: true });
+          res.write('data: [DONE]\n\n');
+          res.end();
+        } catch (e) {
+          clearInterval(keepaliveD);
+          sendEv2({ error: e.message });
           res.end();
         }
         logRequest(method, pathname, 200, Date.now() - start);
