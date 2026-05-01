@@ -638,6 +638,11 @@ function onConversationSwitch(){
   }
 }
 
+function openCanvasPanel(){
+  var cp = document.getElementById('canvasPanel');
+  if (cp) cp.classList.add('open');
+}
+
 function reopenCanvas(){
   var d=getConvCanvasData();
   canvasIdx=d.canvases.length-1;
@@ -2832,7 +2837,7 @@ function renderStudioResult() {
   el.style.display = 'block';
   var isHtml = studioState.result.trimStart().startsWith('<');
   var body = isHtml
-    ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:var(--dim);font-size:13px">&#10003; Dashboard HTML generata nel pannello Canvas.</span><button onclick="var cp=document.getElementById(\'canvasPanel\');if(cp)cp.classList.add(\'open\')" style="padding:6px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;cursor:pointer;font-weight:700">&#x25A3; Apri Canvas</button></div>'
+    ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:var(--dim);font-size:13px">&#10003; Dashboard HTML generata nel pannello Canvas.</span><button onclick="openCanvasPanel()" style="padding:6px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;cursor:pointer;font-weight:700">&#x25A3; Apri Canvas</button></div>'
     : '<div class="md-body">' + renderMd(studioState.result) + '</div>';
   el.innerHTML = '<div class="studio-result__title">&#10003; Workflow completato</div>' + body;
 }
