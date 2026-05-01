@@ -75,7 +75,11 @@ export async function listEvents(config, calendarId = 'primary', timeMin, timeMa
   });
 
   const data = await calFetch(config, `/calendars/${encodeURIComponent(calendarId)}/events?${params}`);
-  const events = (data.items || []).map(parseEvent);
+  const events = (data.items || []).map(raw => {
+    const e = parseEvent(raw);
+    e.calendarId = calendarId; // propagate real calendarId
+    return e;
+  });
 
   // Cache events
   cacheEvents(timeMin, events);
@@ -99,6 +103,7 @@ export async function getTodayEvents(config) {
       const events = await listEvents(config, cal.id, startOfDay, endOfDay);
       for (const e of events) {
         e.calendarName = cal.summary;
+        e.calendarId = cal.id; // ensure real calendarId is set
         allEvents.push(e);
       }
     } catch { /* skip failed calendars */ }
@@ -116,7 +121,23 @@ export async function getEventsForDate(config, date) {
   const d = new Date(date);
   const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const endOfDay = new Date(startOfDay.getTime() + 86400000);
-  return listEvents(config, 'primary', startOfDay, endOfDay);
+
+  // Load from all calendars so calendarId is always accurate
+  const calendars = await listCalendars(config);
+  const allEvents = [];
+  for (const cal of calendars) {
+    if (cal.accessRole === 'freeBusyReader') continue;
+    try {
+      const events = await listEvents(config, cal.id, startOfDay, endOfDay);
+      for (const e of events) {
+        e.calendarName = cal.summary;
+        e.calendarId = cal.id;
+        allEvents.push(e);
+      }
+    } catch { /* skip */ }
+  }
+  allEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  return allEvents;
 }
 
 /**
