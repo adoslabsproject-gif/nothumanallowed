@@ -3358,16 +3358,117 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the wo
             const stopWords = new Set(['di','la','il','lo','le','gli','un','una','dei','del','della','per','che','con','su','in','e','a','da','è','come','analizza','analisi','ricerca','crea','genera','fai','fammi','dammi','the','of','for','and','a','an','in','with','on','about','analyze','analysis','research','create','generate','make','find','search']);
             const titleWords = task.replace(/[.,;:!?]/g,'').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w.toLowerCase())).slice(0, 6);
             const reportTitle = titleWords.length > 0 ? titleWords.map(w => w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'Studio Report';
-            // Fallback: if LLM output is empty or has no HTML tags, build body from context using markdown→HTML conversion
+            // Convert markdown to NHA-classed HTML — handles the case where Liara/Qwen3
+            // returns markdown instead of HTML despite instructions.
+            const mdToNhaHtml = (md) => {
+              const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              // inline: bold, italic, inline-code, links
+              const inl = s => s
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code style="background:#1c1c28;padding:1px 5px;border-radius:3px;font-size:12px">$1</code>')
+                .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+              const lines = md.split('\n');
+              let out = [];
+              let i = 0;
+              let currentSection = null; // accumulates section content
+
+              const flushSection = () => {
+                if (currentSection) { out.push(currentSection + '</div>'); currentSection = null; }
+              };
+
+              while (i < lines.length) {
+                const l = lines[i];
+                // H1 — treat as sub-header inside a new section
+                if (/^# /.test(l)) {
+                  flushSection();
+                  const title = esc(l.replace(/^# /, '').replace(/\*\*/g,'').replace(/\*/g,''));
+                  currentSection = `<div class="section"><div class="section-title">${title}</div>`;
+                  i++; continue;
+                }
+                // H2 / H3 — new section
+                if (/^#{2,3} /.test(l)) {
+                  flushSection();
+                  const title = esc(l.replace(/^#{2,3} /, '').replace(/\*\*/g,'').replace(/\*/g,''));
+                  currentSection = `<div class="section"><div class="section-title">${title}</div>`;
+                  i++; continue;
+                }
+                // H4 — sub-heading inside current section
+                if (/^#### /.test(l)) {
+                  const h = esc(l.replace(/^#### /, '').replace(/\*\*/g,'').replace(/\*/g,''));
+                  const frag = `<h3>${h}</h3>`;
+                  if (currentSection) currentSection += frag; else out.push(frag);
+                  i++; continue;
+                }
+                // Horizontal rule — divider
+                if (/^---+$/.test(l.trim())) {
+                  const frag = '<div class="divider"></div>';
+                  if (currentSection) currentSection += frag; else out.push(frag);
+                  i++; continue;
+                }
+                // Table row
+                if (l.trim().startsWith('|') && l.includes('|', 1)) {
+                  // Collect all table lines
+                  const tableLines = [];
+                  while (i < lines.length && lines[i].trim().startsWith('|')) {
+                    if (!/^\|[\s:|-]+\|$/.test(lines[i].trim())) tableLines.push(lines[i]);
+                    i++;
+                  }
+                  if (tableLines.length > 0) {
+                    const isHeader = tableLines.length > 1;
+                    let tHtml = '<table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:12px">';
+                    tableLines.forEach((tl, ti) => {
+                      const cells = tl.split('|').slice(1,-1).map(c => c.trim());
+                      const tag = (ti === 0 && isHeader) ? 'th' : 'td';
+                      const bg = ti === 0 && isHeader ? 'background:#1c1c28;color:#a5b4fc;font-weight:700' : (ti % 2 === 0 ? 'background:#15151f' : 'background:#1a1a28');
+                      tHtml += '<tr>' + cells.map(c => `<${tag} style="${bg};padding:6px 10px;border:1px solid #2a2a38;text-align:left">${inl(esc(c))}</${tag}>`).join('') + '</tr>';
+                    });
+                    tHtml += '</table>';
+                    if (currentSection) currentSection += tHtml; else out.push(tHtml);
+                  }
+                  continue;
+                }
+                // Unordered list block
+                if (/^(\s*[-*+] )/.test(l)) {
+                  const items = [];
+                  while (i < lines.length && /^(\s*[-*+] )/.test(lines[i])) {
+                    items.push(inl(esc(lines[i].replace(/^\s*[-*+] /, ''))));
+                    i++;
+                  }
+                  const frag = '<ul>' + items.map(it => `<li>${it}</li>`).join('') + '</ul>';
+                  if (currentSection) currentSection += frag; else out.push(frag);
+                  continue;
+                }
+                // Ordered list block
+                if (/^\d+\. /.test(l)) {
+                  const items = [];
+                  while (i < lines.length && /^\d+\. /.test(lines[i])) {
+                    items.push(inl(esc(lines[i].replace(/^\d+\. /, ''))));
+                    i++;
+                  }
+                  const frag = '<ol>' + items.map(it => `<li>${it}</li>`).join('') + '</ol>';
+                  if (currentSection) currentSection += frag; else out.push(frag);
+                  continue;
+                }
+                // Blank line — skip
+                if (!l.trim()) { i++; continue; }
+                // Regular paragraph
+                const frag = `<p>${inl(esc(l))}</p>`;
+                if (currentSection) currentSection += frag; else out.push(frag);
+                i++;
+              }
+              flushSection();
+              return out.join('');
+            };
+
+            // If LLM output has no HTML tags → it's markdown → convert
             if (!bodyHtml || !bodyHtml.includes('<')) {
-              const sections = context.split(/\n#{1,3} |(?=\n\n)/).filter(s => s.trim()).slice(0, 12);
+              const source = bodyHtml || context;
+              const converted = mdToNhaHtml(source);
+              const agentNames = (stepDef && Array.isArray(stepDef)) ? '' : '';
               bodyHtml = `<div class="header"><h1>${reportTitle.replace(/</g,'&lt;')}</h1><p>NHA Studio Report \u00b7 ${today}</p><div class="meta"><span>${today}</span></div></div>` +
-                sections.map(s => {
-                  const lines = s.replace(/\*\*/g,'').replace(/\*/g,'').trim().split('\n').filter(Boolean);
-                  const stitle = lines[0] || '';
-                  const body = lines.slice(1).map(l => `<p>${l.replace(/</g,'&lt;')}</p>`).join('');
-                  return `<div class="section"><div class="section-title">${stitle.replace(/</g,'&lt;')}</div>${body}</div>`;
-                }).join('') +
+                converted +
                 `<div class="footer">NHA Studio \u00b7 ${today}</div>`;
             } else {
               // Replace the h1 inside existing header div if the model included the full prompt as title
