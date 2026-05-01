@@ -1180,15 +1180,19 @@ function loadMonthEvents(){
 function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--}renderCalendar(document.getElementById('content'))}
 function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++}renderCalendar(document.getElementById('content'))}
 
+var _calDayEvts=[];
+var _calDayStr='';
 function openDayDetail(dateStr){
   var evts=calEventsCache[dateStr]||[];
+  _calDayEvts=evts;
+  _calDayStr=dateStr;
   var dayLabel=new Date(dateStr+'T12:00:00').toLocaleDateString('en',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 
   function buildDayHtml(){
     var h='<h2 style="color:var(--green);margin-bottom:4px">'+esc(dayLabel)+'</h2>';
     h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
     h+='<span style="color:var(--dim);font-size:11px">'+dateStr+'</span>';
-    h+='<button onclick="openEventForm(null,'+JSON.stringify(dateStr)+')" style="margin-left:auto;background:var(--green3);color:var(--bg);padding:5px 12px;border-radius:var(--r);font-size:12px;font-weight:700">+ Add Event</button>';
+    h+='<button onclick="openEventForm(null,_calDayStr)" style="margin-left:auto;background:var(--green3);color:var(--bg);padding:5px 12px;border-radius:var(--r);font-size:12px;font-weight:700">+ Add Event</button>';
     h+='</div>';
     if(evts.length===0){
       h+='<div style="color:var(--dim);padding:20px;text-align:center">No events on this day</div>';
@@ -1202,8 +1206,8 @@ function openDayDetail(dateStr){
         h+='<div style="color:var(--bright);font-size:15px;font-weight:700;margin-bottom:6px">'+esc(x.summary)+'</div></div>';
         if(x.id){
           h+='<div style="display:flex;gap:4px;flex-shrink:0">';
-          h+='<button onclick="openEventForm('+JSON.stringify({id:x.id,calId:calId,summary:x.summary,description:x.description||'',location:x.location||'',start:x.start,end:x.end,isAllDay:x.isAllDay})+','+JSON.stringify(dateStr)+')" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px">Edit</button>';
-          h+='<button onclick="deleteCalEvent('+JSON.stringify(calId)+','+JSON.stringify(x.id)+','+JSON.stringify(dateStr)+')" style="background:var(--bg2);border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:4px;font-size:11px">Delete</button>';
+          h+='<button onclick="openEventFormByIdx('+idx+')" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px">Edit</button>';
+          h+='<button onclick="deleteCalEventByIdx('+idx+')" style="background:var(--bg2);border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:4px;font-size:11px">Delete</button>';
           h+='</div>';
         }
         h+='</div>';
@@ -1253,9 +1257,19 @@ function refreshDayDetail(dateStr){
 
 function deleteCalEvent(calId,eventId,dateStr){
   if(!confirm('Delete this event?'))return;
-  apiPost('/api/calendar/'+encodeURIComponent(calId)+'/'+encodeURIComponent(eventId),null,'DELETE').then(function(){
+  apiPost('/api/calendar/'+encodeURIComponent(calId)+'/'+encodeURIComponent(eventId),{},'DELETE').then(function(){
     refreshDayDetail(dateStr);
   }).catch(function(e){alert('Error: '+e.message);});
+}
+function deleteCalEventByIdx(idx){
+  var x=_calDayEvts[idx];if(!x)return;
+  var calId=x.calendarId||'primary';
+  deleteCalEvent(calId,x.id,_calDayStr);
+}
+function openEventFormByIdx(idx){
+  var x=_calDayEvts[idx];if(!x)return;
+  var calId=x.calendarId||'primary';
+  openEventForm({id:x.id,calId:calId,summary:x.summary,description:x.description||'',location:x.location||'',start:x.start,end:x.end,isAllDay:x.isAllDay},_calDayStr);
 }
 
 function openEventForm(evt,dateStr){
