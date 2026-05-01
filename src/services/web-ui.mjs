@@ -3796,7 +3796,15 @@ async function runStudio() {
           if (ct) ct.textContent = node.label + ' Report';
         }
       }
-      context = realOutput || stepResult.canvas || context;
+      // Accumulate context: append each step's output so specialist agents see ALL previous data
+      var NL = String.fromCharCode(10);
+      if (realOutput) {
+        context = context
+          ? context + NL + NL + '---' + NL + '## ' + node.label + ':' + NL + realOutput
+          : '## ' + node.label + ':' + NL + realOutput;
+      } else if (stepResult.canvas) {
+        context = context || '[Canvas generated]';
+      }
     }
 
     // Parliament mode: Round 2 cross-reading deliberation
@@ -3993,8 +4001,14 @@ function studioAddTokens(inp, out) {
 function studioUpdateTokenBar() {
   var el = document.getElementById('studioTokenBar');
   if (!el) return;
-  if (studioTokens.in === 0 && studioTokens.out === 0) { el.textContent = ''; return; }
-  el.textContent = '⬆ ' + studioTokens.in.toLocaleString() + ' in  ⬇ ' + studioTokens.out.toLocaleString() + ' out';
+  if (studioTokens.in === 0 && studioTokens.out === 0) { el.innerHTML = ''; return; }
+  var total = studioTokens.in + studioTokens.out;
+  el.innerHTML = '<span style="color:var(--green);font-weight:700">\u2B06 ' + studioTokens.in.toLocaleString() + '</span>' +
+    '<span style="color:var(--dim)"> in &nbsp;</span>' +
+    '<span style="color:#a5b4fc;font-weight:700">\u2B07 ' + studioTokens.out.toLocaleString() + '</span>' +
+    '<span style="color:var(--dim)"> out &nbsp;\u2022&nbsp; </span>' +
+    '<span style="color:var(--bright);font-weight:700">' + total.toLocaleString() + '</span>' +
+    '<span style="color:var(--dim)"> tot</span>';
 }
 
 function runStudioStep(idx, node, task, context, stepDef, signal) {
@@ -4003,7 +4017,9 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
     var canvasHtml = null;
     // Inject attachment into first step only — pass PDF/image as dedicated fields,
     // NOT as raw base64 in context (would cause 100k+ token overflow for any real PDF).
-    var bodyObj = {stepIdx: idx, agent: node.agent, task: task, context: context, stepDef: stepDef};
+    // Cap accumulated context to ~40KB to avoid token overflow — keep the most recent content
+    var cappedContext = context && context.length > 40000 ? context.slice(-40000) : context;
+    var bodyObj = {stepIdx: idx, agent: node.agent, task: task, context: cappedContext, stepDef: stepDef};
     if (idx === 0 && studioState.attachmentContext) {
       var ac = studioState.attachmentContext;
       var isPdfAttach = ac.indexOf('[ATTACHED PDF:') === 0;
@@ -4049,7 +4065,7 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
               if (ev.token) {
                 var isStatus = ev.token.charAt(0) === \x27[\x27 && ev.token.indexOf(\x27]\x27) > 0 && ev.token.length < 80;
                 if (!isStatus) { output += ev.token; }
-                // Update live log: show status tokens as text, LLM output as animated dots
+                // Update live log
                 var entries = document.querySelectorAll(\x27.studio-log-entry\x27);
                 var last = entries[entries.length - 1];
                 if (last) {
@@ -4057,8 +4073,12 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
                   if (tb) {
                     if (isStatus) {
                       tb.textContent = ev.token.replace(new RegExp(\x27[\\\\r\\\\n]+\x27,\x27g\x27), \x27 \x27);
+                    } else {
+                      // Live token counter — shows progress without raw content
+                      var chars = output.length;
+                      var toks = Math.ceil(chars / 4);
+                      tb.innerHTML = \x27<span style="color:var(--green);font-family:var(--mono);font-size:10px">&#9679; Generating\u2026 \x27 + toks + \x27 token</span>\x27;
                     }
-                    // LLM output: don\x27t show raw tokens — just keep the animated dots from CSS
                   }
                 }
               }

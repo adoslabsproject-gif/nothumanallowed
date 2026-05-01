@@ -2998,10 +2998,19 @@ ${rawText.slice(0, 18000)}`;
               // Run all queries sequentially, accumulate results
               for (let qi = 0; qi < searchQueries.length; qi++) {
                 const q = searchQueries[qi];
+                sendToken(`[Searching: "${q.slice(0, 60)}"] `);
                 try {
-                  const searchResult = await withTimeout(executeTool('web_search', { query: q, deep: qi === 0 }, config), 25000);
+                  const searchResult = await withTimeout(executeTool('web_search', { query: q, deep: true }, config), 35000);
                   const searchStr = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
-                  toolData += (toolData ? '\n\n' : '') + `## Web search: "${q}":\n${searchStr}`;
+                  // If no results, try without 'deep' (fallback to basic search)
+                  if (!searchStr || searchStr.length < 50 || /no results|not found/i.test(searchStr)) {
+                    sendToken('[Retrying basic search...] ');
+                    const retryResult = await withTimeout(executeTool('web_search', { query: q }, config), 25000);
+                    const retryStr = typeof retryResult === 'string' ? retryResult : JSON.stringify(retryResult);
+                    toolData += (toolData ? '\n\n' : '') + `## Web search: "${q}":\n${retryStr || 'No results found.'}`;
+                  } else {
+                    toolData += (toolData ? '\n\n' : '') + `## Web search: "${q}":\n${searchStr}`;
+                  }
                 } catch (e) { toolData += (toolData ? '\n\n' : '') + `## Search "${q}" failed: ${e.message}`; }
               }
             } catch (e) { toolData = toolData || `Web search failed: ${e.message}`; }
