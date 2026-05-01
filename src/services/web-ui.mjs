@@ -3278,6 +3278,8 @@ function studioReset() {
   if (ta) ta.value = '';
   var tb = document.getElementById('studioTokenBar');
   if (tb) tb.textContent = '';
+  var inlinePdfBtn = document.getElementById('studioInlinePdfBtn');
+  if (inlinePdfBtn) inlinePdfBtn.style.display = 'none';
   renderStudioNodes();
   renderStudioLog();
   renderStudioResult();
@@ -3655,8 +3657,17 @@ function renderStudioResult() {
   var body = hasCanvas
     ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:var(--dim);font-size:13px">&#10003; ' + t('canvas_generated') + '</span><button onclick="openCanvasPanel()" style="padding:6px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;cursor:pointer;font-weight:700">&#x25A3; ' + t('canvas_open') + '</button></div>'
     : '<div class="md-body">' + renderMd(studioState.result) + '</div>';
-  var dlBtn = '<button onclick="downloadStudioPDF()" title="Scarica il workflow come PDF" style="margin-top:10px;padding:6px 14px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);font-size:11px;cursor:pointer;font-family:var(--mono);letter-spacing:.5px">&#x2913; Download PDF</button>';
-  el.innerHTML = '<div class="studio-result__title">&#10003; ' + t('workflow_complete') + '</div>' + body + dlBtn;
+  var tokLine = (studioTokens && (studioTokens.in > 0 || studioTokens.out > 0))
+    ? '<div style="margin-top:8px;font-size:11px;color:var(--dim);font-family:var(--mono)">&#x2B06; ' + (studioTokens.in||0).toLocaleString() + ' token in &nbsp;&#x2B07; ' + (studioTokens.out||0).toLocaleString() + ' token out &nbsp;&#x2022;&nbsp; <strong style="color:var(--green)">' + ((studioTokens.in||0)+(studioTokens.out||0)).toLocaleString() + '</strong> totale</div>'
+    : '';
+  var dlBtn = '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+    '<button onclick="downloadStudioPDF()" title="Scarica il workflow come PDF" style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:linear-gradient(135deg,#4f46e5,#2563eb);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.3px;box-shadow:0 2px 8px rgba(79,70,229,.35)">&#x2913; Download PDF</button>' +
+    '<span style="font-size:11px;color:var(--dim)">Scarica il workflow completo come documento PDF</span>' +
+    '</div>';
+  el.innerHTML = '<div class="studio-result__title">&#10003; ' + t('workflow_complete') + '</div>' + body + tokLine + dlBtn;
+  // Show/hide inline PDF button in the prompt bar
+  var inlinePdfBtn = document.getElementById('studioInlinePdfBtn');
+  if (inlinePdfBtn) inlinePdfBtn.style.display = 'inline-flex';
   // Update canvas button style: bright green when canvas exists, dimmed otherwise
   var canvasBtn = document.getElementById('studioCanvasBtn');
   if (canvasBtn) {
@@ -4186,6 +4197,7 @@ function renderStudio(el) {
               '<button onclick="document.getElementById(\\x27studioFileInput\\x27).click()" title="Attach PDF or image" style="padding:8px 10px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:15px" ' + (studioState.running ? 'disabled' : '') + '>&#128206;</button>' +
               '<button id="studioRunBtn" class="studio-run-btn" onclick="runStudio()" style="flex:1" ' + (studioState.running ? 'disabled' : '') + '>' + t('run') + '</button>' +
               '<button id="studioStopBtn" onclick="stopStudio()" title="' + t('stop') + '" style="padding:8px 14px;background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;color:#ef4444;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;' + (studioState.running ? '' : 'display:none') + '">&#9632; ' + t('stop') + '</button>' +
+              '<button id="studioInlinePdfBtn" onclick="downloadStudioPDF()" title="Scarica PDF del risultato" style="display:' + (studioState.result ? 'inline-flex' : 'none') + ';align-items:center;gap:5px;padding:8px 12px;background:linear-gradient(135deg,#4f46e5,#2563eb);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(79,70,229,.35)">&#x2913; PDF</button>' +
               '<button onclick="studioReset()" title="' + t('reset') + '" style="padding:8px 12px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:16px;line-height:1" ' + (studioState.running ? 'disabled' : '') + '>&#8635;</button>' +
             '</div>' +
           '</div>' +
