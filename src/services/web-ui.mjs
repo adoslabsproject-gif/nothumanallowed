@@ -3124,7 +3124,7 @@ function downloadStudioPDF() {
 
   // Build sections for each agent
   function mdToPdfHtml(raw) {
-    var lines = raw.split('\n');
+    var lines = raw.split(String.fromCharCode(10));
     var out = '';
     var inList = false;
     for (var li = 0; li < lines.length; li++) {
