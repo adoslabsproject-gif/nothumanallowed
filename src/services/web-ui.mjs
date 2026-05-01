@@ -3123,20 +3123,34 @@ function downloadStudioPDF() {
   var nodes = studioState.nodes || [];
 
   // Build sections for each agent
+  function mdToPdfHtml(raw) {
+    var lines = raw.split('\n');
+    var out = '';
+    var inList = false;
+    for (var li = 0; li < lines.length; li++) {
+      var line = lines[li]
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      // Inline bold: **text**
+      line = line.replace(new RegExp('[*][*]([^*]+)[*][*]','g'),'<strong>$1</strong>');
+      // Inline italic: *text*
+      line = line.replace(new RegExp('[*]([^*]+)[*]','g'),'<em>$1</em>');
+      if (line.slice(0,4) === '### ') { if(inList){out+='</ul>';inList=false;} out += '<h3>' + line.slice(4) + '</h3>'; continue; }
+      if (line.slice(0,3) === '## ') { if(inList){out+='</ul>';inList=false;} out += '<h2>' + line.slice(3) + '</h2>'; continue; }
+      if (line.slice(0,2) === '# ') { if(inList){out+='</ul>';inList=false;} out += '<h2>' + line.slice(2) + '</h2>'; continue; }
+      if (line.slice(0,2) === '- ' || line.slice(0,2) === '* ') {
+        if (!inList) { out += '<ul>'; inList = true; }
+        out += '<li>' + line.slice(2) + '</li>';
+        continue;
+      }
+      if (inList) { out += '</ul>'; inList = false; }
+      if (line.trim() === '') { out += '</p><p>'; } else { out += line + '<br>'; }
+    }
+    if (inList) out += '</ul>';
+    return '<p>' + out + '</p>';
+  }
   var sectionsHtml = nodes.map(function(n) {
     if (!n.output || n.output === '(no output)' || n.agent === 'CanvasAgent') return '';
-    var mdHtml = (n.output || '')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g,'<em>$1</em>')
-      .replace(new RegExp('^#{3}[ \\t]+(.+)$','gm'),'<h3>$1</h3>')
-      .replace(new RegExp('^#{2}[ \\t]+(.+)$','gm'),'<h2>$1</h2>')
-      .replace(new RegExp('^#{1}[ \\t]+(.+)$','gm'),'<h2>$1</h2>')
-      .replace(new RegExp('^-[ \\t]+(.+)$','gm'),'<li>$1</li>')
-      .replace(/(<li>[\s\S]*?<\/li>)/g,'<ul>$1</ul>')
-      .replace(/\n{2,}/g,'</p><p>')
-      .replace(/\n/g,'<br>');
-    return '<div class="section"><div class="agent-label">' + (n.icon||'') + ' ' + esc(n.label||n.agent) + '</div><div class="section-body"><p>' + mdHtml + '</p></div></div>';
+    return '<div class="section"><div class="agent-label">' + (n.icon||'') + ' ' + esc(n.label||n.agent) + '</div><div class="section-body">' + mdToPdfHtml(n.output) + '</div></div>';
   }).join('');
 
   // Include canvas if present (as an embedded iframe screenshot fallback note)
