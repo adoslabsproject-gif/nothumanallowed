@@ -420,8 +420,11 @@ function renderMessages(){
     if(isA&&m.inlineHtml){
       inlineBlock=m.inlineHtml.replace(/\\[INLINE_CARD\\]([\\s\\S]*?)\\[\\/INLINE_CARD\\]/g,function(_,htm){return '<div class="inline-card">'+htm+'</div>';}).replace(/\\[INLINE_BROWSER\\]([^|]+)\\|([^\\]]+)\\[\\/INLINE_BROWSER\\]/g,function(_,file,url){return '<div class="inline-browser"><div class="inline-browser-bar"><span class="inline-browser-dot"></span><span class="inline-browser-dot"></span><span class="inline-browser-dot"></span><span class="inline-browser-url">'+esc(url)+'</span></div><img src="/api/screenshots/'+esc(file)+'" alt="'+esc(url)+'" onclick="openLightbox(this.src)" style="cursor:zoom-in"></div>';});
     }
+    var isStreaming=isA&&(m.content==='Thinking...'||m.content==='');
     var bubbleCls=isA?'msg__bubble md-body':'msg__bubble';
-    h+='<div class="msg msg--'+esc(m.role)+'"><div class="msg__label">'+esc(m.role==='user'?'You':'NHA')+'</div><div class="'+bubbleCls+'">'+content+'</div>'+inlineBlock+acts+'</div>';
+    var displayContent=isStreaming?'<div class="typing-dots"><span></span><span></span><span></span></div>':content;
+    var streamCls=isStreaming?' msg--streaming':'';
+    h+='<div class="msg msg--'+esc(m.role)+streamCls+'"><div class="msg__label">'+esc(m.role==='user'?'You':'NHA')+'</div><div class="'+bubbleCls+'">'+displayContent+'</div>'+inlineBlock+acts+'</div>';
   });
   el.innerHTML=h;el.scrollTop=el.scrollHeight;
   // Load fork info for messages that have IDs
@@ -882,7 +885,7 @@ function sendChat(){
                   displayContent=displayContent.replace(/<think>[\\s\\S]*?<\\/think>/g,'').trim();
                 }
                 var el=document.getElementById('chatMessages');
-                if(el){var msgs=el.querySelectorAll('.msg');var last=msgs[msgs.length-1];if(last){var bub=last.querySelector('.msg__bubble');if(bub){bub.className='msg__bubble md-body';bub.innerHTML=isThinking?displayContent:renderMd(displayContent)||'Thinking...';}}el.scrollTop=el.scrollHeight;}
+                if(el){var msgs=el.querySelectorAll('.msg');var last=msgs[msgs.length-1];if(last){last.classList.add('msg--streaming');var bub=last.querySelector('.msg__bubble');if(bub){bub.className='msg__bubble md-body';var renderedContent=isThinking?displayContent:renderMd(displayContent);bub.innerHTML=renderedContent||'<div class="typing-dots"><span></span><span></span><span></span></div>';}}el.scrollTop=el.scrollHeight;}
               }
               if(currentEvent==='tool'){
                 var toolLabels={browser_open:'Opening page',browser_screenshot:'Taking screenshot',browser_click:'Clicking element',browser_type:'Typing text',browser_extract:'Extracting content',browser_js:'Running JavaScript',browser_wait:'Waiting for element',browser_scroll:'Scrolling page',browser_key:'Pressing key',browser_close:'Closing browser',web_search:'Searching the web',fetch_url:'Fetching URL',gmail_list:'Searching emails',gmail_read:'Reading email',gmail_send:'Sending email',calendar_today:'Loading calendar',calendar_create:'Creating event'};
@@ -4144,6 +4147,10 @@ function init(){
   if(bv)makeDraggable(bv,\x27.browser-viewer__header\x27);
   var cp=document.getElementById('canvasPanel');
   if(cp)makeDraggable(cp,\x27.cvs-header\x27);
+  // Telemetry ping — fire and forget
+  setTimeout(function(){
+    fetch(\x27https://nothumanallowed.com/api/v1/telemetry/ping\x27,{method:\x27POST\x27,headers:{\x27Content-Type\x27:\x27application/json\x27},body:JSON.stringify({platform:\x27web-ui\x27,version:VERSION})}).catch(function(){});
+  },3000);
 }
 init();
 `;
@@ -4248,9 +4255,15 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .chat__empty-hint{font-size:11px;margin-top:12px}
 .msg{margin-bottom:12px}
 .msg--user .msg__bubble{background:var(--bg3);border:1px solid var(--border2);border-radius:8px 8px 2px 8px;padding:10px 14px;max-width:85%;margin-left:auto;color:var(--bright)}
-.msg--assistant .msg__bubble{background:var(--greendim);border:1px solid var(--green3);border-radius:8px 8px 8px 2px;padding:10px 14px;max-width:85%;color:var(--text);white-space:pre-wrap;word-wrap:break-word;line-height:1.5}
+.msg--assistant .msg__bubble{background:var(--greendim);border:1px solid var(--green3);border-radius:8px 8px 8px 2px;padding:10px 14px;max-width:85%;color:var(--text);white-space:pre-wrap;word-wrap:break-word;line-height:1.5;min-height:40px;min-width:60px}
 .msg--assistant .msg__bubble img{max-width:100%;border-radius:8px;margin:8px 0;border:1px solid rgba(0,255,65,0.2)}
+.msg--assistant.msg--streaming .msg__bubble{border-color:var(--green);box-shadow:0 0 8px rgba(0,255,65,0.15)}
 .msg__label{font-size:10px;color:var(--dim);margin-bottom:2px}
+.typing-dots{display:inline-flex;align-items:center;gap:4px;padding:4px 0}
+.typing-dots span{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);opacity:0.3;animation:tdot 1.2s ease-in-out infinite}
+.typing-dots span:nth-child(2){animation-delay:0.2s}
+.typing-dots span:nth-child(3){animation-delay:0.4s}
+@keyframes tdot{0%,80%,100%{opacity:0.2;transform:scale(0.8)}40%{opacity:1;transform:scale(1.2)}}
 .msg__actions{display:flex;gap:6px;margin-top:4px;opacity:0.4;transition:opacity 0.2s}
 .msg:hover .msg__actions{opacity:1}
 .msg__actions button{background:none;border:none;color:var(--dim);cursor:pointer;font-size:10px;font-family:var(--mono);padding:2px 4px}
