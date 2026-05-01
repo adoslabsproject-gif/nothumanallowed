@@ -2715,6 +2715,24 @@ var studioState = {
   planned: false
 };
 
+function studioReset() {
+  if (studioState.running) return;
+  studioState.task = '';
+  studioState.nodes = [];
+  studioState.log = [];
+  studioState.result = '';
+  studioState.running = false;
+  studioState.planned = false;
+  studioTokens = {in:0, out:0};
+  var ta = document.getElementById('studioTaskInput');
+  if (ta) ta.value = '';
+  var tb = document.getElementById('studioTokenBar');
+  if (tb) tb.textContent = '';
+  renderStudioNodes();
+  renderStudioLog();
+  renderStudioResult();
+}
+
 var STUDIO_EXAMPLES = [
   'Analyze my unread emails and create a priority action plan',
   'Search the web for AI news today and summarize it in a canvas report',
@@ -2748,20 +2766,25 @@ function renderStudioNodes() {
     else if (n.status === 'done') cls += ' studio-node--done';
     else if (n.status === 'error') cls += ' studio-node--error';
     var statusLabel = {waiting:'&#9711; wait', running:'&#9654; running', done:'&#10003; done', error:'&#10005; error'}[n.status] || '';
-    var delay = (i * 120) + 'ms';
-    html += '<div class="' + cls + '" style="animation-delay:' + delay + '">';
+    // Only animate nodes that haven't been rendered yet (first appearance)
+    var style = n._rendered ? '' : 'animation-delay:' + (i * 110) + 'ms';
+    html += '<div class="' + cls + '" style="' + style + '">';
     html += '<div class="studio-node__circle">' + n.icon + '</div>';
     html += '<div class="studio-node__label">' + esc(n.label) + '</div>';
     html += '<div class="studio-node__status studio-node__status--' + n.status + '">' + statusLabel + '</div>';
+    if (n.status === 'running') {
+      html += '<div class="studio-node__progress"><span></span><span></span><span></span></div>';
+    }
     html += '</div>';
     if (i < studioState.nodes.length - 1) {
       var next = studioState.nodes[i + 1];
       var arrowCls = 'studio-arrow';
       if (n.status === 'done' && next.status === 'running') arrowCls += ' studio-arrow--active';
       else if (n.status === 'done') arrowCls += ' studio-arrow--done';
-      var arrowDelay = (i * 120 + 60) + 'ms';
-      html += '<div class="' + arrowCls + '" style="opacity:0;animation:stNodeIn .3s ease ' + arrowDelay + ' forwards">&#8594;</div>';
+      var arrowStyle = n._rendered ? '' : 'opacity:0;animation:stNodeIn .3s ease ' + (i * 110 + 55) + 'ms forwards';
+      html += '<div class="' + arrowCls + '" style="' + arrowStyle + '">&#8594;</div>';
     }
+    n._rendered = true;
   });
   html += '</div>';
   el.innerHTML = html;
@@ -2916,7 +2939,8 @@ function renderStudioSessionsBar() {
   if (!sessions.length) { el.style.display = 'none'; return; }
   el.style.display = 'block';
   el.innerHTML = '<div style="font-size:10px;color:var(--dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Recent sessions</div>' +
-    sessions.slice(0,5).map(function(s,i) {
+    '<div style="max-height:220px;overflow-y:auto;padding-right:4px">' +
+    sessions.map(function(s,i) {
       return '<div class="studio-session-item">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
           '<span class="studio-session-task">' + esc(s.task.slice(0,60)) + (s.task.length>60?'...':'') + '</span>' +
@@ -2928,7 +2952,7 @@ function renderStudioSessionsBar() {
           '<button onclick="deleteStudioSession('+i+')" style="font-size:10px;padding:3px 8px;background:none;border:none;color:var(--dim);cursor:pointer">&times;</button>' +
         '</div>' +
       '</div>';
-    }).join('');
+    }).join('') + '</div>';
 }
 
 function restoreStudioSession(idx) {
@@ -3033,6 +3057,8 @@ function runStudioStep(idx, node, task, context, stepDef) {
                   var ct2 = document.getElementById('canvasTitle');
                   if (ct2) ct2.textContent = 'Studio Report';
                 }
+                var scb = document.getElementById('studioCanvasBtn');
+                if (scb) scb.style.display = '';
               }
               if (ev.usage) { studioAddTokens(ev.usage.input||0, ev.usage.output||0); }
               if (ev.done) { resolve({output: output || '(no output)', canvas: canvasHtml}); return; }
@@ -3150,7 +3176,10 @@ function renderStudio(el) {
           '</div>' +
           '<div class="studio-input-row">' +
             '<textarea id="studioTaskInput" placeholder="Describe what you want to accomplish... (Ctrl+Enter to run)" onkeydown="if(event.key===\\x27Enter\\x27&&(event.ctrlKey||event.metaKey)){runStudio();event.preventDefault()}">' + esc(studioState.task) + '</textarea>' +
-            '<button id="studioRunBtn" class="studio-run-btn" onclick="runStudio()" ' + (studioState.running ? 'disabled' : '') + '>&#9654; Run</button>' +
+            '<div style="display:flex;gap:6px">' +
+              '<button id="studioRunBtn" class="studio-run-btn" onclick="runStudio()" style="flex:1" ' + (studioState.running ? 'disabled' : '') + '>&#9654; Run</button>' +
+              '<button onclick="studioReset()" title="New workflow" style="padding:8px 12px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:16px;line-height:1" ' + (studioState.running ? 'disabled' : '') + '>&#8635;</button>' +
+            '</div>' +
           '</div>' +
         '</div>' +
 
@@ -3168,7 +3197,10 @@ function renderStudio(el) {
           '</div>' +
         '</div>' +
 
-        '<div id="studioTokenBar" style="font-size:10px;color:var(--dim);margin:8px 0;font-family:var(--mono)"></div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin:8px 0">' +
+          '<div id="studioTokenBar" style="font-size:10px;color:var(--dim);font-family:var(--mono);flex:1"></div>' +
+          '<button id="studioCanvasBtn" onclick="var p=document.getElementById(\\x27canvasPanel\\x27);if(p)p.classList.add(\\x27open\\x27)" style="display:none;font-size:10px;padding:3px 9px;background:none;border:1px solid var(--green3);border-radius:5px;color:var(--green);cursor:pointer;font-family:var(--mono)">&#9632; Open Canvas</button>' +
+        '</div>' +
         '<div class="studio-canvas" id="studioNodes"></div>' +
         '<div class="studio-log" id="studioLog" style="display:none"></div>' +
         '<div id="studioResult"></div>' +
@@ -3683,7 +3715,12 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .studio-node{position:relative;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:106px;max-width:126px;opacity:0;animation:stNodeIn .35s ease forwards}
 @keyframes stNodeIn{from{opacity:0;transform:translateY(10px) scale(.92)}to{opacity:1;transform:translateY(0) scale(1)}}
 .studio-node__circle{width:56px;height:56px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:22px;transition:all .35s;flex-shrink:0}
-.studio-node--active .studio-node__circle{border-color:var(--green3);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--greendim);animation:stRing 1.4s ease-out infinite}
+.studio-node__progress{display:flex;gap:4px;align-items:center;margin-top:2px}
+.studio-node__progress span{width:5px;height:5px;border-radius:50%;background:var(--green3);animation:stDot 1.1s ease-in-out infinite}
+.studio-node__progress span:nth-child(2){animation-delay:.18s}
+.studio-node__progress span:nth-child(3){animation-delay:.36s}
+@keyframes stDot{0%,80%,100%{opacity:.2;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}
+.studio-node--active .studio-node__circle{border-color:var(--green3);box-shadow:0 0 0 6px rgba(99,102,241,.18),0 0 20px rgba(99,102,241,.25);background:var(--greendim);animation:stRing 1.6s ease-out infinite}
 .studio-node--done .studio-node__circle{border-color:#22c55e;background:rgba(34,197,94,.08);box-shadow:0 0 0 3px rgba(34,197,94,.12)}
 .studio-node--error .studio-node__circle{border-color:var(--red);background:rgba(239,68,68,.07)}
 .studio-node__label{font-size:10px;color:var(--dim);text-align:center;line-height:1.3;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}

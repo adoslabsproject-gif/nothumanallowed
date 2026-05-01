@@ -2801,12 +2801,25 @@ ${context ? `## CONTEXT FROM PREVIOUS AGENTS:\n${context.slice(0, 5000)}\n` : ''
           try {
             await withTimeout(
               callLLMStream(config, sysPrompt, userMsg,
-                (token) => { fullOutput += token; if (!isCanvasAgent) sendToken(token); },
+                (token) => {
+                  fullOutput += token;
+                  if (!isCanvasAgent) {
+                    // Strip JSON tool calls from synthesis agent output before sending to client
+                    const stripped = token.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '').trim();
+                    if (stripped) sendToken(stripped);
+                  }
+                },
               ),
               isCanvasAgent ? 60000 : 35000
             );
           } catch (e) {
             if (!isCanvasAgent) sendToken(`[Error: ${e.message}]`);
+          }
+
+          // Fallback: if LLM returned empty and we have tool data, send that directly
+          if (!isCanvasAgent && !fullOutput.trim() && toolData) {
+            fullOutput = toolData;
+            sendToken(toolData.slice(0, 2000));
           }
 
           if (isCanvasAgent) {
