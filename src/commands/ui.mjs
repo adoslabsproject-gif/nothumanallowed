@@ -3313,7 +3313,7 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the wo
                     if (stripped) sendToken(stripped);
                   }
                 },
-                { max_tokens: 4096 },
+                { max_tokens: 8192 },
               ),
               llmTimeout
             );
@@ -3340,7 +3340,7 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the wo
                 callLLMStream(retryConfig, `You are ${agent}. Analyze the following data and complete the task. Be thorough and write in ${language}.\n\nDATA:\n${context}\n\nTASK: ${stepPrompt}`,
                   'Write your complete analysis now.',
                   (tok) => { retryOutput += tok; sendToken(tok); },
-                  { max_tokens: 4096 },
+                  { max_tokens: 8192 },
                 ),
                 60000
               );

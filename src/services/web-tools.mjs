@@ -27,6 +27,7 @@ const MAX_REDIRECTS = 5;
 const MAX_RESULTS = 8;
 
 const USER_AGENT = 'NHA-CLI/9.0 (NotHumanAllowed; +https://nothumanallowed.com)';
+const BROWSER_UA = 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0';
 
 // ── SSRF Protection ──────────────────────────────────────────────────────────
 
@@ -291,9 +292,13 @@ export async function webSearch(query, maxResults = MAX_RESULTS) {
   try {
     const res = await fetch(searchUrl, {
       headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': 'text/html',
-        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': BROWSER_UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'identity',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
       },
       signal: controller.signal,
     });
@@ -325,58 +330,55 @@ export async function webSearch(query, maxResults = MAX_RESULTS) {
 /**
  * Parse DuckDuckGo HTML results page.
  * Extracts title, URL, and snippet from result items.
+ *
+ * DDG HTML structure (current):
+ *   <div class="result results_links results_links_deep web-result ">
+ *     <h2 class="result__title">
+ *       <a class="result__a" href="//duckduckgo.com/l/?uddg=ENCODED_URL&...">Title</a>
+ *     </h2>
+ *     <a class="result__snippet" href="...">Snippet text</a>
+ *   </div>
  */
 function parseDuckDuckGoResults(html, maxResults) {
   const results = [];
 
-  // DuckDuckGo HTML wraps results in <div class="result..."> with
-  // <a class="result__a" href="...">title</a> and
-  // <a class="result__snippet">snippet</a>
-  const resultBlocks = html.split(/class="result\s/);
+  // Split on individual result divs. Each web result starts with this class sequence.
+  const resultBlocks = html.split('class="result results_links');
 
   for (let i = 1; i < resultBlocks.length && results.length < maxResults; i++) {
     const block = resultBlocks[i];
 
-    // Extract URL — DuckDuckGo uses redirect URLs, extract the actual destination
+    // Extract URL from uddg= parameter in the result__a href
     let url = '';
-    const urlMatch = block.match(/class="result__a"\s+href="([^"]+)"/);
-    if (urlMatch) {
-      url = urlMatch[1];
-      // DuckDuckGo wraps URLs: //duckduckgo.com/l/?uddg=ENCODED_URL&...
-      if (url.includes('uddg=')) {
-        const uddgMatch = url.match(/uddg=([^&]+)/);
-        if (uddgMatch) {
-          try {
-            url = decodeURIComponent(uddgMatch[1]);
-          } catch {
-            url = uddgMatch[1];
-          }
-        }
+    const uddgMatch = block.match(/uddg=([^&"]+)/);
+    if (uddgMatch) {
+      try {
+        url = decodeURIComponent(uddgMatch[1]);
+      } catch {
+        url = uddgMatch[1];
       }
-      // Handle protocol-relative URLs
-      if (url.startsWith('//')) url = 'https:' + url;
     }
+    if (!url) continue;
 
-    // Extract title
+    // Extract title from result__a anchor text
     let title = '';
     const titleMatch = block.match(/class="result__a"[^>]*>([\s\S]*?)<\/a>/);
     if (titleMatch) {
       title = htmlToText(titleMatch[1]).trim();
     }
+    if (!title) continue;
 
-    // Extract snippet
+    // Extract snippet from result__snippet anchor
     let snippet = '';
     const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
-    if (!snippetMatch) {
+    if (snippetMatch) {
+      snippet = htmlToText(snippetMatch[1]).trim();
+    } else {
       const altSnippet = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\//);
       if (altSnippet) snippet = htmlToText(altSnippet[1]).trim();
-    } else {
-      snippet = htmlToText(snippetMatch[1]).trim();
     }
 
-    if (url && title) {
-      results.push({ title, url, snippet: snippet.slice(0, 300) });
-    }
+    results.push({ title, url, snippet: snippet.slice(0, 300) });
   }
 
   return results;

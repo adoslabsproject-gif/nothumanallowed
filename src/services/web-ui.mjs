@@ -4072,7 +4072,15 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
                   var tb = last.querySelector(\x27.studio-log-entry__text\x27);
                   if (tb) {
                     if (isStatus) {
-                      tb.textContent = ev.token.replace(new RegExp(\x27[\\\\r\\\\n]+\x27,\x27g\x27), \x27 \x27);
+                      var st = ev.token.replace(new RegExp(\x27[\\\\r\\\\n]+\x27,\x27g\x27), \x27 \x27);
+                      // Render [Searching: "query"] as a styled search chip
+                      var srchM = st.match(/^\\[Searching:\\s*"([^"]+)"\\]\\s*$/);
+                      if (srchM) {
+                        var qEsc = srchM[1].replace(/&/g,\x27&amp;\x27).replace(/</g,\x27&lt;\x27).replace(/>/g,\x27&gt;\x27);
+                        tb.innerHTML = \x27<span style="display:inline-flex;align-items:center;gap:6px;background:#1c1c28;border:1px solid #6366f133;border-radius:20px;padding:3px 10px 3px 8px;font-size:11px;font-family:var(--mono)"><span style="color:#6366f1">&#128269;</span><span style="color:var(--dim)">Cercando</span><strong style="color:#a5b4fc">\x27 + qEsc + \x27</strong><span style="color:#6366f1;animation:pulse 1s infinite">&#183;&#183;&#183;</span></span>\x27;
+                      } else {
+                        tb.textContent = st;
+                      }
                     } else {
                       // Live token counter — shows progress without raw content
                       var chars = output.length;
