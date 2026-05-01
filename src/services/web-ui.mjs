@@ -81,6 +81,34 @@ function renderMd(raw) {
     // Close lists on blank or non-list line
     if (inUl) { out.push('</ul>'); inUl = false; }
     if (inOl) { out.push('</ol>'); inOl = false; }
+    // Markdown table: line starting with | and containing at least two |
+    if (l.charAt(0) === '|' && l.lastIndexOf('|') > 0) {
+      // Separator row (---|---) — skip, handled via <thead>
+      if (/^\|[\s\-|:]+\|$/.test(l.trim())) continue;
+      var cells = l.split('|').slice(1,-1).map(function(c){ return c.trim(); });
+      // Check if next line is a separator → this is a header row
+      var nextL = lines[i+1] ? lines[i+1].trim() : '';
+      var isHeader = /^\|[\s\-|:]+\|$/.test(nextL);
+      if (isHeader) {
+        out.push('<table class="md-table"><thead><tr>' + cells.map(function(c){ return '<th>'+c+'</th>'; }).join('') + '</tr></thead><tbody>');
+      } else {
+        // Check if we need to open tbody (no header case)
+        var prevOut = out[out.length-1] || '';
+        if (prevOut.indexOf('<tbody>') === -1 && prevOut.indexOf('<tr>') === -1) {
+          out.push('<table class="md-table"><tbody>');
+        }
+        out.push('<tr>' + cells.map(function(c){ return '<td>'+c+'</td>'; }).join('') + '</tr>');
+        // Close table if next line is not a table row
+        var nextL2 = lines[i+1] ? lines[i+1].trim() : '';
+        if (!nextL2 || nextL2.charAt(0) !== '|') { out.push('</tbody></table>'); }
+      }
+      continue;
+    }
+    // Close open table if we hit a non-table line
+    var lastOut = out[out.length-1] || '';
+    if (lastOut.indexOf('<tr>') !== -1 && lastOut.indexOf('</table>') === -1) {
+      out.push('</tbody></table>');
+    }
     // Blockquote > text
     var bqm = l.match(/^&gt; (.+)/);
     if (bqm) { out.push('<blockquote class="md-bq">'+bqm[1]+'</blockquote>'); continue; }
@@ -3202,7 +3230,7 @@ function renderSidebar() {
       \x27<a href="https://nothumanallowed.com/docs/agents" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#129302;</span> \x27+t(\x27nav_agents_guide\x27)+\x27</a>\x27+
       \x27<a href="https://nothumanallowed.com/docs/mobile" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#128241;</span> \x27+t(\x27nav_mobile\x27)+\x27</a>\x27+
     \x27</div>\x27+
-    \x27<div style="padding:12px 16px;margin-top:auto;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">nothumanallowed.com</div>\x27;
+    \x27<div style="padding:12px 16px;margin-top:auto;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">nothumanallowed.com<span style="margin-left:6px;opacity:.5">v${VERSION}</span></div>\x27;
 }
 
 var studioState = {
@@ -3241,6 +3269,8 @@ function studioReset() {
   studioState.canvas = null;
   studioState.running = false;
   studioState.planned = false;
+  studioState.attachmentContext = '';
+  studioState.attachmentName = '';
   studioTokens = {in:0, out:0};
   var nudgeEl = document.getElementById(\x27studioParliamentNudge\x27);
   if (nudgeEl) nudgeEl.remove();
@@ -3251,6 +3281,42 @@ function studioReset() {
   renderStudioNodes();
   renderStudioLog();
   renderStudioResult();
+}
+
+function studioClearAttach() {
+  studioState.attachmentContext = '';
+  studioState.attachmentName = '';
+  var badge = document.getElementById('studioAttachBadge');
+  if (badge) badge.remove();
+  var fi = document.getElementById('studioFileInput');
+  if (fi) fi.value = '';
+}
+
+function studioHandleAttach(file) {
+  if (!file) return;
+  var name = file.name;
+  var isPdf = name.toLowerCase().endsWith('.pdf');
+  var isImg = new RegExp('[.](png|jpe?g|gif|webp)$', 'i').test(name);
+  if (!isPdf && !isImg) { alert('Supported: PDF, PNG, JPG, GIF, WEBP'); return; }
+
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var dataUrl = ev.target.result;
+    studioState.attachmentName = name;
+    studioState.attachmentContext = (isPdf ? '[ATTACHED PDF: ' : '[ATTACHED IMAGE: ') + name + ']' + String.fromCharCode(10) + 'Base64: ' + dataUrl;
+    // Show badge inline without full re-render
+    var inputRow = document.querySelector('.studio-input-row');
+    if (inputRow) {
+      var existing = document.getElementById('studioAttachBadge');
+      if (existing) existing.remove();
+      var badge = document.createElement('div');
+      badge.id = 'studioAttachBadge';
+      badge.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--greendim);border:1px solid var(--green3);border-radius:6px;margin-bottom:6px;font-size:11px;color:var(--green);font-family:var(--mono)';
+      badge.innerHTML = '&#128206; ' + esc(name) + ' <span onclick="studioClearAttach()" style="cursor:pointer;color:var(--dim);font-size:13px;margin-left:4px" title="Remove">&#215;</span>';
+      inputRow.insertBefore(badge, inputRow.children[1]);
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 var STUDIO_EXAMPLES = [
@@ -3329,80 +3395,255 @@ function renderStudioLog() {
   el.scrollTop = el.scrollHeight;
 }
 
+var _downloadPdfLast = 0;
 function downloadStudioPDF() {
+  var now = Date.now();
+  if (now - _downloadPdfLast < 3000) return; // debounce: max 1 download every 3s
+  _downloadPdfLast = now;
   var task = studioState.task || 'NHA Studio Report';
   var today = new Date().toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric'});
   var nodes = studioState.nodes || [];
+  var fileName = (task).slice(0, 60).replace(/[^a-z0-9\s]/gi,'').trim().replace(/\s+/g,'-') || 'NHA-Studio';
 
-  // Build sections for each agent
+  // If canvas exists, download the canvas HTML directly (preserves colors and layout)
+  if (studioState.canvas) {
+    var blob = new Blob([studioState.canvas], {type: 'text/html'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.download = fileName + '.html';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+    return;
+  }
+
+  // ── Markdown → HTML for PDF (full support: tables, lists, headers, inline) ──
   function mdToPdfHtml(raw) {
-    var lines = raw.split(String.fromCharCode(10));
+    var NL2 = String.fromCharCode(10);
+    var lines = raw.split(NL2);
     var out = '';
-    var inList = false;
+    var inUl = false, inOl = false, inTable = false, inTbody = false;
+    function closeAll() {
+      if (inUl) { out += '</ul>'; inUl = false; }
+      if (inOl) { out += '</ol>'; inOl = false; }
+      if (inTable) { if (inTbody) { out += '</tbody>'; inTbody = false; } out += '</table>'; inTable = false; }
+    }
+    function inlineFormat(t) {
+      t = t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      t = t.replace(new RegExp('[*][*]([^*]+)[*][*]','g'),'<strong>$1</strong>');
+      t = t.replace(new RegExp('[*]([^*]+)[*]','g'),'<em>$1</em>');
+      t = t.replace(/~~([^~]+)~~/g,'<del>$1</del>');
+      return t;
+    }
     for (var li = 0; li < lines.length; li++) {
-      var line = lines[li]
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      // Inline bold: **text**
-      line = line.replace(new RegExp('[*][*]([^*]+)[*][*]','g'),'<strong>$1</strong>');
-      // Inline italic: *text*
-      line = line.replace(new RegExp('[*]([^*]+)[*]','g'),'<em>$1</em>');
-      if (line.slice(0,4) === '### ') { if(inList){out+='</ul>';inList=false;} out += '<h3>' + line.slice(4) + '</h3>'; continue; }
-      if (line.slice(0,3) === '## ') { if(inList){out+='</ul>';inList=false;} out += '<h2>' + line.slice(3) + '</h2>'; continue; }
-      if (line.slice(0,2) === '# ') { if(inList){out+='</ul>';inList=false;} out += '<h2>' + line.slice(2) + '</h2>'; continue; }
-      if (line.slice(0,2) === '- ' || line.slice(0,2) === '* ') {
-        if (!inList) { out += '<ul>'; inList = true; }
-        out += '<li>' + line.slice(2) + '</li>';
+      var line = lines[li];
+      var trimmed = line.trim();
+      // Headers
+      if (trimmed.slice(0,4) === '### ') { closeAll(); out += '<h3>' + inlineFormat(trimmed.slice(4)) + '</h3>'; continue; }
+      if (trimmed.slice(0,3) === '## ')  { closeAll(); out += '<h2>' + inlineFormat(trimmed.slice(3)) + '</h2>'; continue; }
+      if (trimmed.slice(0,2) === '# ')   { closeAll(); out += '<h1>' + inlineFormat(trimmed.slice(2)) + '</h1>'; continue; }
+      // Horizontal rule
+      if (/^---+$/.test(trimmed)) { closeAll(); out += '<hr>'; continue; }
+      // Markdown table
+      if (trimmed.charAt(0) === '|' && trimmed.lastIndexOf('|') > 0) {
+        // Separator row — signals end of header
+        if (/^\|[\s\-|:]+\|$/.test(trimmed)) {
+          if (inTable) { out += '</thead><tbody>'; inTbody = true; }
+          continue;
+        }
+        var cells = trimmed.split('|').slice(1,-1).map(function(c){ return inlineFormat(c.trim()); });
+        var nextTrimmed = lines[li+1] ? lines[li+1].trim() : '';
+        var nextIsSep = /^\|[\s\-|:]+\|$/.test(nextTrimmed);
+        if (!inTable) {
+          out += '<table>';
+          inTable = true;
+          if (nextIsSep) { out += '<thead>'; inTbody = false; }
+          else { out += '<tbody>'; inTbody = true; }
+        }
+        var tag = (!inTbody) ? 'th' : 'td';
+        out += '<tr>' + cells.map(function(c){ return '<'+tag+'>'+c+'</'+tag+'>'; }).join('') + '</tr>';
         continue;
       }
-      if (inList) { out += '</ul>'; inList = false; }
-      if (line.trim() === '') { out += '</p><p>'; } else { out += line + '<br>'; }
+      // Close table if not a table row
+      if (inTable) { if (inTbody) { out += '</tbody>'; inTbody = false; } out += '</table>'; inTable = false; }
+      // Unordered list
+      if (/^[\-\*] /.test(trimmed)) {
+        if (inOl) { out += '</ol>'; inOl = false; }
+        if (!inUl) { out += '<ul>'; inUl = true; }
+        out += '<li>' + inlineFormat(trimmed.slice(2)) + '</li>';
+        continue;
+      }
+      // Ordered list
+      var olMatch = trimmed.match(/^\d+\. (.+)/);
+      if (olMatch) {
+        if (inUl) { out += '</ul>'; inUl = false; }
+        if (!inOl) { out += '<ol>'; inOl = true; }
+        out += '<li>' + inlineFormat(olMatch[1]) + '</li>';
+        continue;
+      }
+      // Close lists
+      if (inUl) { out += '</ul>'; inUl = false; }
+      if (inOl) { out += '</ol>'; inOl = false; }
+      // Blank line
+      if (trimmed === '') { out += '<div style="height:6px"></div>'; continue; }
+      // Paragraph
+      out += '<p>' + inlineFormat(trimmed) + '</p>';
     }
-    if (inList) out += '</ul>';
-    return '<p>' + out + '</p>';
+    closeAll();
+    return out;
   }
-  var sectionsHtml = nodes.map(function(n) {
-    if (!n.output || n.output === '(no output)' || n.agent === 'CanvasAgent') return '';
-    return '<div class="section"><div class="agent-label">' + (n.icon||'') + ' ' + esc(n.label||n.agent) + '</div><div class="section-body">' + mdToPdfHtml(n.output) + '</div></div>';
+
+  // ── Collect workflow metadata ─────────────────────────────────────────────
+  var activeNodes = nodes.filter(function(n){ return n.output && n.output !== '(no output)' && n.agent !== 'CanvasAgent'; });
+  var totalTokensIn  = studioTokens ? (studioTokens.in  || 0) : 0;
+  var totalTokensOut = studioTokens ? (studioTokens.out || 0) : 0;
+  var agentNames = activeNodes.map(function(n){ return (n.icon||'') + ' ' + esc(n.label||n.agent); });
+  var nowTime = new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+
+  // ── Section HTML ──────────────────────────────────────────────────────────
+  var sectionsHtml = activeNodes.map(function(n, idx) {
+    var agentColor = ['#4f46e5','#0891b2','#059669','#d97706','#dc2626','#7c3aed','#0284c7'][idx % 7];
+    return '<div class="section">' +
+      '<div class="agent-header" style="border-left-color:' + agentColor + '">' +
+        '<span class="agent-icon">' + (n.icon||'&#9632;') + '</span>' +
+        '<div><div class="agent-name">' + esc(n.label||n.agent) + '</div>' +
+        '<div class="agent-sub">' + esc(n.agent) + ' &nbsp;&#183;&nbsp; Step ' + (idx+1) + ' di ' + activeNodes.length + '</div></div>' +
+      '</div>' +
+      '<div class="section-body">' + mdToPdfHtml(n.output) + '</div>' +
+    '</div>';
   }).join('');
 
-  // Include canvas if present (as an embedded iframe screenshot fallback note)
-  var canvasNote = studioState.canvas ? ["<div class='section canvas-note'><div class='agent-label'>&#9632; Canvas Report</div><div class='section-body'><p><em>Il Canvas HTML e disponibile in Studio. Aprire il pannello Canvas e usare la funzione stampa del browser per includerlo.</em></p></div></div>"].join("") : "";
+  // ── Full HTML document ────────────────────────────────────────────────────
+  var html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>' + esc(task) + '</title>' +
+  '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+  '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
+  '<style>' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:"Inter",system-ui,sans-serif;color:#1e1e2e;background:#fff;font-size:13px;line-height:1.7}' +
 
-  var html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>' + esc(task) + '</title><style>' +
-    'body{font-family:"Helvetica Neue",Arial,sans-serif;color:#111;background:#fff;margin:0;padding:0}' +
-    '.cover{background:#0d0d0d;color:#fff;padding:60px 50px;page-break-after:always}' +
-    '.cover h1{font-size:28px;font-weight:700;margin:0 0 12px;color:#00ff41}' +
-    '.cover .meta{font-size:13px;color:#aaa;margin-top:8px}' +
-    '.cover .task{font-size:15px;color:#e0e0e0;margin-top:20px;line-height:1.6;max-width:700px}' +
-    '.cover .brand{font-size:11px;color:#555;margin-top:40px;letter-spacing:2px;text-transform:uppercase}' +
-    '.toc{padding:40px 50px;border-bottom:1px solid #e0e0e0;page-break-after:always}' +
-    '.toc h2{font-size:14px;text-transform:uppercase;letter-spacing:2px;color:#555;margin-bottom:16px}' +
-    '.toc ol{margin:0;padding-left:20px;font-size:13px;line-height:2}' +
-    '.section{padding:36px 50px;border-bottom:1px solid #f0f0f0;page-break-inside:avoid}' +
+    // Cover
+    '.cover{background:linear-gradient(135deg,#1e1b4b 0%,#312e81 40%,#1e3a5f 100%);color:#fff;padding:64px 60px 56px;page-break-after:always;position:relative;overflow:hidden}' +
+    '.cover::before{content:"";position:absolute;top:-80px;right:-80px;width:360px;height:360px;background:radial-gradient(circle,rgba(99,102,241,.25) 0%,transparent 70%);pointer-events:none}' +
+    '.cover-brand{font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:32px;display:flex;align-items:center;gap:8px}' +
+    '.cover-brand::before{content:"";display:inline-block;width:24px;height:2px;background:#6366f1}' +
+    '.cover h1{font-size:30px;font-weight:800;line-height:1.25;color:#fff;margin-bottom:20px;max-width:680px}' +
+    '.cover-task-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:8px}' +
+    '.cover-task{font-size:14px;color:rgba(255,255,255,.8);line-height:1.65;max-width:660px;font-style:italic;padding:14px 18px;background:rgba(255,255,255,.07);border-radius:8px;border-left:3px solid #6366f1}' +
+
+    // Stats bar
+    '.cover-stats{display:flex;gap:0;margin-top:40px;border-top:1px solid rgba(255,255,255,.12);padding-top:28px}' +
+    '.stat{flex:1;padding-right:28px;border-right:1px solid rgba(255,255,255,.1)}' +
+    '.stat:last-child{border-right:none;padding-right:0;padding-left:28px}' +
+    '.stat:not(:first-child){padding-left:28px}' +
+    '.stat-value{font-size:22px;font-weight:800;color:#fff;line-height:1}' +
+    '.stat-label{font-size:10px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:5px}' +
+
+    // Workflow bar
+    '.workflow-bar{padding:28px 60px;background:#f8f7ff;border-bottom:1px solid #e8e5ff;display:flex;align-items:center;gap:0;flex-wrap:wrap}' +
+    '.wf-step{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#4f46e5;white-space:nowrap}' +
+    '.wf-arrow{color:#c7c2f0;margin:0 6px;font-size:14px}' +
+    '.wf-label{font-size:9px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:#9c97c7;margin-right:16px}' +
+
+    // TOC
+    '.toc{padding:36px 60px;border-bottom:1px solid #eee;page-break-after:always}' +
+    '.toc-title{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9ca3af;margin-bottom:18px}' +
+    '.toc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}' +
+    '.toc-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f9f9fc;border-radius:8px;border:1px solid #ede9fe}' +
+    '.toc-num{width:22px;height:22px;border-radius:50%;background:#4f46e5;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}' +
+    '.toc-name{font-size:12px;font-weight:600;color:#1e1e2e}' +
+
+    // Sections
+    '.section{padding:36px 60px;border-bottom:1px solid #f0f0f5;page-break-inside:avoid}' +
     '.section:last-child{border-bottom:none}' +
-    '.agent-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#888;font-weight:700;margin-bottom:14px}' +
-    '.section-body{font-size:13px;line-height:1.8;color:#222}' +
-    '.section-body h2{font-size:16px;font-weight:700;color:#111;margin:20px 0 8px}' +
-    '.section-body h3{font-size:14px;font-weight:600;color:#333;margin:16px 0 6px}' +
-    '.section-body ul{margin:8px 0;padding-left:20px}' +
+    '.agent-header{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-left:14px;border-left:3px solid #4f46e5}' +
+    '.agent-icon{font-size:22px;line-height:1}' +
+    '.agent-name{font-size:14px;font-weight:700;color:#1e1e2e}' +
+    '.agent-sub{font-size:10px;font-weight:500;color:#9ca3af;letter-spacing:.5px;margin-top:2px}' +
+    '.section-body{font-size:13px;line-height:1.75;color:#374151}' +
+    '.section-body h1{font-size:18px;font-weight:700;color:#1e1e2e;margin:20px 0 10px;border-bottom:1px solid #e5e7eb;padding-bottom:6px}' +
+    '.section-body h2{font-size:15px;font-weight:700;color:#1e1e2e;margin:18px 0 8px}' +
+    '.section-body h3{font-size:13px;font-weight:600;color:#4f46e5;margin:14px 0 6px}' +
+    '.section-body p{margin:0 0 10px}' +
+    '.section-body ul{margin:8px 0 10px 18px;list-style:disc}' +
+    '.section-body ol{margin:8px 0 10px 18px}' +
     '.section-body li{margin-bottom:4px}' +
-    '.section-body strong{font-weight:700}' +
-    '.section-body p{margin:0 0 12px}' +
-    '.canvas-note{background:#f9f9f9}' +
-    '.footer-bar{padding:20px 50px;background:#f9f9f9;font-size:10px;color:#aaa;text-align:center;letter-spacing:1px}' +
-    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.cover{page-break-after:always}.toc{page-break-after:always}}' +
+    '.section-body strong{font-weight:700;color:#1e1e2e}' +
+    '.section-body em{color:#6366f1;font-style:italic}' +
+    '.section-body table{width:100%;border-collapse:collapse;margin:14px 0;font-size:12px}' +
+    '.section-body th{background:#f0eeff;color:#4f46e5;font-weight:700;text-align:left;padding:8px 12px;border:1px solid #e0d9ff;font-size:11px;letter-spacing:.3px}' +
+    '.section-body td{padding:7px 12px;border:1px solid #ede9fe;color:#374151}' +
+    '.section-body tr:nth-child(even) td{background:#f9f8ff}' +
+    '.section-body hr{border:none;border-top:1px solid #e5e7eb;margin:16px 0}' +
+    '.section-body blockquote{border-left:3px solid #6366f1;padding:8px 14px;background:#f5f3ff;border-radius:0 6px 6px 0;color:#4f46e5;font-style:italic;margin:10px 0}' +
+
+    // Footer
+    '.footer-bar{padding:18px 60px;background:#f8f7ff;border-top:2px solid #e8e5ff;display:flex;justify-content:space-between;align-items:center}' +
+    '.footer-left{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#9c97c7}' +
+    '.footer-right{font-size:10px;color:#b8b4d4}' +
+
+    '@media print{' +
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.cover{page-break-after:always}' +
+      '.toc{page-break-after:always}' +
+      '.section{page-break-inside:avoid}' +
+    '}' +
   '</style></head><body>' +
-    '<div class="cover"><div class="brand">NotHumanAllowed — NHA Studio</div><h1>' + esc(task.length > 80 ? task.slice(0,80)+'...' : task) + '</h1><div class="meta">Generato il ' + today + ' &nbsp;·&nbsp; ' + nodes.filter(function(n){return n.agent!=='CanvasAgent'}).length + ' agenti</div><div class="task">' + esc(task) + '</div></div>' +
-    '<div class="toc"><h2>Indice</h2><ol>' + nodes.filter(function(n){return n.output&&n.output!=='(no output)'&&n.agent!=='CanvasAgent'}).map(function(n){return '<li>' + esc(n.label||n.agent) + '</li>';}).join('') + '</ol></div>' +
-    sectionsHtml + canvasNote +
-    '<div class="footer-bar">NHA Studio &nbsp;·&nbsp; nothumanallowed.com &nbsp;·&nbsp; ' + today + '</div>' +
+
+  // ── Cover ────────────────────────────────────────────────────────────────
+  '<div class="cover">' +
+    '<div class="cover-brand">NotHumanAllowed &nbsp; NHA Studio</div>' +
+    '<h1>' + esc(task.length > 90 ? task.slice(0,90)+'...' : task) + '</h1>' +
+    '<div class="cover-task-label">Workflow richiesto</div>' +
+    '<div class="cover-task">' + esc(task) + '</div>' +
+    '<div class="cover-stats">' +
+      '<div class="stat"><div class="stat-value">' + activeNodes.length + '</div><div class="stat-label">Agenti eseguiti</div></div>' +
+      '<div class="stat"><div class="stat-value">' + today + '</div><div class="stat-label">Data generazione</div></div>' +
+      '<div class="stat"><div class="stat-value">' + nowTime + '</div><div class="stat-label">Ora</div></div>' +
+      (totalTokensIn > 0 ? '<div class="stat"><div class="stat-value">' + (totalTokensIn + totalTokensOut).toLocaleString() + '</div><div class="stat-label">Token totali</div></div>' : '') +
+    '</div>' +
+  '</div>' +
+
+  // ── Workflow bar ─────────────────────────────────────────────────────────
+  '<div class="workflow-bar">' +
+    '<span class="wf-label">Workflow:</span>' +
+    activeNodes.map(function(n, idx){
+      return '<span class="wf-step">' + (n.icon||'') + ' ' + esc(n.label||n.agent) + '</span>' +
+        (idx < activeNodes.length-1 ? '<span class="wf-arrow">&#8594;</span>' : '');
+    }).join('') +
+  '</div>' +
+
+  // ── TOC ──────────────────────────────────────────────────────────────────
+  '<div class="toc">' +
+    '<div class="toc-title">Indice dei contenuti</div>' +
+    '<div class="toc-grid">' +
+    activeNodes.map(function(n, idx){
+      return '<div class="toc-item"><div class="toc-num">' + (idx+1) + '</div><div class="toc-name">' + esc(n.label||n.agent) + '</div></div>';
+    }).join('') +
+    '</div>' +
+  '</div>' +
+
+  // ── Sections ─────────────────────────────────────────────────────────────
+  sectionsHtml +
+
+  // ── Footer ───────────────────────────────────────────────────────────────
+  '<div class="footer-bar">' +
+    '<span class="footer-left">NHA Studio &nbsp;&#183;&nbsp; nothumanallowed.com</span>' +
+    '<span class="footer-right">' + today + ' ' + nowTime +
+      (totalTokensIn > 0 ? ' &nbsp;&#183;&nbsp; ' + totalTokensIn.toLocaleString() + ' token in / ' + totalTokensOut.toLocaleString() + ' out' : '') +
+    '</span>' +
+  '</div>' +
   '</body></html>';
 
-  var win = window.open('', '_blank');
-  if (!win) { alert('Popup bloccato — abilita i popup per scaricare il PDF'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.onload = function() { setTimeout(function(){ win.print(); }, 300); };
+  // Use Blob URL to avoid popup blockers — opens in new tab, user can Cmd+P to print as PDF
+  var blob = new Blob([html], {type: 'text/html'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.download = (studioState.task || 'NHA Studio Report').slice(0, 60).replace(/[^a-z0-9\s]/gi,'').trim().replace(/\s+/g,'-') + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
 }
 
 function renderStudioResult() {
@@ -3453,6 +3694,7 @@ async function runStudio() {
   studioState.canvas = null;
   studioState.running = true;
   studioState.planned = false;
+  // Keep attachmentContext — it was loaded before hitting Run
   renderStudioNodes();
   renderStudioLog();
   renderStudioResult();
@@ -3471,7 +3713,17 @@ async function runStudio() {
 
   try {
     // Step 1: plan the workflow
-    var planRes = await apiPost('/api/studio/plan', {task: task});
+    var nl = String.fromCharCode(10);
+    var taskForPlan = studioState.attachmentContext
+      ? task + nl + nl + '[User has attached a file: ' + studioState.attachmentName + '. Agents will receive the full content.]'
+      : task;
+    // Include PDF info in plan request so server can add DocumentReaderAgent step
+    var planBody = {task: taskForPlan};
+    if (studioState.attachmentContext && studioState.attachmentContext.indexOf('[ATTACHED PDF:') === 0) {
+      planBody.hasPdf = true;
+      planBody.pdfName = studioState.attachmentName || 'document.pdf';
+    }
+    var planRes = await apiPost('/api/studio/plan', planBody);
     if (!planRes || !planRes.steps || !planRes.steps.length) {
       studioLog('Studio', '&#9888;', 'Could not plan workflow. Check your LLM provider config.', 'error');
       studioState.running = false;
@@ -3731,7 +3983,31 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
   return new Promise(function(resolve) {
     var output = '';
     var canvasHtml = null;
-    var body = JSON.stringify({stepIdx: idx, agent: node.agent, task: task, context: context, stepDef: stepDef});
+    // Inject attachment into first step only — pass PDF/image as dedicated fields,
+    // NOT as raw base64 in context (would cause 100k+ token overflow for any real PDF).
+    var bodyObj = {stepIdx: idx, agent: node.agent, task: task, context: context, stepDef: stepDef};
+    if (idx === 0 && studioState.attachmentContext) {
+      var ac = studioState.attachmentContext;
+      var isPdfAttach = ac.indexOf('[ATTACHED PDF:') === 0;
+      var isImgAttach = ac.indexOf('[ATTACHED IMAGE:') === 0;
+      // Extract base64 data URL from attachment context
+      var b64Match = ac.indexOf('Base64: ');
+      var dataUrl = b64Match >= 0 ? ac.slice(b64Match + 8).trim() : '';
+      if (isPdfAttach && dataUrl) {
+        // Pass PDF as dedicated field — agent/llm handles it natively
+        bodyObj.pdfBase64 = dataUrl;
+        bodyObj.pdfName = studioState.attachmentName;
+        // Add a short note in context instead of the full base64
+        bodyObj.context = '[User attached PDF: ' + studioState.attachmentName + ']' +
+          (context ? String.fromCharCode(10) + String.fromCharCode(10) + context : '');
+      } else if (isImgAttach && dataUrl) {
+        bodyObj.imageBase64 = dataUrl;
+        bodyObj.imageMimeType = dataUrl.indexOf('data:image/png') === 0 ? 'image/png' : 'image/jpeg';
+        bodyObj.context = '[User attached image: ' + studioState.attachmentName + ']' +
+          (context ? String.fromCharCode(10) + String.fromCharCode(10) + context : '');
+      }
+    }
+    var body = JSON.stringify(bodyObj);
     var fetchOpts = {method: 'POST', headers: {'Content-Type': 'application/json'}, body: body};
     if (signal) fetchOpts.signal = signal;
 
@@ -3904,7 +4180,10 @@ function renderStudio(el) {
           '</div>' +
           '<div class="studio-input-row">' +
             '<textarea id="studioTaskInput" placeholder="' + t('placeholder_studio') + '" onkeydown="if(event.key===\\x27Enter\\x27&&(event.ctrlKey||event.metaKey)){runStudio();event.preventDefault()}">' + esc(studioState.task) + '</textarea>' +
+            (studioState.attachmentName ? '<div id="studioAttachBadge" style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--greendim);border:1px solid var(--green3);border-radius:6px;margin-bottom:6px;font-size:11px;color:var(--green);font-family:var(--mono)">&#128206; ' + esc(studioState.attachmentName) + ' <span onclick="studioClearAttach()" style="cursor:pointer;color:var(--dim);font-size:13px;margin-left:4px" title="Rimuovi">&#215;</span></div>' : '') +
+            '<input type="file" id="studioFileInput" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" style="display:none" onchange="studioHandleAttach(this.files[0])">' +
             '<div style="display:flex;gap:6px">' +
+              '<button onclick="document.getElementById(\\x27studioFileInput\\x27).click()" title="Attach PDF or image" style="padding:8px 10px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:15px" ' + (studioState.running ? 'disabled' : '') + '>&#128206;</button>' +
               '<button id="studioRunBtn" class="studio-run-btn" onclick="runStudio()" style="flex:1" ' + (studioState.running ? 'disabled' : '') + '>' + t('run') + '</button>' +
               '<button id="studioStopBtn" onclick="stopStudio()" title="' + t('stop') + '" style="padding:8px 14px;background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;color:#ef4444;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;' + (studioState.running ? '' : 'display:none') + '">&#9632; ' + t('stop') + '</button>' +
               '<button onclick="studioReset()" title="' + t('reset') + '" style="padding:8px 12px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:16px;line-height:1" ' + (studioState.running ? 'disabled' : '') + '>&#8635;</button>' +
@@ -4149,7 +4428,7 @@ function init(){
   if(cp)makeDraggable(cp,\x27.cvs-header\x27);
   // Telemetry ping — fire and forget
   setTimeout(function(){
-    fetch(\x27https://nothumanallowed.com/api/v1/telemetry/ping\x27,{method:\x27POST\x27,headers:{\x27Content-Type\x27:\x27application/json\x27},body:JSON.stringify({platform:\x27web-ui\x27,version:VERSION})}).catch(function(){});
+    fetch(\x27https://nothumanallowed.com/api/v1/telemetry/ping\x27,{method:\x27POST\x27,headers:{\x27Content-Type\x27:\x27application/json\x27},body:JSON.stringify({platform:\x27web-ui\x27,version:\x27${VERSION}\x27})}).catch(function(){});
   },3000);
 }
 init();
@@ -4521,6 +4800,11 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .md-body em{font-style:italic;color:var(--dim)}
 .md-body del{text-decoration:line-through;color:var(--dim)}
 .md-body a{color:var(--cyan);text-decoration:underline}
+.md-body .md-table{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:13px}
+.md-body .md-table th{background:var(--bg3);color:var(--bright);font-weight:600;padding:7px 12px;text-align:left;border:1px solid var(--border2);white-space:nowrap}
+.md-body .md-table td{padding:6px 12px;border:1px solid var(--border);color:var(--text);vertical-align:top}
+.md-body .md-table tbody tr:nth-child(odd){background:rgba(0,0,0,0.15)}
+.md-body .md-table tbody tr:hover{background:rgba(0,255,65,0.04)}
 
 /* ---- CHAT bubble markdown tweaks ---- */
 .msg--assistant .msg__bubble{white-space:normal}

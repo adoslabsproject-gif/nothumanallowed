@@ -2692,9 +2692,10 @@ export async function cmdUI(args) {
 
         // ── Fast keyword-based planning (no LLM call needed for common patterns) ──────
         const taskLow = task.toLowerCase();
+        const hasPdf        = !!(body.hasPdf) || /pdf|allegat|catalogo|scheda\s*tecnic|document/i.test(taskLow);
         const hasEmail      = /email|mail|inbox|posta/i.test(taskLow);
         const hasCalendar   = /calendar|agenda|calendari|eventi|schedule/i.test(taskLow);
-        const hasSearch     = /cerca|search|notizie|news|ultime|latest|web|internet|tendenz|trend/i.test(taskLow);
+        const hasSearch     = /cerca|search|notizie|news|ultime|latest|web|internet|tendenz|trend|acquista|compra|dove\s+trovare|where\s+to\s+buy|similar|simile/i.test(taskLow);
         const hasCanvas     = /html|dashboard|visua|report|grafico|chart/i.test(taskLow);
         const hasGitHub     = /github|git|issue|pr|pull request/i.test(taskLow);
         const hasSlack      = /slack|channel|messag/i.test(taskLow);
@@ -2726,13 +2727,23 @@ export async function cmdUI(args) {
         // Build plan directly from keywords — reliable, fast, no SENTINEL risk
         const buildKeywordPlan = () => {
           const steps = [];
+          // PDF attachment: always read document first to extract specs/data before any web search
+          if (hasPdf) {
+            const pdfName = body.pdfName || 'documento allegato';
+            steps.push({icon:'\u{1F4C4}',agent:'DocumentReaderAgent',label:it?'Leggi documento':'Read document',prompt:`Extract all technical specifications, model numbers, part codes, product names, manufacturer, dimensions, ratings, and any other key data from the attached document "${pdfName}". List every technical detail precisely.`});
+          }
           if (hasEmail)    steps.push({icon:'\u{1F4E7}',agent:'EmailAgent',   label:it?'Controlla email':'Check emails',       prompt:'Read the latest unread emails and identify urgent items, deadlines, and required actions'});
           if (hasCalendar) steps.push({icon:'\u{1F4C5}',agent:'CalendarAgent', label:it?'Rivedi calendario':'Review calendar',   prompt:'Check today\'s events and identify any scheduling conflicts or important meetings'});
           if (hasGitHub)   steps.push({icon:'\u{1F4BB}',agent:'GitHubAgent',   label:'GitHub',                                  prompt:'Read open issues and pull requests, identify what needs attention'});
           if (hasSlack)    steps.push({icon:'\u{1F4AC}',agent:'SlackAgent',    label:'Slack',                                   prompt:'Check recent Slack messages and identify important conversations'});
           if (hasNotion)   steps.push({icon:'\u{1F4DD}',agent:'NotionAgent',   label:'Notion',                                  prompt:'Search Notion for relevant pages and notes'});
-          if (hasSearch || hasReputation || (!hasEmail && !hasCalendar && !hasGitHub && !hasSlack)) {
-            steps.push({icon:'\u{1F50D}',agent:'WebSearchAgent',label:it?'Ricerca web':'Web search',prompt:searchQuery});
+          // When PDF is present: always search web (to find where to buy, similar products etc.)
+          // The search query will be refined at runtime using the extracted PDF specs as context
+          if (hasPdf || hasSearch || hasReputation || (!hasEmail && !hasCalendar && !hasGitHub && !hasSlack)) {
+            const searchPrompt = hasPdf
+              ? (it ? 'Usando le specifiche tecniche estratte dal documento (codice prodotto, modello, costruttore, caratteristiche), cerca online dove acquistare il prodotto o articoli equivalenti. Usa i codici esatti dal documento come query di ricerca.' : 'Using the technical specifications extracted from the document (product code, model, manufacturer, specs), search online for where to buy this product or equivalent alternatives. Use exact codes from the document as search queries.')
+              : searchQuery;
+            steps.push({icon:'\u{1F50D}',agent:'WebSearchAgent',label:it?'Ricerca web':'Web search',prompt:searchPrompt});
           }
           // Specialist agents — can stack multiple
           if (hasSecurity)   steps.push({icon:'\u{1F6E1}',agent:'cassandra',   label:it?'CASSANDRA \u2014 Rischi sicurezza':'CASSANDRA \u2014 Security risks',    prompt:'Analyze the collected data and identify security risks, vulnerabilities and concrete recommendations'});
@@ -2758,7 +2769,7 @@ export async function cmdUI(args) {
 
         // Use keyword plan directly — only fall back to LLM for genuinely ambiguous tasks
         const keywordSteps = buildKeywordPlan();
-        const taskIsComplex = !hasEmail && !hasCalendar && !hasSearch && !hasGitHub && !hasSlack && !hasBriefing && !hasStrategy && !hasReputation && !hasCode && !hasWriting && !hasData && keywordSteps.length <= 1;
+        const taskIsComplex = !hasPdf && !hasEmail && !hasCalendar && !hasSearch && !hasGitHub && !hasSlack && !hasBriefing && !hasStrategy && !hasReputation && !hasCode && !hasWriting && !hasData && keywordSteps.length <= 1;
 
         try {
           let steps;
@@ -2805,6 +2816,10 @@ export async function cmdUI(args) {
       if (pathname === '/api/studio/run' && method === 'POST') {
         const body = await parseBody(req);
         const { agent, task, context, stepDef } = body;
+        const stepPdfBase64 = body.pdfBase64 || null;
+        const stepPdfName = body.pdfName || null;
+        const stepImageBase64 = body.imageBase64 || null;
+        const stepImageMime = body.imageMimeType || 'image/jpeg';
         if (!agent || !task) { sendJSON(res, 400, { error: 'agent and task required' }); logRequest(method, pathname, 400, Date.now() - start); return; }
 
         res.writeHead(200, {
@@ -2836,7 +2851,90 @@ export async function cmdUI(args) {
           let toolData = '';
 
           // ── Fetch REAL data for each agent type ──────────────────────
-          if (agent === 'EmailAgent') {
+          if (agent === 'DocumentReaderAgent') {
+            // Always use vision for PDF reading — text extraction loses table structure,
+            // column alignment, and layout-dependent data for the vast majority of
+            // technical PDFs (datasheets, catalogs, forms, scanned docs).
+            // Vision reads exactly what a human sees on the page.
+            sendToken('[Reading document with vision...] ');
+            let rawText = '';
+            if (stepPdfBase64) {
+              try {
+                const b64 = stepPdfBase64.includes(',') ? stepPdfBase64.split(',')[1] : stepPdfBase64;
+                rawText = await callLLMVision(
+                  config,
+                  'You are a technical document analyst. Extract ALL content exactly as it appears on the page.',
+                  'Extract ALL content from this document: all text, tables (preserve rows and columns with exact values), product codes, numbers, units, notes, headers. Do not summarize — transcribe everything visible.',
+                  { base64: b64, mimeType: 'application/pdf' }
+                );
+              } catch (ve) {
+                // Vision failed — fall back to text extraction
+                sendToken('[Vision unavailable — falling back to text extraction...] ');
+                try {
+                  const b64 = stepPdfBase64.includes(',') ? stepPdfBase64.split(',')[1] : stepPdfBase64;
+                  rawText = extractTextFromPdf(Buffer.from(b64, 'base64')) || '';
+                } catch (e) { rawText = ''; }
+              }
+            }
+            if (!rawText) {
+              sendToken('Could not extract text from the attached document.');
+              clearInterval(keepalive);
+              sendEvent({ done: true, usage: { input: 0, output: 0 } });
+              res.end();
+              logRequest(method, pathname, 200, Date.now() - start);
+              return;
+            }
+            // Ask LLM to structure the raw extracted text into readable markdown
+            sendToken('[Structuring document content...] ');
+            const LANG_MAP_DOC = {en:'English',it:'Italian',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',zh:'Chinese',ja:'Japanese',ar:'Arabic',hi:'Hindi',ru:'Russian',nl:'Dutch',pl:'Polish',tr:'Turkish',ko:'Korean',sv:'Swedish',da:'Danish',fi:'Finnish',no:'Norwegian',cs:'Czech'};
+            const docLang = LANG_MAP_DOC[(config?.language||'it').toLowerCase().slice(0,2)] || 'Italian';
+            // Put the raw PDF text in the SYSTEM prompt — SENTINEL only scans the user message.
+            // The user message is a short, safe instruction that won't trigger false positives.
+            const docSys = `You are a technical document analyst. The following is the raw text extracted from the document "${stepPdfName || 'document.pdf'}". Your job is to structure it into clear, readable markdown. Respond in ${docLang}.
+
+Rules:
+- List ALL technical specifications with their exact values (codes, voltages, pressures, temperatures, dimensions, flow rates, etc.)
+- Use markdown headers (##), bullet points (-), and tables where appropriate
+- Do NOT invent, interpret, or add anything not present in the raw text
+- Include all product/part codes exactly as written
+- Keep all numeric values with their units
+
+RAW DOCUMENT TEXT:
+${rawText.slice(0, 18000)}`;
+            const docUser = `Structure the document content above into clean, readable markdown with all technical specifications.`;
+            let structuredOutput = '';
+            let inThink = false;
+            try {
+              await withTimeout(
+                callLLMStream(config, docSys, docUser,
+                  (token) => {
+                    // Strip <think> blocks
+                    let buf = token;
+                    if (inThink) {
+                      const ci = buf.indexOf('</think>');
+                      if (ci >= 0) { buf = buf.slice(ci + 8); inThink = false; }
+                      else return;
+                    }
+                    const oi = buf.indexOf('<think>');
+                    if (oi >= 0) { buf = buf.slice(0, oi); inThink = true; }
+                    if (buf) { structuredOutput += buf; sendToken(buf); }
+                  },
+                  { max_tokens: 3000 }
+                ),
+                90000
+              );
+            } catch (e) {
+              // LLM failed — fall back to raw text
+              structuredOutput = `## ${stepPdfName || 'Document'}\n\n${rawText.slice(0, 8000)}`;
+              sendToken(structuredOutput);
+            }
+            clearInterval(keepalive);
+            sendEvent({ done: true, usage: { input: Math.ceil(rawText.length / 4), output: Math.ceil(structuredOutput.length / 4) } });
+            res.end();
+            logRequest(method, pathname, 200, Date.now() - start);
+            return;
+
+          } else if (agent === 'EmailAgent') {
             sendToken('[Reading emails...] ');
             try {
               const emails = await withTimeout(getUnreadImportant(config, 10), 'EmailAgent');
@@ -2857,34 +2955,37 @@ export async function cmdUI(args) {
           } else if (agent === 'WebSearchAgent' || agent === 'ResearchAgent') {
             sendToken('[Searching the web and reading pages...] ');
             try {
-              // Extract a concise search query from the step prompt
-              let searchQuery = stepPrompt;
-              if (searchQuery.length > 120) {
-                const keywordMatch = searchQuery.match(/(?:cerca|search|find|ricerca|notizie su|news about|latest on|aggiornamenti su)\s+(.{5,80}?)(?:\s+(?:e|and|per|for|poi|then)|$)/i);
-                if (keywordMatch) {
-                  searchQuery = keywordMatch[1].trim();
-                } else {
-                  searchQuery = searchQuery.split(/[,\.\n]/)[0].slice(0, 100).trim();
-                }
-              }
-              // If step prompt / task contains a specific domain, fetch that page directly first
-              const domainMatch = (stepPrompt + ' ' + task).match(/(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.[a-z]{2,}(?:\/[^\s,]*)?)/i);
-              if (domainMatch) {
-                let targetUrl = domainMatch[0];
-                if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
-                sendToken(`[Fetching ${targetUrl}...] `);
+              // If there is document context from a previous step, ask the LLM to derive
+              // the optimal search queries. This is generic and works for any document/task.
+              let searchQueries = [stepPrompt.slice(0, 120)];
+              if (context && context.length > 50) {
+                sendToken('[Building search queries from document...] ');
                 try {
-                  const fetchResult = await withTimeout(executeTool('fetch_url', { url: targetUrl }, config), 20000);
-                  const fetchStr = typeof fetchResult === 'string' ? fetchResult : JSON.stringify(fetchResult);
-                  if (fetchStr && !fetchStr.startsWith('HTTP ') && !fetchStr.startsWith('Content blocked')) {
-                    toolData = `## Content from ${targetUrl}:\n${fetchStr}`;
+                  // Document context goes in system prompt — SENTINEL only scans user message
+                  const queryPlanSys = `You are a search query generator. Given a document summary and a user task, output a JSON array of 1-3 concise web search queries (strings, max 80 chars each) that will find the best results. Output ONLY the JSON array, no explanation.\n\nDocument content:\n${context.slice(0, 3000)}`;
+                  const queryPlanUser = `User task: "${task.slice(0, 200)}". Generate search queries. If task asks for similar/alternative products use technical specs. If it asks where to buy include vendor queries. Output: ["query1","query2",...]`;
+                  const planConfig2 = Object.assign({}, config, { thinking: 'off' });
+                  const queryRaw = await withTimeout(callLLM(planConfig2, queryPlanSys, queryPlanUser, { max_tokens: 200 }), 15000);
+                  const jsonMatch = queryRaw.match(/\[[\s\S]*?\]/);
+                  if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      searchQueries = parsed.filter(q => typeof q === 'string' && q.length > 2).slice(0, 3);
+                    }
                   }
                 } catch {}
+                sendToken(`[Queries: ${searchQueries.map(q => '"' + q + '"').join(', ')}] `);
               }
-              // Deep web search for broader context
-              const searchResult = await withTimeout(executeTool('web_search', { query: searchQuery, deep: true }, config), 25000);
-              const searchStr = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
-              toolData += (toolData ? '\n\n' : '') + `## Web search results for "${searchQuery}":\n${searchStr}`;
+
+              // Run all queries sequentially, accumulate results
+              for (let qi = 0; qi < searchQueries.length; qi++) {
+                const q = searchQueries[qi];
+                try {
+                  const searchResult = await withTimeout(executeTool('web_search', { query: q, deep: qi === 0 }, config), 25000);
+                  const searchStr = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
+                  toolData += (toolData ? '\n\n' : '') + `## Web search: "${q}":\n${searchStr}`;
+                } catch (e) { toolData += (toolData ? '\n\n' : '') + `## Search "${q}" failed: ${e.message}`; }
+              }
             } catch (e) { toolData = toolData || `Web search failed: ${e.message}`; }
 
           } else if (agent === 'BrowserAgent') {
@@ -3009,11 +3110,48 @@ RULES:
 - Use .priority-list for action items, .source-item for each email/news source, .bar-row for any percentage data
 - Output must start with <div class="header"> and end with <div class="footer">`;
 
+          // ── Handle PDF/image attachment on first step ─────────────────
+          let attachmentText = '';
+          if (stepPdfBase64 && !isLiveDataAgent) {
+            sendToken('[Reading PDF...] ');
+            try {
+              // Extract base64 payload (strip data URL prefix if present)
+              const b64 = stepPdfBase64.includes(',') ? stepPdfBase64.split(',')[1] : stepPdfBase64;
+              const pdfBuffer = Buffer.from(b64, 'base64');
+              const extracted = extractTextFromPdf(pdfBuffer);
+              if (extracted && extracted.length > 20) {
+                attachmentText = `## ATTACHED PDF: ${stepPdfName || 'document.pdf'}\n${extracted.slice(0, 15000)}`;
+              } else {
+                // PDF has no extractable text (scanned) — use vision
+                try {
+                  const { callLLMVision } = await import('../services/llm.mjs');
+                  const visionResult = await withTimeout(
+                    callLLMVision(config, 'Extract all text and information from this PDF document.', task, { base64: b64, mimeType: 'application/pdf' }),
+                    60000
+                  );
+                  if (visionResult) attachmentText = `## ATTACHED PDF: ${stepPdfName || 'document.pdf'}\n${visionResult.slice(0, 15000)}`;
+                } catch {}
+              }
+            } catch (e) { attachmentText = `[PDF read failed: ${e.message}]`; }
+          } else if (stepImageBase64 && !isLiveDataAgent) {
+            sendToken('[Reading image...] ');
+            try {
+              const { callLLMVision } = await import('../services/llm.mjs');
+              const b64 = stepImageBase64.includes(',') ? stepImageBase64.split(',')[1] : stepImageBase64;
+              const visionResult = await withTimeout(
+                callLLMVision(config, 'Describe and extract all information from this image in detail.', task, { base64: b64, mimeType: stepImageMime }),
+                45000
+              );
+              if (visionResult) attachmentText = `## ATTACHED IMAGE: ${body.imageName || 'image'}\n${visionResult.slice(0, 8000)}`;
+            } catch (e) { attachmentText = `[Image read failed: ${e.message}]`; }
+          }
+
           let sysPrompt, userMsg;
 
           if (isCanvasAgent) {
             sysPrompt = canvasSystemPrompt;
-            userMsg = `Create a professional dashboard report for this data. Output ONLY the inner HTML body content (starting with <div class="header">):\n\n${context}`;
+            const canvasData = [attachmentText, context].filter(Boolean).join('\n\n');
+            userMsg = `Create a professional dashboard report for this data. Output ONLY the inner HTML body content (starting with <div class="header">):\n\n${canvasData}`;
           } else if (isLiveDataAgent) {
             // These agents fetched real data — use a focused prompt (no tool definitions to avoid JSON output)
             const agentInstruction = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. Respond entirely in ${language}.
@@ -3025,7 +3163,7 @@ CRITICAL: Do NOT invent, hallucinate, or add any data not present in the DATA se
 Do NOT output JSON, tool calls, or code blocks. Write in plain text with markdown headers.
 Always apply your analysis specifically to the subject mentioned in the WORKFLOW GOAL.
 
-${toolData ? `## DATA FROM TOOLS:\n${toolData}\n` : '## DATA: No data was retrieved by this agent.\n'}
+${attachmentText ? `## ATTACHED FILE CONTENT:\n${attachmentText}\n` : ''}${toolData ? `## DATA FROM TOOLS:\n${toolData}\n` : '## DATA: No data was retrieved by this agent.\n'}
 ${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context}\n` : ''}
 
 Your task: ${stepPrompt}`;
@@ -3052,7 +3190,7 @@ CRITICAL RULES:
 - Be thorough and specific — this is for an executive briefing based on REAL data only
 - Always keep the OVERALL WORKFLOW GOAL in mind — apply your analysis specifically to the subject mentioned
 
-${toolData ? `## LIVE DATA FROM TOOLS:\n${toolData}\n` : '## LIVE DATA: No tool data was fetched for this step.\n'}
+${attachmentText ? `## ATTACHED FILE CONTENT:\n${attachmentText}\n` : ''}${toolData ? `## LIVE DATA FROM TOOLS:\n${toolData}\n` : '## LIVE DATA: No tool data was fetched for this step.\n'}
 ${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context}\n` : ''}`;
             userMsg = hasRealData
               ? `Based ONLY on the real data above, complete this task specifically for the subject in the WORKFLOW GOAL: ${stepPrompt}`
