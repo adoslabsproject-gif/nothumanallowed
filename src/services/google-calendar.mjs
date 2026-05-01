@@ -37,7 +37,10 @@ async function calFetch(config, urlPath, options = {}) {
     throw new Error(`Calendar API ${res.status}: ${err}`);
   }
 
-  return res.json();
+  if (res.status === 204 || res.headers.get('content-length') === '0') return {};
+  const text = await res.text();
+  if (!text) return {};
+  try { return JSON.parse(text); } catch { return {}; }
 }
 
 /**
