@@ -27,7 +27,7 @@ import {
 } from '../services/task-store.mjs';
 import { runPlanningPipeline } from '../services/ops-pipeline.mjs';
 import { AGENTS, AGENTS_DIR, NHA_DIR, VERSION } from '../constants.mjs';
-import { getHTML } from '../services/web-ui.mjs';
+import { getHTML, getJS } from '../services/web-ui.mjs';
 import { loadChatHistory, saveChatHistory, extractMemory, buildMemoryContext } from '../services/memory.mjs';
 import {
   createConversation,
@@ -244,6 +244,7 @@ export async function cmdUI(args) {
 
   const config = loadConfig();
   const htmlPage = getHTML(port);
+  const jsBundle = getJS();
 
   // Migrate old chat history to multi-conversation format
   migrateOldHistory();
@@ -281,6 +282,17 @@ export async function cmdUI(args) {
       // ── Serve HTML page ─────────────────────────────────────────────
       if (method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
         sendHTML(res, htmlPage);
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── JS bundle ───────────────────────────────────────────────────
+      if (method === 'GET' && pathname.startsWith('/nha-ui.js')) {
+        res.writeHead(200, {
+          'Content-Type': 'application/javascript; charset=utf-8',
+          'Cache-Control': 'public, max-age=3600',
+        });
+        res.end(jsBundle);
         logRequest(method, pathname, 200, Date.now() - start);
         return;
       }
@@ -335,40 +347,15 @@ export async function cmdUI(args) {
 
       // POST /api/google/auth — trigger Google OAuth flow from web UI
       if (method === 'POST' && pathname === '/api/google/auth') {
-        // Check if Google credentials are configured first
-        const clientId = config.google?.clientId || '';
-        const clientSecret = config.google?.clientSecret || '';
-        if (!clientId) {
-          sendJSON(res, 200, {
-            ok: false,
-            needsSetup: true,
-            message: 'Google OAuth not configured yet.\n\n' +
-              'To connect Google services, you need OAuth credentials:\n\n' +
-              '1. Go to https://console.cloud.google.com/apis/credentials\n' +
-              '2. Create an OAuth 2.0 Client ID (Desktop app type)\n' +
-              '3. Enable Gmail API, Calendar API, Drive API, People API, Tasks API\n' +
-              '4. Add authorized redirect URIs: http://127.0.0.1:19847/callback through http://127.0.0.1:19851/callback\n' +
-              '5. In the NHA terminal, run:\n' +
-              '   nha config set google-client-id YOUR_CLIENT_ID\n' +
-              '   nha config set google-client-secret YOUR_CLIENT_SECRET\n' +
-              '6. Then click "Connect Google" again.',
-          });
-          logRequest(method, pathname, 200, Date.now() - start);
-          return;
-        }
         try {
           const { runAuthFlow } = await import('../services/google-oauth.mjs');
-          const success = await runAuthFlow(config);
-          if (success) {
-            config._googleConnected = true;
-            const freshConfig = await loadConfig();
-            Object.assign(config, freshConfig);
-            sendJSON(res, 200, { ok: true, message: 'Google connected successfully! You can now use email, calendar, contacts, and Drive.' });
-          } else {
-            sendJSON(res, 200, { ok: false, message: 'Google OAuth failed. The browser window should have opened at accounts.google.com. If it didn\'t, try running "nha google" from the terminal.' });
-          }
+          // Run auth flow in background — opens browser
+          runAuthFlow(config).then(success => {
+            if (success) config._googleConnected = true;
+          }).catch(() => {});
+          sendJSON(res, 200, { ok: true, message: 'OAuth flow started. Check the browser window that opened.' });
         } catch (e) {
-          sendJSON(res, 500, { error: `Google OAuth error: ${e.message}. Try running "nha google" from the terminal.` });
+          sendJSON(res, 500, { error: e.message });
         }
         logRequest(method, pathname, 200, Date.now() - start);
         return;
@@ -631,14 +618,6 @@ export async function cmdUI(args) {
       // GET /api/config — read config values for settings UI
       if (method === 'GET' && pathname === '/api/config') {
         // Return non-sensitive config for the settings form
-        // Sanitize email accounts — don't expose passwords to frontend
-        const safeAccounts = (config.emailAccounts || []).map(a => ({
-          label: a.label,
-          address: a.address,
-          isDefault: a.isDefault,
-          hasImap: !!(a.imap?.host),
-          hasSmtp: !!(a.smtp?.host),
-        }));
         sendJSON(res, 200, {
           profile: config.profile || {},
           provider: config.llm?.provider || '',
@@ -649,8 +628,6 @@ export async function cmdUI(args) {
           meetingAlert: config.ops?.meetingAlertMinutes || 30,
           hasTelegram: !!config.responder?.telegram?.token,
           hasDiscord: !!config.responder?.discord?.token,
-          hasGoogle: !!config._googleConnected,
-          emailAccounts: safeAccounts,
         });
         logRequest(method, pathname, 200, Date.now() - start);
         return;
@@ -1270,7 +1247,7 @@ export async function cmdUI(args) {
           }
         }
 
-        if (!config.llm.apiKey && config.llm.provider !== 'nha') {
+        if (!config.llm.provider || (!config.llm.apiKey && config.llm.provider !== 'nha')) {
           config.llm.provider = 'nha'; // Auto-fallback to free tier
         }
 
@@ -1292,51 +1269,18 @@ export async function cmdUI(args) {
           if (sLines.length > 0) parts.push(`[CONTEXT — ${sLines.length} earlier exchanges]\n${sLines.join('\n')}\n[END CONTEXT]`);
         }
         for (const turn of requestHistory.slice(-RECENT)) {
-          // Use llmContent (file context) when available, otherwise display content
-          const turnContent = turn.llmContent || turn.content;
-          parts.push(`${turn.role === 'user' ? '[User]' : '[Assistant]'} ${turnContent.slice(0, 4000)}`);
+          parts.push(`${turn.role === 'user' ? '[User]' : '[Assistant]'} ${turn.content.slice(0, 2000)}`);
         }
         parts.push(`[User] ${body.message}`);
         let userMessage = parts.join('\n\n');
 
-        // Inject episodic memory + cross-conversation memory into the system prompt
+        // Inject episodic memory context into the system prompt
         const basePrompt = effectiveSystemPrompt || chatSystemPrompt;
         let enrichedSystemPrompt = basePrompt;
         try {
           const memCtx = buildMemoryContext('chat', body.message);
           if (memCtx) enrichedSystemPrompt = basePrompt + memCtx;
         } catch { /* memory unavailable */ }
-
-        // Cross-conversation memory — summaries of recent conversations
-        try {
-          const allConvs = listConversations();
-          if (allConvs.length > 1) {
-            const summaries = [];
-            let totalChars = 0;
-            for (const c of allConvs) {
-              if (c.id === (body.conversationId || activeConvId)) continue;
-              if (summaries.length >= 8 || totalChars > 2000) break;
-              if (!c.messages || c.messages.length === 0) continue;
-              const firstUser = c.messages.find(m => m.role === 'user');
-              const lastAssistant = [...c.messages].reverse().find(m => m.role === 'assistant');
-              if (!firstUser) continue;
-              const date = c.updatedAt?.split('T')[0] || '?';
-              const title = c.title !== 'New Chat' ? c.title : firstUser.content.slice(0, 60);
-              let s = `• [${date}] "${title}" (${c.messages.length} msgs)`;
-              s += `\n  User: ${firstUser.content.replace(/\s+/g, ' ').slice(0, 120)}`;
-              if (lastAssistant) {
-                const preview = lastAssistant.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/\s+/g, ' ').slice(0, 150);
-                s += `\n  Result: ${preview}`;
-              }
-              if (totalChars + s.length > 2000) break;
-              summaries.push(s);
-              totalChars += s.length;
-            }
-            if (summaries.length > 0) {
-              enrichedSystemPrompt += `\n\n--- CONVERSATION MEMORY ---\nYou remember these past conversations:\n\n${summaries.join('\n\n')}\n\nUse this to maintain continuity. Never say "I don't have access to previous conversations".\n--- END MEMORY ---`;
-            }
-          }
-        } catch { /* non-critical */ }
 
         // Handle image attachment — vision API
         if (body.imageBase64 && body.imageMimeType) {
@@ -1430,33 +1374,13 @@ export async function cmdUI(args) {
             const pdfPrompt = body.message || `Read and analyze this PDF document "${body.pdfName}". Extract all text content, summarize key information.`;
             let pdfResponse = '';
 
-            // Step 1: Extract text — try server (pdftotext) first, then local fallback
-            let pdfText = '';
-            try {
-              const extractRes = await fetch('https://nothumanallowed.com/api/v1/tools/extract-pdf', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-NHA-Client': 'desktop' },
-                body: JSON.stringify({ base64: body.pdfBase64 }),
-                signal: AbortSignal.timeout(30000),
-              });
-              if (extractRes.ok) {
-                const d = await extractRes.json();
-                pdfText = d.text || '';
-              }
-            } catch { /* server unreachable */ }
-            // Local fallback if server extraction failed
-            if (pdfText.length < 20) {
-              const pdfBuffer = Buffer.from(body.pdfBase64, 'base64');
-              pdfText = extractTextFromPdf(pdfBuffer);
-            }
-
-            // Save extracted text as llmContent so it persists across turns
-            const pdfLlmContent = pdfText.length > 20
-              ? `[PDF: ${body.pdfName}]\n\n${pdfText.slice(0, 12000)}\n\n---\n\nUser question: ${pdfPrompt}`
-              : '';
-
             if (provider === 'nha') {
+              // NHA Free tier: extract text from PDF, then send to Liara chat
+              // Decode PDF base64 and extract text content
+              const pdfBuffer = Buffer.from(body.pdfBase64, 'base64');
+              const pdfText = extractTextFromPdf(pdfBuffer);
               if (!pdfText || pdfText.length < 10) {
+                // Fallback: send first page as image to vision model
                 const r = await fetch('https://nothumanallowed.com/api/v1/liara/vision', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -1469,6 +1393,7 @@ export async function cmdUI(args) {
                   pdfResponse = 'Could not read this PDF. Try a text-based PDF or use Claude/Gemini for scanned documents.';
                 }
               } else {
+                // Send extracted text to Liara chat
                 const truncatedText = pdfText.slice(0, 12000);
                 const r = await fetch('https://nothumanallowed.com/api/v1/liara/chat', {
                   method: 'POST',
@@ -1526,8 +1451,7 @@ export async function cmdUI(args) {
               pdfResponse = `PDF reading requires Anthropic (Claude) or Gemini. Your provider "${provider}" does not support native PDF documents.`;
             }
 
-            // Return llmContent so frontend can persist the PDF text across turns
-            sendJSON(res, 200, { response: pdfResponse, llmContent: pdfLlmContent || undefined });
+            sendJSON(res, 200, { response: pdfResponse });
             logRequest(method, pathname, 200, Date.now() - start);
             return;
           } catch (e) {
@@ -1537,14 +1461,12 @@ export async function cmdUI(args) {
           }
         }
 
-        // Handle text file attachment — include file content as llmContent for persistence
-        let fileLlmContent = '';
+        // Handle text file attachment
         if (body.fileContent && body.fileName) {
           const filePrompt = body.message
             ? `User asks about file "${body.fileName}": ${body.message}\n\nFile content:\n${body.fileContent.slice(0, 8000)}`
             : `Analyze this file "${body.fileName}":\n\n${body.fileContent.slice(0, 8000)}`;
           userMessage = filePrompt;
-          fileLlmContent = filePrompt;
         }
 
         try {
@@ -1563,7 +1485,11 @@ export async function cmdUI(args) {
                 screenshotData = result;
                 toolResults.push({ action, result: 'Screenshot captured. Analyzing with vision...' });
               } else {
-                toolResults.push({ action, result: typeof result === 'object' ? JSON.stringify(result) : String(result) });
+                let rStr = typeof result === 'object' ? JSON.stringify(result) : String(result);
+                if ((action === 'web_search' || action === 'fetch_url') && rStr.includes('<')) {
+                  rStr = rStr.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s{3,}/g,'\n').replace(/[^\x00-\x7F]/g,'').trim().slice(0,6000);
+                }
+                toolResults.push({ action, result: rStr });
               }
             } catch (e) {
               toolResults.push({ action, result: `Error: ${e.message}` });
@@ -1641,7 +1567,7 @@ export async function cmdUI(args) {
           } catch { /* non-critical */ }
           try { extractMemory('chat', body.message, fullResponse); } catch { /* non-critical */ }
 
-          sendJSON(res, 200, { response: fullResponse, toolResults, actions, ...(fileLlmContent ? { llmContent: fileLlmContent } : {}) });
+          sendJSON(res, 200, { response: fullResponse, toolResults, actions });
         } catch (e) {
           sendJSON(res, 200, { response: null, error: e.message });
         }
@@ -1783,7 +1709,7 @@ export async function cmdUI(args) {
       if (method === 'POST' && pathname === '/api/chat/stream') {
         const body = await parseBody(req);
         if (!body.message) { sendJSON(res, 400, { error: 'message required' }); logRequest(method, pathname, 400, Date.now() - start); return; }
-        if (!config.llm.apiKey && config.llm.provider !== 'nha') { config.llm.provider = 'nha'; }
+        if (!config.llm.provider || (!config.llm.apiKey && config.llm.provider !== 'nha')) { config.llm.provider = 'nha'; }
 
         const msg = body.message.trim();
         const convId = body.conversationId;
@@ -1989,7 +1915,18 @@ export async function cmdUI(args) {
                 continue;
               }
 
-              const resultStr = typeof result === 'object' ? JSON.stringify(result) : String(result);
+              let resultStr = typeof result === 'object' ? JSON.stringify(result) : String(result);
+              // For web_search/fetch_url: strip raw HTML/CSS so the LLM gets clean text
+              if ((action === 'web_search' || action === 'fetch_url') && resultStr.includes('<')) {
+                resultStr = resultStr
+                  .replace(/<style[\s\S]*?<\/style>/gi, '')
+                  .replace(/<script[\s\S]*?<\/script>/gi, '')
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/\s{3,}/g, '\n')
+                  .replace(/[^\x00-\x7F]/g, '') // strip non-ASCII that causes encoding issues
+                  .trim()
+                  .slice(0, 6000);
+              }
               toolResults.push({ action, result: resultStr });
               sendSSE('tool', { action, status: 'done', result: typeof resultStr === 'string' ? resultStr.slice(0, 500) : '' });
 
@@ -2280,7 +2217,7 @@ export async function cmdUI(args) {
           return;
         }
 
-        if (!config.llm.apiKey && config.llm.provider !== 'nha') {
+        if (!config.llm.provider || (!config.llm.apiKey && config.llm.provider !== 'nha')) {
           // Auto-fallback to NHA free tier if no API key is configured
           config.llm.provider = 'nha';
         }
@@ -2347,6 +2284,107 @@ export async function cmdUI(args) {
         } catch (e) {
           sendJSON(res, 200, { response: null, error: e.message });
         }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/ask/stream — streaming SSE agent call
+      if (method === 'POST' && pathname === '/api/ask/stream') {
+        const body = await parseBody(req);
+        if (!body.agent || !body.prompt) {
+          sendJSON(res, 400, { error: 'agent and prompt required' });
+          logRequest(method, pathname, 400, Date.now() - start);
+          return;
+        }
+
+        // Ensure provider is set — default to 'nha' free tier if no apiKey
+        if (!config.llm.provider || (!config.llm.apiKey && config.llm.provider !== 'nha')) {
+          config.llm.provider = 'nha';
+        }
+
+        const agentFileStream = path.join(AGENTS_DIR, `${body.agent}.mjs`);
+        if (!AGENTS.includes(body.agent) && !fs.existsSync(agentFileStream)) {
+          sendJSON(res, 400, { error: `Unknown agent: ${body.agent}` });
+          logRequest(method, pathname, 400, Date.now() - start);
+          return;
+        }
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        });
+
+        const sendEv = (obj) => { try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch {} };
+
+        try {
+          let context = '';
+          try {
+            const [emails, events] = await Promise.all([
+              getUnreadImportant(config, 15).catch(() => []),
+              getTodayEvents(config).catch(() => []),
+            ]);
+            const tasks = getTasks();
+            if (emails.length > 0) {
+              context += '\n\n[USER EMAIL CONTEXT]\n';
+              emails.slice(0, 10).forEach((e, i) => {
+                context += `${i + 1}. From: ${e.from} | Subject: ${e.subject}\n   ${e.snippet.slice(0, 150)}\n`;
+              });
+            }
+            if (events.length > 0) {
+              context += '\n\n[USER CALENDAR — today]\n';
+              events.forEach(e => {
+                context += `${e.isAllDay ? 'All day' : e.start + ' - ' + e.end}: ${e.summary}\n`;
+              });
+            }
+            if (tasks.length > 0) {
+              context += '\n\n[USER TASKS]\n';
+              tasks.forEach(t => { context += `#${t.id} [${t.priority}] ${t.description}\n`; });
+            }
+          } catch { /* proceed without context */ }
+
+          let fileContext = '';
+          if (body.fileContent && body.fileName) {
+            fileContext = '\n\n--- Attached: ' + body.fileName + ' ---\n' + String(body.fileContent).slice(0, 100000);
+          }
+
+          const enrichedPrompt = body.prompt + fileContext + (context
+            ? '\n\nIMPORTANT CONTEXT: The data below is from the user\'s OWN accounts.\n' + context : '');
+
+          if (!fs.existsSync(agentFileStream)) {
+            sendEv({ error: `Agent "${body.agent}" not downloaded. Run: nha update` });
+            sendEv({ done: true });
+            res.end();
+            logRequest(method, pathname, 200, Date.now() - start);
+            return;
+          }
+          const src = fs.readFileSync(agentFileStream, 'utf-8');
+          const { systemPrompt } = parseAgentFile(src, body.agent);
+          let enrichedSystem = systemPrompt;
+          try {
+            const { buildMemoryContext } = await import('../services/memory.mjs');
+            const mc = buildMemoryContext(body.agent, enrichedPrompt);
+            if (mc) enrichedSystem = systemPrompt + mc;
+          } catch { /* proceed */ }
+
+          let fullResponse = '';
+          await callLLMStream(config, enrichedSystem, enrichedPrompt, (token) => {
+            fullResponse += token;
+            sendEv({ token });
+          });
+          sendEv({ done: true });
+
+          try {
+            const { extractMemory } = await import('../services/memory.mjs');
+            extractMemory(body.agent, enrichedPrompt, fullResponse);
+          } catch { /* non-critical */ }
+
+        } catch (e) {
+          sendEv({ error: e.message });
+        }
+
+        res.end();
         logRequest(method, pathname, 200, Date.now() - start);
         return;
       }
@@ -2494,6 +2532,342 @@ export async function cmdUI(args) {
           sendJSON(res, 200, { birthdays: upcoming });
         } catch (e) {
           sendJSON(res, 200, { birthdays: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── Studio: plan workflow ────────────────────────────────────────
+      if (pathname === '/api/studio/plan' && method === 'POST') {
+        const body = await parseBody(req);
+        const task = (body.task || '').trim();
+        if (!task) { sendJSON(res, 400, { error: 'task required' }); logRequest(method, pathname, 400, Date.now() - start); return; }
+
+        const planPrompt = `You are a workflow planner for NHA Studio. The user wants to accomplish this task: "${task}"
+
+Design a sequential workflow of 2-5 steps. RULES:
+- Use tool-agents (WebSearchAgent, EmailAgent, CalendarAgent, GitHubAgent, NotionAgent, SlackAgent) FIRST when real live data is needed
+- Use specialist agents (SABER, ATLAS, JARVIS, etc.) for deep domain analysis — they have rich expert system prompts
+- Use CanvasAgent as the LAST step ONLY when a visual HTML report is requested
+- The "prompt" field must be a plain language instruction — never JSON or code
+- Each agent receives the previous step's output as context automatically
+- Pick the most relevant agents for the task — don't use all of them
+
+TOOL AGENTS (fetch real live data):
+- WebSearchAgent: search the web for current information
+- EmailAgent: read user's real unread emails
+- CalendarAgent: read user's real calendar events for today
+- GitHubAgent: read user's GitHub notifications and issues
+- NotionAgent: search user's Notion workspace
+- SlackAgent: read user's Slack messages
+- WriterAgent: write, summarize, synthesize text (no live data)
+- SummaryAgent: condense and summarize content
+- DataAnalystAgent: analyze data, find patterns, generate insights
+- SecurityAgent: security audit, threat analysis
+- DevOpsAgent: infrastructure, deployment, CI/CD analysis
+- CanvasAgent: generate a beautiful HTML visual dashboard (LAST step only)
+
+SPECIALIST AGENTS (deep domain experts with rich system prompts):
+- SABER: security audits, OWASP, penetration testing, vulnerability analysis
+- ATLAS: infrastructure-as-code, Terraform, Kubernetes, cloud architecture
+- JARVIS: full-stack architecture, API design, system design, ADRs
+- VERITAS: fact-checking, evidence verification, claim validation
+- CASSANDRA: risk analysis, failure modes, worst-case scenarios
+- MERCURY: financial analysis, ROI, unit economics, market modeling
+- HERALD: news analysis, trend detection, executive briefings
+- ATHENA: tech evaluation, framework comparison, benchmarks
+- ORACLE: business intelligence, KPIs, OKRs, dashboards
+- NAVI: data exploration, statistical analysis, pattern detection
+- MUSE: creative brainstorming, ideation, naming, taglines
+- QUILL: short-form content, summaries, press releases
+- SCHEHERAZADE: long-form technical writing, documentation, tutorials
+- ECHO: content adaptation, cross-platform distribution
+- POLYGLOT: translation, localization, multilingual content
+- FORGE: CI/CD pipelines, GitHub Actions, Docker builds
+- FLUX: deployment strategies, blue/green, canary releases
+- SHOGUN: Kubernetes, Helm, container orchestration
+- PIPE: data pipelines, Airflow, dbt, ETL
+- MACRO: bulk operations, data migration, batch processing
+- SHELL: shell scripting, CLI tools, automation scripts
+- CONDUCTOR: workflow orchestration, task decomposition
+- CRON: scheduling, cron jobs, time-based automation
+- HERMES: webhooks, event-driven architecture, integrations
+- BABEL: API design, microservices, OpenAPI specs
+- CARTOGRAPHER: data mapping, schema inference, knowledge graphs
+- LOGOS: logical analysis, argument mapping, decision theory
+- EDI: A/B testing, statistical modeling, hypothesis testing
+- EPICURE: nutrition, recipes, meal planning
+- MURASAKI: creative writing, storytelling, narrative craft
+- LINK: community management, reputation systems
+- GLITCH: chaos engineering, resilience testing
+- TEMPEST: performance engineering, load testing
+- SAURON: observability, monitoring, alerting
+- PROMETHEUS: capability routing, task decomposition
+- ADE: agent design, system prompt engineering
+- ZERO: vulnerability scanning, dependency audit, secret detection
+
+Icon values must be actual emoji characters — never HTML entities.
+
+Respond with ONLY valid JSON, no markdown:
+{"steps":[{"icon":"🔍","agent":"WebSearchAgent","label":"Search AI news","prompt":"Search for the latest AI agent news"},{"icon":"🧠","agent":"ATHENA","label":"Tech analysis","prompt":"Analyze the search results and compare the key technologies mentioned"}]}`;
+
+        try {
+          const planRaw = await callLLM(config, 'You are a JSON workflow planner. Respond only with valid JSON.', planPrompt, { max_tokens: 800 });
+          let steps;
+          try {
+            const jsonMatch = planRaw.match(/\{[\s\S]*\}/);
+            const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : planRaw);
+            steps = parsed.steps;
+          } catch {
+            sendJSON(res, 500, { error: 'Failed to parse workflow plan' });
+            logRequest(method, pathname, 500, Date.now() - start);
+            return;
+          }
+          if (!Array.isArray(steps) || !steps.length) {
+            sendJSON(res, 500, { error: 'Empty workflow plan' });
+            logRequest(method, pathname, 500, Date.now() - start);
+            return;
+          }
+          sendJSON(res, 200, { steps });
+          logRequest(method, pathname, 200, Date.now() - start);
+        } catch (e) {
+          sendJSON(res, 500, { error: e.message });
+          logRequest(method, pathname, 500, Date.now() - start);
+        }
+        return;
+      }
+
+      // ── Studio: run single step (SSE streaming) ──────────────────────
+      if (pathname === '/api/studio/run' && method === 'POST') {
+        const body = await parseBody(req);
+        const { agent, task, context, stepDef } = body;
+        if (!agent || !task) { sendJSON(res, 400, { error: 'agent and task required' }); logRequest(method, pathname, 400, Date.now() - start); return; }
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        });
+
+        const sendEvent = (data) => {
+          try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
+        };
+        const sendToken = (t) => sendEvent({ token: t });
+
+        // Keepalive: send a comment every 5s so the connection doesn't time out during slow tool calls
+        const keepalive = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 5000);
+
+        // Timeout wrapper for tool calls — 25s max
+        const withTimeout = (promise, label) => Promise.race([
+          promise,
+          new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after 25s`)), 25000)),
+        ]);
+
+        try {
+          const stepPrompt = stepDef?.prompt || task;
+          let toolData = '';
+
+          // ── Fetch REAL data for each agent type ──────────────────────
+          if (agent === 'EmailAgent') {
+            sendToken('[Reading emails...] ');
+            try {
+              const emails = await withTimeout(getUnreadImportant(config, 10), 'EmailAgent');
+              toolData = emails && emails.length
+                ? emails.map(e => `From: ${e.from}\nSubject: ${e.subject}\nDate: ${e.date}\nSnippet: ${e.snippet}`).join('\n\n---\n\n')
+                : 'No unread emails found.';
+            } catch (e) { toolData = `Email read failed: ${e.message}`; }
+
+          } else if (agent === 'CalendarAgent') {
+            sendToken('[Reading calendar...] ');
+            try {
+              const events = await withTimeout(getTodayEvents(config), 'CalendarAgent');
+              toolData = events && events.length
+                ? events.map(e => `${e.summary || e.title} - ${e.start || ''} to ${e.end || ''}`).join('\n')
+                : 'No events found for today.';
+            } catch (e) { toolData = `Calendar read failed: ${e.message}`; }
+
+          } else if (agent === 'WebSearchAgent' || agent === 'ResearchAgent') {
+            sendToken('[Searching the web...] ');
+            try {
+              const searchResult = await withTimeout(executeTool('web_search', { query: stepPrompt }, config), 'WebSearch');
+              toolData = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
+            } catch (e) { toolData = `Web search failed: ${e.message}`; }
+
+          } else if (agent === 'BrowserAgent') {
+            const urlMatch = stepPrompt.match(/https?:\/\/[^\s"']+/);
+            if (urlMatch) {
+              sendToken(`[Fetching ${urlMatch[0]}...] `);
+              try {
+                const fetchResult = await withTimeout(executeTool('fetch_url', { url: urlMatch[0] }, config), 'BrowserAgent');
+                toolData = typeof fetchResult === 'string' ? fetchResult : JSON.stringify(fetchResult);
+              } catch (e) { toolData = `Fetch failed: ${e.message}`; }
+            } else {
+              sendToken('[Searching web...] ');
+              try {
+                const searchResult = await withTimeout(executeTool('web_search', { query: stepPrompt }, config), 'BrowserSearch');
+                toolData = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
+              } catch (e) { toolData = `Browser search failed: ${e.message}`; }
+            }
+
+          } else if (agent === 'GitHubAgent') {
+            sendToken('[Reading GitHub...] ');
+            try {
+              const gh = await import('../services/github.mjs');
+              const issues = await withTimeout(gh.listIssues(config, config.githubRepo || '', 10), 'GitHubAgent');
+              toolData = typeof issues === 'string' ? issues : JSON.stringify(issues);
+            } catch (e) { toolData = `GitHub read failed: ${e.message}`; }
+
+          } else if (agent === 'NotionAgent') {
+            sendToken('[Searching Notion...] ');
+            try {
+              const nt = await import('../services/notion.mjs');
+              const results = await withTimeout(nt.search(config, stepPrompt, 10), 'NotionAgent');
+              toolData = typeof results === 'string' ? results : JSON.stringify(results);
+            } catch (e) { toolData = `Notion search failed: ${e.message}`; }
+
+          } else if (agent === 'SlackAgent') {
+            sendToken('[Reading Slack...] ');
+            try {
+              const sl = await import('../services/slack.mjs');
+              const channels = await withTimeout(sl.listChannels(config, 10), 'SlackAgent');
+              toolData = typeof channels === 'string' ? channels : JSON.stringify(channels);
+            } catch (e) { toolData = `Slack read failed: ${e.message}`; }
+
+          } else if (agent === 'DriveAgent') {
+            sendToken('[Reading Drive...] ');
+            try {
+              const gd = await import('../services/google-drive.mjs');
+              const files = await withTimeout(gd.listFiles(config, '', 10), 'DriveAgent');
+              toolData = typeof files === 'string' ? files : JSON.stringify(files);
+            } catch (e) { toolData = `Drive read failed: ${e.message}`; }
+          }
+
+          // ── Build system prompt with real tool data ───────────────────
+          const isCanvasAgent = agent === 'CanvasAgent';
+          // Tool-data agents: fetch real live data and use buildSystemPrompt (tool calls allowed)
+          const isLiveDataAgent = ['CalendarAgent','EmailAgent','GitHubAgent','NotionAgent','SlackAgent','DriveAgent','BrowserAgent','WebSearchAgent','ResearchAgent'].includes(agent);
+
+          const canvasSystemPrompt = `You are an HTML report generator. Output a single complete HTML document. No preamble, no explanation.
+RULES:
+- First character of your response must be < (start of <!DOCTYPE html>)
+- Do NOT use markdown code blocks, JSON, or any wrapper
+- Use clean design: white background, Inter/system-ui font, #6366f1 accent color
+- Structure: gradient header, then card sections with the content
+- Make it complete and self-contained`;
+
+          let sysPrompt, userMsg;
+
+          if (isCanvasAgent) {
+            sysPrompt = canvasSystemPrompt;
+            userMsg = `Generate a beautiful HTML dashboard report for this content. Start immediately with <!DOCTYPE html>:\n\n${context.slice(0, 8000)}`;
+          } else if (isLiveDataAgent) {
+            // These agents fetched real data — use buildSystemPrompt so they can call tools too
+            const agentInstruction = `You are ${agent}, a specialist AI agent inside NHA Studio.\nYour task: ${stepPrompt}\n` +
+              (toolData ? `\n## DATA FROM TOOLS:\n${toolData.slice(0, 4000)}\n` : '') +
+              (context ? `\n## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 3000)}\n` : '') +
+              '\nWrite your analysis in plain text. Do NOT output JSON, tool calls, or code blocks. Summarize the data clearly.';
+            sysPrompt = buildSystemPrompt(agent, agentInstruction, config);
+            userMsg = toolData
+              ? `Summarize the data above for: ${stepPrompt}`
+              : context
+              ? `Based on the previous output, complete: ${stepPrompt}`
+              : stepPrompt;
+          } else {
+            // All other agents (WriterAgent, DataAnalystAgent, specialist agents, etc.)
+            // Use a focused prompt with NO TOOL_DEFINITIONS to prevent JSON/tool-call output
+            const today = new Date().toISOString().split('T')[0];
+            const language = config?.language || 'Italian';
+            sysPrompt = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. Respond in ${language}.
+
+CRITICAL RULES:
+- Do NOT output JSON, tool calls, function calls, or code blocks
+- Do NOT ask for more information — use only the data provided below
+- Write in plain prose, structured with headers and bullet points where appropriate
+- Be thorough and specific — this is for an executive briefing
+
+${toolData ? `## LIVE DATA:\n${toolData.slice(0, 4000)}\n` : ''}
+${context ? `## CONTEXT FROM PREVIOUS AGENTS:\n${context.slice(0, 5000)}\n` : ''}`;
+            userMsg = toolData
+              ? `Use the live data and context above to complete this task: ${stepPrompt}`
+              : context
+              ? `Using the context from previous steps, complete this task: ${stepPrompt}`
+              : stepPrompt;
+          }
+
+          // ── Stream LLM response ───────────────────────────────────────
+          let fullOutput = '';
+          sendToken(isCanvasAgent ? 'Generating visual report...' : '');
+          try {
+            await withTimeout(
+              callLLMStream(config, sysPrompt, userMsg,
+                (token) => { fullOutput += token; if (!isCanvasAgent) sendToken(token); },
+              ),
+              isCanvasAgent ? 60000 : 35000
+            );
+          } catch (e) {
+            if (!isCanvasAgent) sendToken(`[Error: ${e.message}]`);
+          }
+
+          if (isCanvasAgent) {
+            let html = fullOutput.trim();
+            // Strip thinking tags if not already filtered
+            html = html.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            // Extract from markdown code block
+            const mdMatch = html.match(/```html?\s*([\s\S]*?)```/i);
+            if (mdMatch) html = mdMatch[1].trim();
+            // Find <!DOCTYPE or <html start if there's preamble text
+            const doctypeIdx = html.indexOf('<!DOCTYPE');
+            const htmlTagIdx = html.indexOf('<html');
+            const startIdx = doctypeIdx >= 0 ? doctypeIdx : (htmlTagIdx >= 0 ? htmlTagIdx : -1);
+            if (startIdx > 0) html = html.slice(startIdx);
+            // Fallback: build clean HTML from the context directly (no LLM needed)
+            if (!html.trim() || !html.includes('<')) {
+              // Try splitting on markdown headings first, then numbered items, then double newlines
+              let sections = context.split(/\n#{1,3} /).filter(s => s.trim());
+              if (sections.length <= 1) sections = context.split(/\n(?=\*\*\d+[\.\)])|(?=^\d+[\.\)])/).filter(s => s.trim());
+              if (sections.length <= 1) sections = context.split(/\n{2,}/).filter(s => s.trim());
+              const reportTitle = (task.slice(0, 80) || 'NHA Studio Report').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              const cardsHtml = sections.map(s => {
+                const clean = s.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+                const lines = clean.split('\n').filter(Boolean);
+                const titleLine = lines[0] || '';
+                const bodyLines = lines.slice(1).join('\n').trim();
+                return `<div class="card">${titleLine ? `<h2>${titleLine.replace(/</g,'&lt;')}</h2>` : ''}<p>${(bodyLines || titleLine).replace(/\n/g, '</p><p>').replace(/</g,'&lt;')}</p></div>`;
+              }).join('');
+              const safeContext = context.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'</p><p>');
+              html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e293b;padding:0}
+.header{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:48px 40px;margin-bottom:32px}
+.header h1{font-size:1.8em;font-weight:700;margin-bottom:8px}
+.header p{opacity:.85;font-size:1em}
+.content{max-width:900px;margin:0 auto;padding:0 32px 48px}
+.card{background:#fff;border-radius:12px;padding:28px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);border:1px solid #e2e8f0}
+.card h2{color:#6366f1;font-size:1.05em;font-weight:700;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #f1f5f9}
+.card p{color:#475569;line-height:1.75;margin-bottom:8px}
+.card p:last-child{margin-bottom:0}
+</style></head><body>
+<div class="header"><h1>${reportTitle}</h1><p>Report generated by NHA Studio</p></div>
+<div class="content">${cardsHtml || '<div class="card"><p>' + safeContext + '</p></div>'}</div>
+</body></html>`;
+            }
+            sendToken('\n\n[Report generato]');
+            sendEvent({ canvas: html });
+          }
+
+          // Estimate token usage (aprox: 1 token ≈ 4 chars)
+          const inTokens = Math.ceil((sysPrompt.length + userMsg.length) / 4);
+          const outTokens = Math.ceil(fullOutput.length / 4);
+          clearInterval(keepalive);
+          sendEvent({ usage: { input: inTokens, output: outTokens } });
+          sendEvent({ done: true });
+          res.write('data: [DONE]\n\n');
+          res.end();
+        } catch (e) {
+          clearInterval(keepalive);
+          sendEvent({ error: e.message });
+          res.end();
         }
         logRequest(method, pathname, 200, Date.now() - start);
         return;
