@@ -2543,13 +2543,16 @@ export async function cmdUI(args) {
         const task = (body.task || '').trim();
         if (!task) { sendJSON(res, 400, { error: 'task required' }); logRequest(method, pathname, 400, Date.now() - start); return; }
 
+        const plannerLang = (() => { const LANG_MAP2 = {en:'English',it:'Italian',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',zh:'Chinese',ja:'Japanese',ar:'Arabic',hi:'Hindi',ru:'Russian',nl:'Dutch',pl:'Polish',tr:'Turkish',ko:'Korean'}; const lc = (config?.language||'it').slice(0,2); return LANG_MAP2[lc]||'Italian'; })();
         const planPrompt = `You are a workflow planner for NHA Studio. The user wants to accomplish this task: "${task}"
+The workflow will run in ${plannerLang} — all agent prompts must be in ${plannerLang}.
 
-Design a sequential workflow of 2-5 steps. RULES:
+Design a sequential workflow of 2-6 steps. RULES:
 - Use tool-agents (WebSearchAgent, EmailAgent, CalendarAgent, GitHubAgent, NotionAgent, SlackAgent) FIRST when real live data is needed
-- Use specialist agents (SABER, ATLAS, JARVIS, etc.) for deep domain analysis — they have rich expert system prompts
-- Use CanvasAgent as the LAST step ONLY when a visual HTML report is requested
-- The "prompt" field must be a plain language instruction — never JSON or code
+- ALWAYS use specialist agents (HERALD, ORACLE, NAVI, ATHENA, CASSANDRA, etc.) for analysis, briefings, and synthesis — NOT WriterAgent or DataAnalystAgent
+- For executive briefings use HERALD. For data analysis use NAVI or ORACLE. For tech analysis use ATHENA. For risk use CASSANDRA.
+- Use CanvasAgent as the LAST step ONLY when a visual HTML report/dashboard is explicitly requested
+- The "prompt" field must be a plain language instruction in ${plannerLang} — never JSON or code
 - Each agent receives the previous step's output as context automatically
 - Pick the most relevant agents for the task — don't use all of them
 
@@ -2747,14 +2750,19 @@ Respond with ONLY valid JSON, no markdown:
           }
 
           // ── Build system prompt with real tool data ───────────────────
+          const LANG_MAP = {en:'English',it:'Italian',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',zh:'Chinese',ja:'Japanese',ar:'Arabic',hi:'Hindi',ru:'Russian',nl:'Dutch',pl:'Polish',tr:'Turkish',ko:'Korean',sv:'Swedish',da:'Danish',fi:'Finnish',no:'Norwegian',cs:'Czech'};
+          const langCode = (config?.language || 'it').toLowerCase().slice(0,2);
+          const language = LANG_MAP[langCode] || config?.language || 'Italian';
+          const today = new Date().toISOString().split('T')[0];
           const isCanvasAgent = agent === 'CanvasAgent';
           // Tool-data agents: fetch real live data and use buildSystemPrompt (tool calls allowed)
           const isLiveDataAgent = ['CalendarAgent','EmailAgent','GitHubAgent','NotionAgent','SlackAgent','DriveAgent','BrowserAgent','WebSearchAgent','ResearchAgent'].includes(agent);
 
-          const canvasSystemPrompt = `You are an HTML report generator. Output a single complete HTML document. No preamble, no explanation.
+          const canvasSystemPrompt = `You are an HTML report generator. Output a single complete HTML document in ${language}. No preamble, no explanation.
 RULES:
 - First character of your response must be < (start of <!DOCTYPE html>)
 - Do NOT use markdown code blocks, JSON, or any wrapper
+- All text content must be in ${language}
 - Use clean design: white background, Inter/system-ui font, #6366f1 accent color
 - Structure: gradient header, then card sections with the content
 - Make it complete and self-contained`;
@@ -2766,10 +2774,10 @@ RULES:
             userMsg = `Generate a beautiful HTML dashboard report for this content. Start immediately with <!DOCTYPE html>:\n\n${context.slice(0, 8000)}`;
           } else if (isLiveDataAgent) {
             // These agents fetched real data — use buildSystemPrompt so they can call tools too
-            const agentInstruction = `You are ${agent}, a specialist AI agent inside NHA Studio.\nYour task: ${stepPrompt}\n` +
+            const agentInstruction = `You are ${agent}, a specialist AI agent inside NHA Studio. Respond in ${language}.\nYour task: ${stepPrompt}\n` +
               (toolData ? `\n## DATA FROM TOOLS:\n${toolData.slice(0, 4000)}\n` : '') +
               (context ? `\n## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 3000)}\n` : '') +
-              '\nWrite your analysis in plain text. Do NOT output JSON, tool calls, or code blocks. Summarize the data clearly.';
+              `\nWrite your analysis in plain text in ${language}. Do NOT output JSON, tool calls, or code blocks. Summarize the data clearly.`;
             sysPrompt = buildSystemPrompt(agent, agentInstruction, config);
             userMsg = toolData
               ? `Summarize the data above for: ${stepPrompt}`
@@ -2779,9 +2787,7 @@ RULES:
           } else {
             // All other agents (WriterAgent, DataAnalystAgent, specialist agents, etc.)
             // Use a focused prompt with NO TOOL_DEFINITIONS to prevent JSON/tool-call output
-            const today = new Date().toISOString().split('T')[0];
-            const language = config?.language || 'Italian';
-            sysPrompt = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. Respond in ${language}.
+            sysPrompt = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. You MUST respond entirely in ${language}.
 
 CRITICAL RULES:
 - Do NOT output JSON, tool calls, function calls, or code blocks
@@ -2801,6 +2807,7 @@ ${context ? `## CONTEXT FROM PREVIOUS AGENTS:\n${context.slice(0, 5000)}\n` : ''
           // ── Stream LLM response ───────────────────────────────────────
           let fullOutput = '';
           sendToken(isCanvasAgent ? 'Generating visual report...' : '');
+          const llmTimeout = isCanvasAgent ? 120000 : 90000;
           try {
             await withTimeout(
               callLLMStream(config, sysPrompt, userMsg,
@@ -2812,8 +2819,9 @@ ${context ? `## CONTEXT FROM PREVIOUS AGENTS:\n${context.slice(0, 5000)}\n` : ''
                     if (stripped) sendToken(stripped);
                   }
                 },
+                { max_tokens: isCanvasAgent ? 4096 : 2048 },
               ),
-              isCanvasAgent ? 60000 : 35000
+              llmTimeout
             );
           } catch (e) {
             if (!isCanvasAgent) sendToken(`[Error: ${e.message}]`);

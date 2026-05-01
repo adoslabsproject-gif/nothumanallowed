@@ -2966,7 +2966,7 @@ function restoreStudioSession(idx) {
   var ta = document.getElementById('studioTaskInput');
   if (ta) ta.value = s.task;
   renderStudioNodes(); renderStudioLog(); renderStudioResult();
-  toast('Session restored');
+  showToast('success', 'Session restored', s.task.slice(0, 60), 3000);
 }
 
 function importStudioToChat(idx) {
@@ -3036,14 +3036,20 @@ function runStudioStep(idx, node, task, context, stepDef) {
               var ev = JSON.parse(d);
               if (ev.token) {
                 // Tool status tokens (start with '[') shown in dim color, LLM output streamed normally
-                var isStatus = ev.token.charAt(0) === '[' && ev.token.indexOf(']') > 0 && ev.token.length < 60;
+                var isStatus = ev.token.charAt(0) === '[' && ev.token.indexOf(']') > 0 && ev.token.length < 80;
                 if (!isStatus) output += ev.token;
                 // Update live log entry
                 var entries = document.querySelectorAll('.studio-log-entry');
                 var last = entries[entries.length - 1];
                 if (last) {
                   var tb = last.querySelector('.studio-log-entry__text');
-                  if (tb) tb.textContent = isStatus ? ev.token.replace(/[\\r\\n]/g, '') : output;
+                  if (tb) {
+                    if (isStatus) {
+                      tb.textContent = ev.token.split('\\r').join('').split('\\n').join(' ');
+                    } else {
+                      tb.innerHTML = renderMd(output);
+                    }
+                  }
                 }
               }
               if (ev.canvas) {
