@@ -2877,24 +2877,57 @@ export async function cmdUI(args) {
             sendToken('[Reading GitHub...] ');
             try {
               const gh = await import('../services/github.mjs');
-              const issues = await withTimeout(gh.listIssues(config, config.githubRepo || '', 10), 'GitHubAgent');
-              toolData = typeof issues === 'string' ? issues : JSON.stringify(issues);
+              if (!config.github?.token) {
+                toolData = 'GitHub token not configured. Run: nha config set github-token YOUR_PAT';
+              } else {
+                const parts = [];
+                // Notifications (always available)
+                try {
+                  const notifs = await withTimeout(gh.listNotifications(config, 15), 'GitHubAgent-notifs');
+                  if (notifs) parts.push('## GitHub Notifications\n' + notifs);
+                } catch (e) { /* skip */ }
+                // Issues/PRs on configured repo if available
+                const repo = config.github?.defaultRepo || '';
+                if (repo) {
+                  try {
+                    const issues = await withTimeout(gh.listIssues(config, repo, 'open', 10), 'GitHubAgent-issues');
+                    if (issues) parts.push('## Open Issues (' + repo + ')\n' + issues);
+                  } catch (e) { /* skip */ }
+                  try {
+                    const prs = await withTimeout(gh.listPRs(config, repo, 'open', 10), 'GitHubAgent-prs');
+                    if (prs) parts.push('## Open PRs (' + repo + ')\n' + prs);
+                  } catch (e) { /* skip */ }
+                }
+                toolData = parts.length > 0 ? parts.join('\n\n') : 'No GitHub data available.';
+              }
             } catch (e) { toolData = `GitHub read failed: ${e.message}`; }
 
           } else if (agent === 'NotionAgent') {
             sendToken('[Searching Notion...] ');
             try {
               const nt = await import('../services/notion.mjs');
-              const results = await withTimeout(nt.search(config, stepPrompt, 10), 'NotionAgent');
-              toolData = typeof results === 'string' ? results : JSON.stringify(results);
+              if (!config.notion?.token) {
+                toolData = 'Notion token not configured. Run: nha config set notion-token YOUR_TOKEN';
+              } else {
+                const results = await withTimeout(nt.search(config, stepPrompt, 10), 'NotionAgent');
+                toolData = typeof results === 'string' ? results : JSON.stringify(results);
+              }
             } catch (e) { toolData = `Notion search failed: ${e.message}`; }
 
           } else if (agent === 'SlackAgent') {
             sendToken('[Reading Slack...] ');
             try {
               const sl = await import('../services/slack.mjs');
-              const channels = await withTimeout(sl.listChannels(config, 10), 'SlackAgent');
-              toolData = typeof channels === 'string' ? channels : JSON.stringify(channels);
+              if (!config.slack?.token) {
+                toolData = 'Slack token not configured. Run: nha config set slack-token xoxb-YOUR_TOKEN';
+              } else {
+                const parts = [];
+                try {
+                  const channels = await withTimeout(sl.listChannels(config, 10), 'SlackAgent-channels');
+                  if (channels) parts.push('## Slack Channels\n' + (typeof channels === 'string' ? channels : JSON.stringify(channels)));
+                } catch (e) { /* skip */ }
+                toolData = parts.length > 0 ? parts.join('\n\n') : 'No Slack data available.';
+              }
             } catch (e) { toolData = `Slack read failed: ${e.message}`; }
 
           } else if (agent === 'DriveAgent') {

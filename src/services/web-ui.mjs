@@ -1326,7 +1326,7 @@ function renderGitHub(el){
     // Header: user profile + repo input
     var userHtml='';
     if(user&&user.login){
-      userHtml='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border)">'+(user.avatar?'<img src="'+esc(user.avatar)+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover" alt="">':'')+'<div><div style="font-weight:700;font-size:13px;color:var(--green)">@'+esc(user.login)+'</div>'+(user.name?'<div style="font-size:11px;color:var(--dim)">'+esc(user.name)+'</div>':'')+'</div></div>';
+      userHtml='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border)">'+(user.avatar?'<img src="'+esc(user.avatar)+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover" alt="">':'')+'<div style="flex:1"><div style="font-weight:700;font-size:13px;color:var(--green)">@'+esc(user.login)+'</div>'+(user.name?'<div style="font-size:11px;color:var(--dim)">'+esc(user.name)+'</div>':'')+'</div><button onclick="disconnectService(\\x27github-token\\x27,function(el){ghData=null;renderGitHub(el)})" style="background:var(--bg3);border:1px solid var(--red);color:var(--red);padding:4px 10px;border-radius:var(--r);font-size:11px">Disconnect</button></div>';
     }
     var h=userHtml+'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap"><input type="text" id="ghRepo" placeholder="owner/repo" value="'+esc(ghRepo)+'" style="flex:1;min-width:180px;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)loadGhIssues()"><button onclick="loadGhIssues()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Issues</button><button onclick="loadGhPRs()" style="background:var(--cyan);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">PRs</button></div>';
     // My repos as clickable pills
@@ -1366,17 +1366,19 @@ function renderGitHub(el){
     renderGhData(r);
   });
 }
-function loadGhIssues(){var inp=document.getElementById('ghRepo');if(!inp||!inp.value.trim())return;ghRepo=inp.value.trim();var el=document.getElementById('content');el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';apiGet('/api/github/issues?repo='+encodeURIComponent(ghRepo)).then(function(r){if(ghData){ghData.issues=r.issues||[];ghData.prs=ghData.prs||[];ghData.repo=r.repo}else{ghData={issues:r.issues||[],prs:[],notifications:[]}}renderGitHub(document.getElementById('content'))})}
+function loadGhIssues(){var inp=document.getElementById('ghRepo');if(!inp||!inp.value.trim())return;ghRepo=inp.value.trim();apiPost('/api/config',{key:'github-repo',value:ghRepo}).catch(function(){});var el=document.getElementById('content');el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';apiGet('/api/github/issues?repo='+encodeURIComponent(ghRepo)).then(function(r){if(ghData){ghData.issues=r.issues||[];ghData.prs=ghData.prs||[];ghData.repo=r.repo}else{ghData={issues:r.issues||[],prs:[],notifications:[]}}renderGitHub(document.getElementById('content'))})}
 function loadGhPRs(){var inp=document.getElementById('ghRepo');if(!inp||!inp.value.trim())return;ghRepo=inp.value.trim();var el=document.getElementById('content');el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';apiGet('/api/github/prs?repo='+encodeURIComponent(ghRepo)).then(function(r){if(ghData){ghData.prs=r.prs||[];ghData.issues=ghData.issues||[];ghData.repo=r.repo}else{ghData={prs:r.prs||[],issues:[],notifications:[]}}renderGitHub(document.getElementById('content'))})}
 function ghMarkRead(){apiPost('/api/github/mark-read',{}).then(function(){if(ghData)ghData.notifications=[];renderGitHub(document.getElementById('content'))})}
 
 // ---- NOTION ----
 function renderNotion(el){
   apiGet('/api/notion/search?q=').then(function(r){
-    var banner=r&&r.error?setupBanner('Notion','nha config set notion-token YOUR_INTEGRATION_TOKEN')+'<div style="color:var(--dim);font-size:12px;padding:8px 0">Get an Integration Token from notion.so/my-integrations → New integration → Internal → copy Secret</div>':'';
-    el.innerHTML=banner+'<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" id="notionQuery" placeholder="Search Notion pages..." style="flex:1;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)searchNotion()"><button onclick="searchNotion()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Search</button></div><div id="notionResults"></div>';
+    var isOk=!(r&&r.error);
+    var banner=isOk?'':''+setupBanner('Notion','nha config set notion-token YOUR_INTEGRATION_TOKEN')+'<div style="color:var(--dim);font-size:12px;padding:8px 0">Get an Integration Token from notion.so/my-integrations → New integration → Internal → copy Secret</div>';
+    var disconnectBtn=isOk?'<button onclick="disconnectService(\\x27notion-token\\x27,renderNotion)" style="background:var(--bg3);border:1px solid var(--red);color:var(--red);padding:4px 10px;border-radius:var(--r);font-size:11px;margin-bottom:12px">Disconnect Notion</button>':'';
+    el.innerHTML=banner+disconnectBtn+'<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" id="notionQuery" placeholder="Search Notion pages..." style="flex:1;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)searchNotion()">'+(isOk?'<button onclick="searchNotion()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Search</button>':'<button style="background:var(--bg3);color:var(--dim);padding:8px 16px;border-radius:var(--r);font-size:12px" disabled>Search</button>')+'</div><div id="notionResults"></div>';
   }).catch(function(){
-    el.innerHTML=setupBanner('Notion','nha config set notion-token YOUR_INTEGRATION_TOKEN')+'<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" id="notionQuery" placeholder="Search Notion pages..." style="flex:1;font-size:13px;padding:10px 14px"><button style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px" disabled>Search</button></div>';
+    el.innerHTML=setupBanner('Notion','nha config set notion-token YOUR_INTEGRATION_TOKEN')+'<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" id="notionQuery" placeholder="Search Notion pages..." style="flex:1;font-size:13px;padding:10px 14px"><button style="background:var(--bg3);color:var(--dim);padding:8px 16px;border-radius:var(--r);font-size:12px" disabled>Search</button></div>';
   });
 }
 function searchNotion(){
@@ -1399,6 +1401,13 @@ function loadNotionPage(id){
 }
 
 // ---- SLACK ----
+function disconnectService(configKey,renderFn){
+  if(!confirm('Remove this connection? You can reconnect anytime.'))return;
+  apiPost('/api/config',{key:configKey,value:''}).then(function(){
+    var el=document.getElementById('content');
+    if(el&&renderFn)renderFn(el);
+  }).catch(function(){});
+}
 function setupBanner(service,cmd){return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--r);margin-bottom:14px;font-size:12px"><span style="font-size:20px">&#128274;</span><div><div style="color:var(--fg);font-weight:600;margin-bottom:2px">'+esc(service)+' not configured</div><div style="color:var(--dim);font-family:var(--mono);font-size:11px">'+esc(cmd)+'</div></div></div>';}
 var slackData=null;
 function renderSlack(el){
@@ -1407,7 +1416,7 @@ function renderSlack(el){
     if(r&&r.error){el.innerHTML=setupBanner('Slack','nha config set slack-token xoxb-YOUR_TOKEN')+'<div style="color:var(--dim);font-size:12px;padding:8px 0">Get a Bot Token from api.slack.com/apps → OAuth &amp; Permissions → Bot Token Scopes: channels:read, channels:history, users:read</div>';return}
     slackData=r;
     var channels=r.channels||[];
-    var h='<div class="section-title">Channels ('+channels.length+')</div>';
+    var h='<div style="display:flex;align-items:center;margin-bottom:8px"><div class="section-title" style="margin:0;flex:1">Channels ('+channels.length+')</div><button onclick="disconnectService(\\x27slack-token\\x27,renderSlack)" style="background:var(--bg3);border:1px solid var(--red);color:var(--red);padding:4px 10px;border-radius:var(--r);font-size:11px">Disconnect</button></div>';
     if(channels.length===0){h+='<div class="card" style="text-align:center;color:var(--dim);padding:20px">No channels found</div>'}
     channels.forEach(function(c){h+='<div class="card" style="padding:10px 14px;cursor:pointer" onclick="loadSlackChannel(\\x27'+esc(c.id)+'\\x27,\\x27'+esc(c.name)+'\\x27)"><span style="color:var(--green);font-weight:700">#'+esc(c.name)+'</span> <span style="font-size:10px;color:var(--dim)">'+c.members+' members</span>'+(c.purpose?'<div style="font-size:11px;color:var(--dim);margin-top:2px">'+esc(c.purpose)+'</div>':'')+'</div>'});
     h+='<div id="slackMessages"></div>';
