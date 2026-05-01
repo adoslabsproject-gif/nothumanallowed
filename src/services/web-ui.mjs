@@ -104,6 +104,11 @@ function makeDraggable(el, handleSelector) {
     if (e.button !== 0) return;
     dragging = true;
     sx = e.clientX; sy = e.clientY;
+    // Clear transform first so getBoundingClientRect gives the real rendered position
+    el.style.transform = '';
+    if (el.dataset) el.dataset.expanded = '';
+    el.style.width = el.style.width || '';
+    el.style.height = el.style.height || '';
     var rect = el.getBoundingClientRect();
     // Switch from CSS right/top to explicit left/top
     el.style.right = 'auto';
@@ -639,7 +644,16 @@ function onConversationSwitch(){
 
 function openCanvasPanel(){
   var cp = document.getElementById('canvasPanel');
-  if (cp) cp.classList.add('open');
+  if (!cp) return;
+  cp.classList.add('open');
+  // If no canvas data, show a tip in the frame area
+  if (!studioState.canvas) {
+    var cf = document.getElementById('canvasFrame');
+    if (cf) {
+      var tip = \x27<!DOCTYPE html><html><body style="background:#0a0a0a;color:#6b7280;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px"><div><div style="font-size:32px;margin-bottom:16px">&#9632;</div><div style="font-size:13px;line-height:1.6">Nessun Canvas in questo workflow.<br>Aggiungi <strong style=\x22color:#4ade80\x22>html</strong>, <strong style=\x22color:#4ade80\x22>dashboard</strong> o <strong style=\x22color:#4ade80\x22>visual</strong> al prompt,<br>oppure usa un task con 2+ agenti specialisti.</div></div></body></html>\x27;
+      cf.srcdoc = tip;
+    }
+  }
 }
 
 function reopenCanvas(){
@@ -697,8 +711,18 @@ function canvasCopyImage(){
 }
 function toggleCanvasSize(){
   var p=document.getElementById('canvasPanel');if(!p)return;
-  if(p.style.width==='80vw'){p.style.width='';p.style.height='';p.style.top='';p.style.right='';}
-  else{p.style.width='80vw';p.style.height='80vh';p.style.top='10vh';p.style.right='10vw';}
+  if(p.dataset.expanded==='1'){
+    p.dataset.expanded='';
+    // Reset to CSS default: fixed position top-right
+    p.style.width='';p.style.height='';
+    p.style.top='60px';p.style.right='12px';
+    p.style.left='';p.style.transform='';
+  } else {
+    p.dataset.expanded='1';
+    p.style.width='80vw';p.style.height='80vh';
+    p.style.top='10vh';p.style.left='50%';p.style.right='auto';
+    p.style.transform='translateX(-50%)';
+  }
 }
 // ---- MSG ACTIONS ----
 function copyMsg(i){
@@ -3006,6 +3030,8 @@ function studioReset() {
   studioState.running = false;
   studioState.planned = false;
   studioTokens = {in:0, out:0};
+  var nudgeEl = document.getElementById(\x27studioParliamentNudge\x27);
+  if (nudgeEl) nudgeEl.remove();
   var ta = document.getElementById('studioTaskInput');
   if (ta) ta.value = '';
   var tb = document.getElementById('studioTokenBar');
@@ -3091,6 +3117,68 @@ function renderStudioLog() {
   el.scrollTop = el.scrollHeight;
 }
 
+function downloadStudioPDF() {
+  var task = studioState.task || 'NHA Studio Report';
+  var today = new Date().toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric'});
+  var nodes = studioState.nodes || [];
+
+  // Build sections for each agent
+  var sectionsHtml = nodes.map(function(n) {
+    if (!n.output || n.output === '(no output)' || n.agent === 'CanvasAgent') return '';
+    var mdHtml = (n.output || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g,'<em>$1</em>')
+      .replace(new RegExp('^#{3}[ \\t]+(.+)$','gm'),'<h3>$1</h3>')
+      .replace(new RegExp('^#{2}[ \\t]+(.+)$','gm'),'<h2>$1</h2>')
+      .replace(new RegExp('^#{1}[ \\t]+(.+)$','gm'),'<h2>$1</h2>')
+      .replace(new RegExp('^-[ \\t]+(.+)$','gm'),'<li>$1</li>')
+      .replace(/(<li>[\s\S]*?<\/li>)/g,'<ul>$1</ul>')
+      .replace(/\n{2,}/g,'</p><p>')
+      .replace(/\n/g,'<br>');
+    return '<div class="section"><div class="agent-label">' + (n.icon||'') + ' ' + esc(n.label||n.agent) + '</div><div class="section-body"><p>' + mdHtml + '</p></div></div>';
+  }).join('');
+
+  // Include canvas if present (as an embedded iframe screenshot fallback note)
+  var canvasNote = studioState.canvas ? '<div class="section canvas-note"><div class="agent-label">&#9632; Canvas Report</div><div class="section-body"><p><em>Il Canvas HTML è disponibile nell\x27interfaccia Studio. Apri il pannello Canvas e usa la funzione stampa del browser per includerlo.</em></p></div></div>' : '';
+
+  var html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>' + esc(task) + '</title><style>' +
+    'body{font-family:"Helvetica Neue",Arial,sans-serif;color:#111;background:#fff;margin:0;padding:0}' +
+    '.cover{background:#0d0d0d;color:#fff;padding:60px 50px;page-break-after:always}' +
+    '.cover h1{font-size:28px;font-weight:700;margin:0 0 12px;color:#00ff41}' +
+    '.cover .meta{font-size:13px;color:#aaa;margin-top:8px}' +
+    '.cover .task{font-size:15px;color:#e0e0e0;margin-top:20px;line-height:1.6;max-width:700px}' +
+    '.cover .brand{font-size:11px;color:#555;margin-top:40px;letter-spacing:2px;text-transform:uppercase}' +
+    '.toc{padding:40px 50px;border-bottom:1px solid #e0e0e0;page-break-after:always}' +
+    '.toc h2{font-size:14px;text-transform:uppercase;letter-spacing:2px;color:#555;margin-bottom:16px}' +
+    '.toc ol{margin:0;padding-left:20px;font-size:13px;line-height:2}' +
+    '.section{padding:36px 50px;border-bottom:1px solid #f0f0f0;page-break-inside:avoid}' +
+    '.section:last-child{border-bottom:none}' +
+    '.agent-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#888;font-weight:700;margin-bottom:14px}' +
+    '.section-body{font-size:13px;line-height:1.8;color:#222}' +
+    '.section-body h2{font-size:16px;font-weight:700;color:#111;margin:20px 0 8px}' +
+    '.section-body h3{font-size:14px;font-weight:600;color:#333;margin:16px 0 6px}' +
+    '.section-body ul{margin:8px 0;padding-left:20px}' +
+    '.section-body li{margin-bottom:4px}' +
+    '.section-body strong{font-weight:700}' +
+    '.section-body p{margin:0 0 12px}' +
+    '.canvas-note{background:#f9f9f9}' +
+    '.footer-bar{padding:20px 50px;background:#f9f9f9;font-size:10px;color:#aaa;text-align:center;letter-spacing:1px}' +
+    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.cover{page-break-after:always}.toc{page-break-after:always}}' +
+  '</style></head><body>' +
+    '<div class="cover"><div class="brand">NotHumanAllowed — NHA Studio</div><h1>' + esc(task.length > 80 ? task.slice(0,80)+'...' : task) + '</h1><div class="meta">Generato il ' + today + ' &nbsp;·&nbsp; ' + nodes.filter(function(n){return n.agent!=='CanvasAgent'}).length + ' agenti</div><div class="task">' + esc(task) + '</div></div>' +
+    '<div class="toc"><h2>Indice</h2><ol>' + nodes.filter(function(n){return n.output&&n.output!=='(no output)'&&n.agent!=='CanvasAgent'}).map(function(n){return '<li>' + esc(n.label||n.agent) + '</li>';}).join('') + '</ol></div>' +
+    sectionsHtml + canvasNote +
+    '<div class="footer-bar">NHA Studio &nbsp;·&nbsp; nothumanallowed.com &nbsp;·&nbsp; ' + today + '</div>' +
+  '</body></html>';
+
+  var win = window.open('', '_blank');
+  if (!win) { alert('Popup bloccato — abilita i popup per scaricare il PDF'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.onload = function() { setTimeout(function(){ win.print(); }, 300); };
+}
+
 function renderStudioResult() {
   var el = document.getElementById('studioResult');
   if (!el) return;
@@ -3100,10 +3188,23 @@ function renderStudioResult() {
   var body = hasCanvas
     ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:var(--dim);font-size:13px">&#10003; ' + t('canvas_generated') + '</span><button onclick="openCanvasPanel()" style="padding:6px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;cursor:pointer;font-weight:700">&#x25A3; ' + t('canvas_open') + '</button></div>'
     : '<div class="md-body">' + renderMd(studioState.result) + '</div>';
-  el.innerHTML = '<div class="studio-result__title">&#10003; ' + t('workflow_complete') + '</div>' + body;
-  // Show canvas button in toolbar whenever canvas data exists
+  var dlBtn = '<button onclick="downloadStudioPDF()" title="Scarica il workflow come PDF" style="margin-top:10px;padding:6px 14px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);font-size:11px;cursor:pointer;font-family:var(--mono);letter-spacing:.5px">&#x2913; Download PDF</button>';
+  el.innerHTML = '<div class="studio-result__title">&#10003; ' + t('workflow_complete') + '</div>' + body + dlBtn;
+  // Update canvas button style: bright green when canvas exists, dimmed otherwise
   var canvasBtn = document.getElementById('studioCanvasBtn');
-  if (canvasBtn) canvasBtn.style.display = hasCanvas ? '' : 'none';
+  if (canvasBtn) {
+    if (hasCanvas) {
+      canvasBtn.style.background = 'var(--greendim)';
+      canvasBtn.style.borderColor = 'var(--green3)';
+      canvasBtn.style.color = 'var(--green)';
+      canvasBtn.title = t(\x27canvas_open\x27);
+    } else {
+      canvasBtn.style.background = \x27none\x27;
+      canvasBtn.style.borderColor = \x27var(--border)\x27;
+      canvasBtn.style.color = \x27var(--dim)\x27;
+      canvasBtn.title = \x27Canvas non disponibile per questo workflow\x27;
+    }
+  }
 }
 
 function studioSetNodeStatus(idx, status) {
@@ -3158,6 +3259,21 @@ async function runStudio() {
     renderStudioNodes();
     studioLog('Studio', '&#10003;', 'Workflow planned: ' + planRes.steps.map(function(s){return s.label}).join(' -> '), 'system');
 
+    // Parliament suggestion: show nudge if 3+ specialist steps and Parliament not already enabled
+    var specialistAgents = planRes.steps.filter(function(s){ return !['WebSearchAgent','EmailAgent','CalendarAgent','GitHubAgent','SlackAgent','NotionAgent','CanvasAgent','HERALD'].includes(s.agent); });
+    var parliamentChkEarly = document.getElementById(\x27studioParliamentMode\x27);
+    if (specialistAgents.length >= 2 && parliamentChkEarly && !parliamentChkEarly.checked) {
+      var nudge = document.getElementById(\x27studioParliamentNudge\x27);
+      if (!nudge) {
+        nudge = document.createElement(\x27div\x27);
+        nudge.id = \x27studioParliamentNudge\x27;
+        nudge.style.cssText = \x27margin:8px 0;padding:8px 12px;background:#1a1a2e;border:1px solid #6366f1;border-radius:8px;font-size:11px;color:#a5b4fc;display:flex;align-items:center;gap:10px\x27;
+        nudge.innerHTML = \x27&#x2656; <span><strong>Suggerimento:</strong> questo workflow ha \x27 + specialistAgents.length + \x27 agenti specialisti — attiva <strong>Parlamento</strong> per un confronto critico tra le loro analisi.</span><button onclick="document.getElementById(\\\x27studioParliamentMode\\\x27).checked=true;studioState.parliamentMode=true;this.parentNode.remove()" style="margin-left:auto;background:#6366f1;border:none;border-radius:6px;color:#fff;padding:4px 10px;cursor:pointer;font-size:10px;white-space:nowrap">Attiva &#x2656;</button>\x27;
+        var tokenBar = document.getElementById(\x27studioTokenBar\x27);
+        if (tokenBar && tokenBar.parentNode) tokenBar.parentNode.insertBefore(nudge, tokenBar.parentNode.firstChild);
+      }
+    }
+
     // Step 2: execute each step via SSE
     var context = '';
     for (var i = 0; i < studioState.nodes.length; i++) {
@@ -3195,11 +3311,17 @@ async function runStudio() {
     }
 
     // Parliament mode: Round 2 cross-reading deliberation
+    // Read from both DOM and studioState (supports mid-run activation via nudge)
     var parliamentChk = document.getElementById(\x27studioParliamentMode\x27);
-    if (parliamentChk && parliamentChk.checked && studioState.nodes.length >= 2) {
+    var parliamentActive = studioState.parliamentMode || (parliamentChk && parliamentChk.checked);
+    if (parliamentActive && studioState.nodes.length >= 1) {
       var proposals = studioState.nodes
         .filter(function(n) { return n.output && n.output !== \x27(no output)\x27 && n.agent !== \x27CanvasAgent\x27; })
         .map(function(n) { return {agent: n.agent, label: n.label, output: n.output}; });
+      // Need at least 2 proposals for cross-reading; if only 1, include the full context as a second proposal
+      if (proposals.length === 1 && context) {
+        proposals.push({agent: \x27Context\x27, label: \x27Contesto workflow\x27, output: context});
+      }
       if (proposals.length >= 2) {
         studioLog(\x27Parlamento\x27, \x27&#x2656;\x27, \x27Avvio deliberazione — Round 2 cross-reading tra agenti...\x27, \x27system\x27);
         var deliberateBody = JSON.stringify({task: task, proposals: proposals, language: document.getElementById(\x27langSelect\x27) ? document.getElementById(\x27langSelect\x27).value : \x27it\x27});
@@ -3584,7 +3706,7 @@ function renderStudio(el) {
 
         '<div style="display:flex;align-items:center;gap:8px;margin:8px 0">' +
           '<div id="studioTokenBar" style="font-size:10px;color:var(--dim);font-family:var(--mono);flex:1"></div>' +
-          '<button id="studioCanvasBtn" onclick="openCanvasPanel()" style="display:none;font-size:12px;padding:5px 14px;background:var(--greendim);border:1px solid var(--green3);border-radius:6px;color:var(--green);cursor:pointer;font-weight:700">&#9632; ' + t('canvas_open') + '</button>' +
+          '<button id="studioCanvasBtn" onclick="openCanvasPanel()" title="' + t('canvas_open') + '" style="font-size:12px;padding:5px 14px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);cursor:pointer;font-weight:700;transition:all .2s">&#9632; Canvas</button>' +
         '</div>' +
         '<div class="studio-canvas" id="studioNodes"></div>' +
         '<div class="studio-log" id="studioLog" style="display:none"></div>' +

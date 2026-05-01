@@ -2570,6 +2570,9 @@ export async function cmdUI(args) {
         const extractSearchQuery = (t) => {
           const m = t.match(/(?:cerca|search|find|ricerca|notizie su|news about|latest on|aggiornamenti su|ultime su|tendenz|trend)\s+(.{5,80}?)(?:\s+(?:e |and |per |for |poi |then )|[,\n]|$)/i);
           if (m) return m[1].trim();
+          // If task contains a domain/URL, use it as the search anchor
+          const domainMatch = t.match(/(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.[a-z]{2,}(?:\.[a-z]{2,})?)/i);
+          if (domainMatch) return domainMatch[0].replace(/^https?:\/\//,'');
           const stripped = t.replace(/^[^:]+:\s*/,'').split(/[,\n]/)[0].slice(0,100).trim();
           return stripped || t.slice(0,80).trim();
         };
@@ -2709,24 +2712,35 @@ export async function cmdUI(args) {
           } else if (agent === 'WebSearchAgent' || agent === 'ResearchAgent') {
             sendToken('[Searching the web and reading pages...] ');
             try {
-              // Extract a concise search query from the step prompt (avoid sending the whole task as query)
-              // The planner should provide a short query, but if not, extract key terms
+              // Extract a concise search query from the step prompt
               let searchQuery = stepPrompt;
-              // If the prompt is very long (> 120 chars), extract the core search terms
               if (searchQuery.length > 120) {
-                // Try to extract a meaningful short query
                 const keywordMatch = searchQuery.match(/(?:cerca|search|find|ricerca|notizie su|news about|latest on|aggiornamenti su)\s+(.{5,80}?)(?:\s+(?:e|and|per|for|poi|then)|$)/i);
                 if (keywordMatch) {
                   searchQuery = keywordMatch[1].trim();
                 } else {
-                  // Take first meaningful clause before comma/period
                   searchQuery = searchQuery.split(/[,\.\n]/)[0].slice(0, 100).trim();
                 }
               }
-              // Use deep search: fetches and reads top 3 pages for real content
+              // If step prompt / task contains a specific domain, fetch that page directly first
+              const domainMatch = (stepPrompt + ' ' + task).match(/(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.[a-z]{2,}(?:\/[^\s,]*)?)/i);
+              if (domainMatch) {
+                let targetUrl = domainMatch[0];
+                if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
+                sendToken(`[Fetching ${targetUrl}...] `);
+                try {
+                  const fetchResult = await withTimeout(executeTool('fetch_url', { url: targetUrl }, config), 20000);
+                  const fetchStr = typeof fetchResult === 'string' ? fetchResult : JSON.stringify(fetchResult);
+                  if (fetchStr && !fetchStr.startsWith('HTTP ') && !fetchStr.startsWith('Content blocked')) {
+                    toolData = `## Content from ${targetUrl}:\n${fetchStr}`;
+                  }
+                } catch {}
+              }
+              // Deep web search for broader context
               const searchResult = await withTimeout(executeTool('web_search', { query: searchQuery, deep: true }, config), 25000);
-              toolData = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
-            } catch (e) { toolData = `Web search failed: ${e.message}`; }
+              const searchStr = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
+              toolData += (toolData ? '\n\n' : '') + `## Web search results for "${searchQuery}":\n${searchStr}`;
+            } catch (e) { toolData = toolData || `Web search failed: ${e.message}`; }
 
           } else if (agent === 'BrowserAgent') {
             const urlMatch = stepPrompt.match(/https?:\/\/[^\s"']+/);
@@ -2821,7 +2835,7 @@ RULES:
 
           if (isCanvasAgent) {
             sysPrompt = canvasSystemPrompt;
-            userMsg = `Create a professional dashboard report for this data. Output ONLY the inner HTML body content (starting with <div class="header">):\n\n${context.slice(0, 10000)}`;
+            userMsg = `Create a professional dashboard report for this data. Output ONLY the inner HTML body content (starting with <div class="header">):\n\n${context}`;
           } else if (isLiveDataAgent) {
             // These agents fetched real data — use a focused prompt (no tool definitions to avoid JSON output)
             const agentInstruction = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. Respond entirely in ${language}.
@@ -2833,8 +2847,8 @@ CRITICAL: Do NOT invent, hallucinate, or add any data not present in the DATA se
 Do NOT output JSON, tool calls, or code blocks. Write in plain text with markdown headers.
 Always apply your analysis specifically to the subject mentioned in the WORKFLOW GOAL.
 
-${toolData ? `## DATA FROM TOOLS:\n${toolData.slice(0, 6000)}\n` : '## DATA: No data was retrieved by this agent.\n'}
-${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 4000)}\n` : ''}
+${toolData ? `## DATA FROM TOOLS:\n${toolData}\n` : '## DATA: No data was retrieved by this agent.\n'}
+${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context}\n` : ''}
 
 Your task: ${stepPrompt}`;
             sysPrompt = agentInstruction;
@@ -2860,8 +2874,8 @@ CRITICAL RULES:
 - Be thorough and specific — this is for an executive briefing based on REAL data only
 - Always keep the OVERALL WORKFLOW GOAL in mind — apply your analysis specifically to the subject mentioned
 
-${toolData ? `## LIVE DATA FROM TOOLS:\n${toolData.slice(0, 6000)}\n` : '## LIVE DATA: No tool data was fetched for this step.\n'}
-${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 6000)}\n` : ''}`;
+${toolData ? `## LIVE DATA FROM TOOLS:\n${toolData}\n` : '## LIVE DATA: No tool data was fetched for this step.\n'}
+${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context}\n` : ''}`;
             userMsg = hasRealData
               ? `Based ONLY on the real data above, complete this task specifically for the subject in the WORKFLOW GOAL: ${stepPrompt}`
               : `No real data is available for "${task}". State this clearly and explain what data would be needed to complete: ${stepPrompt}`;
@@ -2869,6 +2883,8 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 6000)}\n` : ''}
 
           // ── Stream LLM response ───────────────────────────────────────
           let fullOutput = '';
+          let inThinkBlock = false;
+          let thinkBuf = '';
           sendToken(isCanvasAgent ? 'Generating visual report...' : '');
           const llmTimeout = isCanvasAgent ? 120000 : 90000;
           try {
@@ -2877,12 +2893,39 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 6000)}\n` : ''}
                 (token) => {
                   fullOutput += token;
                   if (!isCanvasAgent) {
-                    // Strip JSON tool calls from synthesis agent output before sending to client
-                    const stripped = token.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '').trim();
+                    // Buffer and strip <think>...</think> blocks before sending to client
+                    thinkBuf += token;
+                    // Process thinkBuf: emit only content outside think tags
+                    let out = '';
+                    let buf = thinkBuf;
+                    while (buf.length > 0) {
+                      if (inThinkBlock) {
+                        const closeIdx = buf.indexOf('</think>');
+                        if (closeIdx >= 0) {
+                          buf = buf.slice(closeIdx + 8);
+                          inThinkBlock = false;
+                        } else {
+                          buf = '';
+                        }
+                      } else {
+                        const openIdx = buf.indexOf('<think>');
+                        if (openIdx >= 0) {
+                          out += buf.slice(0, openIdx);
+                          buf = buf.slice(openIdx + 7);
+                          inThinkBlock = true;
+                        } else {
+                          out += buf;
+                          buf = '';
+                        }
+                      }
+                    }
+                    thinkBuf = '';
+                    // Strip JSON tool calls from specialist agent output
+                    const stripped = out.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '').trim();
                     if (stripped) sendToken(stripped);
                   }
                 },
-                { max_tokens: isCanvasAgent ? 4096 : 2048 },
+                { max_tokens: 4096 },
               ),
               llmTimeout
             );
@@ -2890,10 +2933,31 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 6000)}\n` : ''}
             if (!isCanvasAgent) sendToken(`[Error: ${e.message}]`);
           }
 
-          // Fallback: if LLM returned empty and we have tool data, send that directly
-          if (!isCanvasAgent && !fullOutput.trim() && toolData) {
+          // Strip think tags from fullOutput before emptiness check
+          const fullOutputClean = fullOutput.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+          // Fallback: if LLM returned empty and we have tool data, send it directly
+          if (!isCanvasAgent && !fullOutputClean && toolData) {
             fullOutput = toolData;
-            sendToken(toolData.slice(0, 2000));
+            sendToken(toolData);
+          }
+          // Fallback: if LLM returned empty and we have context (specialist agents like CASSANDRA),
+          // retry once without thinking and with a simplified direct prompt
+          else if (!isCanvasAgent && !fullOutputClean && context && !toolData) {
+            sendToken('[Retrying analysis...]');
+            let retryOutput = '';
+            try {
+              const retryConfig = Object.assign({}, config, { thinking: 'off' });
+              await withTimeout(
+                callLLMStream(retryConfig, `You are ${agent}. Analyze the following data and complete the task. Be thorough and write in ${language}.\n\nDATA:\n${context}\n\nTASK: ${stepPrompt}`,
+                  'Write your complete analysis now.',
+                  (tok) => { retryOutput += tok; sendToken(tok); },
+                  { max_tokens: 4096 },
+                ),
+                60000
+              );
+            } catch {}
+            if (retryOutput.trim()) fullOutput = retryOutput;
           }
 
           if (isCanvasAgent) {
@@ -2911,21 +2975,29 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context.slice(0, 6000)}\n` : ''}
               const bodyStart = bodyHtml.search(/<body[^>]*>/i);
               if (bodyStart >= 0) bodyHtml = bodyHtml.slice(bodyStart).replace(/<body[^>]*>/i, '').replace(/<\/body>[\s\S]*/i, '').trim();
             }
+            // Derive a short report title from the task (skip stop words, take first 5-6 meaningful words)
+            const stopWords = new Set(['di','la','il','lo','le','gli','un','una','dei','del','della','per','che','con','su','in','e','a','da','è','come','analizza','analisi','ricerca','crea','genera','fai','fammi','dammi','the','of','for','and','a','an','in','with','on','about','analyze','analysis','research','create','generate','make','find','search']);
+            const titleWords = task.replace(/[.,;:!?]/g,'').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w.toLowerCase())).slice(0, 6);
+            const reportTitle = titleWords.length > 0 ? titleWords.map(w => w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'Studio Report';
             // Fallback: if LLM output is empty or has no HTML tags, build body from context using markdown→HTML conversion
             if (!bodyHtml || !bodyHtml.includes('<')) {
-              const reportTitle = task.slice(0, 80).replace(/</g,'&lt;');
               const sections = context.split(/\n#{1,3} |(?=\n\n)/).filter(s => s.trim()).slice(0, 12);
-              bodyHtml = `<div class="header"><h1>${reportTitle}</h1><p>NHA Studio Report \u00b7 ${today}</p><div class="meta"><span>${today}</span></div></div>` +
+              bodyHtml = `<div class="header"><h1>${reportTitle.replace(/</g,'&lt;')}</h1><p>NHA Studio Report \u00b7 ${today}</p><div class="meta"><span>${today}</span></div></div>` +
                 sections.map(s => {
                   const lines = s.replace(/\*\*/g,'').replace(/\*/g,'').trim().split('\n').filter(Boolean);
-                  const title = lines[0] || '';
+                  const stitle = lines[0] || '';
                   const body = lines.slice(1).map(l => `<p>${l.replace(/</g,'&lt;')}</p>`).join('');
-                  return `<div class="section"><div class="section-title">${title.replace(/</g,'&lt;')}</div>${body}</div>`;
+                  return `<div class="section"><div class="section-title">${stitle.replace(/</g,'&lt;')}</div>${body}</div>`;
                 }).join('') +
                 `<div class="footer">NHA Studio \u00b7 ${today}</div>`;
+            } else {
+              // Replace the h1 inside existing header div if the model included the full prompt as title
+              bodyHtml = bodyHtml.replace(/(<div[^>]*class="header"[^>]*>[\s\S]*?<h1[^>]*>)([^<]{60,})(<\/h1>)/, (m, open, title, close) => {
+                return open + reportTitle.replace(/</g,'&lt;') + close;
+              });
             }
             // Always wrap in the guaranteed NHA dark CSS template
-            const finalHtml = wrapInNHATemplate(bodyHtml, task.slice(0, 60));
+            const finalHtml = wrapInNHATemplate(bodyHtml, reportTitle);
             sendToken('\n\n[Report generato]');
             sendEvent({ canvas: finalHtml });
           }
