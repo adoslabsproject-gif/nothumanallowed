@@ -521,7 +521,7 @@ export async function callLLMStream(config, systemPrompt, userMessage, onToken, 
         { role: 'system', content: sanitize(systemPrompt) },
         { role: 'user', content: sanitize(userMessage) },
       ],
-      stream: true,
+      stream: false,
       chat_template_kwargs: { enable_thinking: thinkingEnabled },
     };
     const nhaRes = await fetch('https://nothumanallowed.com/api/v1/liara/chat', {
@@ -533,10 +533,13 @@ export async function callLLMStream(config, systemPrompt, userMessage, onToken, 
       const err = await nhaRes.text();
       throw new Error(`NHA Free ${nhaRes.status}: ${err}`);
     }
-    // Node.js native fetch ReadableStream closes after first TCP buffer for SSE.
-    // Use res.text() to get the full response, then parse SSE lines synchronously.
-    const rawText = await nhaRes.text();
-    return parseSSEText(rawText, 'openai', onToken);
+    // Non-streaming: vLLM returns complete text — no BPE subword splitting issues
+    const nhaJson = await nhaRes.json();
+    let fullNhaText = nhaJson.choices?.[0]?.message?.content || '';
+    // Strip <think>...</think> blocks
+    fullNhaText = fullNhaText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    if (onToken) onToken(fullNhaText);
+    return fullNhaText;
   }
 
   const format = provider === 'anthropic' ? 'anthropic' : 'openai';
@@ -624,10 +627,31 @@ function getProviderHeaders(provider, apiKey) {
 }
 
 /** Parse a complete SSE text body (already read via res.text()) and call onToken per token. */
+/**
+ * Qwen3 sometimes emits entire paragraphs as a single token with no spaces/newlines.
+ * This restores markdown structure: newlines before headings, list items, numbered lists.
+ * Only applied to non-HTML content (inside HTML tags is left untouched).
+ */
+function fixQwen3Markdown(text) {
+  // Don't touch HTML content
+  if (/<[a-zA-Z]/.test(text) && text.includes('</')) return text;
+  return text
+    // newline before markdown headings (##, ###, etc.) not at start
+    .replace(/([^\n])(#{1,6}\s)/g, '$1\n$2')
+    // newline before list items (- or * at word boundary) not at start
+    .replace(/([^\n])(\n?[-*]\s)/g, '$1\n$2')
+    // newline before numbered list items (1. 2. etc.) not at start
+    .replace(/([^\n])(\n?\d+\.\s)/g, '$1\n$2')
+    // newline before --- separators
+    .replace(/([^\n])(---)/g, '$1\n$2');
+}
+
 function parseSSEText(text, format, onToken) {
   let fullText = '';
   let thinkBuf = '';
   let inThink = false;
+  let isHtmlOutput = false;
+  let chunkCount = 0;
 
   for (const line of text.split('\n')) {
     if (!line.startsWith('data: ')) continue;
@@ -661,9 +685,18 @@ function parseSSEText(text, format, onToken) {
           }
         }
         if (out) {
-          // Qwen3 emits tokens without spaces between words — insert space when needed
-          if (fullText && out && !/[\s\n]$/.test(fullText) && !/^[\s\n.,;:!?)\]}'"]/.test(out)) {
-            out = ' ' + out;
+          chunkCount++;
+          if (chunkCount <= 3) process.stderr.write(`[QWEN3 CHUNK ${chunkCount}] len=${out.length} repr=${JSON.stringify(out.slice(0,60))}\n`);
+          // Detect HTML output on first meaningful token
+          if (!isHtmlOutput && (out.includes('<div') || out.includes('<!DOCTYPE') || out.includes('<html'))) {
+            isHtmlOutput = true;
+          }
+          if (!isHtmlOutput) {
+            out = fixQwen3Markdown(out);
+            const insideTag = fullText.lastIndexOf('<') > fullText.lastIndexOf('>');
+            if (fullText && out && !insideTag && !/[\s\n]$/.test(fullText) && !/^[\s\n.,;:!?)\]}'">]/.test(out)) {
+              out = ' ' + out;
+            }
           }
           fullText += out;
           if (onToken) onToken(out);
@@ -671,7 +704,7 @@ function parseSSEText(text, format, onToken) {
       }
     } catch {}
   }
-
+  process.stderr.write(`[QWEN3 TOTAL CHUNKS] ${chunkCount}, fullText len=${fullText.length}\n`);
   return fullText;
 }
 
@@ -683,6 +716,7 @@ async function streamSSEWithCallback(res, format, onToken) {
   let fullText = '';
   let thinkBuf = '';    // accumulates <think>...</think> content to suppress
   let inThink = false;
+  let isHtmlOutput = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -728,9 +762,15 @@ async function streamSSEWithCallback(res, format, onToken) {
             }
           }
           if (out) {
-            // Qwen3 emits tokens without spaces between words — insert space when needed
-            if (fullText && out && !/[\s\n]$/.test(fullText) && !/^[\s\n.,;:!?)\]}'"]/.test(out)) {
-              out = ' ' + out;
+            if (!isHtmlOutput && (out.includes('<div') || out.includes('<!DOCTYPE') || out.includes('<html'))) {
+              isHtmlOutput = true;
+            }
+            if (!isHtmlOutput) {
+              out = fixQwen3Markdown(out);
+              const insideTag2 = fullText.lastIndexOf('<') > fullText.lastIndexOf('>');
+              if (fullText && out && !insideTag2 && !/[\s\n]$/.test(fullText) && !/^[\s\n.,;:!?)\]}'">]/.test(out)) {
+                out = ' ' + out;
+              }
             }
             fullText += out;
             if (onToken) onToken(out);
