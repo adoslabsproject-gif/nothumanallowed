@@ -3660,7 +3660,7 @@ function renderStudioResult() {
   var tokLine = (studioTokens && (studioTokens.in > 0 || studioTokens.out > 0))
     ? '<div style="margin-top:8px;font-size:11px;color:var(--dim);font-family:var(--mono)">&#x2B06; ' + (studioTokens.in||0).toLocaleString() + ' token in &nbsp;&#x2B07; ' + (studioTokens.out||0).toLocaleString() + ' token out &nbsp;&#x2022;&nbsp; <strong style="color:var(--green)">' + ((studioTokens.in||0)+(studioTokens.out||0)).toLocaleString() + '</strong> totale</div>'
     : '';
-  var dlBtn = '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+  var dlBtn = '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
     '<button onclick="downloadStudioPDF()" title="Scarica il workflow come PDF" style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:linear-gradient(135deg,#4f46e5,#2563eb);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.3px;box-shadow:0 2px 8px rgba(79,70,229,.35)">&#x2913; Download PDF</button>' +
     '<span style="font-size:11px;color:var(--dim)">Scarica il workflow completo come documento PDF</span>' +
     '</div>';
@@ -3805,8 +3805,15 @@ async function runStudio() {
     var parliamentActive = studioState.parliamentMode || (parliamentChk && parliamentChk.checked);
     if (parliamentActive && studioState.nodes.length >= 1) {
       var proposals = studioState.nodes
-        .filter(function(n) { return n.output && n.output !== \x27(no output)\x27 && n.agent !== \x27CanvasAgent\x27; })
-        .map(function(n) { return {agent: n.agent, label: n.label, output: n.output}; });
+        .filter(function(n) {
+          if (!n.output || n.output === \x27(no output)\x27) return false;
+          if (n.agent === \x27CanvasAgent\x27 || n.agent === \x27DocumentReaderAgent\x27) return false;
+          if (n.status === \x27error\x27) return false;
+          // Exclude nodes whose output is a short error message (< 80 chars containing "error"/"could not")
+          if (n.output.length < 120 && /error|could not|fallito|errore/i.test(n.output)) return false;
+          return true;
+        })
+        .map(function(n) { return {agent: n.agent, label: n.label, icon: n.icon, output: n.output}; });
       // Need at least 2 proposals for cross-reading; if only 1, include the full context as a second proposal
       if (proposals.length === 1 && context) {
         proposals.push({agent: \x27Context\x27, label: \x27Contesto workflow\x27, output: context});

@@ -2692,7 +2692,7 @@ export async function cmdUI(args) {
 
         // ── Fast keyword-based planning (no LLM call needed for common patterns) ──────
         const taskLow = task.toLowerCase();
-        const hasPdf        = !!(body.hasPdf) || /pdf|allegat|catalogo|scheda\s*tecnic|document/i.test(taskLow);
+        const hasPdf        = !!(body.hasPdf) || /pdf|allegat|catalogo|scheda\s*tecnic/i.test(taskLow);
         const hasEmail      = /email|mail|inbox|posta/i.test(taskLow);
         const hasCalendar   = /calendar|agenda|calendari|eventi|schedule/i.test(taskLow);
         const hasSearch     = /cerca|search|notizie|news|ultime|latest|web|internet|tendenz|trend|acquista|compra|dove\s+trovare|where\s+to\s+buy|similar|simile/i.test(taskLow);
@@ -3154,6 +3154,11 @@ RULES:
             userMsg = `Create a professional dashboard report for this data. Output ONLY the inner HTML body content (starting with <div class="header">):\n\n${canvasData}`;
           } else if (isLiveDataAgent) {
             // These agents fetched real data — use a focused prompt (no tool definitions to avoid JSON output)
+            // Live data agents that fetched their own data: do NOT inject previous context
+            // (prevents EmailAgent output from being repeated by GitHubAgent, CalendarAgent, etc.)
+            const contextBlock = toolData
+              ? ''  // Has own live data — ignore previous agent outputs to avoid repetition
+              : (context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context}\n` : '');
             const agentInstruction = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. Respond entirely in ${language}.
 
 ## OVERALL WORKFLOW GOAL:
@@ -3164,8 +3169,7 @@ Do NOT output JSON, tool calls, or code blocks. Write in plain text with markdow
 Always apply your analysis specifically to the subject mentioned in the WORKFLOW GOAL.
 
 ${attachmentText ? `## ATTACHED FILE CONTENT:\n${attachmentText}\n` : ''}${toolData ? `## DATA FROM TOOLS:\n${toolData}\n` : '## DATA: No data was retrieved by this agent.\n'}
-${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context}\n` : ''}
-
+${contextBlock}
 Your task: ${stepPrompt}`;
             sysPrompt = agentInstruction;
             userMsg = toolData
