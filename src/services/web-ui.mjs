@@ -3154,7 +3154,7 @@ function downloadStudioPDF() {
   }).join('');
 
   // Include canvas if present (as an embedded iframe screenshot fallback note)
-  var canvasNote = studioState.canvas ? '<div class="section canvas-note"><div class="agent-label">&#9632; Canvas Report</div><div class="section-body"><p><em>Il Canvas HTML è disponibile nell\x27interfaccia Studio. Apri il pannello Canvas e usa la funzione stampa del browser per includerlo.</em></p></div></div>' : '';
+  var canvasNote = studioState.canvas ? ["<div class='section canvas-note'><div class='agent-label'>&#9632; Canvas Report</div><div class='section-body'><p><em>Il Canvas HTML e disponibile in Studio. Aprire il pannello Canvas e usare la funzione stampa del browser per includerlo.</em></p></div></div>"].join("") : "";
 
   var html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>' + esc(task) + '</title><style>' +
     'body{font-family:"Helvetica Neue",Arial,sans-serif;color:#111;background:#fff;margin:0;padding:0}' +
