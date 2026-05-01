@@ -2275,8 +2275,8 @@ function renderSettings(el) {
       ['profile-notes', 'Notes', 'Anything else agents should know about you'],
     ]) +
     '<div style="padding:12px 16px;margin-bottom:16px;background:var(--amberdim);border:1px solid var(--amber3);border-radius:8px"><span style="font-family:var(--term);color:var(--amber);font-size:13px;font-weight:700">NHA Free (Liara)</span><div style="font-size:11px;color:var(--dim);margin:4px 0 8px">Powered by Qwen3 32B. Free, no API key needed. Slower (5-15s).</div><button onclick="apiPost(\\x27/api/config\\x27,{key:\\x27provider\\x27,value:\\x27nha\\x27}).then(function(){location.reload()})" style="padding:6px 16px;background:var(--amber3);color:var(--bg);border:none;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:700">Use NHA Free</button></div>' +
-    settingsSection('language', 'Language / Lingua', 'Set the UI language. Applies on reload.', [
-      ['lang', 'Language', 'en / it / es / fr / de / pt / zh / ja / ar / hi / ru / nl / pl / tr / ko / sv / da / fi / no / cs'],
+    settingsSection('language', 'Language / Lingua', 'Select the language used by all agents and Studio workflows.', [
+      ['lang', 'Language', ''],
     ]) +
     settingsSection('llm', 'LLM Provider', 'Or use your own API key for faster, more capable responses.', [
       ['provider', 'Provider', 'nha (free) / anthropic / openai / gemini / deepseek / grok / mistral'],
@@ -2345,6 +2345,35 @@ function settingsSection(id, title, desc, fields) {
         h += '<option value="' + providers[pi].value + '"' + sel + '>' + providers[pi].label + '</option>';
       }
       h += '</select>';
+    } else if (key === 'lang') {
+      var langs = [
+        {value:'it',label:'🇮🇹  Italiano'},
+        {value:'en',label:'🇬🇧  English'},
+        {value:'es',label:'🇪🇸  Español'},
+        {value:'fr',label:'🇫🇷  Français'},
+        {value:'de',label:'🇩🇪  Deutsch'},
+        {value:'pt',label:'🇵🇹  Português'},
+        {value:'nl',label:'🇳🇱  Nederlands'},
+        {value:'pl',label:'🇵🇱  Polski'},
+        {value:'ru',label:'🇷🇺  Русский'},
+        {value:'zh',label:'🇨🇳  中文'},
+        {value:'ja',label:'🇯🇵  日本語'},
+        {value:'ko',label:'🇰🇷  한국어'},
+        {value:'ar',label:'🇸🇦  العربية'},
+        {value:'hi',label:'🇮🇳  हिन्दी'},
+        {value:'tr',label:'🇹🇷  Türkçe'},
+        {value:'sv',label:'🇸🇪  Svenska'},
+        {value:'da',label:'🇩🇰  Dansk'},
+        {value:'fi',label:'🇫🇮  Suomi'},
+        {value:'cs',label:'🇨🇿  Čeština'},
+      ];
+      var curLang = currentVal || 'it';
+      h += '<select style="width:100%;padding:8px 12px;font-size:13px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:var(--r)" data-config-key="lang" data-section="' + esc(id) + '">';
+      for (var li=0;li<langs.length;li++) {
+        var lsel = curLang === langs[li].value ? ' selected' : '';
+        h += '<option value="' + langs[li].value + '"' + lsel + '>' + langs[li].label + '</option>';
+      }
+      h += '</select>';
     } else if (key === 'thinking') {
       // Dropdown for thinking toggle
       h += '<select style="width:100%;padding:8px 12px;font-size:13px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:var(--r)" data-config-key="thinking" data-section="' + esc(id) + '">' +
@@ -2404,13 +2433,22 @@ function saveSettingsSection(sectionId) {
     var allOk = results.every(function(r) { return r; });
     if (statusEl) {
       if (allOk) {
-        statusEl.textContent = 'Saved!';
+        if (sectionId === 'language') {
+          var langNames = {it:'Italiano',en:'English',es:'Español',fr:'Français',de:'Deutsch',pt:'Português',nl:'Nederlands',pl:'Polski',ru:'Русский',zh:'中文',ja:'日本語',ko:'한국어',ar:'العربية',hi:'हिन्दी',tr:'Türkçe',sv:'Svenska',da:'Dansk',fi:'Suomi',cs:'Čeština'};
+          try {
+            var cfg2 = JSON.parse(localStorage.getItem('nha_config_cache') || '{}');
+            var ln = langNames[cfg2.lang] || cfg2.lang || 'Italian';
+            statusEl.textContent = '✓ Language set to ' + ln + '. All agents and Studio will now respond in ' + ln + '.';
+          } catch(e) { statusEl.textContent = '✓ Saved!'; }
+        } else {
+          statusEl.textContent = 'Saved!';
+        }
         statusEl.style.color = 'var(--green)';
       } else {
         statusEl.textContent = 'Some fields failed to save.';
         statusEl.style.color = 'var(--red)';
       }
-      setTimeout(function() { statusEl.textContent = ''; }, 3000);
+      setTimeout(function() { statusEl.textContent = ''; }, 4000);
     }
   });
 }
@@ -3042,8 +3080,13 @@ var studioTokens = {in: 0, out: 0};
 function studioAddTokens(inp, out) {
   studioTokens.in += (inp||0);
   studioTokens.out += (out||0);
+  studioUpdateTokenBar();
+}
+function studioUpdateTokenBar() {
   var el = document.getElementById('studioTokenBar');
-  if (el) el.textContent = 'Tokens: ' + studioTokens.in + ' in / ' + studioTokens.out + ' out';
+  if (!el) return;
+  if (studioTokens.in === 0 && studioTokens.out === 0) { el.textContent = ''; return; }
+  el.textContent = '⬆ ' + studioTokens.in.toLocaleString() + ' in  ⬇ ' + studioTokens.out.toLocaleString() + ' out';
 }
 
 function runStudioStep(idx, node, task, context, stepDef, signal) {
@@ -3104,6 +3147,7 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
                 if (scb) scb.style.display = '';
               }
               if (ev.usage) { studioAddTokens(ev.usage.input||0, ev.usage.output||0); }
+              else if (ev.token && !isStatus) { studioTokens.out += Math.ceil(ev.token.length/4); studioUpdateTokenBar(); }
               if (ev.done) { resolve({output: output || '(no output)', canvas: canvasHtml}); return; }
               if (ev.error) { resolve({error: ev.error}); return; }
             } catch(e) {}

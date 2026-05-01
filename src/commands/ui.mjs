@@ -2544,82 +2544,32 @@ export async function cmdUI(args) {
         if (!task) { sendJSON(res, 400, { error: 'task required' }); logRequest(method, pathname, 400, Date.now() - start); return; }
 
         const plannerLang = (() => { const LANG_MAP2 = {en:'English',it:'Italian',es:'Spanish',fr:'French',de:'German',pt:'Portuguese',zh:'Chinese',ja:'Japanese',ar:'Arabic',hi:'Hindi',ru:'Russian',nl:'Dutch',pl:'Polish',tr:'Turkish',ko:'Korean'}; const lc = (config?.language||'it').slice(0,2); return LANG_MAP2[lc]||'Italian'; })();
-        const planPrompt = `You are a workflow planner for NHA Studio. The user wants to accomplish this task: "${task}"
-The workflow will run in ${plannerLang} — all agent prompts must be in ${plannerLang}.
+        const planPrompt = `You are a workflow planner. Task: "${task}"
+Language: ${plannerLang}. All prompts must be in ${plannerLang}.
 
-Design a sequential workflow of 2-6 steps. RULES:
-- Use tool-agents (WebSearchAgent, EmailAgent, CalendarAgent, GitHubAgent, NotionAgent, SlackAgent) FIRST when real live data is needed
-- ALWAYS use specialist agents (HERALD, ORACLE, NAVI, ATHENA, CASSANDRA, etc.) for analysis, briefings, and synthesis — NOT WriterAgent or DataAnalystAgent
-- For executive briefings use HERALD. For data analysis use NAVI or ORACLE. For tech analysis use ATHENA. For risk use CASSANDRA.
-- Use CanvasAgent as the LAST step ONLY when a visual HTML report/dashboard is explicitly requested
-- The "prompt" field must be a plain language instruction in ${plannerLang} — never JSON or code
-- Each agent receives the previous step's output as context automatically
-- Pick the most relevant agents for the task — don't use all of them
+Output ONLY valid JSON (no markdown, no explanation, no thinking):
+{"steps":[{"icon":"EMOJI","agent":"AGENT_NAME","label":"SHORT LABEL","prompt":"INSTRUCTION IN ${plannerLang}"}]}
 
-TOOL AGENTS (fetch real live data):
-- WebSearchAgent: search the web for current information
-- EmailAgent: read user's real unread emails
-- CalendarAgent: read user's real calendar events for today
-- GitHubAgent: read user's GitHub notifications and issues
-- NotionAgent: search user's Notion workspace
-- SlackAgent: read user's Slack messages
-- WriterAgent: write, summarize, synthesize text (no live data)
-- SummaryAgent: condense and summarize content
-- DataAnalystAgent: analyze data, find patterns, generate insights
-- SecurityAgent: security audit, threat analysis
-- DevOpsAgent: infrastructure, deployment, CI/CD analysis
-- CanvasAgent: generate a beautiful HTML visual dashboard (LAST step only)
+Rules:
+- 2-5 steps max
+- Use WebSearchAgent to fetch live web data
+- Use EmailAgent/CalendarAgent/GitHubAgent/SlackAgent for personal live data
+- Use HERALD for news briefings, ORACLE for business analysis, NAVI for data analysis, ATHENA for tech evaluation, CASSANDRA for risk, MERCURY for finance, HERALD for trends, QUILL for summaries
+- Use CanvasAgent LAST only if user explicitly asks for HTML/visual/dashboard
+- icon must be a real emoji character
 
-SPECIALIST AGENTS (deep domain experts with rich system prompts):
-- SABER: security audits, OWASP, penetration testing, vulnerability analysis
-- ATLAS: infrastructure-as-code, Terraform, Kubernetes, cloud architecture
-- JARVIS: full-stack architecture, API design, system design, ADRs
-- VERITAS: fact-checking, evidence verification, claim validation
-- CASSANDRA: risk analysis, failure modes, worst-case scenarios
-- MERCURY: financial analysis, ROI, unit economics, market modeling
-- HERALD: news analysis, trend detection, executive briefings
-- ATHENA: tech evaluation, framework comparison, benchmarks
-- ORACLE: business intelligence, KPIs, OKRs, dashboards
-- NAVI: data exploration, statistical analysis, pattern detection
-- MUSE: creative brainstorming, ideation, naming, taglines
-- QUILL: short-form content, summaries, press releases
-- SCHEHERAZADE: long-form technical writing, documentation, tutorials
-- ECHO: content adaptation, cross-platform distribution
-- POLYGLOT: translation, localization, multilingual content
-- FORGE: CI/CD pipelines, GitHub Actions, Docker builds
-- FLUX: deployment strategies, blue/green, canary releases
-- SHOGUN: Kubernetes, Helm, container orchestration
-- PIPE: data pipelines, Airflow, dbt, ETL
-- MACRO: bulk operations, data migration, batch processing
-- SHELL: shell scripting, CLI tools, automation scripts
-- CONDUCTOR: workflow orchestration, task decomposition
-- CRON: scheduling, cron jobs, time-based automation
-- HERMES: webhooks, event-driven architecture, integrations
-- BABEL: API design, microservices, OpenAPI specs
-- CARTOGRAPHER: data mapping, schema inference, knowledge graphs
-- LOGOS: logical analysis, argument mapping, decision theory
-- EDI: A/B testing, statistical modeling, hypothesis testing
-- EPICURE: nutrition, recipes, meal planning
-- MURASAKI: creative writing, storytelling, narrative craft
-- LINK: community management, reputation systems
-- GLITCH: chaos engineering, resilience testing
-- TEMPEST: performance engineering, load testing
-- SAURON: observability, monitoring, alerting
-- PROMETHEUS: capability routing, task decomposition
-- ADE: agent design, system prompt engineering
-- ZERO: vulnerability scanning, dependency audit, secret detection
-
-Icon values must be actual emoji characters — never HTML entities.
-
-Respond with ONLY valid JSON, no markdown:
-{"steps":[{"icon":"🔍","agent":"WebSearchAgent","label":"Search AI news","prompt":"Search for the latest AI agent news"},{"icon":"🧠","agent":"ATHENA","label":"Tech analysis","prompt":"Analyze the search results and compare the key technologies mentioned"}]}`;
+Example output:
+{"steps":[{"icon":"🔍","agent":"WebSearchAgent","label":"Cerca notizie","prompt":"Cerca le ultime notizie su intelligenza artificiale oggi"},{"icon":"📰","agent":"HERALD","label":"Analisi notizie","prompt":"Analizza le notizie trovate e crea un briefing esecutivo"},{"icon":"📊","agent":"CanvasAgent","label":"Dashboard HTML","prompt":"Crea una dashboard HTML visuale con i risultati"}]}`;
 
         try {
-          const planRaw = await callLLM(config, 'You are a JSON workflow planner. Respond only with valid JSON.', planPrompt, { max_tokens: 800 });
+          const planRaw = await callLLM(config, 'You are a JSON workflow planner. Respond only with valid JSON, no markdown, no explanation.', planPrompt, { max_tokens: 1200 });
           let steps;
           try {
-            const jsonMatch = planRaw.match(/\{[\s\S]*\}/);
-            const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : planRaw);
+            // Strip <think>...</think> blocks and markdown fences before parsing
+            let clean = planRaw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            clean = clean.replace(/^```[\w]*\n?/,'').replace(/\n?```$/,'').trim();
+            const jsonMatch = clean.match(/\{[\s\S]*\}/);
+            const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
             steps = parsed.steps;
           } catch {
             sendJSON(res, 500, { error: 'Failed to parse workflow plan' });
