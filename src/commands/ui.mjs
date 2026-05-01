@@ -2758,14 +2758,92 @@ Respond with ONLY valid JSON, no markdown:
           // Tool-data agents: fetch real live data and use buildSystemPrompt (tool calls allowed)
           const isLiveDataAgent = ['CalendarAgent','EmailAgent','GitHubAgent','NotionAgent','SlackAgent','DriveAgent','BrowserAgent','WebSearchAgent','ResearchAgent'].includes(agent);
 
-          const canvasSystemPrompt = `You are an HTML report generator. Output a single complete HTML document in ${language}. No preamble, no explanation.
-RULES:
-- First character of your response must be < (start of <!DOCTYPE html>)
-- Do NOT use markdown code blocks, JSON, or any wrapper
-- All text content must be in ${language}
-- Use clean design: white background, Inter/system-ui font, #6366f1 accent color
-- Structure: gradient header, then card sections with the content
-- Make it complete and self-contained`;
+          const canvasSystemPrompt = `You are an HTML report generator. Output ONLY a single complete HTML document in ${language}. No preamble, no explanation, no markdown.
+STRICT RULES:
+- Your ENTIRE response must be valid HTML starting with <!DOCTYPE html>
+- Do NOT output markdown code blocks, JSON, or any wrapper text
+- ALL text content (titles, descriptions, labels, body text) must be in ${language}
+- Use EXACTLY this CSS template structure — only change the content inside, never the style
+
+USE THIS EXACT HTML STRUCTURE (replace placeholders with real content):
+<!DOCTYPE html>
+<html lang="${language.slice(0,2).toLowerCase()}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REPORT TITLE HERE</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;background:#0d0d14;color:#f0f0f5;min-height:100vh;padding:24px}
+.header{background:linear-gradient(135deg,#6366f1 0%,#22d3ee 100%);border-radius:16px;padding:32px 40px;margin-bottom:24px}
+.header h1{font-size:28px;font-weight:700;color:#fff;margin-bottom:8px}
+.header p{font-size:14px;color:rgba(255,255,255,0.8)}
+.meta{display:flex;gap:16px;margin-top:16px;flex-wrap:wrap}
+.meta span{background:rgba(255,255,255,0.2);border-radius:20px;padding:4px 12px;font-size:12px;color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+.card{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:20px}
+.card h2{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;margin-bottom:12px;font-weight:600}
+.card h3{font-size:16px;font-weight:600;color:#f0f0f5;margin-bottom:8px}
+.card p{font-size:13px;color:#8b8b9e;line-height:1.6}
+.card ul{list-style:none;padding:0}
+.card ul li{font-size:13px;color:#8b8b9e;line-height:1.8;padding-left:16px;position:relative}
+.card ul li::before{content:'›';position:absolute;left:0;color:#6366f1}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;margin-right:6px;margin-bottom:4px}
+.badge-high{background:#7f1d1d;color:#ef4444}
+.badge-med{background:#713f12;color:#f59e0b}
+.badge-low{background:#14532d;color:#34d399}
+.badge-info{background:#1e1b4b;color:#6366f1}
+.section{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:24px;margin-bottom:16px}
+.section h2{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#22d3ee;margin-bottom:16px;font-weight:600}
+.section h3{font-size:15px;font-weight:600;color:#f0f0f5;margin-bottom:6px}
+.section p{font-size:13px;color:#8b8b9e;line-height:1.7;margin-bottom:12px}
+.priority-list{display:flex;flex-direction:column;gap:10px}
+.priority-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#1c1c28;border-radius:8px}
+.priority-num{width:28px;height:28px;border-radius:50%;background:#6366f1;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.priority-item h4{font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:2px}
+.priority-item p{font-size:12px;color:#8b8b9e;line-height:1.5;margin:0}
+.footer{text-align:center;padding:20px;font-size:11px;color:#4a4a5e;margin-top:8px}
+</style>
+</head>
+<body>
+<!-- HEADER: put report title, subtitle, date, and 2-3 meta tags -->
+<div class="header">
+  <h1>REPLACE WITH REPORT TITLE</h1>
+  <p>REPLACE WITH SUBTITLE/DESCRIPTION</p>
+  <div class="meta">
+    <span>📅 ${today}</span>
+    <span>META TAG 2</span>
+    <span>META TAG 3</span>
+  </div>
+</div>
+
+<!-- STATS GRID: 3-4 cards with key numbers/stats -->
+<div class="grid">
+  <div class="card">
+    <h2>LABEL 1</h2>
+    <h3>STAT OR TITLE</h3>
+    <p>DESCRIPTION</p>
+  </div>
+  <!-- Add more cards for other stats -->
+</div>
+
+<!-- MAIN SECTIONS: 2-4 sections with content -->
+<div class="section">
+  <h2>SECTION LABEL</h2>
+  <div class="priority-list">
+    <div class="priority-item">
+      <div class="priority-num">1</div>
+      <div><h4>ITEM TITLE</h4><p>ITEM DESCRIPTION</p></div>
+    </div>
+    <!-- Add more priority items -->
+  </div>
+</div>
+
+<div class="footer">Generated by NHA Studio · ${today}</div>
+</body>
+</html>
+
+Fill ALL placeholder text with the actual content from the data provided. Keep ALL CSS exactly as above. Output ONLY the HTML.`;
 
           let sysPrompt, userMsg;
 
