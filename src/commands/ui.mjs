@@ -18,7 +18,7 @@ import { loadConfig } from '../config.mjs';
 import { detectMailProvider, hasMailProvider, getProviderStatus } from '../services/mail-router.mjs';
 import { callLLM, callLLMStream, callAgent, parseAgentFile } from '../services/llm.mjs';
 import { getUnreadImportant, getMessage, listMessages, sendEmail, createDraft } from '../services/mail-router.mjs';
-import { getTodayEvents, getUpcomingEvents, createEvent, updateEvent, getEventsForDate } from '../services/mail-router.mjs';
+import { getTodayEvents, getUpcomingEvents, createEvent, updateEvent, deleteEvent, getEventsForDate } from '../services/mail-router.mjs';
 import {
   getTasks,
   addTask,
@@ -1022,6 +1022,70 @@ export async function cmdUI(args) {
           sendJSON(res, 200, { events, date: dateParam || new Date().toISOString().split('T')[0] });
         } catch (e) {
           sendJSON(res, 200, { events: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/calendar — create event
+      if (method === 'POST' && pathname === '/api/calendar') {
+        try {
+          const body = await parseBody(req);
+          if (!body.summary) { sendJSON(res, 400, { error: 'summary required' }); logRequest(method, pathname, 400, Date.now() - start); return; }
+          const calendarId = body.calendarId || 'primary';
+          const event = { summary: body.summary };
+          if (body.description) event.description = body.description;
+          if (body.location) event.location = body.location;
+          if (body.allDay && body.date) {
+            event.start = { date: body.date };
+            event.end = { date: body.date };
+          } else {
+            const startDT = body.start || (body.date ? body.date + 'T09:00:00' : new Date().toISOString());
+            const endDT = body.end || (body.date ? body.date + 'T10:00:00' : new Date(Date.now() + 3600000).toISOString());
+            event.start = { dateTime: startDT };
+            event.end = { dateTime: endDT };
+          }
+          const created = await createEvent(config, event, calendarId);
+          sendJSON(res, 201, { event: created });
+        } catch (e) {
+          sendJSON(res, 500, { error: e.message });
+        }
+        logRequest(method, pathname, 201, Date.now() - start);
+        return;
+      }
+
+      // PATCH /api/calendar/:calId/:eventId — update event
+      const calPatchMatch = pathname.match(/^\/api\/calendar\/([^/]+)\/([^/]+)$/);
+      if (method === 'PATCH' && calPatchMatch) {
+        try {
+          const calendarId = decodeURIComponent(calPatchMatch[1]);
+          const eventId = decodeURIComponent(calPatchMatch[2]);
+          const body = await parseBody(req);
+          const patch = {};
+          if (body.summary !== undefined) patch.summary = body.summary;
+          if (body.description !== undefined) patch.description = body.description;
+          if (body.location !== undefined) patch.location = body.location;
+          if (body.start !== undefined) patch.start = { dateTime: body.start };
+          if (body.end !== undefined) patch.end = { dateTime: body.end };
+          const updated = await updateEvent(config, calendarId, eventId, patch);
+          sendJSON(res, 200, { event: updated });
+        } catch (e) {
+          sendJSON(res, 500, { error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // DELETE /api/calendar/:calId/:eventId — delete event
+      const calDeleteMatch = pathname.match(/^\/api\/calendar\/([^/]+)\/([^/]+)$/);
+      if (method === 'DELETE' && calDeleteMatch) {
+        try {
+          const calendarId = decodeURIComponent(calDeleteMatch[1]);
+          const eventId = decodeURIComponent(calDeleteMatch[2]);
+          await deleteEvent(config, calendarId, eventId);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) {
+          sendJSON(res, 500, { error: e.message });
         }
         logRequest(method, pathname, 200, Date.now() - start);
         return;
@@ -2390,11 +2454,26 @@ export async function cmdUI(args) {
       }
 
       // ── GitHub ───────────────────────────────────────────────────────
+      if (method === 'GET' && pathname === '/api/github/repos') {
+        try {
+          const gh = await import('../services/github.mjs');
+          const data = await gh.listUserRepos(config, 30);
+          sendJSON(res, 200, data);
+        } catch (e) {
+          sendJSON(res, 200, { error: e.message, repos: [] });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
       if (method === 'GET' && pathname === '/api/github') {
         try {
           const gh = await import('../services/github.mjs');
-          const raw = await gh.listNotificationsRaw(config, 15);
-          sendJSON(res, 200, { notifications: raw });
+          const [notifData, repoData] = await Promise.all([
+            gh.listNotificationsRaw(config, 15),
+            gh.listUserRepos(config, 30).catch(() => null),
+          ]);
+          sendJSON(res, 200, { notifications: notifData, user: repoData });
         } catch (e) {
           sendJSON(res, 200, { error: e.message, notifications: [] });
         }
@@ -2525,13 +2604,49 @@ export async function cmdUI(args) {
             const daysUntil = Math.ceil((thisYear - today) / 86400000);
             if (daysUntil <= 90) {
               const dateStr = thisYear.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-              upcoming.push({ name: c.name, date: dateStr, daysUntil });
+              upcoming.push({ name: c.name, date: dateStr, rawDate: c.birthday, daysUntil, contactId: c.resourceName });
             }
           }
           upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
           sendJSON(res, 200, { birthdays: upcoming });
         } catch (e) {
           sendJSON(res, 200, { birthdays: [], error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/birthdays — create or update birthday on a contact
+      if (method === 'POST' && pathname === '/api/birthdays') {
+        try {
+          const body = await parseBody(req);
+          const gc = await import('../services/google-contacts.mjs');
+          if (body.contactId) {
+            // Update existing contact's birthday
+            await gc.updateContact(config, body.contactId, { birthday: body.date });
+          } else {
+            // Create new contact with just name + birthday
+            const created = await gc.createContact(config, { name: body.name });
+            await gc.updateContact(config, created.resourceName, { birthday: body.date });
+          }
+          sendJSON(res, 200, { ok: true });
+        } catch (e) {
+          sendJSON(res, 500, { error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/birthdays/delete — clear birthday from a contact
+      if (method === 'POST' && pathname === '/api/birthdays/delete') {
+        try {
+          const body = await parseBody(req);
+          const gc = await import('../services/google-contacts.mjs');
+          // Clear birthday by setting it to empty (remove field)
+          await gc.updateContact(config, body.contactId, { birthday: '' });
+          sendJSON(res, 200, { ok: true });
+        } catch (e) {
+          sendJSON(res, 500, { error: e.message });
         }
         logRequest(method, pathname, 200, Date.now() - start);
         return;

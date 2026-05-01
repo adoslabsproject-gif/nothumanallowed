@@ -281,6 +281,19 @@ export async function updateEvent(config, calendarId, eventId, patch) {
   return gc.updateEvent(config, calendarId, eventId, patch);
 }
 
+export async function deleteEvent(config, calendarId, eventId) {
+  const provider = detectMailProvider(config);
+  if (!provider) throw new Error('No mail provider authenticated.');
+
+  if (provider === 'microsoft') {
+    const ms = await getMicrosoftCalendar();
+    return ms.deleteEvent(config, calendarId, eventId);
+  }
+
+  const gc = await getGoogleCalendar();
+  return gc.deleteEvent(config, calendarId, eventId);
+}
+
 /**
  * List events for a date range.
  */

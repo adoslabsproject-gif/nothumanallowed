@@ -228,6 +228,13 @@ export async function updateEvent(config, calendarId, eventId, patch) {
   });
 }
 
+export async function deleteEvent(config, calendarId, eventId) {
+  const calPath = calendarId === 'primary'
+    ? `/calendar/events/${eventId}`
+    : `/calendars/${calendarId}/events/${eventId}`;
+  await graphFetch(config, calPath, { method: 'DELETE' });
+}
+
 // ── Event Parser ───────────────────────────────────────────────────────────
 
 /**

@@ -242,7 +242,7 @@ setInterval(updateClock,1000);updateClock();
 
 // ---- API ----
 function apiGet(p){return fetch(API+p).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}
-function apiPost(p,b){return fetch(API+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}
+function apiPost(p,b,m){return fetch(API+p,{method:m||'POST',headers:{'Content-Type':'application/json'},body:b!=null?JSON.stringify(b):undefined}).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(t||r.status)});return r.text().then(function(t){try{return JSON.parse(t)}catch(e){return null}})})}
 function apiPatch(p){return fetch(API+p,{method:'PATCH'}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}
 
 // ---- LOAD DATA ----
@@ -1184,75 +1184,180 @@ function openDayDetail(dateStr){
   var evts=calEventsCache[dateStr]||[];
   var dayLabel=new Date(dateStr+'T12:00:00').toLocaleDateString('en',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 
-  var h='<h2 style="color:var(--green);margin-bottom:4px">'+esc(dayLabel)+'</h2>';
-  h+='<div style="color:var(--dim);font-size:11px;margin-bottom:12px">'+dateStr+'</div>';
-
-  if(evts.length===0){
-    h+='<div style="color:var(--dim);padding:20px;text-align:center">No events on this day</div>';
-  } else {
-    evts.forEach(function(x){
-      var timeStr=x.isAllDay?'All day':fmtTime(x.start)+' - '+fmtTime(x.end);
-      h+='<div style="border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:10px;background:var(--bg3)">';
-      h+='<div style="color:var(--amber);font-weight:700;font-size:13px;margin-bottom:4px">'+esc(timeStr)+'</div>';
-      h+='<div style="color:var(--bright);font-size:15px;font-weight:700;margin-bottom:6px">'+esc(x.summary)+'</div>';
-      if(x.location)h+='<div style="color:var(--cyan);font-size:12px;margin-bottom:4px">Location: '+esc(x.location)+'</div>';
-      if(x.organizer)h+='<div style="color:var(--dim);font-size:11px;margin-bottom:4px">Organizer: '+esc(x.organizer)+'</div>';
-      if(x.attendees&&x.attendees.length>0){
-        h+='<div style="color:var(--dim);font-size:11px;margin-bottom:4px">Attendees:</div>';
-        x.attendees.forEach(function(a){
-          var status=a.responseStatus==='accepted'?'var(--green)':a.responseStatus==='declined'?'var(--red)':'var(--dim)';
-          h+='<div style="font-size:11px;color:'+status+';padding-left:8px">'+esc(a.name||a.email)+' ('+esc(a.responseStatus)+')</div>';
-        });
-      }
-      if(x.description){
-        h+='<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;color:var(--text);font-size:12px;white-space:pre-wrap;word-wrap:break-word">'+esc(x.description)+'</div>';
-      }
-      if(x.hangoutLink){
-        h+='<div style="margin-top:8px"><a href="'+esc(x.hangoutLink)+'" target="_blank" style="color:var(--cyan);font-size:12px;font-weight:700">Join Video Call</a></div>';
-      }
-      if(x.htmlLink){
-        h+='<div style="margin-top:4px"><a href="'+esc(x.htmlLink)+'" target="_blank" style="color:var(--dim);font-size:10px">Open in Google Calendar</a></div>';
-      }
-      h+='</div>';
-    });
+  function buildDayHtml(){
+    var h='<h2 style="color:var(--green);margin-bottom:4px">'+esc(dayLabel)+'</h2>';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
+    h+='<span style="color:var(--dim);font-size:11px">'+dateStr+'</span>';
+    h+='<button onclick="openEventForm(null,'+JSON.stringify(dateStr)+')" style="margin-left:auto;background:var(--green3);color:var(--bg);padding:5px 12px;border-radius:var(--r);font-size:12px;font-weight:700">+ Add Event</button>';
+    h+='</div>';
+    if(evts.length===0){
+      h+='<div style="color:var(--dim);padding:20px;text-align:center">No events on this day</div>';
+    } else {
+      evts.forEach(function(x,idx){
+        var timeStr=x.isAllDay?'All day':fmtTime(x.start)+' - '+fmtTime(x.end);
+        var calId=x.calendarId||'primary';
+        h+='<div style="border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:10px;background:var(--bg3)">';
+        h+='<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px">';
+        h+='<div style="flex:1"><div style="color:var(--amber);font-weight:700;font-size:13px;margin-bottom:4px">'+esc(timeStr)+'</div>';
+        h+='<div style="color:var(--bright);font-size:15px;font-weight:700;margin-bottom:6px">'+esc(x.summary)+'</div></div>';
+        if(x.id){
+          h+='<div style="display:flex;gap:4px;flex-shrink:0">';
+          h+='<button onclick="openEventForm('+JSON.stringify({id:x.id,calId:calId,summary:x.summary,description:x.description||'',location:x.location||'',start:x.start,end:x.end,isAllDay:x.isAllDay})+','+JSON.stringify(dateStr)+')" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px">Edit</button>';
+          h+='<button onclick="deleteCalEvent('+JSON.stringify(calId)+','+JSON.stringify(x.id)+','+JSON.stringify(dateStr)+')" style="background:var(--bg2);border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:4px;font-size:11px">Delete</button>';
+          h+='</div>';
+        }
+        h+='</div>';
+        if(x.location)h+='<div style="color:var(--cyan);font-size:12px;margin-bottom:4px">Location: '+esc(x.location)+'</div>';
+        if(x.organizer)h+='<div style="color:var(--dim);font-size:11px;margin-bottom:4px">Organizer: '+esc(x.organizer)+'</div>';
+        if(x.attendees&&x.attendees.length>0){
+          h+='<div style="color:var(--dim);font-size:11px;margin-bottom:4px">Attendees:</div>';
+          x.attendees.forEach(function(a){
+            var status=a.responseStatus==='accepted'?'var(--green)':a.responseStatus==='declined'?'var(--red)':'var(--dim)';
+            h+='<div style="font-size:11px;color:'+status+';padding-left:8px">'+esc(a.name||a.email)+' ('+esc(a.responseStatus)+')</div>';
+          });
+        }
+        if(x.description){
+          h+='<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;color:var(--text);font-size:12px;white-space:pre-wrap;word-wrap:break-word">'+esc(x.description)+'</div>';
+        }
+        if(x.hangoutLink){
+          h+='<div style="margin-top:8px"><a href="'+esc(x.hangoutLink)+'" target="_blank" style="color:var(--cyan);font-size:12px;font-weight:700">Join Video Call</a></div>';
+        }
+        if(x.htmlLink){
+          h+='<div style="margin-top:4px"><a href="'+esc(x.htmlLink)+'" target="_blank" style="color:var(--dim);font-size:10px">Open in Google Calendar</a></div>';
+        }
+        h+='</div>';
+      });
+    }
+    return h;
   }
 
-  // Use the agent modal for day detail (read-only mode)
   selectedAgent=null;
   agentChatHistory=[];
   document.getElementById('modalName').textContent=dayLabel;
   document.getElementById('modalAgentDesc').textContent='';
-  // Show the day events in the messages area
   var msgEl=document.getElementById('agentMessages');
-  if(msgEl){msgEl.innerHTML='<div class="agent-chat__bubble agent-chat__bubble--agent md-body" style="width:100%;max-width:100%;box-sizing:border-box">'+h+'</div>';}
-  // Hide input footer in read-only mode
+  if(msgEl){msgEl.innerHTML='<div id="dayDetailBody" class="agent-chat__bubble agent-chat__bubble--agent md-body" style="width:100%;max-width:100%;box-sizing:border-box">'+buildDayHtml()+'</div>';}
   var footer=document.querySelector('.agent-chat__footer');
   if(footer)footer.style.display='none';
   document.getElementById('agentModal').classList.add('modal-overlay--open');
+}
+
+function refreshDayDetail(dateStr){
+  delete calEventsCache[dateStr];
+  apiGet('/api/calendar?date='+dateStr).then(function(r){
+    calEventsCache[dateStr]=(r&&r.events)||[];
+    openDayDetail(dateStr);
+    renderCalendar(document.getElementById('content'));
+  });
+}
+
+function deleteCalEvent(calId,eventId,dateStr){
+  if(!confirm('Delete this event?'))return;
+  apiPost('/api/calendar/'+encodeURIComponent(calId)+'/'+encodeURIComponent(eventId),null,'DELETE').then(function(){
+    refreshDayDetail(dateStr);
+  }).catch(function(e){alert('Error: '+e.message);});
+}
+
+function openEventForm(evt,dateStr){
+  var isEdit=evt&&evt.id;
+  var defDate=dateStr||new Date().toISOString().split('T')[0];
+  var defStart=evt&&evt.start?evt.start:defDate+'T09:00';
+  var defEnd=evt&&evt.end?evt.end:defDate+'T10:00';
+  if(defStart.length>16)defStart=defStart.slice(0,16);
+  if(defEnd.length>16)defEnd=defEnd.slice(0,16);
+
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center';
+  var card=document.createElement('div');
+  card.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:24px;width:420px;max-width:95vw;max-height:90vh;overflow-y:auto';
+  card.innerHTML='<div style="font-size:16px;font-weight:700;color:var(--bright);margin-bottom:16px">'+(isEdit?'Edit Event':'New Event')+'</div>'+
+    '<label style="font-size:12px;color:var(--dim);display:block;margin-bottom:4px">Title *</label>'+
+    '<input id="evtTitle" type="text" value="'+esc(evt&&evt.summary||'')+'" placeholder="Event title" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:12px;font-size:13px">'+
+    '<label style="font-size:12px;color:var(--dim);display:block;margin-bottom:4px">Start</label>'+
+    '<input id="evtStart" type="datetime-local" value="'+esc(defStart)+'" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:12px;font-size:13px">'+
+    '<label style="font-size:12px;color:var(--dim);display:block;margin-bottom:4px">End</label>'+
+    '<input id="evtEnd" type="datetime-local" value="'+esc(defEnd)+'" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:12px;font-size:13px">'+
+    '<label style="font-size:12px;color:var(--dim);display:block;margin-bottom:4px">Location</label>'+
+    '<input id="evtLoc" type="text" value="'+esc(evt&&evt.location||'')+'" placeholder="Optional" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:12px;font-size:13px">'+
+    '<label style="font-size:12px;color:var(--dim);display:block;margin-bottom:4px">Description</label>'+
+    '<textarea id="evtDesc" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:16px;font-size:13px;height:70px;resize:vertical">'+esc(evt&&evt.description||'')+'</textarea>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end">'+
+    '<button id="evtCancelBtn" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:var(--r);font-size:13px">Cancel</button>'+
+    '<button id="evtSaveBtn" style="background:var(--green3);color:var(--bg);padding:8px 18px;border-radius:var(--r);font-size:13px;font-weight:700">'+(isEdit?'Save Changes':'Create Event')+'</button>'+
+    '</div><div id="evtErr" style="color:var(--red);font-size:12px;margin-top:8px"></div>';
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  card.querySelector('#evtCancelBtn').onclick=function(){document.body.removeChild(overlay);};
+  overlay.onclick=function(e){if(e.target===overlay)document.body.removeChild(overlay);};
+  card.querySelector('#evtSaveBtn').onclick=function(){
+    var title=card.querySelector('#evtTitle').value.trim();
+    if(!title){card.querySelector('#evtErr').textContent='Title is required';return;}
+    var startVal=card.querySelector('#evtStart').value;
+    var endVal=card.querySelector('#evtEnd').value;
+    var loc=card.querySelector('#evtLoc').value.trim();
+    var desc=card.querySelector('#evtDesc').value.trim();
+    var btn=card.querySelector('#evtSaveBtn');
+    btn.textContent='Saving...';btn.disabled=true;
+    var promise;
+    if(isEdit){
+      var calId=evt.calId||'primary';
+      var patch={summary:title,start:startVal,end:endVal};
+      if(loc)patch.location=loc;
+      if(desc)patch.description=desc;
+      promise=apiPost('/api/calendar/'+encodeURIComponent(calId)+'/'+encodeURIComponent(evt.id),patch,'PATCH');
+    } else {
+      promise=apiPost('/api/calendar',{summary:title,start:startVal,end:endVal,location:loc,description:desc,date:dateStr});
+    }
+    promise.then(function(){
+      document.body.removeChild(overlay);
+      refreshDayDetail(dateStr);
+    }).catch(function(e){
+      card.querySelector('#evtErr').textContent='Error: '+(e.message||'Unknown error');
+      btn.textContent=isEdit?'Save Changes':'Create Event';btn.disabled=false;
+    });
+  };
 }
 
 // ---- GITHUB ----
 var ghData=null;var ghRepo='';
 function renderGitHub(el){
   function renderGhData(r){
-    var h='<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"><input type="text" id="ghRepo" placeholder="owner/repo" value="'+esc(ghRepo)+'" style="flex:1;min-width:180px;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)loadGhIssues()"><button onclick="loadGhIssues()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Issues</button><button onclick="loadGhPRs()" style="background:var(--cyan);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">PRs</button></div>';
+    var user=r.user||null;
+    // Header: user profile + repo input
+    var userHtml='';
+    if(user&&user.login){
+      userHtml='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border)">'+(user.avatar?'<img src="'+esc(user.avatar)+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover" alt="">':'')+'<div><div style="font-weight:700;font-size:13px;color:var(--green)">@'+esc(user.login)+'</div>'+(user.name?'<div style="font-size:11px;color:var(--dim)">'+esc(user.name)+'</div>':'')+'</div></div>';
+    }
+    var h=userHtml+'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap"><input type="text" id="ghRepo" placeholder="owner/repo" value="'+esc(ghRepo)+'" style="flex:1;min-width:180px;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)loadGhIssues()"><button onclick="loadGhIssues()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Issues</button><button onclick="loadGhPRs()" style="background:var(--cyan);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">PRs</button></div>';
+    // My repos as clickable pills
+    if(user&&user.repos&&user.repos.length>0){
+      h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">';
+      user.repos.slice(0,12).forEach(function(repo){
+        h+='<button onclick="ghRepo=\\x27'+esc(repo.full_name)+'\\x27;document.getElementById(\\x27ghRepo\\x27).value=\\x27'+esc(repo.full_name)+'\\x27;loadGhIssues()" style="background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--fg);cursor:pointer;white-space:nowrap" title="'+esc(repo.description)+(repo.open_issues?' | '+repo.open_issues+' open issues':'')+'">'+(repo.private?'&#128274; ':'')+esc(repo.full_name)+(repo.open_issues?'<span style="color:var(--amber);margin-left:4px">'+repo.open_issues+'</span>':'')+'</button>';
+      });
+      h+='</div>';
+    }
+    // Notifications
     var notifs=r.notifications||[];
     if(notifs.length>0){
       h+='<div style="display:flex;align-items:center;justify-content:space-between"><div class="section-title">Notifications ('+notifs.length+')</div><button onclick="ghMarkRead()" style="background:var(--bg3);color:var(--dim);border:1px solid var(--border);padding:4px 10px;border-radius:var(--r);font-size:10px;cursor:pointer">Mark all read</button></div>';
       notifs.forEach(function(n){h+='<div class="card" style="padding:10px 14px;cursor:pointer" onclick="window.open(\\x27'+esc(n.url)+'\\x27,\\x27_blank\\x27)"><span style="color:var(--cyan);font-size:11px">'+esc(n.repo)+'</span> <span style="color:var(--dim);font-size:10px">['+esc(n.type)+']</span><div style="font-size:13px;margin-top:2px">'+esc(n.title)+'</div><div style="font-size:10px;color:var(--dim)">'+esc(n.reason)+' &middot; '+esc(n.updated)+'</div></div>'});
     }
+    // Issues
     if(r.issues&&r.issues.length>0){
       h+='<div class="section-title">Issues — '+esc(r.repo||ghRepo)+'</div>';
       r.issues.forEach(function(i){h+='<div class="card" style="padding:10px 14px;cursor:pointer" onclick="window.open(\\x27'+esc(i.url)+'\\x27,\\x27_blank\\x27)"><span style="color:var(--green);font-weight:700">#'+i.number+'</span> '+esc(i.title)+(i.assignee?' <span style="font-size:10px;color:var(--cyan)">&#8594; '+esc(i.assignee)+'</span>':'')+(i.labels?'<span style="font-size:9px;color:var(--amber);margin-left:6px">['+esc(i.labels)+']</span>':'')+'<div style="font-size:10px;color:var(--dim)">'+esc(i.updated)+'</div></div>'});
     }
+    // PRs
     if(r.prs&&r.prs.length>0){
       h+='<div class="section-title">Pull Requests — '+esc(r.repo||ghRepo)+'</div>';
       r.prs.forEach(function(p){h+='<div class="card" style="padding:10px 14px;cursor:pointer" onclick="window.open(\\x27'+esc(p.url)+'\\x27,\\x27_blank\\x27)"><span style="color:var(--cyan);font-weight:700">#'+p.number+'</span> '+esc(p.title)+' <span style="font-size:10px;color:var(--dim)">by '+esc(p.author)+'</span>'+(p.draft?'<span style="font-size:9px;color:var(--amber)"> DRAFT</span>':'')+'<div style="font-size:10px;color:var(--dim)">'+esc(p.updated)+'</div></div>'});
     }
-    if(!notifs.length&&!(r.issues&&r.issues.length)&&!(r.prs&&r.prs.length)){h+='<div class="card" style="text-align:center;color:var(--dim);padding:20px">Enter a repo above (e.g. owner/repo) and click Issues or PRs.<br>Notifications load automatically.</div>'}
+    if(!notifs.length&&!(r.issues&&r.issues.length)&&!(r.prs&&r.prs.length)){
+      h+='<div class="card" style="text-align:center;color:var(--dim);padding:20px">Click a repo above or type owner/repo and click Issues or PRs.</div>';
+    }
     el.innerHTML=h;
   }
-  // If ghData already loaded (e.g. after loadGhIssues/loadGhPRs), render directly without re-fetching
   if(ghData){renderGhData(ghData);return;}
   el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="color:var(--dim)">Loading GitHub...</div></div>';
   apiGet('/api/github').then(function(r){
@@ -1267,7 +1372,12 @@ function ghMarkRead(){apiPost('/api/github/mark-read',{}).then(function(){if(ghD
 
 // ---- NOTION ----
 function renderNotion(el){
-  el.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" id="notionQuery" placeholder="Search Notion pages..." style="flex:1;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)searchNotion()"><button onclick="searchNotion()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Search</button></div><div id="notionResults"><div class="card" style="text-align:center;color:var(--dim);padding:20px">Search your Notion workspace. Requires: nha config set notion-token YOUR_TOKEN</div></div>';
+  apiGet('/api/notion/search?q=').then(function(r){
+    var banner=r&&r.error?setupBanner('Notion','nha config set notion-token YOUR_INTEGRATION_TOKEN')+'<div style="color:var(--dim);font-size:12px;padding:8px 0">Get an Integration Token from notion.so/my-integrations → New integration → Internal → copy Secret</div>':'';
+    el.innerHTML=banner+'<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" id="notionQuery" placeholder="Search Notion pages..." style="flex:1;font-size:13px;padding:10px 14px" onkeydown="if(event.key===\\x27Enter\\x27)searchNotion()"><button onclick="searchNotion()" style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px">Search</button></div><div id="notionResults"></div>';
+  }).catch(function(){
+    el.innerHTML=setupBanner('Notion','nha config set notion-token YOUR_INTEGRATION_TOKEN')+'<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" id="notionQuery" placeholder="Search Notion pages..." style="flex:1;font-size:13px;padding:10px 14px"><button style="background:var(--green3);color:var(--bg);padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px" disabled>Search</button></div>';
+  });
 }
 function searchNotion(){
   var q=document.getElementById('notionQuery');if(!q||!q.value.trim())return;
@@ -1289,11 +1399,12 @@ function loadNotionPage(id){
 }
 
 // ---- SLACK ----
+function setupBanner(service,cmd){return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--r);margin-bottom:14px;font-size:12px"><span style="font-size:20px">&#128274;</span><div><div style="color:var(--fg);font-weight:600;margin-bottom:2px">'+esc(service)+' not configured</div><div style="color:var(--dim);font-family:var(--mono);font-size:11px">'+esc(cmd)+'</div></div></div>';}
 var slackData=null;
 function renderSlack(el){
   el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="color:var(--dim)">Loading Slack channels...</div></div>';
   apiGet('/api/slack/channels').then(function(r){
-    if(r&&r.error){el.innerHTML='<div class="card" style="text-align:center;padding:30px"><div style="color:var(--dim);margin-bottom:8px">'+esc(r.error)+'</div><div style="font-size:11px;color:var(--dim)">Run: nha config set slack-token xoxb-YOUR_TOKEN</div></div>';return}
+    if(r&&r.error){el.innerHTML=setupBanner('Slack','nha config set slack-token xoxb-YOUR_TOKEN')+'<div style="color:var(--dim);font-size:12px;padding:8px 0">Get a Bot Token from api.slack.com/apps → OAuth &amp; Permissions → Bot Token Scopes: channels:read, channels:history, users:read</div>';return}
     slackData=r;
     var channels=r.channels||[];
     var h='<div class="section-title">Channels ('+channels.length+')</div>';
@@ -1322,15 +1433,73 @@ function renderBirthdays(el){
   apiGet('/api/birthdays').then(function(r){
     if(r&&r.error){el.innerHTML='<div class="card" style="text-align:center;padding:30px"><div style="color:var(--dim)">'+esc(r.error)+'</div></div>';return}
     var bdays=r.birthdays||[];
-    if(bdays.length===0){el.innerHTML='<div class="card" style="text-align:center;padding:30px;color:var(--dim)">No upcoming birthdays found. Make sure your Google Contacts have birthday info.</div>';return}
-    var h='<div class="section-title">Upcoming Birthdays</div>';
-    bdays.forEach(function(b){
-      var isToday=b.daysUntil===0;
-      var label=isToday?'<span style="color:var(--red);font-weight:700">TODAY!</span>':b.daysUntil===1?'<span style="color:var(--amber)">Tomorrow</span>':'<span style="color:var(--dim)">in '+b.daysUntil+' days</span>';
-      h+='<div class="card" style="padding:12px 14px'+(isToday?';border-color:var(--red)':'')+'"><span style="font-size:16px">&#127874;</span> <span style="font-weight:700">'+esc(b.name)+'</span>  -  '+esc(b.date)+' '+label+'</div>';
-    });
+    var h='<div style="display:flex;align-items:center;margin-bottom:12px">';
+    h+='<div class="section-title" style="margin:0;flex:1">Upcoming Birthdays</div>';
+    h+='<button onclick="openBirthdayForm(null)" style="background:var(--green3);color:var(--bg);padding:5px 14px;border-radius:var(--r);font-size:12px;font-weight:700">+ Add Birthday</button>';
+    h+='</div>';
+    if(bdays.length===0){
+      h+='<div class="card" style="text-align:center;padding:30px;color:var(--dim)">No upcoming birthdays found.<br><span style="font-size:11px">Add one above, or add birthdays to your Google Contacts.</span></div>';
+    } else {
+      bdays.forEach(function(b){
+        var isToday=b.daysUntil===0;
+        var label=isToday?'<span style="color:var(--red);font-weight:700">TODAY!</span>':b.daysUntil===1?'<span style="color:var(--amber)">Tomorrow</span>':'<span style="color:var(--dim)">in '+b.daysUntil+' days</span>';
+        h+='<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:8px'+(isToday?';border-color:var(--red)':'')+'"><span style="font-size:18px">&#127874;</span><div style="flex:1"><div style="font-weight:700;font-size:13px">'+esc(b.name)+'</div><div style="font-size:11px;color:var(--dim)">'+esc(b.date)+'</div></div><div style="margin-right:8px">'+label+'</div>';
+        if(b.contactId){
+          h+='<button onclick="openBirthdayForm('+JSON.stringify({contactId:b.contactId,name:b.name,date:b.date})+')" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px">Edit</button>';
+          h+='<button onclick="deleteBirthday('+JSON.stringify(b.contactId)+','+JSON.stringify(b.name)+')" style="background:var(--bg3);border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:4px;font-size:11px;margin-left:4px">Delete</button>';
+        }
+        h+='</div>';
+      });
+    }
     el.innerHTML=h;
   });
+}
+
+function openBirthdayForm(b){
+  var isEdit=b&&b.contactId;
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center';
+  var card=document.createElement('div');
+  card.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:24px;width:360px;max-width:95vw';
+  card.innerHTML='<div style="font-size:16px;font-weight:700;color:var(--bright);margin-bottom:16px">'+(isEdit?'Edit Birthday':'Add Birthday')+'</div>'+
+    '<label style="font-size:12px;color:var(--dim);display:block;margin-bottom:4px">Name *</label>'+
+    '<input id="bdayName" type="text" value="'+esc(b&&b.name||'')+'" placeholder="Contact name" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:12px;font-size:13px">'+
+    '<label style="font-size:12px;color:var(--dim);display:block;margin-bottom:4px">Birthday (MM-DD or YYYY-MM-DD)</label>'+
+    '<input id="bdayDate" type="text" value="'+esc(b&&b.date||'')+'" placeholder="e.g. 03-15 or 1990-03-15" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:16px;font-size:13px">'+
+    '<div style="font-size:11px;color:var(--dim);margin-bottom:16px">Birthday will be saved as a Google Calendar event on the specified date.</div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end">'+
+    '<button id="bdayCancelBtn" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:var(--r);font-size:13px">Cancel</button>'+
+    '<button id="bdaySaveBtn" style="background:var(--green3);color:var(--bg);padding:8px 18px;border-radius:var(--r);font-size:13px;font-weight:700">'+(isEdit?'Save':'Add')+'</button>'+
+    '</div><div id="bdayErr" style="color:var(--red);font-size:12px;margin-top:8px"></div>';
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  card.querySelector('#bdayCancelBtn').onclick=function(){document.body.removeChild(overlay);};
+  overlay.onclick=function(e){if(e.target===overlay)document.body.removeChild(overlay);};
+  card.querySelector('#bdaySaveBtn').onclick=function(){
+    var name=card.querySelector('#bdayName').value.trim();
+    var date=card.querySelector('#bdayDate').value.trim();
+    if(!name){card.querySelector('#bdayErr').textContent='Name is required';return;}
+    if(!date){card.querySelector('#bdayErr').textContent='Date is required';return;}
+    var btn=card.querySelector('#bdaySaveBtn');
+    btn.textContent='Saving...';btn.disabled=true;
+    // Parse date into a full date for the calendar event
+    var fullDate=date;
+    if(/^\d{2}-\d{2}$/.test(date))fullDate=new Date().getFullYear()+'-'+date;
+    apiPost('/api/birthdays',{name:name,date:fullDate,contactId:isEdit?b.contactId:null,edit:isEdit}).then(function(){
+      document.body.removeChild(overlay);
+      renderBirthdays(document.getElementById('content'));
+    }).catch(function(e){
+      card.querySelector('#bdayErr').textContent='Error: '+(e.message||'Unknown error');
+      btn.textContent=isEdit?'Save':'Add';btn.disabled=false;
+    });
+  };
+}
+
+function deleteBirthday(contactId,name){
+  if(!confirm('Remove birthday for '+name+'?'))return;
+  apiPost('/api/birthdays/delete',{contactId:contactId}).then(function(){
+    renderBirthdays(document.getElementById('content'));
+  }).catch(function(e){alert('Error: '+e.message);});
 }
 
 // ---- AGENTS ----

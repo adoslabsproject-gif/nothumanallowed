@@ -174,6 +174,12 @@ export async function updateEvent(config, calendarId, eventId, patch) {
   });
 }
 
+export async function deleteEvent(config, calendarId, eventId) {
+  await calFetch(config, `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`, {
+    method: 'DELETE',
+  });
+}
+
 // ── Event Parser ───────────────────────────────────────────────────────────
 
 function parseEvent(raw) {
