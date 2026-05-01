@@ -55,8 +55,6 @@ export const DESTRUCTIVE_ACTIONS = new Set([
   'gmail_send_attach',
   'gmail_reply',
   'gmail_delete',
-  'email_send',
-  'outreach_campaign',
   'calendar_create',
   'calendar_move',
   'calendar_update',
@@ -94,42 +92,11 @@ CRITICAL: Never output a JSON block as a "suggestion" or "let me try" — every 
 
 TOOLS:
 
---- EMAIL (Gmail) ---
+--- EMAIL ---
 
 1. gmail_list(query: string, maxResults?: number)
-   Search Gmail. query uses Gmail search syntax (e.g. "from:boss@co.com", "is:unread subject:invoice").
+   Search emails. query uses Gmail search syntax (e.g. "from:boss@co.com", "is:unread subject:invoice").
    Default maxResults = 10.
-   NOTE: For non-Gmail accounts use email_list instead.
-
---- EMAIL (Multi-Provider IMAP/SMTP) ---
-
-email_accounts()
-  List all configured email accounts (Gmail + IMAP/SMTP).
-
-email_list(account?: string, limit?: number)
-  List recent messages from an IMAP email account. If account not specified, lists all accounts.
-  account can be the label ("Work") or address ("you@company.com") or index (1, 2, 3).
-  Read-only: NEVER deletes or modifies messages on the server.
-
-email_read(messageId: string, account?: string)
-  Read a single message by ID from an IMAP account.
-
-email_send(to: string, subject: string, body: string, from?: string, cc?: string, bcc?: string)
-  Send email via SMTP. If 'from' specified, uses that account's SMTP. Otherwise uses default account.
-  ALWAYS confirm with the user before sending.
-
-find_contact_email(url: string)
-  Scrape a website to find contact email addresses. Checks /contact, /about, /contatti, home page.
-  Returns list of email addresses found.
-
-outreach_campaign(query: string, subject: string, template: string, maxSites?: number)
-  Full market research pipeline: search → find contact emails → prepare campaign.
-  1. Searches the web for businesses matching the query
-  2. Visits each site's contact page to extract emails
-  3. Returns a report with all found emails + template preview
-  Does NOT send automatically — reports findings and waits for user confirmation.
-
---- EMAIL (Gmail) continued ---
 
 2. gmail_read(messageId: string)
    Read the full body of an email by its ID (returned by gmail_list).
@@ -851,149 +818,6 @@ export async function executeTool(action, params, config) {
       });
 
       return `Email sent to ${params.to} with attachment "${downloaded.name}" (${formatFileSize(downloaded.size)}).`;
-    }
-
-    // ── IMAP/SMTP Multi-Provider Email ────────────────────────────────────
-    case 'email_accounts': {
-      const { getEmailAccounts } = await import('./imap-email.mjs');
-      const accounts = getEmailAccounts(config);
-      if (accounts.length === 0) return 'No email accounts configured. Use "nha config set email-add" to add one, or configure in Settings.';
-      return accounts.map((a, i) => `${i + 1}. ${a.label || 'Email'} <${a.address}>${a.isDefault ? ' (default)' : ''}`).join('\n');
-    }
-
-    case 'email_list': {
-      const { listAllInboxes, listImapMessages, getEmailAccounts } = await import('./imap-email.mjs');
-      const accounts = getEmailAccounts(config);
-      if (accounts.length === 0) return 'No email accounts configured.';
-
-      // If account specified, use it; otherwise list all
-      if (params.account) {
-        const acct = accounts.find(a => a.label === params.account || a.address === params.account) || accounts[parseInt(params.account) - 1];
-        if (!acct) return `Account "${params.account}" not found.`;
-        const msgs = await listImapMessages(acct, params.limit || 10);
-        return msgs.length === 0 ? `No messages in ${acct.label || acct.address}.`
-          : `${acct.label || acct.address} (${msgs.length} messages):\n\n` + msgs.map((m, i) =>
-            `${i + 1}. ${m.seen ? '' : '[NEW] '}${m.from}\n   ${m.subject}\n   ${m.date}`).join('\n\n');
-      }
-
-      const all = await listAllInboxes(config, params.limit || 10);
-      return all.map(a => {
-        if (a.error) return `${a.account}: Error — ${a.error}`;
-        if (a.messages.length === 0) return `${a.account}: No messages.`;
-        return `${a.account} (${a.messages.length}):\n` + a.messages.map((m, i) =>
-          `  ${i + 1}. ${m.seen ? '' : '[NEW] '}${m.from} — ${m.subject}`).join('\n');
-      }).join('\n\n');
-    }
-
-    case 'email_read': {
-      const { readImapMessage, getEmailAccounts } = await import('./imap-email.mjs');
-      const accounts = getEmailAccounts(config);
-      if (!params.messageId) return 'messageId required.';
-      const acct = params.account
-        ? accounts.find(a => a.label === params.account || a.address === params.account) || accounts[0]
-        : accounts[0];
-      if (!acct) return 'No email accounts configured.';
-      const body = await readImapMessage(acct, params.messageId);
-      return body || 'Empty message.';
-    }
-
-    case 'email_send': {
-      const { sendSmtpEmail, getEmailAccounts } = await import('./imap-email.mjs');
-      const accounts = getEmailAccounts(config);
-      if (!params.to || !params.subject) return 'to and subject required.';
-
-      // Find the account to send from
-      let acct;
-      if (params.from) {
-        acct = accounts.find(a => a.address === params.from || a.label === params.from);
-      }
-      if (!acct) acct = accounts.find(a => a.isDefault) || accounts[0];
-      if (!acct || !acct.smtp) return 'No SMTP account configured for sending.';
-
-      const result = await sendSmtpEmail(acct, params.to, params.subject, params.body || '', params.cc || '', params.bcc || '');
-      return result.success ? `Email sent from ${acct.address} to ${params.to}.` : 'Send failed.';
-    }
-
-    case 'find_contact_email': {
-      // Scrape a website's contact/about page to find email addresses
-      const url = params.url || params.website;
-      if (!url) return 'url required.';
-
-      const fetchModule = await import('./web-tools.mjs');
-      const contactPaths = ['/contact', '/contacts', '/contatti', '/about', '/about-us', '/chi-siamo', '/impressum', '/kontakt', ''];
-      const emails = new Set();
-
-      for (const contactPath of contactPaths) {
-        try {
-          const fullUrl = url.replace(/\/+$/, '') + contactPath;
-          const result = await fetchModule.fetchUrl(config, fullUrl);
-          if (result.error) continue;
-          const text = result.text || result.content || '';
-          // Extract emails with regex
-          const found = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
-          found.forEach(e => {
-            const lower = e.toLowerCase();
-            // Filter out image/asset emails and common fake ones
-            if (!lower.endsWith('.png') && !lower.endsWith('.jpg') && !lower.endsWith('.gif')
-                && !lower.includes('example.com') && !lower.includes('sentry.io')
-                && !lower.includes('webpack') && !lower.includes('wixpress')) {
-              emails.add(lower);
-            }
-          });
-          if (emails.size > 0) break; // Found emails, stop searching
-        } catch { /* skip failed pages */ }
-      }
-
-      if (emails.size === 0) return `No email addresses found on ${url} (checked contact, about, home pages).`;
-      return `Found ${emails.size} email(s) on ${url}:\n${[...emails].join('\n')}`;
-    }
-
-    case 'outreach_campaign': {
-      // Full pipeline: search → find emails → send template
-      const query = params.query || params.search;
-      const template = params.template || params.body;
-      const subject = params.subject || 'Introduction';
-      if (!query) return 'query required (e.g., "Italian valve manufacturers").';
-      if (!template) return 'template required (email body text).';
-
-      // Step 1: Web search
-      const fetchModule = await import('./web-tools.mjs');
-      const searchResult = await fetchModule.webSearch(config, query, 10);
-      const urls = (searchResult.results || []).map(r => r.url).filter(Boolean).slice(0, params.maxSites || 5);
-
-      if (urls.length === 0) return 'No results found for the search query.';
-
-      // Step 2: Find emails from each site
-      const found = [];
-      for (const siteUrl of urls) {
-        try {
-          const contactPaths = ['/contact', '/contacts', '/contatti', '/about', ''];
-          for (const cp of contactPaths) {
-            const fullUrl = siteUrl.replace(/\/+$/, '') + cp;
-            const result = await fetchModule.fetchUrl(config, fullUrl);
-            const text = result.text || result.content || '';
-            const emails = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
-            const valid = emails.filter(e => !e.endsWith('.png') && !e.includes('example.com')).map(e => e.toLowerCase());
-            if (valid.length > 0) {
-              found.push({ site: siteUrl, emails: [...new Set(valid)] });
-              break;
-            }
-          }
-        } catch { /* skip */ }
-      }
-
-      if (found.length === 0) return `Searched ${urls.length} sites but found no contact emails. Try a different search query.`;
-
-      // Step 3: Report (don't send automatically — user must confirm)
-      let report = `Found ${found.length} sites with contact emails:\n\n`;
-      found.forEach((f, i) => {
-        report += `${i + 1}. ${f.site}\n   ${f.emails.join(', ')}\n`;
-      });
-      report += `\nSubject: "${subject}"\nTemplate preview: ${template.slice(0, 200)}...\n`;
-      report += `\nTo send to all, reply: "send the campaign"`;
-      report += `\nTo send to specific ones, reply: "send to #1 and #3"`;
-
-      return report;
     }
 
     // ── Calendar ──────────────────────────────────────────────────────────

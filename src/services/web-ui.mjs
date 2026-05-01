@@ -2715,6 +2715,22 @@ var studioState = {
   planned: false
 };
 
+var studioAbortController = null;
+
+function stopStudio() {
+  if (!studioState.running) return;
+  if (studioAbortController) { try { studioAbortController.abort(); } catch(e) {} studioAbortController = null; }
+  studioState.running = false;
+  var btn = document.getElementById('studioRunBtn');
+  if (btn) { btn.disabled = false; btn.textContent = '▶ Run'; }
+  var stopBtn = document.getElementById('studioStopBtn');
+  if (stopBtn) stopBtn.style.display = 'none';
+  studioLog('Studio', '⬛', 'Workflow stopped by user.', 'system');
+  // Mark any still-running nodes as error
+  studioState.nodes.forEach(function(n) { if (n.status === 'running') n.status = 'error'; });
+  renderStudioNodes();
+}
+
 function studioReset() {
   if (studioState.running) return;
   studioState.task = '';
@@ -2840,8 +2856,12 @@ async function runStudio() {
   renderStudioLog();
   renderStudioResult();
 
+  studioAbortController = new AbortController();
+
   var btn = document.getElementById('studioRunBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Planning...'; }
+  var stopBtn = document.getElementById('studioStopBtn');
+  if (stopBtn) stopBtn.style.display = '';
 
   studioLog('Studio', '&#9881;', 'Planning workflow for: "' + task + '"', 'system');
   // Show a temporary planning indicator in the nodes area
@@ -2871,7 +2891,12 @@ async function runStudio() {
       studioSetNodeStatus(i, 'running');
       studioLog(node.label, node.icon, 'Starting...', 'agent');
 
-      var stepResult = await runStudioStep(i, node, task, context, planRes.steps[i]);
+      if (!studioState.running) break; // stopped by user
+      var stepResult = await runStudioStep(i, node, task, context, planRes.steps[i], studioAbortController ? studioAbortController.signal : null);
+      if (stepResult.aborted) {
+        studioSetNodeStatus(i, 'error');
+        break;
+      }
       if (stepResult.error) {
         studioSetNodeStatus(i, 'error');
         studioLog(node.label, node.icon, 'Error: ' + stepResult.error, 'error');
@@ -2903,11 +2928,15 @@ async function runStudio() {
     renderStudioSessionsBar();
 
   } catch(e) {
-    studioLog('Studio', '&#9888;', 'Unexpected error: ' + (e.message || String(e)), 'error');
+    if (e.name !== 'AbortError') {
+      studioLog('Studio', '&#9888;', 'Unexpected error: ' + (e.message || String(e)), 'error');
+    }
   }
 
   studioState.running = false;
-  if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
+  studioAbortController = null;
+  if (btn) { btn.disabled = false; btn.textContent = '▶ Run'; }
+  if (stopBtn) stopBtn.style.display = 'none';
 }
 
 // ---- STUDIO SESSIONS ----
@@ -3007,17 +3036,15 @@ function studioAddTokens(inp, out) {
   if (el) el.textContent = 'Tokens: ' + studioTokens.in + ' in / ' + studioTokens.out + ' out';
 }
 
-function runStudioStep(idx, node, task, context, stepDef) {
+function runStudioStep(idx, node, task, context, stepDef, signal) {
   return new Promise(function(resolve) {
     var output = '';
     var canvasHtml = null;
     var body = JSON.stringify({stepIdx: idx, agent: node.agent, task: task, context: context, stepDef: stepDef});
+    var fetchOpts = {method: 'POST', headers: {'Content-Type': 'application/json'}, body: body};
+    if (signal) fetchOpts.signal = signal;
 
-    fetch('/api/studio/run', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: body
-    }).then(function(res) {
+    fetch('/api/studio/run', fetchOpts).then(function(res) {
       if (!res.ok) { resolve({error: 'HTTP ' + res.status}); return; }
       var reader = res.body.getReader();
       var decoder = new TextDecoder();
@@ -3072,10 +3099,14 @@ function runStudioStep(idx, node, task, context, stepDef) {
             } catch(e) {}
           });
           pump();
-        }).catch(function(e) { resolve({error: e.message}); });
+        }).catch(function(e) {
+          if (e.name === 'AbortError') { resolve({aborted: true}); } else { resolve({error: e.message}); }
+        });
       }
       pump();
-    }).catch(function(e) { resolve({error: e.message}); });
+    }).catch(function(e) {
+      if (e.name === 'AbortError') { resolve({aborted: true}); } else { resolve({error: e.message}); }
+    });
   });
 }
 
@@ -3184,6 +3215,7 @@ function renderStudio(el) {
             '<textarea id="studioTaskInput" placeholder="Describe what you want to accomplish... (Ctrl+Enter to run)" onkeydown="if(event.key===\\x27Enter\\x27&&(event.ctrlKey||event.metaKey)){runStudio();event.preventDefault()}">' + esc(studioState.task) + '</textarea>' +
             '<div style="display:flex;gap:6px">' +
               '<button id="studioRunBtn" class="studio-run-btn" onclick="runStudio()" style="flex:1" ' + (studioState.running ? 'disabled' : '') + '>&#9654; Run</button>' +
+              '<button id="studioStopBtn" onclick="stopStudio()" title="Stop workflow" style="padding:8px 14px;background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;color:#ef4444;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;' + (studioState.running ? '' : 'display:none') + '">&#9632; Stop</button>' +
               '<button onclick="studioReset()" title="New workflow" style="padding:8px 12px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:16px;line-height:1" ' + (studioState.running ? 'disabled' : '') + '>&#8635;</button>' +
             '</div>' +
           '</div>' +

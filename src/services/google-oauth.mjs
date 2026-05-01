@@ -44,14 +44,9 @@ function generatePKCE() {
 function openBrowser(url) {
   const platform = os.platform();
   try {
-    if (platform === 'darwin') {
-      execSync(`open "${url}"`);
-    } else if (platform === 'win32') {
-      // Use rundll32 — more reliable than 'start' in batch/npm contexts
-      execSync(`rundll32 url.dll,FileProtocolHandler "${url}"`);
-    } else {
-      execSync(`xdg-open "${url}"`);
-    }
+    if (platform === 'darwin') execSync(`open "${url}"`);
+    else if (platform === 'win32') execSync(`start "" "${url}"`);
+    else execSync(`xdg-open "${url}"`);
   } catch {
     warn('Could not open browser automatically.');
     info(`Open this URL manually:\n\n  ${url}\n`);
