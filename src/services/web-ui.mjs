@@ -2624,15 +2624,16 @@ function showToast(type, title, body, durationMs) {
 var ws = null;
 var wsReconnectTimer = null;
 var wsRetryCount = 0;
-var wsMaxRetries = 1;
+var wsRetryDelay = 2000; // start at 2s, exponential backoff up to 30s
 function connectWebSocket() {
-  if (wsRetryCount >= wsMaxRetries) return; // Stop trying after 3 failures
+  if (wsReconnectTimer) return; // already scheduled
   try {
     ws = new WebSocket('ws://' + window.location.host);
   } catch(e) { return; }
 
   ws.onopen = function() {
     wsRetryCount = 0;
+    wsRetryDelay = 2000;
     var indicator = document.getElementById('wsIndicator');
     if (indicator) { indicator.style.color = 'var(--green)'; indicator.title = 'Live updates: connected'; }
   };
@@ -2646,15 +2647,15 @@ function connectWebSocket() {
 
   ws.onclose = function() {
     var indicator = document.getElementById('wsIndicator');
-    if (indicator) { indicator.style.color = 'var(--dim)'; indicator.title = 'Live updates: disconnected'; }
+    if (indicator) { indicator.style.color = 'var(--dim)'; indicator.title = 'Live updates: reconnecting...'; }
     ws = null;
     wsRetryCount++;
-    if (wsRetryCount < wsMaxRetries && !wsReconnectTimer) {
-      wsReconnectTimer = setTimeout(function() {
-        wsReconnectTimer = null;
-        connectWebSocket();
-      }, 3000); // 3s between retries
-    }
+    var delay = Math.min(wsRetryDelay * Math.pow(1.5, Math.min(wsRetryCount - 1, 6)), 30000);
+    wsRetryDelay = delay;
+    wsReconnectTimer = setTimeout(function() {
+      wsReconnectTimer = null;
+      connectWebSocket();
+    }, delay);
   };
 
   ws.onerror = function() {
