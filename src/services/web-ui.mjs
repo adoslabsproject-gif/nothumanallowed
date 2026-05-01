@@ -1115,29 +1115,38 @@ function renderCalendar(el){
 
   // Day headers
   h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">';
-  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function(d){
-    h+='<div style="text-align:center;font-size:10px;color:var(--dim);padding:4px">'+d+'</div>';
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function(d,i){
+    var isWe=i>=5;
+    h+='<div style="text-align:center;font-size:10px;color:'+(isWe?'var(--red)':'var(--dim)')+';padding:4px;font-weight:'+(isWe?'600':'400')+'">'+d+'</div>';
   });
   h+='</div>';
 
   // Calendar grid  -  square cells
   h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">';
   // Empty cells before first day
-  for(var i=0;i<startDay;i++){h+='<div style="aspect-ratio:1;background:var(--bg);border-radius:6px"></div>'}
+  for(var i=0;i<startDay;i++){
+    var isWeCol=i>=5;
+    h+='<div style="aspect-ratio:1;background:'+(isWeCol?'rgba(255,80,80,0.04)':'var(--bg)')+';border-radius:6px"></div>';
+  }
   // Day cells
   for(var d=1;d<=daysInMonth;d++){
     var key=calKey(calYear,calMonth,d);
     var today=isToday(calYear,calMonth,d);
     var evts=calEventsCache[key]||[];
     var count=evts.length;
-    var bg=today?'var(--greendim)':'var(--bg2)';
-    var bdr=today?'var(--green3)':count>0?'var(--amber)':'var(--border)';
+    var dayOfWeek=(startDay+d-1)%7; // 0=Mon … 5=Sat, 6=Sun
+    var isWeekend=dayOfWeek>=5;
+    var hasHoliday=evts.some(function(e){return e._isHoliday||e.readOnly});
+    var bg=today?'var(--greendim)':isWeekend?'rgba(255,80,80,0.06)':'var(--bg2)';
+    var bdr=today?'var(--green3)':hasHoliday?'var(--red)':count>0?'var(--amber)':'var(--border)';
+    var numColor=today?'var(--green)':isWeekend?'var(--red)':'var(--text)';
     h+='<div onclick="openDayDetail(\\x27'+key+'\\x27)" style="aspect-ratio:1;background:'+bg+';border:1px solid '+bdr+';border-radius:6px;padding:6px;cursor:pointer;display:flex;flex-direction:column;overflow:hidden">';
-    h+='<div style="font-size:14px;font-weight:'+(today?'800':'500')+';color:'+(today?'var(--green)':'var(--text)')+'">'+d+'</div>';
+    h+='<div style="font-size:14px;font-weight:'+(today?'800':'500')+';color:'+numColor+'">'+d+'</div>';
     if(count>0){
       h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:1px;min-height:0">';
       evts.slice(0,2).forEach(function(x){
-        h+='<div style="font-size:8px;color:var(--amber);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:var(--bg3);border-radius:2px;padding:1px 3px">'+esc(x.summary)+'</div>';
+        var evtColor=x._isHoliday||x.readOnly?'var(--red)':'var(--amber)';
+        h+='<div style="font-size:8px;color:'+evtColor+';overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:var(--bg3);border-radius:2px;padding:1px 3px">'+esc(x.summary)+'</div>';
       });
       if(count>2)h+='<div style="font-size:8px;color:var(--dim);text-align:center">+'+String(count-2)+'</div>';
       h+='</div>';
@@ -1154,26 +1163,25 @@ function renderCalendar(el){
 }
 
 function loadMonthEvents(){
+  var monthKey=calYear+'-'+String(calMonth+1).padStart(2,'0');
+  // Check if already loaded
   var daysInMonth=new Date(calYear,calMonth+1,0).getDate();
-  var promises=[];
-  for(var d=1;d<=daysInMonth;d++){
-    var key=calKey(calYear,calMonth,d);
-    if(!calEventsCache[key]){
-      (function(k,day){
-        promises.push(apiGet('/api/calendar?date='+k).then(function(r){
-          calEventsCache[k]=(r&&r.events)||[];
-        }));
-      })(key,d);
+  var allLoaded=true;
+  for(var d=1;d<=daysInMonth;d++){if(!calEventsCache[calKey(calYear,calMonth,d)]){allLoaded=false;break}}
+  if(allLoaded){var li=document.getElementById('calLoading');if(li)li.style.display='none';return;}
+
+  apiGet('/api/calendar?month='+monthKey).then(function(r){
+    if(r&&r.byDate){
+      // Fill all days — ensure days with no events get empty array so we don't re-fetch
+      for(var d=1;d<=daysInMonth;d++){
+        var k=calKey(calYear,calMonth,d);
+        calEventsCache[k]=r.byDate[k]||[];
+      }
     }
-  }
-  if(promises.length===0){
     var li=document.getElementById('calLoading');if(li)li.style.display='none';
-    return;
-  }
-  Promise.all(promises).then(function(){
-    var li=document.getElementById('calLoading');if(li)li.style.display='none';
-    // Re-render just the grid cells with events
     renderCalendar(document.getElementById('content'));
+  }).catch(function(){
+    var li=document.getElementById('calLoading');if(li)li.style.display='none';
   });
 }
 

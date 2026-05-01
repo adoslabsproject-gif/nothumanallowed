@@ -98,25 +98,27 @@ export async function getTodayEvents(config) {
   const allEvents = [];
 
   for (const cal of calendars) {
-    if (cal.accessRole === 'freeBusyReader') continue; // skip minimal access
+    if (cal.accessRole === 'freeBusyReader') continue;
+    const isHolidayFeed = cal.id.includes('#holiday@group');
     try {
       const events = await listEvents(config, cal.id, startOfDay, endOfDay);
       for (const e of events) {
         e.calendarName = cal.summary;
         e.calendarId = cal.id;
         e.readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
+        e._isHoliday = isHolidayFeed;
         allEvents.push(e);
       }
     } catch { /* skip failed calendars */ }
   }
 
-  // Sort by start time, then deduplicate same-day same-title events (holiday feeds)
   allEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  const seen = new Set();
+  const holidayDates = new Set();
   return allEvents.filter(e => {
-    const key = (e.start || '').slice(0, 10) + '|' + (e.summary || '').toLowerCase().trim();
-    if (seen.has(key)) return false;
-    seen.add(key);
+    if (!e._isHoliday) return true;
+    const dateKey = (e.start || '').slice(0, 10);
+    if (holidayDates.has(dateKey)) return false;
+    holidayDates.add(dateKey);
     return true;
   });
 }
@@ -125,8 +127,15 @@ export async function getTodayEvents(config) {
  * Get events for a specific date.
  */
 export async function getEventsForDate(config, date) {
-  const d = new Date(date);
-  const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  // Parse date string as LOCAL time to avoid UTC-midnight timezone shift
+  let startOfDay;
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [y, m, d] = date.split('-').map(Number);
+    startOfDay = new Date(y, m - 1, d);
+  } else {
+    const d = new Date(date);
+    startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
   const endOfDay = new Date(startOfDay.getTime() + 86400000);
 
   // Load from all calendars so calendarId is always accurate
@@ -134,26 +143,30 @@ export async function getEventsForDate(config, date) {
   const allEvents = [];
   for (const cal of calendars) {
     if (cal.accessRole === 'freeBusyReader') continue;
+    const isHolidayFeed = cal.id.includes('#holiday@group');
     try {
       const events = await listEvents(config, cal.id, startOfDay, endOfDay);
       for (const e of events) {
         e.calendarName = cal.summary;
         e.calendarId = cal.id;
         e.readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
+        e._isHoliday = isHolidayFeed;
         allEvents.push(e);
       }
     } catch { /* skip */ }
   }
   allEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-  // Deduplicate: same start date + same normalized title = same event (e.g. IT + EN holiday feeds)
-  const seen = new Set();
-  const deduped = [];
-  for (const e of allEvents) {
-    const key = (e.start || '').slice(0, 10) + '|' + (e.summary || '').toLowerCase().trim();
-    if (!seen.has(key)) { seen.add(key); deduped.push(e); }
-  }
-  return deduped;
+  // Deduplicate: for holiday feeds, keep only ONE holiday per date
+  // (IT + EN feeds have same day, different language titles — keep first)
+  const holidayDates = new Set();
+  return allEvents.filter(e => {
+    if (!e._isHoliday) return true;
+    const dateKey = (e.start || '').slice(0, 10);
+    if (holidayDates.has(dateKey)) return false;
+    holidayDates.add(dateKey);
+    return true;
+  });
 }
 
 /**

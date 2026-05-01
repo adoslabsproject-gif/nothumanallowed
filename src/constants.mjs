@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const VERSION = '13.2.64';
+export const VERSION = '13.2.65';
 export const BASE_URL = 'https://nothumanallowed.com/cli';
 export const API_BASE = 'https://nothumanallowed.com/api/v1';
 

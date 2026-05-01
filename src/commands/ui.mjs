@@ -1009,17 +1009,47 @@ export async function cmdUI(args) {
         return;
       }
 
-      // GET /api/calendar?date=YYYY-MM-DD
+      // GET /api/calendar?date=YYYY-MM-DD   OR   ?month=YYYY-MM (loads entire month)
       if (method === 'GET' && pathname === '/api/calendar') {
         try {
           const dateParam = url.searchParams.get('date');
-          let events;
-          if (dateParam && dateParam !== new Date().toISOString().split('T')[0]) {
-            events = await getEventsForDate(config, new Date(dateParam));
+          const monthParam = url.searchParams.get('month'); // e.g. "2026-05"
+          if (monthParam) {
+            // Load entire month across all calendars in one shot
+            const [y, m] = monthParam.split('-').map(Number);
+            const startOfMonth = new Date(y, m - 1, 1);
+            const endOfMonth = new Date(y, m, 1);
+            const { listCalendars: lc, listEvents: le } = await import('../services/google-calendar.mjs');
+            const calendars = await lc(config);
+            const byDate = {};
+            for (const cal of calendars) {
+              if (cal.accessRole === 'freeBusyReader') continue;
+              const isHolidayFeed = cal.id.includes('#holiday@group');
+              try {
+                const evts = await le(config, cal.id, startOfMonth, endOfMonth);
+                for (const e of evts) {
+                  e.calendarId = cal.id;
+                  e.calendarName = cal.summary;
+                  e.readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
+                  e._isHoliday = isHolidayFeed;
+                  const dk = (e.start || '').slice(0, 10);
+                  if (!byDate[dk]) byDate[dk] = [];
+                  // Dedup holidays per date
+                  if (isHolidayFeed && byDate[dk].some(x => x._isHoliday)) continue;
+                  byDate[dk].push(e);
+                }
+              } catch { /* skip */ }
+            }
+            sendJSON(res, 200, { byDate, month: monthParam });
           } else {
-            events = await getTodayEvents(config);
+            let events;
+            if (dateParam) {
+              events = await getEventsForDate(config, dateParam);
+            } else {
+              events = await getTodayEvents(config);
+            }
+            sendJSON(res, 200, { events, date: dateParam || new Date().toISOString().split('T')[0] });
           }
-          sendJSON(res, 200, { events, date: dateParam || new Date().toISOString().split('T')[0] });
         } catch (e) {
           sendJSON(res, 200, { events: [], error: e.message });
         }
