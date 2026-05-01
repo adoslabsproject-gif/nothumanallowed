@@ -661,6 +661,10 @@ function parseSSEText(text, format, onToken) {
           }
         }
         if (out) {
+          // Qwen3 emits tokens without spaces between words — insert space when needed
+          if (fullText && out && !/[\s\n]$/.test(fullText) && !/^[\s\n.,;:!?)\]}'"]/.test(out)) {
+            out = ' ' + out;
+          }
           fullText += out;
           if (onToken) onToken(out);
         }
@@ -724,6 +728,10 @@ async function streamSSEWithCallback(res, format, onToken) {
             }
           }
           if (out) {
+            // Qwen3 emits tokens without spaces between words — insert space when needed
+            if (fullText && out && !/[\s\n]$/.test(fullText) && !/^[\s\n.,;:!?)\]}'"]/.test(out)) {
+              out = ' ' + out;
+            }
             fullText += out;
             if (onToken) onToken(out);
           }
