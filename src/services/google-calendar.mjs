@@ -110,9 +110,15 @@ export async function getTodayEvents(config) {
     } catch { /* skip failed calendars */ }
   }
 
-  // Sort by start time
+  // Sort by start time, then deduplicate same-day same-title events (holiday feeds)
   allEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  return allEvents;
+  const seen = new Set();
+  return allEvents.filter(e => {
+    const key = (e.start || '').slice(0, 10) + '|' + (e.summary || '').toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**
@@ -139,7 +145,15 @@ export async function getEventsForDate(config, date) {
     } catch { /* skip */ }
   }
   allEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  return allEvents;
+
+  // Deduplicate: same start date + same normalized title = same event (e.g. IT + EN holiday feeds)
+  const seen = new Set();
+  const deduped = [];
+  for (const e of allEvents) {
+    const key = (e.start || '').slice(0, 10) + '|' + (e.summary || '').toLowerCase().trim();
+    if (!seen.has(key)) { seen.add(key); deduped.push(e); }
+  }
+  return deduped;
 }
 
 /**
