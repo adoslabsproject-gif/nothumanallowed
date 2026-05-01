@@ -2958,12 +2958,14 @@ ${rawText.slice(0, 18000)}`;
               // If there is document context from a previous step, ask the LLM to derive
               // the optimal search queries. This is generic and works for any document/task.
               let searchQueries = [stepPrompt.slice(0, 120)];
-              if (context && context.length > 50) {
+              // Only use LLM query generation when context is a PDF/document (not previous agent text output).
+              // When context is email/github output from a prior step, ignore it — use task + stepPrompt directly.
+              const contextIsPdf = context && context.length > 50 && context.startsWith('## ATTACHED PDF');
+              if (contextIsPdf) {
                 sendToken('[Building search queries from document...] ');
                 try {
-                  // Document context goes in system prompt — SENTINEL only scans user message
                   const queryPlanSys = `You are a search query generator. Given a document summary and a user task, output a JSON array of 1-3 concise web search queries (strings, max 80 chars each) that will find the best results. Output ONLY the JSON array, no explanation.\n\nDocument content:\n${context.slice(0, 3000)}`;
-                  const queryPlanUser = `User task: "${task.slice(0, 200)}". Generate search queries. If task asks for similar/alternative products use technical specs. If it asks where to buy include vendor queries. Output: ["query1","query2",...]`;
+                  const queryPlanUser = `User task: "${task.slice(0, 200)}". Generate search queries. If task asks for similar/alternative products use technical specs. Output: ["query1","query2",...]`;
                   const planConfig2 = Object.assign({}, config, { thinking: 'off' });
                   const queryRaw = await withTimeout(callLLM(planConfig2, queryPlanSys, queryPlanUser, { max_tokens: 200 }), 15000);
                   const jsonMatch = queryRaw.match(/\[[\s\S]*?\]/);
@@ -2974,8 +2976,24 @@ ${rawText.slice(0, 18000)}`;
                     }
                   }
                 } catch {}
-                sendToken(`[Queries: ${searchQueries.map(q => '"' + q + '"').join(', ')}] `);
+              } else {
+                // No PDF — derive queries from task + stepPrompt using LLM for better queries
+                sendToken('[Building search queries...] ');
+                try {
+                  const queryPlanSys = `You are a search query generator. Given a user task and a search instruction, output a JSON array of 2-3 concise web search queries (strings, max 80 chars each). Focus on the specific topics in the task. Output ONLY the JSON array, no explanation.`;
+                  const queryPlanUser = `Task: "${task.slice(0, 300)}"\nSearch instruction: "${stepPrompt.slice(0, 200)}"\nOutput: ["query1","query2","query3"]`;
+                  const planConfig2 = Object.assign({}, config, { thinking: 'off' });
+                  const queryRaw = await withTimeout(callLLM(planConfig2, queryPlanSys, queryPlanUser, { max_tokens: 200 }), 15000);
+                  const jsonMatch = queryRaw.match(/\[[\s\S]*?\]/);
+                  if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      searchQueries = parsed.filter(q => typeof q === 'string' && q.length > 2).slice(0, 3);
+                    }
+                  }
+                } catch {}
               }
+              sendToken(`[Queries: ${searchQueries.map(q => '"' + q + '"').join(', ')}] `);
 
               // Run all queries sequentially, accumulate results
               for (let qi = 0; qi < searchQueries.length; qi++) {
@@ -3012,24 +3030,64 @@ ${rawText.slice(0, 18000)}`;
                 toolData = 'GitHub token not configured. Run: nha config set github-token YOUR_PAT';
               } else {
                 const parts = [];
-                // Notifications (always available)
-                try {
-                  const notifs = await withTimeout(gh.listNotifications(config, 15), 'GitHubAgent-notifs');
-                  if (notifs) parts.push('## GitHub Notifications\n' + notifs);
-                } catch (e) { /* skip */ }
-                // Issues/PRs on configured repo if available
-                const repo = config.github?.defaultRepo || '';
-                if (repo) {
+                // Extract repo from prompt or task (e.g. "owner/repo" pattern)
+                const repoMatch = (stepPrompt + ' ' + task).match(/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/);
+                const targetRepo = repoMatch ? repoMatch[1].replace(/[`'"]/g, '') : (config.github?.defaultRepo || '');
+
+                if (targetRepo) {
+                  sendToken(`[Analyzing ${targetRepo}...] `);
+                  // Repo metadata
                   try {
-                    const issues = await withTimeout(gh.listIssues(config, repo, 'open', 10), 'GitHubAgent-issues');
-                    if (issues) parts.push('## Open Issues (' + repo + ')\n' + issues);
-                  } catch (e) { /* skip */ }
+                    const info = await withTimeout(gh.getRepoInfo(config, targetRepo), 20000);
+                    parts.push(`## Repository: ${info.full_name}\n` +
+                      `- Description: ${info.description || 'none'}\n` +
+                      `- Stars: ${info.stars} | Forks: ${info.forks} | Watchers: ${info.watchers}\n` +
+                      `- Open issues: ${info.open_issues}\n` +
+                      `- Primary language: ${info.language}\n` +
+                      `- Topics: ${info.topics}\n` +
+                      `- License: ${info.license}\n` +
+                      `- Last push: ${info.pushed_at} | Created: ${info.created_at}\n` +
+                      `- Homepage: ${info.homepage || 'none'}\n` +
+                      `- Archived: ${info.archived}`);
+                  } catch (e) { parts.push(`## Repository ${targetRepo}\nCould not fetch repo info: ${e.message}`); }
+                  // Languages
                   try {
-                    const prs = await withTimeout(gh.listPRs(config, repo, 'open', 10), 'GitHubAgent-prs');
-                    if (prs) parts.push('## Open PRs (' + repo + ')\n' + prs);
-                  } catch (e) { /* skip */ }
+                    const langs = await withTimeout(gh.getRepoLanguages(config, targetRepo), 10000);
+                    if (langs) parts.push('## Languages\n' + langs);
+                  } catch {}
+                  // README
+                  try {
+                    const readme = await withTimeout(gh.getReadme(config, targetRepo), 15000);
+                    if (readme) parts.push('## README\n' + readme.slice(0, 3000));
+                  } catch {}
+                  // Recent commits
+                  try {
+                    const commits = await withTimeout(gh.getRecentCommits(config, targetRepo, 10), 15000);
+                    if (commits) parts.push('## Recent Commits\n' + commits);
+                  } catch {}
+                  // Open issues
+                  try {
+                    const issues = await withTimeout(gh.listIssues(config, targetRepo, 'open', 10), 15000);
+                    if (issues) parts.push('## Open Issues\n' + issues);
+                  } catch {}
+                  // Open PRs
+                  try {
+                    const prs = await withTimeout(gh.listPRs(config, targetRepo, 'open', 10), 15000);
+                    if (prs) parts.push('## Open Pull Requests\n' + prs);
+                  } catch {}
+                  // Contributors
+                  try {
+                    const contributors = await withTimeout(gh.getContributors(config, targetRepo, 10), 10000);
+                    if (contributors) parts.push('## Contributors\n' + contributors);
+                  } catch {}
+                } else {
+                  // No specific repo — read notifications + user repos
+                  try {
+                    const notifs = await withTimeout(gh.listNotifications(config, 15), 15000);
+                    if (notifs) parts.push('## GitHub Notifications\n' + notifs);
+                  } catch {}
                 }
-                toolData = parts.length > 0 ? parts.join('\n\n') : 'No GitHub data available.';
+                toolData = parts.length > 0 ? parts.join('\n\n') : 'No GitHub data could be retrieved.';
               }
             } catch (e) { toolData = `GitHub read failed: ${e.message}`; }
 
@@ -3188,14 +3246,15 @@ ${task}
 CRITICAL RULES:
 - Do NOT output JSON, tool calls, function calls, or code blocks
 - NEVER invent, fabricate, or hallucinate data, events, emails, meetings, or news
-- ONLY use the EXACT data provided in the DATA sections below — if no data is provided, say so clearly
-- Do NOT add fictional examples, placeholder content, or generic suggestions not grounded in the data
+- ONLY use data from the DATA sections that is RELEVANT to your specific domain and the WORKFLOW GOAL
+- If the previous agents' output contains irrelevant personal data (e.g. unrelated emails, purchases, subscriptions) — IGNORE it entirely
+- ONLY reference data that directly relates to the subject of the WORKFLOW GOAL
+- If genuinely no relevant data exists for your domain, say so clearly — do NOT invent analysis
 - Write in plain prose, structured with markdown headers (##) and bullet points (-)
 - Be thorough and specific — this is for an executive briefing based on REAL data only
-- Always keep the OVERALL WORKFLOW GOAL in mind — apply your analysis specifically to the subject mentioned
 
 ${attachmentText ? `## ATTACHED FILE CONTENT:\n${attachmentText}\n` : ''}${toolData ? `## LIVE DATA FROM TOOLS:\n${toolData}\n` : '## LIVE DATA: No tool data was fetched for this step.\n'}
-${context ? `## OUTPUT FROM PREVIOUS AGENTS:\n${context}\n` : ''}`;
+${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the workflow goal):\n${context}\n` : ''}`;
             userMsg = hasRealData
               ? `Based ONLY on the real data above, complete this task specifically for the subject in the WORKFLOW GOAL: ${stepPrompt}`
               : `No real data is available for "${task}". State this clearly and explain what data would be needed to complete: ${stepPrompt}`;
