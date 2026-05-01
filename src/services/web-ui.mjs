@@ -697,6 +697,18 @@ function reopenCanvas(){
   renderCanvasPanel();
 }
 function closeCanvas(){var p=document.getElementById('canvasPanel');if(p)p.classList.remove('open');}
+function canvasDownloadHTML(){
+  var d=getConvCanvasData();var item=d.canvases[canvasIdx];
+  var html=(item&&item.html)||studioState.canvas;
+  if(!html){alert('No dashboard to download');return;}
+  var t=document.getElementById('canvasTitle');
+  var name=((t&&t.textContent)||'NHA-Dashboard').slice(0,60).replace(/[^a-z0-9\s]/gi,'').trim().replace(/\s+/g,'-')||'NHA-Dashboard';
+  var blob=new Blob([html],{type:'text/html'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=name+'.html';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},5000);
+}
 function canvasCopyText(){
   var d=getConvCanvasData();var item=d.canvases[canvasIdx];
   if(!item){alert('No canvas content');return;}
@@ -3407,16 +3419,8 @@ function downloadStudioPDF() {
   var nodes = studioState.nodes || [];
   var fileName = (task).slice(0, 60).replace(/[^a-z0-9\s]/gi,'').trim().replace(/\s+/g,'-') || 'NHA-Studio';
 
-  // If canvas exists, download the canvas HTML directly (preserves colors and layout)
-  if (studioState.canvas) {
-    var blob = new Blob([studioState.canvas], {type: 'text/html'});
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url; a.target = '_blank'; a.download = fileName + '.html';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
-    return;
-  }
+  // Always generate the full Studio PDF with all agent outputs.
+  // The canvas panel is already open for the HTML dashboard — PDF = complete structured report.
 
   // ── Markdown → HTML for PDF (full support: tables, lists, headers, inline) ──
   function mdToPdfHtml(raw) {
@@ -3849,18 +3853,60 @@ async function runStudio() {
                 try {
                   var dev = JSON.parse(dd);
                   if (dev.token) {
-                    // Status tokens from server — update last log entry text inline
-                    var delEntries = document.querySelectorAll(\x27.studio-log-entry\x27);
-                    var delLast = delEntries[delEntries.length - 1];
-                    if (delLast) { var delTb = delLast.querySelector(\x27.studio-log-entry__text\x27); if (delTb) delTb.textContent = dev.token; }
+                    // Status tokens — check for Round 2 start to add new animated log entry
+                    var r2StartM = dev.token.match(/^\\[Round 2: (.+?)\\]\\s*$/);
+                    var r2LiveM = dev.token.match(/^\\[Round 2 (.+?): (\\d+) token\\]\\s*$/);
+                    if (r2StartM) {
+                      // New R2 agent starting — add a new log entry with thinking animation
+                      var r2Label = r2StartM[1];
+                      studioLog(r2Label, \x27&#x2656;\x27, \x27\x27, \x27agent\x27, false);
+                      var delEnts2 = document.querySelectorAll(\x27.studio-log-entry\x27);
+                      var delL2 = delEnts2[delEnts2.length - 1];
+                      if (delL2) {
+                        delL2.setAttribute(\x27data-r2-agent\x27, r2Label);
+                        var delTb2 = delL2.querySelector(\x27.studio-log-entry__text\x27);
+                        if (delTb2) delTb2.innerHTML = \x27<span style="color:var(--green);font-family:var(--mono);font-size:10px">&#x2656; Deliberando Round 2<span class="thinking-dots"><span></span><span></span><span></span></span></span>\x27;
+                      }
+                    } else if (r2LiveM) {
+                      // Live token count update for the current R2 agent
+                      var r2AgentName = r2LiveM[1];
+                      var r2Toks = parseInt(r2LiveM[2], 10);
+                      var delAllEnts = document.querySelectorAll(\x27[data-r2-agent]\x27);
+                      var r2Entry = null;
+                      for (var rei = delAllEnts.length - 1; rei >= 0; rei--) {
+                        if (delAllEnts[rei].getAttribute(\x27data-r2-agent\x27) === r2AgentName) { r2Entry = delAllEnts[rei]; break; }
+                      }
+                      if (!r2Entry) {
+                        var delAllE = document.querySelectorAll(\x27.studio-log-entry\x27);
+                        r2Entry = delAllE[delAllE.length - 1];
+                      }
+                      if (r2Entry) {
+                        var r2Tb = r2Entry.querySelector(\x27.studio-log-entry__text\x27);
+                        if (r2Tb) r2Tb.innerHTML = \x27<span style="color:var(--green);font-family:var(--mono);font-size:10px">&#x2656; Deliberando Round 2 \u2014 \x27 + r2Toks + \x27 token<span class="thinking-dots"><span></span><span></span><span></span></span></span>\x27;
+                      }
+                      studioAddTokens(0, 20); // approx chunk size
+                    } else {
+                      // Other status tokens — update last log entry
+                      var delEntries = document.querySelectorAll(\x27.studio-log-entry\x27);
+                      var delLast = delEntries[delEntries.length - 1];
+                      if (delLast) { var delTb = delLast.querySelector(\x27.studio-log-entry__text\x27); if (delTb) delTb.textContent = dev.token.replace(new RegExp(\x27[\\r\\n]+\x27,\x27g\x27),\x27 \x27); }
+                    }
                   } else if (dev.deliberation_r2) {
                     var r2d = dev.deliberation_r2;
-                    studioLog(r2d.label || r2d.agent, \x27&#x2656;\x27, \x27[R2] \x27 + (r2d.output || \x27\x27).slice(0, 300), \x27agent\x27, true);
+                    // Full output in log — no truncation
+                    studioLog(r2d.label || r2d.agent, \x27&#x2656;\x27, \x27[R2] \x27 + (r2d.output || \x27\x27), \x27agent\x27, true);
                     var ni2 = studioState.nodes.findIndex(function(x){return x.agent===r2d.agent;});
-                    if (ni2 >= 0) { studioState.nodes[ni2].output = r2d.output; }
+                    if (ni2 >= 0) {
+                      studioState.nodes[ni2].output = r2d.output;
+                      studioState.nodes[ni2].status = \x27done\x27;
+                    }
+                    // Estimate tokens for R2 (approx 1 token ≈ 4 chars)
+                    studioAddTokens(0, Math.ceil((r2d.output||'').length / 4));
+                    renderStudioNodes();
                     context = r2d.output || context;
                   } else if (dev.deliberation_r3) {
-                    studioLog(\x27HERALD\x27, \x27&#128295;\x27, \x27[Mediazione] \x27 + (dev.deliberation_r3.output || \x27\x27).slice(0, 300), \x27system\x27, true);
+                    studioLog(\x27HERALD\x27, \x27&#128295;\x27, \x27[Mediazione] \x27 + (dev.deliberation_r3.output || \x27\x27), \x27system\x27, true);
+                    studioAddTokens(0, Math.ceil((dev.deliberation_r3.output||'').length / 4));
                     context = dev.deliberation_r3.output || context;
                   } else if (dev.deliberation_done) {
                     var r2Conv = Math.round((dev.r2_convergence || 0) * 100);
@@ -4925,7 +4971,7 @@ input:focus,textarea:focus{border-color:var(--green3)}
   </div>
 </div>
 
-<div id="canvasPanel"><div class="cvs-header"><div style="display:flex;align-items:center;gap:8px"><button id="canvasTabC" onclick="canvasShowCanvas()" style="background:none;border:none;border-bottom:2px solid var(--green);color:var(--green);cursor:pointer;font-family:var(--mono);font-size:11px;padding:2px 6px">Canvas</button><button id="canvasTabB" onclick="canvasShowBrowser()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-family:var(--mono);font-size:11px;padding:2px 6px">Browser</button><span id="canvasTitle" style="font-family:var(--mono);color:var(--green);font-size:11px;margin-left:8px">Canvas</span></div><div style="display:flex;align-items:center;gap:4px"><span id="canvasNav" style="display:none;gap:4px"><button onclick="canvasPrev()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px" title="Previous">&#x25C0;</button><button onclick="canvasNext()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px" title="Next">&#x25B6;</button></span><button onclick="canvasCopyText()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;font-family:var(--mono)" title="Copy text content">Copy</button><button onclick="canvasCopyHTML()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;font-family:var(--mono)" title="Copy HTML source">HTML</button><button onclick="canvasCopyImage()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;font-family:var(--mono)" title="Copy as image">IMG</button><button onclick="toggleCanvasSize()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px" title="Resize">&#x2922;</button><button onclick="closeCanvas()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px" title="Close">&times;</button></div></div><iframe id="canvasFrame" sandbox="allow-scripts" srcdoc=""></iframe></div>
+<div id="canvasPanel"><div class="cvs-header"><div style="display:flex;align-items:center;gap:8px"><button id="canvasTabC" onclick="canvasShowCanvas()" style="background:none;border:none;border-bottom:2px solid var(--green);color:var(--green);cursor:pointer;font-family:var(--mono);font-size:11px;padding:2px 6px">Canvas</button><button id="canvasTabB" onclick="canvasShowBrowser()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-family:var(--mono);font-size:11px;padding:2px 6px">Browser</button><span id="canvasTitle" style="font-family:var(--mono);color:var(--green);font-size:11px;margin-left:8px">Canvas</span></div><div style="display:flex;align-items:center;gap:4px"><span id="canvasNav" style="display:none;gap:4px"><button onclick="canvasPrev()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px" title="Previous">&#x25C0;</button><button onclick="canvasNext()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px" title="Next">&#x25B6;</button></span><button onclick="canvasDownloadHTML()" style="background:none;border:none;color:var(--green3);cursor:pointer;font-size:11px;font-family:var(--mono)" title="Scarica Dashboard HTML">&#x2913; HTML</button><button onclick="canvasCopyText()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;font-family:var(--mono)" title="Copy text content">Copy</button><button onclick="canvasCopyImage()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;font-family:var(--mono)" title="Copy as image">IMG</button><button onclick="toggleCanvasSize()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px" title="Resize">&#x2922;</button><button onclick="closeCanvas()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px" title="Close">&times;</button></div></div><iframe id="canvasFrame" sandbox="allow-scripts" srcdoc=""></iframe></div>
 <div id="agentEditorOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:400;align-items:center;justify-content:center;padding:16px"></div>
 <div class="lightbox-overlay" id="lightboxOverlay" onclick="closeLightbox()">
   <span class="lightbox-close" onclick="closeLightbox()">&times;</span>

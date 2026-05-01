@@ -3577,7 +3577,7 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the wo
           const buildCrossReadCtx = (excludeAgent) =>
             eligibleProposals
               .filter(p => p.agent !== excludeAgent)
-              .map(p => `## ${p.label || p.agent} (Round 1):\n${p.output.slice(0, 2000)}`)
+              .map(p => `## ${p.label || p.agent} (Round 1):\n${p.output.slice(0, 4000)}`)
               .join('\n\n---\n\n');
 
           // Round 2: cross-reading + refinement (sequential to save tokens)
@@ -3605,9 +3605,17 @@ DELIBERATION ROUND 2 — REFINEMENT:
 5. Keep your analysis focused on: ${task}`;
 
             let r2Out = '';
+            let r2TokCount = 0;
             try {
               await callLLMStream(config, r2Sys, 'Produce your refined Round 2 response.',
-                (tok) => { r2Out += tok; }, { max_tokens: 2048 });
+                (tok) => {
+                  r2Out += tok;
+                  r2TokCount += Math.ceil(tok.length / 4);
+                  // Stream live token count to client every ~20 tokens
+                  if (r2TokCount % 20 < 3) {
+                    sendTok2(`[Round 2 ${proposal.label || proposal.agent}: ${r2TokCount} token] `);
+                  }
+                }, { max_tokens: 6144 });
             } catch (e) { r2Out = proposal.output; }
             r2Results.push({ agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out });
             sendEv2({ deliberation_r2: { agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out } });
@@ -3640,7 +3648,7 @@ MEDIATION TASK:
 5. Output a complete executive summary with concrete action items for: ${task}`;
             try {
               await callLLMStream(config, medSys, 'Produce the mediated Parliament consensus.',
-                (tok) => { mediationOutput += tok; }, { max_tokens: 3000 });
+                (tok) => { mediationOutput += tok; }, { max_tokens: 6144 });
             } catch (e) { mediationOutput = ''; }
             sendEv2({ deliberation_r3: { output: mediationOutput } });
           }
