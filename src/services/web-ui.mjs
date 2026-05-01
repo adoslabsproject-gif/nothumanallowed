@@ -1204,11 +1204,14 @@ function openDayDetail(dateStr){
         h+='<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px">';
         h+='<div style="flex:1"><div style="color:var(--amber);font-weight:700;font-size:13px;margin-bottom:4px">'+esc(timeStr)+'</div>';
         h+='<div style="color:var(--bright);font-size:15px;font-weight:700;margin-bottom:6px">'+esc(x.summary)+'</div></div>';
-        if(x.id){
+        if(x.id&&!x.readOnly){
           h+='<div style="display:flex;gap:4px;flex-shrink:0">';
           h+='<button onclick="openEventFormByIdx('+idx+')" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px">Edit</button>';
           h+='<button onclick="deleteCalEventByIdx('+idx+')" style="background:var(--bg2);border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:4px;font-size:11px">Delete</button>';
           h+='</div>';
+        }
+        if(x.readOnly){
+          h+='<span style="font-size:9px;color:var(--dim);flex-shrink:0;padding-top:2px">read-only</span>';
         }
         h+='</div>';
         if(x.location)h+='<div style="color:var(--cyan);font-size:12px;margin-bottom:4px">Location: '+esc(x.location)+'</div>';

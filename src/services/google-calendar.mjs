@@ -103,7 +103,8 @@ export async function getTodayEvents(config) {
       const events = await listEvents(config, cal.id, startOfDay, endOfDay);
       for (const e of events) {
         e.calendarName = cal.summary;
-        e.calendarId = cal.id; // ensure real calendarId is set
+        e.calendarId = cal.id;
+        e.readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
         allEvents.push(e);
       }
     } catch { /* skip failed calendars */ }
@@ -132,6 +133,7 @@ export async function getEventsForDate(config, date) {
       for (const e of events) {
         e.calendarName = cal.summary;
         e.calendarId = cal.id;
+        e.readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
         allEvents.push(e);
       }
     } catch { /* skip */ }
