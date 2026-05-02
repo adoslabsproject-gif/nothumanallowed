@@ -3331,7 +3331,12 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the wo
           }
 
           // Strip think tags from fullOutput before emptiness check
-          const fullOutputClean = fullOutput.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+          let fullOutputClean = fullOutput.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+          // Remove empty sections: headings (## N. Title) immediately followed by another heading or end-of-text
+          // These appear when LLM runs out of tokens mid-response
+          fullOutputClean = fullOutputClean.replace(/^(#{1,4}\s+[^\n]+)\n+(?=#{1,4}\s|$)/gm, '');
+          // Also strip trailing lone headings at end of output
+          fullOutputClean = fullOutputClean.replace(/(#{1,4}\s+[^\n]+)\s*$/g, '').trim();
 
           // Fallback: if LLM returned empty and we have tool data, send it directly
           if (!isCanvasAgent && !fullOutputClean && toolData) {
