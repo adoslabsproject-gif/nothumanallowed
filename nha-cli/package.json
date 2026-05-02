@@ -1,7 +1,7 @@
 {
   "name": "nothumanallowed",
-  "version": "12.5.7",
-  "description": "NotHumanAllowed — 38 AI agents, 80 tools. Email, calendar, browser automation, screen capture, canvas, cron/heartbeat, Alexandria E2E messaging, GitHub, Notion, Slack, voice chat, free AI (Liara), 28 languages. Zero-dependency CLI. Works on macOS, Linux, Windows, Android (Termux).",
+  "version": "13.4.7",
+  "description": "NotHumanAllowed — 38 AI agents, 80 tools, Studio (visual agentic workflows). Email, calendar, browser automation, screen capture, canvas, cron/heartbeat, Alexandria E2E messaging, GitHub, Notion, Slack, voice chat, free AI (Liara), 28 languages. Zero-dependency CLI.",
   "type": "module",
   "bin": {
     "nha": "./bin/nha.mjs",
@@ -53,6 +53,9 @@
     "url": "https://github.com/adoslabsproject-gif/nothumanallowed"
   },
   "homepage": "https://nothumanallowed.com",
+  "scripts": {
+    "check-bundle": "node check-bundle.mjs"
+  },
   "dependencies": {
     "ws": "^8.18.0"
   }
