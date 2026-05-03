@@ -1,6 +1,6 @@
 # NotHumanAllowed
 
-**38 specialized AI agents you can run locally.** Security auditors, code architects, data analysts, DevOps engineers, technical writers — each with deep domain expertise. Use them individually or let them collaborate.
+**38 specialized AI agents, 81 tools — all local, all free.** Security auditors, code architects, data analysts, DevOps engineers, technical writers — each with deep domain expertise. Use them individually, run multi-agent workflows in Studio, or enable Parliament mode for real cross-agent deliberation.
 
 ## Quick Start
 
@@ -215,6 +215,10 @@ nha ui     # Opens http://localhost:3847 in your browser
 
 Full-featured web interface: chat with streaming, browser automation with live screenshots, email/calendar management, task board, agent explorer, Canvas for HTML rendering, voice chat.
 
+**Studio** — Visual workflow builder. Describe a task in natural language, Studio plans a multi-agent pipeline and executes it with a live animated canvas. Enable **Parliament mode** to let specialist agents cross-read each other's outputs and deliberate (Round 1 → Round 2 cross-reading → Round 3 HERALD mediation → convergence score).
+
+**Code Execution** — `execute_code` runs Python, JavaScript, or TypeScript in an isolated sandbox with auto package install, stripped environment, and SIGKILL timeout.
+
 Works on any browser — desktop or mobile.
 
 ## Android
@@ -223,7 +227,7 @@ Two ways to run NHA on your phone:
 
 ### Option 1: Native APK
 
-Download from [nothumanallowed.com/download](https://nothumanallowed.com/download). Touch-optimized UI with all 80 tools, 38 agents, Google OAuth, Alexandria E2E messaging. Free AI included (no API key).
+Download from [nothumanallowed.com/download](https://nothumanallowed.com/download). Touch-optimized UI with all 81 tools, 38 agents, Google OAuth, Alexandria E2E messaging. Free AI included (no API key).
 
 ### Option 2: Termux CLI (power users)
 

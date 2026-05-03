@@ -189,11 +189,11 @@ function sendHTML(res, html) {
   res.end(html);
 }
 
-function parseBody(req) {
+function parseBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
-    const MAX = 1_048_576; // 1 MB
+    const MAX = maxBytes || 1_048_576; // 1 MB default
     req.on('data', chunk => {
       size += chunk.length;
       if (size > MAX) { reject(new Error('Body too large')); req.destroy(); return; }
@@ -2730,79 +2730,174 @@ export async function cmdUI(args) {
           // PDF attachment: always read document first to extract specs/data before any web search
           if (hasPdf) {
             const pdfName = body.pdfName || 'documento allegato';
-            steps.push({icon:'\u{1F4C4}',agent:'DocumentReaderAgent',label:it?'Leggi documento':'Read document',prompt:`Extract all technical specifications, model numbers, part codes, product names, manufacturer, dimensions, ratings, and any other key data from the attached document "${pdfName}". List every technical detail precisely.`});
+            steps.push({icon:'\u{1F4C4}',agent:'DocumentReaderAgent',label:it?'Leggi documento':'Read document',reason:it?'Allegato PDF rilevato \u2014 estraggo dati tecnici prima di ogni altra operazione':'PDF attachment detected \u2014 extracting technical data first',prompt:`Extract all technical specifications, model numbers, part codes, product names, manufacturer, dimensions, ratings, and any other key data from the attached document "${pdfName}". List every technical detail precisely.`});
           }
-          if (hasEmail)    steps.push({icon:'\u{1F4E7}',agent:'EmailAgent',   label:it?'Controlla email':'Check emails',       prompt:'Read the latest unread emails and identify urgent items, deadlines, and required actions'});
-          if (hasCalendar) steps.push({icon:'\u{1F4C5}',agent:'CalendarAgent', label:it?'Rivedi calendario':'Review calendar',   prompt:'Check today\'s events and identify any scheduling conflicts or important meetings'});
-          if (hasGitHub)   steps.push({icon:'\u{1F4BB}',agent:'GitHubAgent',   label:'GitHub',                                  prompt:'Read open issues and pull requests, identify what needs attention'});
-          if (hasSlack)    steps.push({icon:'\u{1F4AC}',agent:'SlackAgent',    label:'Slack',                                   prompt:'Check recent Slack messages and identify important conversations'});
-          if (hasNotion)   steps.push({icon:'\u{1F4DD}',agent:'NotionAgent',   label:'Notion',                                  prompt:'Search Notion for relevant pages and notes'});
+          if (hasEmail)    steps.push({icon:'\u{1F4E7}',agent:'EmailAgent',   label:it?'Controlla email':'Check emails',       reason:it?'Parola chiave email/mail/posta rilevata nel task':'Keyword email/mail detected in task',       prompt:'Read the latest unread emails and identify urgent items, deadlines, and required actions'});
+          if (hasCalendar) steps.push({icon:'\u{1F4C5}',agent:'CalendarAgent', label:it?'Rivedi calendario':'Review calendar',  reason:it?'Parola chiave calendario/agenda/eventi rilevata nel task':'Keyword calendar/agenda/events detected in task',   prompt:'Check today\'s events and identify any scheduling conflicts or important meetings'});
+          if (hasGitHub)   steps.push({icon:'\u{1F4BB}',agent:'GitHubAgent',   label:'GitHub',                                 reason:it?'Parola chiave GitHub/git/issue/PR rilevata nel task':'Keyword GitHub/git/issue/PR detected in task',  prompt:'Read open issues and pull requests, identify what needs attention'});
+          if (hasSlack)    steps.push({icon:'\u{1F4AC}',agent:'SlackAgent',    label:'Slack',                                  reason:it?'Parola chiave Slack/canale/messaggio rilevata nel task':'Keyword Slack/channel/message detected in task', prompt:'Check recent Slack messages and identify important conversations'});
+          if (hasNotion)   steps.push({icon:'\u{1F4DD}',agent:'NotionAgent',   label:'Notion',                                 reason:it?'Parola chiave Notion/note rilevata nel task':'Keyword Notion/note detected in task',                  prompt:'Search Notion for relevant pages and notes'});
           // When PDF is present: always search web (to find where to buy, similar products etc.)
           // The search query will be refined at runtime using the extracted PDF specs as context
           if (hasPdf || hasSearch || hasReputation || (!hasEmail && !hasCalendar && !hasGitHub && !hasSlack)) {
             const searchPrompt = hasPdf
               ? (it ? 'Usando le specifiche tecniche estratte dal documento (codice prodotto, modello, costruttore, caratteristiche), cerca online dove acquistare il prodotto o articoli equivalenti. Usa i codici esatti dal documento come query di ricerca.' : 'Using the technical specifications extracted from the document (product code, model, manufacturer, specs), search online for where to buy this product or equivalent alternatives. Use exact codes from the document as search queries.')
               : searchQuery;
-            steps.push({icon:'\u{1F50D}',agent:'WebSearchAgent',label:it?'Ricerca web':'Web search',prompt:searchPrompt});
+            const searchReason = hasPdf ? (it?'Complemento PDF: cerco informazioni online con i dati estratti':'PDF complement: searching online with extracted specs') : hasReputation ? (it?'Parola chiave reputazione/brand: raccolgo dati web':'Reputation/brand keyword: collecting web data') : hasSearch ? (it?'Parola chiave cerca/search/notizie rilevata':'Keyword search/news detected') : (it?'Nessuna fonte dati specifica \u2014 web come fonte primaria':'No specific data source \u2014 web as primary source');
+            steps.push({icon:'\u{1F50D}',agent:'WebSearchAgent',label:it?'Ricerca web':'Web search',reason:searchReason,prompt:searchPrompt});
           }
           // Specialist agents — can stack multiple
-          if (hasSecurity)   steps.push({icon:'\u{1F6E1}',agent:'cassandra',   label:it?'CASSANDRA \u2014 Rischi sicurezza':'CASSANDRA \u2014 Security risks',    prompt:'Analyze the collected data and identify security risks, vulnerabilities and concrete recommendations'});
-          if (hasFinance)    steps.push({icon:'\u{1F4B0}',agent:'mercury',     label:it?'MERCURY \u2014 Analisi mercato':'MERCURY \u2014 Market analysis',          prompt:'Analyze the financial data and market trends from the collected information'});
-          if (hasStrategy)   steps.push({icon:'\u{265F}', agent:'athena',      label:it?'ATHENA \u2014 Strategia':'ATHENA \u2014 Strategy',                        prompt:'Based on the collected data, produce strategic analysis with competitive positioning and concrete recommendations'});
-          if (hasReputation) steps.push({icon:'\u{1F52D}',agent:'oracle',      label:it?'ORACLE \u2014 Reputazione':'ORACLE \u2014 Reputation',                    prompt:'Analyze the online reputation data, sentiment and brand positioning from the collected information'});
-          if (hasCode)       steps.push({icon:'\u{1F527}',agent:'forge',       label:it?'FORGE \u2014 Analisi codice':'FORGE \u2014 Code analysis',                prompt:'Analyze the code, dependencies and technical issues identified in the data'});
-          if (hasWriting)    steps.push({icon:'\u{1F58A}',agent:'quill',       label:it?'QUILL \u2014 Redazione':'QUILL \u2014 Writing',                           prompt:'Write a polished, professional document based on all the collected information'});
-          if (hasData)       steps.push({icon:'\u{1F4CA}',agent:'DataAnalystAgent',label:it?'Analisi dati':'Data analysis',                                        prompt:'Analyze the data and extract key patterns, trends and insights'});
-          if (hasTranslate)  steps.push({icon:'\u{1F310}',agent:'polyglot',    label:it?'POLYGLOT \u2014 Traduzione':'POLYGLOT \u2014 Translation',                prompt:'Translate the content as requested, maintaining meaning and style'});
+          if (hasSecurity)   steps.push({icon:'\u{1F6E1}',agent:'cassandra',   label:it?'CASSANDRA \u2014 Rischi sicurezza':'CASSANDRA \u2014 Security risks',    reason:it?'Parola chiave sicurezza/vulnerabilit\u00e0/audit rilevata':'Keyword security/vulnerability/audit detected',    prompt:'Analyze the collected data and identify security risks, vulnerabilities and concrete recommendations'});
+          if (hasFinance)    steps.push({icon:'\u{1F4B0}',agent:'mercury',     label:it?'MERCURY \u2014 Analisi mercato':'MERCURY \u2014 Market analysis',          reason:it?'Parola chiave finanza/mercato/investimento rilevata':'Keyword finance/market/investment detected',          prompt:'Analyze the financial data and market trends from the collected information'});
+          if (hasStrategy)   steps.push({icon:'\u{265F}', agent:'athena',      label:it?'ATHENA \u2014 Strategia':'ATHENA \u2014 Strategy',                        reason:it?'Parola chiave strategia/competitivo/posizionamento rilevata':'Keyword strategy/competitive/positioning detected',prompt:'Based on the collected data, produce strategic analysis with competitive positioning and concrete recommendations'});
+          if (hasReputation) steps.push({icon:'\u{1F52D}',agent:'oracle',      label:it?'ORACLE \u2014 Reputazione':'ORACLE \u2014 Reputation',                    reason:it?'Parola chiave reputazione/brand/recensioni rilevata':'Keyword reputation/brand/reviews detected',             prompt:'Analyze the online reputation data, sentiment and brand positioning from the collected information'});
+          if (hasCode)       steps.push({icon:'\u{1F527}',agent:'forge',       label:it?'FORGE \u2014 Analisi codice':'FORGE \u2014 Code analysis',                reason:it?'Parola chiave codice/refactor/bug/npm rilevata':'Keyword code/refactor/bug/npm detected',                    prompt:'Analyze the code, dependencies and technical issues identified in the data'});
+          if (hasWriting)    steps.push({icon:'\u{1F58A}',agent:'quill',       label:it?'QUILL \u2014 Redazione':'QUILL \u2014 Writing',                           reason:it?'Parola chiave scrivi/articolo/documento rilevata':'Keyword write/article/document detected',                  prompt:'Write a polished, professional document based on all the collected information'});
+          if (hasData)       steps.push({icon:'\u{1F4CA}',agent:'DataAnalystAgent',label:it?'Analisi dati':'Data analysis',                                        reason:it?'Parola chiave dati/dataset/statistiche rilevata':'Keyword data/dataset/statistics detected',                 prompt:'Analyze the data and extract key patterns, trends and insights'});
+          if (hasTranslate)  steps.push({icon:'\u{1F310}',agent:'polyglot',    label:it?'POLYGLOT \u2014 Traduzione':'POLYGLOT \u2014 Translation',                reason:it?'Parola chiave traduci/traduzione rilevata':'Keyword translate/translation detected',                         prompt:'Translate the content as requested, maintaining meaning and style'});
           // If no specialist added but we have data, add HERALD for synthesis
           const hasSpecialist = hasSecurity || hasFinance || hasStrategy || hasReputation || hasCode || hasWriting || hasData || hasTranslate;
           if (!hasSpecialist && (hasBriefing || steps.length > 0)) {
-            steps.push({icon:'\u{1F4F0}',agent:'HERALD',label:it?'HERALD \u2014 Briefing esecutivo':'HERALD \u2014 Executive briefing',prompt:'Based on ALL the data collected by the previous steps, write a complete executive briefing with priorities, findings, and strategic recommendations. Do NOT invent data — only use what was provided.'});
+            steps.push({icon:'\u{1F4F0}',agent:'HERALD',label:it?'HERALD \u2014 Briefing esecutivo':'HERALD \u2014 Executive briefing',reason:it?'Nessun agente specialista \u2014 HERALD sintetizza tutti i dati raccolti':'No specialist agent \u2014 HERALD synthesizes all collected data',prompt:'Based on ALL the data collected by the previous steps, write a complete executive briefing with priorities, findings, and strategic recommendations. Do NOT invent data — only use what was provided.'});
           }
           // Add CanvasAgent: always when explicitly requested OR when 2+ specialist agents ran (complex analysis deserves a visual report)
           const specialistCount = [hasSecurity,hasFinance,hasStrategy,hasReputation,hasCode,hasWriting,hasData].filter(Boolean).length;
           if (hasCanvas || specialistCount >= 2 || (hasSpecialist && hasBriefing)) {
-            steps.push({icon:'\u{1F4CA}',agent:'CanvasAgent',label:it?'Dashboard HTML':'HTML Dashboard',prompt:'Create a professional HTML dashboard report summarizing all findings from the previous agents'});
+            const canvasReason = hasCanvas ? (it?'Parola chiave html/dashboard/report visuale rilevata':'Keyword html/dashboard/visual report detected') : (it?specialistCount+' agenti specialisti \u2014 analisi complessa merita una dashboard':specialistCount+' specialist agents \u2014 complex analysis needs a visual dashboard');
+            steps.push({icon:'\u{1F4CA}',agent:'CanvasAgent',label:it?'Dashboard HTML':'HTML Dashboard',reason:canvasReason,prompt:'Create a professional HTML dashboard report summarizing all findings from the previous agents'});
           }
           return steps;
         };
 
-        // Use keyword plan directly — only fall back to LLM for genuinely ambiguous tasks
+        // ── Hybrid planning: keyword baseline + LLM refinement ──────────────────
+        //
+        // Strategy (3 tiers):
+        //
+        //   TIER 1 — Keyword baseline (always runs, <1ms, zero LLM):
+        //     Builds a solid plan from regex matches on the task. Reliable for all
+        //     known patterns. Already contains `reason` for each step.
+        //
+        //   TIER 2 — LLM refinement (runs when baseline ≥ 1 step OR task is non-trivial):
+        //     Receives the task + the keyword plan as context. Can ADD missing steps,
+        //     REMOVE wrong ones, REORDER, and ADJUST prompts. Does NOT build from scratch.
+        //     Falls back to keyword plan on any parse/timeout error.
+        //
+        //   TIER 3 — LLM-only fallback (runs when keyword baseline is empty):
+        //     Task had zero keyword matches → pure LLM planning with full task text.
+        //     Same fallback: on error, returns a single WebSearchAgent step.
+        //
+        // Why this is safe now: SENTINEL's /api/studio/ is an intent-aware route.
+        // Prompt injection detection is disabled for this path — the body IS the task.
+        // Encoding attacks, rate limits, and toxicity checks remain fully active.
+
         const keywordSteps = buildKeywordPlan();
-        const taskIsComplex = !hasPdf && !hasEmail && !hasCalendar && !hasSearch && !hasGitHub && !hasSlack && !hasBriefing && !hasStrategy && !hasReputation && !hasCode && !hasWriting && !hasData && keywordSteps.length <= 1;
+        const hasKeywordPlan = keywordSteps.length > 0;
+
+        // Sanitize task for LLM: strip HTML tags and control chars (defensive, not SENTINEL).
+        const sanitizedTask = task.replace(/<[^>]*>/g, ' ').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '').trim();
+
+        // Build a compact JSON representation of the keyword plan for the LLM to refine.
+        const keywordPlanJson = hasKeywordPlan
+          ? JSON.stringify(keywordSteps.map(s => ({ agent: s.agent, label: s.label, reason: s.reason || '' })))
+          : '[]';
+
+        const planConfig = Object.assign({}, config, { thinking: 'off' });
 
         try {
-          let steps;
-          if (!taskIsComplex) {
-            // Use keyword plan directly — no LLM, no SENTINEL risk
-            process.stderr.write('[STUDIO PLAN KEYWORD] steps=' + keywordSteps.length + '\n');
-            steps = keywordSteps;
-          } else {
-            // Task is ambiguous — use LLM planner with sanitized short description
-            const shortTask = task.slice(0, 200).replace(/[`'"]/g, ' ');
-            const plannerLangStr = plannerLang;
-            const planPrompt = `Workflow planner. Goal: ${shortTask}\nLanguage: ${plannerLangStr}.\nOutput ONLY JSON:\n{"steps":[{"icon":"EMOJI","agent":"AGENT_NAME","label":"LABEL","prompt":"INSTRUCTION"}]}\nAgents: WebSearchAgent, EmailAgent, CalendarAgent, HERALD, ORACLE, ATHENA, CASSANDRA, MERCURY, QUILL, CanvasAgent (last, only if visual needed). 2-5 steps.`;
-            const planConfig = Object.assign({}, config, { thinking: 'off' });
-            const planRaw = await callLLM(planConfig, 'Output ONLY valid JSON. No explanation.', planPrompt, { max_tokens: 800 });
-            process.stderr.write('[STUDIO PLAN LLM RAW] ' + planRaw.slice(0, 400) + '\n');
+          let steps = keywordSteps;
+
+          // TIER 2 / 3: always attempt LLM if we have a working LLM config
+          if (config && (config.provider || config.apiKey || config.baseUrl)) {
             try {
+              let planPrompt;
+              let planSys;
+
+              if (hasKeywordPlan) {
+                // TIER 2: refine the keyword plan
+                planSys = `You are a workflow planner for NHA Studio. Output ONLY valid JSON — no explanation, no markdown.`;
+                planPrompt = `Task: ${sanitizedTask}
+
+Keyword-detected plan (JSON):
+${keywordPlanJson}
+
+Language for labels: ${plannerLang}.
+
+Review the plan above. You may:
+- ADD steps that are clearly needed but missing
+- REMOVE steps that are wrong for this task
+- REORDER steps to fix logical sequence (e.g. Notion before email)
+- ADJUST the "prompt" field of any step to better match the task
+- KEEP steps that are correct as-is
+
+Available agents: WebSearchAgent, DocumentReaderAgent, EmailAgent, CalendarAgent, GitHubAgent, SlackAgent, NotionAgent, HERALD, ORACLE, ATHENA, CASSANDRA, MERCURY, QUILL, DataAnalystAgent, polyglot, CanvasAgent (last, only if visual output needed).
+
+Output ONLY:
+{"steps":[{"icon":"EMOJI","agent":"AGENT_NAME","label":"LABEL","reason":"WHY THIS AGENT","prompt":"INSTRUCTION"}]}
+
+Rules:
+- 2 to 6 steps maximum
+- CanvasAgent only as the final step and only for complex multi-agent analyses
+- Keep existing reasons where step is unchanged, write a new reason when you add/change a step`;
+              } else {
+                // TIER 3: pure LLM planning — zero keyword matches
+                planSys = `You are a workflow planner for NHA Studio. Output ONLY valid JSON — no explanation, no markdown.`;
+                planPrompt = `Task: ${sanitizedTask}
+
+Language for labels: ${plannerLang}.
+
+Build a workflow plan for this task.
+
+Available agents: WebSearchAgent, DocumentReaderAgent, EmailAgent, CalendarAgent, GitHubAgent, SlackAgent, NotionAgent, HERALD, ORACLE, ATHENA, CASSANDRA, MERCURY, QUILL, DataAnalystAgent, polyglot, CanvasAgent.
+
+Output ONLY:
+{"steps":[{"icon":"EMOJI","agent":"AGENT_NAME","label":"LABEL","reason":"WHY THIS AGENT","prompt":"INSTRUCTION"}]}
+
+Rules:
+- 2 to 5 steps
+- HERALD = executive synthesis when no other specialist fits
+- CanvasAgent only as the final step for complex multi-agent workflows
+- reason = one sentence explaining why this agent was chosen`;
+              }
+
+              const planRaw = await callLLM(planConfig, planSys, planPrompt, { max_tokens: 900 });
+              process.stderr.write('[STUDIO PLAN LLM RAW] mode=' + (hasKeywordPlan ? 'refine' : 'pure') + ' len=' + planRaw.length + '\n');
+
+              // Parse LLM output — strip <think> blocks (Qwen3), markdown fences, extract JSON
               let clean = planRaw;
               let prev = '';
               while (prev !== clean) { prev = clean; clean = clean.replace(/<think>[\s\S]*?<\/think>/g, ''); }
-              clean = clean.trim().replace(/^```[\w]*\r?\n?/,'').replace(/\r?\n?```$/,'').trim();
+              clean = clean.trim().replace(/^```[\w]*\r?\n?/, '').replace(/\r?\n?```$/, '').trim();
               const jsonMatch = clean.match(/\{[\s\S]*\}/);
               const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
-              steps = parsed.steps;
-            } catch (parseErr) {
-              process.stderr.write('[STUDIO PLAN PARSE ERR] ' + parseErr.message + '\n');
-              steps = keywordSteps;
+
+              if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+                // Merge: LLM steps override keyword steps. Preserve `reason` from keyword where LLM kept same agent.
+                const keywordReasonMap = {};
+                keywordSteps.forEach(s => { keywordReasonMap[s.agent] = s.reason || ''; });
+                steps = parsed.steps.map(s => ({
+                  icon: s.icon || '\u{1F916}',
+                  agent: s.agent,
+                  label: s.label,
+                  reason: s.reason || keywordReasonMap[s.agent] || '',
+                  prompt: s.prompt,
+                }));
+                process.stderr.write('[STUDIO PLAN LLM OK] steps=' + steps.length + '\n');
+              } else {
+                process.stderr.write('[STUDIO PLAN LLM EMPTY] falling back to keyword plan\n');
+              }
+            } catch (llmErr) {
+              process.stderr.write('[STUDIO PLAN LLM ERR] ' + llmErr.message + ' — using keyword plan\n');
+              // steps already = keywordSteps, no action needed
             }
+          } else {
+            process.stderr.write('[STUDIO PLAN KEYWORD ONLY] no LLM config, steps=' + keywordSteps.length + '\n');
           }
+
+          // Final safety net: if everything failed and we have nothing, single web search step
           if (!Array.isArray(steps) || !steps.length) {
-            sendJSON(res, 500, { error: 'Empty workflow plan' });
-            logRequest(method, pathname, 500, Date.now() - start);
-            return;
+            steps = [{ icon: '\u{1F50D}', agent: 'WebSearchAgent', label: plannerLang === 'Italian' ? 'Ricerca web' : 'Web search', reason: plannerLang === 'Italian' ? 'Fallback: nessun piano costruito' : 'Fallback: no plan built', prompt: sanitizedTask }];
           }
+
           sendJSON(res, 200, { steps });
           logRequest(method, pathname, 200, Date.now() - start);
         } catch (e) {
@@ -2814,7 +2909,7 @@ export async function cmdUI(args) {
 
       // ── Studio: run single step (SSE streaming) ──────────────────────
       if (pathname === '/api/studio/run' && method === 'POST') {
-        const body = await parseBody(req);
+        const body = await parseBody(req, 4_194_304); // 4MB — context can be up to 120KB + task + PDF
         const { agent, task, context, stepDef } = body;
         const stepPdfBase64 = body.pdfBase64 || null;
         const stepPdfName = body.pdfName || null;
@@ -2955,6 +3050,21 @@ ${rawText.slice(0, 18000)}`;
           } else if (agent === 'WebSearchAgent' || agent === 'ResearchAgent') {
             sendToken('[Searching the web and reading pages...] ');
             try {
+              // If the task or stepPrompt contains explicit URLs, fetch them directly first
+              const explicitUrls = (task + ' ' + stepPrompt).match(/https?:\/\/[^\s"'<>)]+/g);
+              if (explicitUrls && explicitUrls.length > 0) {
+                const uniqueUrls = [...new Set(explicitUrls)].slice(0, 4);
+                for (const u of uniqueUrls) {
+                  sendToken(`[Fetching ${u}...] `);
+                  try {
+                    const fetchRes = await withTimeout(executeTool('fetch_url', { url: u }, config), 30000);
+                    const fetchStr = typeof fetchRes === 'string' ? fetchRes : JSON.stringify(fetchRes);
+                    if (fetchStr && fetchStr.length > 100) {
+                      toolData += (toolData ? '\n\n' : '') + `## Page content: ${u}\n${fetchStr.slice(0, 8000)}`;
+                    }
+                  } catch (e) { toolData += (toolData ? '\n\n' : '') + `## Fetch ${u} failed: ${e.message}`; }
+                }
+              }
               // If there is document context from a previous step, ask the LLM to derive
               // the optimal search queries. This is generic and works for any document/task.
               let searchQueries = [stepPrompt.slice(0, 120)];
@@ -3016,17 +3126,33 @@ ${rawText.slice(0, 18000)}`;
             } catch (e) { toolData = toolData || `Web search failed: ${e.message}`; }
 
           } else if (agent === 'BrowserAgent') {
-            const urlMatch = stepPrompt.match(/https?:\/\/[^\s"']+/);
-            if (urlMatch) {
-              sendToken(`[Fetching ${urlMatch[0]}...] `);
-              try {
-                const fetchResult = await withTimeout(executeTool('fetch_url', { url: urlMatch[0] }, config), 'BrowserAgent');
-                toolData = typeof fetchResult === 'string' ? fetchResult : JSON.stringify(fetchResult);
-              } catch (e) { toolData = `Fetch failed: ${e.message}`; }
+            // Collect all URLs from stepPrompt + task, plus infer subpaths mentioned (e.g. /about, /docs)
+            const allUrlMatches = [...new Set((stepPrompt + ' ' + task).match(/https?:\/\/[^\s"'<>)]+/g) || [])];
+            // Also extract any relative paths like /about, /download, /docs mentioned near a base URL
+            const baseUrlMatch = (stepPrompt + ' ' + task).match(/https?:\/\/[^\s"'<>/]+/);
+            if (baseUrlMatch) {
+              const base = baseUrlMatch[0].replace(/\/$/, '');
+              const subpaths = (stepPrompt + ' ' + task).match(/\/[a-z][a-z0-9_/-]*/g) || [];
+              for (const sp of subpaths) {
+                if (sp.length > 1 && sp.length < 40) allUrlMatches.push(base + sp);
+              }
+            }
+            const urlsToFetch = [...new Set(allUrlMatches)].slice(0, 5);
+            if (urlsToFetch.length > 0) {
+              for (const u of urlsToFetch) {
+                sendToken(`[Fetching ${u}...] `);
+                try {
+                  const fetchResult = await withTimeout(executeTool('fetch_url', { url: u }, config), 30000);
+                  const fetchStr = typeof fetchResult === 'string' ? fetchResult : JSON.stringify(fetchResult);
+                  if (fetchStr && fetchStr.length > 100) {
+                    toolData += (toolData ? '\n\n' : '') + `## Page: ${u}\n${fetchStr.slice(0, 8000)}`;
+                  }
+                } catch (e) { toolData += (toolData ? '\n\n' : '') + `## Fetch ${u} failed: ${e.message}`; }
+              }
             } else {
               sendToken('[Searching web...] ');
               try {
-                const searchResult = await withTimeout(executeTool('web_search', { query: stepPrompt }, config), 'BrowserSearch');
+                const searchResult = await withTimeout(executeTool('web_search', { query: stepPrompt }, config), 30000);
                 toolData = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult);
               } catch (e) { toolData = `Browser search failed: ${e.message}`; }
             }
@@ -3135,6 +3261,69 @@ ${rawText.slice(0, 18000)}`;
               const files = await withTimeout(gd.listFiles(config, '', 10), 'DriveAgent');
               toolData = typeof files === 'string' ? files : JSON.stringify(files);
             } catch (e) { toolData = `Drive read failed: ${e.message}`; }
+
+          } else if (agent === 'FileReaderAgent') {
+            // Reads local files/directories mentioned in the task or step prompt
+            sendToken('[Reading local files...] ');
+            try {
+              // Extract paths from task + stepPrompt (absolute paths, ~/ paths, named dirs like Desktop/Downloads)
+              const pathPatterns = [
+                /([~/][^\s"'`,;]+\.[a-zA-Z0-9]{1,10})/g,  // file with extension
+                /([~/][^\s"'`,;]{3,})/g,                   // any path starting with / or ~
+              ];
+              const homedir = (await import('os')).homedir();
+              const foundPaths = new Set();
+              for (const re of pathPatterns) {
+                const text = task + ' ' + stepPrompt + ' ' + (context || '');
+                let m;
+                while ((m = re.exec(text)) !== null) {
+                  const p = m[1].replace(/^~/, homedir).replace(/\/$/, '');
+                  if (p.length > 2) foundPaths.add(p);
+                }
+              }
+              // Also resolve named directories: Desktop, Downloads, Documents
+              const namedDirRe = /\b(Desktop|Downloads|Documents|Documenti|Scrivania|Scaricati)\b/i;
+              const namedMatch = (task + ' ' + stepPrompt).match(namedDirRe);
+              const dirMap = { desktop: 'Desktop', scrivania: 'Desktop', downloads: 'Downloads', scaricati: 'Downloads', documents: 'Documents', documenti: 'Documents' };
+              if (namedMatch) foundPaths.add(path.join(homedir, dirMap[namedMatch[1].toLowerCase()] || namedMatch[1]));
+
+              if (foundPaths.size === 0) {
+                // Fallback: list Desktop
+                foundPaths.add(path.join(homedir, 'Desktop'));
+              }
+
+              const parts = [];
+              for (const p of foundPaths) {
+                try {
+                  const result = await withTimeout(executeTool('file_list', { path: p }, config), 8000);
+                  parts.push(`## Directory: ${p}\n${typeof result === 'string' ? result : JSON.stringify(result)}`);
+                } catch {
+                  try {
+                    const result = await withTimeout(executeTool('file_read', { path: p, lines: 300 }, config), 8000);
+                    parts.push(`## File: ${p}\n${typeof result === 'string' ? result : JSON.stringify(result)}`);
+                  } catch (e2) { parts.push(`## ${p}: could not read (${e2.message})`); }
+                }
+              }
+              toolData = parts.join('\n\n') || 'No files found at the specified paths.';
+            } catch (e) { toolData = `File read failed: ${e.message}`; }
+
+          } else if (agent === 'CodeExecutorAgent') {
+            // Generates and executes code (Python/JS/TS) to answer data questions
+            sendToken('[Preparing code execution...] ');
+            try {
+              // Ask LLM to write the code first
+              const codeGenSys = `You are a code generator. Write a ${(/python/i.test(stepPrompt) || /dati|data|analisi|analysis|calcol/i.test(stepPrompt)) ? 'Python' : 'JavaScript'} script that answers the following task. Output ONLY the raw code, no markdown fences, no explanation.`;
+              const codeGenUser = `Task: ${stepPrompt}\n\nAvailable context data:\n${(context || '').slice(0, 4000)}`;
+              const codeGenConfig = Object.assign({}, config, { thinking: 'off' });
+              sendToken('[Generating code...] ');
+              const generatedCode = await withTimeout(callLLM(codeGenConfig, codeGenSys, codeGenUser, { max_tokens: 2000 }), 30000);
+              // Strip markdown fences if LLM added them
+              const cleanCode = generatedCode.replace(/^```[\w]*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
+              const lang = /^import |^from |^print\(|^def |^class |^#!.*python/m.test(cleanCode) ? 'python' : 'javascript';
+              sendToken(`[Executing ${lang} code...] `);
+              const execResult = await withTimeout(executeTool('execute_code', { language: lang, code: cleanCode, timeout: 30 }, config), 45000);
+              toolData = `## Generated code (${lang}):\n\`\`\`${lang}\n${cleanCode.slice(0, 2000)}\n\`\`\`\n\n## Execution result:\n${typeof execResult === 'string' ? execResult : JSON.stringify(execResult)}`;
+            } catch (e) { toolData = `Code execution failed: ${e.message}`; }
           }
 
           // ── Build system prompt with real tool data ───────────────────
@@ -3144,37 +3333,72 @@ ${rawText.slice(0, 18000)}`;
           const today = new Date().toISOString().split('T')[0];
           const isCanvasAgent = agent === 'CanvasAgent';
           // Tool-data agents: fetch real live data and use buildSystemPrompt (tool calls allowed)
-          const isLiveDataAgent = ['CalendarAgent','EmailAgent','GitHubAgent','NotionAgent','SlackAgent','DriveAgent','BrowserAgent','WebSearchAgent','ResearchAgent'].includes(agent);
+          const isLiveDataAgent = ['CalendarAgent','EmailAgent','GitHubAgent','NotionAgent','SlackAgent','DriveAgent','BrowserAgent','WebSearchAgent','ResearchAgent','FileReaderAgent','CodeExecutorAgent'].includes(agent);
 
           // ── Canvas HTML template — built server-side, guaranteed CSS ─────
           // The LLM outputs ONLY the <body> inner HTML (no <html>, no <style>)
           // Server wraps it in the full template. This prevents the model from ignoring CSS.
-          const NHA_CSS = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',system-ui,sans-serif;background:#0d0d14;color:#f0f0f5;min-height:100vh;padding:24px;font-size:14px;line-height:1.65}a{color:#22d3ee;text-decoration:underline}a:hover{color:#818cf8}strong{color:#f0f0f5;font-weight:700}em{color:#a5b4fc;font-style:italic}u{text-decoration-color:#ef4444;text-underline-offset:2px}blockquote{border-left:3px solid #6366f1;padding:10px 16px;margin:12px 0;background:#15151f;border-radius:0 8px 8px 0;color:#8b8b9e;font-style:italic}.header{background:linear-gradient(135deg,#4f46e5 0%,#06b6d4 100%);border-radius:16px;padding:28px 36px;margin-bottom:20px}.header h1{font-size:24px;font-weight:800;color:#fff;margin-bottom:6px}.header p{font-size:13px;color:rgba(255,255,255,.85);margin:0}.meta{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}.meta span{background:rgba(255,255,255,.18);border-radius:20px;padding:3px 12px;font-size:11px;color:#fff;font-weight:500}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}.card{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:18px}.card-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;font-weight:700;margin-bottom:8px}.card h3{font-size:20px;font-weight:700;color:#f0f0f5;margin-bottom:4px}.card p{font-size:12px;color:#8b8b9e;margin:0}.section{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:22px;margin-bottom:16px}.section-title{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#22d3ee;font-weight:700;margin-bottom:16px}.section h3{font-size:15px;font-weight:600;color:#f0f0f5;margin-bottom:6px;margin-top:14px}.section p{font-size:13px;color:#8b8b9e;line-height:1.7;margin-bottom:10px}ul{list-style:none;padding:0;margin:8px 0}ul li{padding:4px 0 4px 18px;position:relative;font-size:13px;color:#8b8b9e}ul li::before{content:'›';position:absolute;left:0;color:#6366f1;font-weight:700}ol{padding-left:20px;margin:8px 0}ol li{padding:4px 0;font-size:13px;color:#8b8b9e;line-height:1.6}.priority-list{display:flex;flex-direction:column;gap:8px}.priority-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#1c1c28;border-radius:8px}.priority-num{width:26px;height:26px;border-radius:50%;background:#6366f1;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}.priority-item h4{font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:3px}.priority-item p{font-size:12px;color:#8b8b9e;line-height:1.5;margin:0}.source-item{padding:14px;background:#1c1c28;border-radius:8px;margin-bottom:10px;border-left:3px solid #6366f1}.source-item h4{font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:4px}.source-item p{font-size:12px;color:#8b8b9e;line-height:1.6;margin:4px 0}.source-item a{font-size:11px}.bar-row{margin-bottom:10px}.bar-label{font-size:12px;color:#8b8b9e;margin-bottom:4px;display:flex;justify-content:space-between}.bar-track{background:#1c1c28;border-radius:4px;height:8px;overflow:hidden}.bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#6366f1,#22d3ee)}.badge-high{display:inline-block;background:#7f1d1d;color:#ef4444;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-med{display:inline-block;background:#713f12;color:#f59e0b;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-low{display:inline-block;background:#14532d;color:#34d399;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-info{display:inline-block;background:#1e1b4b;color:#a5b4fc;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.divider{border:none;border-top:1px solid #2a2a38;margin:16px 0}.footer{text-align:center;padding:18px;font-size:11px;color:#4a4a5e;margin-top:8px}`;
+          const NHA_CSS = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',system-ui,sans-serif;background:#0d0d14;color:#f0f0f5;min-height:100vh;padding:24px;font-size:14px;line-height:1.65}a{color:#22d3ee;text-decoration:underline}a:hover{color:#818cf8}strong{color:#f0f0f5;font-weight:700}em{color:#a5b4fc;font-style:italic}u{text-decoration-color:#ef4444;text-underline-offset:2px}blockquote{border-left:3px solid #6366f1;padding:10px 16px;margin:12px 0;background:#15151f;border-radius:0 8px 8px 0;color:#8b8b9e;font-style:italic}
+/* ── HEADER ── */
+.header{background:linear-gradient(135deg,#4f46e5 0%,#06b6d4 100%);border-radius:16px;padding:28px 36px;margin-bottom:20px}.header h1{font-size:24px;font-weight:800;color:#fff;margin-bottom:6px}.header p{font-size:13px;color:rgba(255,255,255,.85);margin:0}.meta{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}.meta span{background:rgba(255,255,255,.18);border-radius:20px;padding:3px 12px;font-size:11px;color:#fff;font-weight:500}
+/* ── GRID / CARDS ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}.card{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:18px}.card-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;font-weight:700;margin-bottom:8px}.card h3{font-size:20px;font-weight:700;color:#f0f0f5;margin-bottom:4px}.card p{font-size:12px;color:#8b8b9e;margin:0}
+/* ── SECTIONS ── */
+.section{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:22px;margin-bottom:16px;break-inside:avoid;page-break-inside:avoid}.section-title{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#22d3ee;font-weight:700;margin-bottom:16px}.section h3{font-size:15px;font-weight:600;color:#f0f0f5;margin-bottom:6px;margin-top:14px}.section p{font-size:13px;color:#8b8b9e;line-height:1.7;margin-bottom:10px}
+/* ── LISTS ── */
+ul{list-style:none;padding:0;margin:8px 0}ul li{padding:4px 0 4px 18px;position:relative;font-size:13px;color:#8b8b9e}ul li::before{content:'›';position:absolute;left:0;color:#6366f1;font-weight:700}ol{padding-left:20px;margin:8px 0}ol li{padding:4px 0;font-size:13px;color:#8b8b9e;line-height:1.6}
+/* ── PRIORITY LIST ── */
+.priority-list{display:flex;flex-direction:column;gap:8px}.priority-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#1c1c28;border-radius:8px;break-inside:avoid}.priority-num{width:26px;height:26px;border-radius:50%;background:#6366f1;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}.priority-item h4{font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:3px}.priority-item p{font-size:12px;color:#8b8b9e;line-height:1.5;margin:0}
+/* ── SOURCE ITEMS ── */
+.source-item{padding:14px;background:#1c1c28;border-radius:8px;margin-bottom:10px;border-left:3px solid #6366f1;break-inside:avoid}.source-item h4{font-size:13px;font-weight:600;color:#f0f0f5;margin-bottom:4px}.source-item p{font-size:12px;color:#8b8b9e;line-height:1.6;margin:4px 0}.source-item a{font-size:11px}
+/* ── BAR CHARTS ── */
+.bar-row{margin-bottom:10px;break-inside:avoid}.bar-label{font-size:12px;color:#8b8b9e;margin-bottom:4px;display:flex;justify-content:space-between}.bar-track{background:#1c1c28;border-radius:4px;height:8px;overflow:hidden}.bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#6366f1,#22d3ee)}
+/* ── DATA TABLES ── */
+.data-table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;border-radius:8px;overflow:hidden}.data-table th{background:#1e1b4b;color:#a5b4fc;font-weight:700;padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.8px;border-bottom:2px solid #2a2a38}.data-table td{padding:9px 14px;color:#c4c4d4;border-bottom:1px solid #1e1e2c;vertical-align:top}.data-table tr:nth-child(even) td{background:#12121e}.data-table tr:hover td{background:#1c1c2c}.data-table td strong{color:#f0f0f5}
+/* ── CHART CONTAINERS ── */
+.chart-wrap{background:#15151f;border:1px solid #2a2a38;border-radius:12px;padding:18px;margin-bottom:16px;break-inside:avoid}.chart-title{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#22d3ee;font-weight:700;margin-bottom:12px}.chart-canvas{width:100%!important;max-height:300px}
+/* ── BADGES / TAGS ── */
+.badge-high{display:inline-block;background:#7f1d1d;color:#ef4444;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-med{display:inline-block;background:#713f12;color:#f59e0b;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-low{display:inline-block;background:#14532d;color:#34d399;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}.badge-info{display:inline-block;background:#1e1b4b;color:#a5b4fc;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-right:4px}
+/* ── MISC ── */
+.divider{border:none;border-top:1px solid #2a2a38;margin:16px 0}.footer{text-align:center;padding:18px;font-size:11px;color:#4a4a5e;margin-top:8px}
+/* ── PRINT / PDF ── */
+@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}body{background:#fff!important;color:#111!important;padding:0!important}.header{background:linear-gradient(135deg,#4f46e5,#06b6d4)!important}.header h1,.header p,.meta span{color:#fff!important}.section,.card,.chart-wrap,.source-item,.priority-item,.data-table,.bar-row{break-inside:avoid;page-break-inside:avoid}.section{background:#f6f8ff!important;border:1px solid #dde1f0!important}.section-title,.chart-title{color:#4f46e5!important}.section p,.section h3{color:#1a1a2e!important}ul li,ol li{color:#374151!important}ul li::before{color:#4f46e5!important}.card{background:#f0f3fc!important;border:1px solid #dde1f0!important}.card h3{color:#1a1a2e!important}.card p{color:#374151!important}.priority-item,.source-item{background:#eef0f8!important}.data-table th{background:#e8eaf6!important;color:#4f46e5!important}.data-table td{color:#374151!important;border-bottom:1px solid #dde1f0!important}.data-table tr:nth-child(even) td{background:#f4f6fb!important}.bar-track{background:#e0e4ef!important}.footer{color:#9ca3af!important}a{color:#4f46e5!important}}`;
 
-          const wrapInNHATemplate = (bodyHtml, title) => `<!DOCTYPE html><html lang="${langCode}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${(title||'NHA Report').replace(/</g,'&lt;')}</title><style>${NHA_CSS}</style></head><body>${bodyHtml}</body></html>`;
+          const wrapInNHATemplate = (bodyHtml, title) => `<!DOCTYPE html><html lang="${langCode}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${(title||'NHA Report').replace(/</g,'&lt;')}</title><style>${NHA_CSS}</style><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"><\/script></head><body>${bodyHtml}</body></html>`;
 
-          const canvasSystemPrompt = `You are a professional HTML content generator. Output ONLY the HTML content that goes INSIDE the <body> tag. Do NOT output <!DOCTYPE>, <html>, <head>, <style>, or any wrapper tags — the CSS and document structure are already provided by the system.
+          const canvasSystemPrompt = `You are a professional HTML dashboard generator. Output ONLY the HTML content that goes INSIDE the <body> tag. Do NOT output <!DOCTYPE>, <html>, <head>, <style>, or any wrapper tags — the CSS and Chart.js are already provided.
 
-AVAILABLE CSS CLASSES (use these, they are pre-defined):
-- .header > h1, p, .meta > span (gradient header banner)
-- .grid > .card > .card-label, h3, p (stat grid)
-- .section > .section-title, h3, p (content sections)
-- .source-item > h4, p, a (news/source items with left accent)
-- .priority-list > .priority-item > .priority-num, h4, p (ranked list)
-- .bar-row > .bar-label, .bar-track > .bar-fill[style="width:X%"] (bar charts)
-- .badge-high .badge-med .badge-low .badge-info (colored badges)
-- ul > li, ol > li (bullet/numbered lists with custom styling)
-- blockquote (quoted excerpts)
-- .divider (horizontal rule)
-- .footer (footer)
-- <strong> <em> <u> (inline formatting)
-- <a href="URL" target="_blank"> (clickable links — use for ALL URLs in the data)
+AVAILABLE CSS CLASSES:
+- .header > h1, p, .meta > span  (gradient header banner)
+- .grid > .card > .card-label, h3, p  (KPI stat grid)
+- .section > .section-title, h3, p  (content sections with auto page-break)
+- .source-item > h4, p, a  (news/email source items)
+- .priority-list > .priority-item > .priority-num, h4, p  (ranked action list)
+- .bar-row > .bar-label, .bar-track > .bar-fill[style="width:X%"]  (CSS bar charts)
+- .data-table  (full HTML table: thead > tr > th, tbody > tr > td)
+- .chart-wrap > .chart-title + <canvas id="cN" class="chart-canvas">  (Chart.js chart)
+- .badge-high .badge-med .badge-low .badge-info  (colored badges)
+- ul > li, ol > li, blockquote, .divider, .footer
+
+TABLES — use whenever data has rows and columns:
+<div class="section"><div class="section-title">TABLE TITLE</div>
+<table class="data-table"><thead><tr><th>Col1</th><th>Col2</th></tr></thead><tbody><tr><td>val</td><td>val</td></tr></tbody></table></div>
+
+CHARTS — Chart.js is loaded. Use for any quantitative comparison, trend, distribution:
+<div class="chart-wrap"><div class="chart-title">CHART TITLE</div>
+<canvas id="c1" class="chart-canvas"></canvas></div>
+<script>new Chart(document.getElementById('c1'),{type:'bar',data:{labels:['A','B','C'],datasets:[{label:'Value',data:[10,20,15],backgroundColor:['#6366f1','#22d3ee','#f59e0b']}]},options:{responsive:true,plugins:{legend:{labels:{color:'#f0f0f5'}}},scales:{x:{ticks:{color:'#8b8b9e'},grid:{color:'#1e1e2c'}},y:{ticks:{color:'#8b8b9e'},grid:{color:'#1e1e2c'}}}}});<\/script>
+Chart types: 'bar' | 'line' | 'pie' | 'doughnut' | 'radar'. Use unique ids: c1, c2, c3...
+For pie/doughnut omit scales. For line use borderColor instead of backgroundColor.
 
 RULES:
 - Language: ${language}. ALL text must be in ${language}.
-- Use REAL data from the input — do NOT invent or fabricate
-- URLs from the data: ALWAYS wrap in <a href="URL" target="_blank">clickable text</a>
-- Use .priority-list for action items, .source-item for each email/news source, .bar-row for any percentage data
+- Use REAL data from the input — NEVER invent numbers or fabricate data
+- URLs: ALWAYS wrap in <a href="URL" target="_blank">text</a>
+- Use .data-table for any tabular data (comparisons, metrics, lists with 2+ columns)
+- Use Chart.js for any numeric data (percentages, counts, trends, rankings)
+- Use .grid>.card for KPI numbers at the top
+- Use .priority-list for action items
 - Output must start with <div class="header"> and end with <div class="footer">`;
 
           // ── Handle PDF/image attachment on first step ─────────────────
@@ -3218,15 +3442,16 @@ RULES:
           if (isCanvasAgent) {
             sysPrompt = canvasSystemPrompt;
             const canvasData = [attachmentText, context].filter(Boolean).join('\n\n');
-            userMsg = `Create a professional dashboard report in ${language}. CRITICAL RULES:
-1. Start immediately with <div class="header"> — no preamble
-2. Every <div class="section"> MUST contain actual content from the data below — NEVER leave a section empty
-3. If data for a section exists, include it verbatim with all details
-4. If data for a section does NOT exist, omit that section entirely — do NOT create empty placeholder sections
-5. Copy specific facts, names, dates, numbers exactly as they appear in the data
-6. Output ONLY HTML starting with <div class="header">
+            userMsg = `Create a complete professional dashboard report in ${language} using the CSS classes defined in the system prompt.
 
-DATA FROM AGENTS:
+RULES:
+- Start with <div class="header"><h1>TITLE</h1><p>Subtitle</p><div class="meta"><span>DATE</span></div></div>
+- Use <div class="section"><div class="section-title">SECTION NAME</div> ... </div> for EACH agent's findings
+- Each section MUST reproduce the agent's actual findings in full — use <h3>, <p>, <ul><li>, tables
+- Output ONLY HTML (no markdown, no \`\`\`html fences, no explanations)
+- End with <div class="footer">NHA Studio · ${today}</div>
+
+AGENT DATA TO INCLUDE IN FULL:
 ${canvasData}`;
           } else if (isLiveDataAgent) {
             // These agents fetched real data — use a focused prompt (no tool definitions to avoid JSON output)
@@ -3279,64 +3504,154 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the wo
           }
 
           // ── Stream LLM response ───────────────────────────────────────
+          // Specialist (non-canvas, non-live-data) agents use Structured Generation:
+          //   Phase 1 — Outline: one call that returns ONLY section headings as a numbered list
+          //   Phase 2 — Section fill: one call per section, with full context of sections already written
+          // Live-data + Canvas agents use the classic single-stream approach.
           let fullOutput = '';
-          let inThinkBlock = false;
-          let thinkBuf = '';
-          sendToken(isCanvasAgent ? 'Generating visual report...' : '');
-          const llmTimeout = isCanvasAgent ? 120000 : 90000;
-          try {
+          let fullOutputClean = '';
+
+          // ── Helper: strip <think> tags from a string ─────────────────
+          const stripThink = (s) => s.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+          // ── Helper: stream a single LLM call, strip think tags, return full text ─
+          const streamCall = async (sysPr, usrMsg, opts, timeout, onToken) => {
+            let raw = '';
+            let inThink = false;
+            let tBuf = '';
             await withTimeout(
-              callLLMStream(config, sysPrompt, userMsg,
-                (token) => {
-                  fullOutput += token;
-                  if (!isCanvasAgent) {
-                    // Buffer and strip <think>...</think> blocks before sending to client
-                    thinkBuf += token;
-                    // Process thinkBuf: emit only content outside think tags
-                    let out = '';
-                    let buf = thinkBuf;
-                    while (buf.length > 0) {
-                      if (inThinkBlock) {
-                        const closeIdx = buf.indexOf('</think>');
-                        if (closeIdx >= 0) {
-                          buf = buf.slice(closeIdx + 8);
-                          inThinkBlock = false;
-                        } else {
-                          buf = '';
-                        }
-                      } else {
-                        const openIdx = buf.indexOf('<think>');
-                        if (openIdx >= 0) {
-                          out += buf.slice(0, openIdx);
-                          buf = buf.slice(openIdx + 7);
-                          inThinkBlock = true;
-                        } else {
-                          out += buf;
-                          buf = '';
-                        }
-                      }
+              callLLMStream(config, sysPr, usrMsg, (tok) => {
+                raw += tok;
+                if (onToken) {
+                  tBuf += tok;
+                  let out = '';
+                  let buf = tBuf;
+                  while (buf.length > 0) {
+                    if (inThink) {
+                      const ci = buf.indexOf('</think>');
+                      if (ci >= 0) { buf = buf.slice(ci + 8); inThink = false; }
+                      else { buf = ''; }
+                    } else {
+                      const oi = buf.indexOf('<think>');
+                      if (oi >= 0) { out += buf.slice(0, oi); buf = buf.slice(oi + 7); inThink = true; }
+                      else { out += buf; buf = ''; }
                     }
-                    thinkBuf = '';
-                    // Strip JSON tool calls from specialist agent output
-                    const stripped = out.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '').trim();
-                    if (stripped) sendToken(stripped);
                   }
-                },
-                { max_tokens: 8192 },
-              ),
-              llmTimeout
+                  tBuf = '';
+                  const stripped = out.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '').trim();
+                  if (stripped) onToken(stripped);
+                }
+              }, opts),
+              timeout
             );
-          } catch (e) {
-            if (!isCanvasAgent) sendToken(`[Error: ${e.message}]`);
+            return stripThink(raw);
+          };
+
+          const useStructuredGen = !isCanvasAgent && !isLiveDataAgent;
+
+          if (isCanvasAgent) {
+            // ── Canvas: single stream, HTML output ────────────────────
+            sendToken('Generating visual report...');
+            try {
+              fullOutput = await streamCall(sysPrompt, userMsg, { max_tokens: 12288, thinking: 'off' }, 180000, null);
+            } catch (e) { /* canvas errors surfaced below */ }
+            fullOutputClean = fullOutput;
+
+          } else if (useStructuredGen) {
+            // ── Structured Generation ─────────────────────────────────
+            // Phase 1: ask for ONLY the section outline (headings list), fast and cheap
+            sendToken('[Pianificazione struttura report...] ');
+            const structConfig = Object.assign({}, config, { thinking: 'off' });
+            const outlineSys = `You are ${agent}, a specialist AI agent. Today is ${today}. Respond in ${language}.
+Your task: plan the sections of a complete structured report for this goal: ${task}
+Instruction: ${stepPrompt}
+
+Output ONLY a numbered list of section headings — one per line, no body text, no explanation.
+Use ## prefix for each heading. Maximum 8 sections. Example:
+## 1. Executive Summary
+## 2. Key Findings
+## 3. Analysis`;
+            let outlineRaw = '';
+            try {
+              outlineRaw = await withTimeout(
+                new Promise((res) => {
+                  let acc = '';
+                  callLLMStream(structConfig, outlineSys, 'List the section headings only.', (tok) => { acc += tok; }, { max_tokens: 300, thinking: 'off' }).then(() => res(acc)).catch(() => res(acc));
+                }),
+                20000
+              );
+            } catch {}
+
+            // Parse headings: lines starting with ## (or plain numbered lines as fallback)
+            const headingLines = stripThink(outlineRaw)
+              .split('\n')
+              .map(l => l.trim())
+              .filter(l => l.match(/^#{1,4}\s+\S/) || l.match(/^\d+[\.\)]\s+\S/))
+              .map(l => l.match(/^#{1,4}\s+/) ? l : '## ' + l.replace(/^\d+[\.\)]\s+/, ''))
+              .slice(0, 8);
+
+            if (headingLines.length === 0) {
+              // Outline failed — fall back to single stream
+              sendToken('');
+              try {
+                fullOutput = await streamCall(sysPrompt, userMsg, { max_tokens: 8192, thinking_budget: 2048 }, 120000, sendToken);
+              } catch (e) { sendToken(`[Error: ${e.message}]`); }
+              fullOutputClean = stripThink(fullOutput);
+            } else {
+              // Phase 2: one call per section, each sees the sections already written
+              // Cap context to 4000 chars max — passing the full output of previous agents
+              // causes the model to think the content is already written and skip sections.
+              const cappedContext = context && context.length > 4000 ? context.slice(-4000) : context;
+              const dataBlock = [
+                attachmentText ? `## ATTACHED FILE:\n${attachmentText}` : '',
+                toolData ? `## LIVE DATA:\n${toolData}` : '',
+                cappedContext ? `## RESEARCH DATA FROM PREVIOUS AGENTS (use as source material):\n${cappedContext}` : '',
+              ].filter(Boolean).join('\n\n');
+              const sectionParts = [];
+              for (let si = 0; si < headingLines.length; si++) {
+                const heading = headingLines[si];
+                const completedHeadings = sectionParts.map(p => p.split('\n')[0]).join('\n');
+                const secSys = `You are ${agent}, a specialist AI agent inside NHA Studio. Today is ${today}. Respond entirely in ${language}.
+
+## OVERALL WORKFLOW GOAL:
+${task}
+
+CRITICAL RULES:
+- The section below has NOT been written yet — YOU must write its full content now
+- Write ONLY the body content for the section heading given — do NOT repeat the heading
+- Do NOT skip, summarize, or reference "see above" — write complete original content for this section
+- Use the DATA block below as source material, but write in your own analytical voice
+- Be thorough: at least 3-5 bullet points or 2-3 full paragraphs per section
+- Do NOT invent data not present in the DATA block
+
+${dataBlock}
+${completedHeadings ? `## SECTIONS ALREADY WRITTEN (headings only):\n${completedHeadings}` : ''}`;
+                const secUser = `This section has NOT been written yet. Write the COMPLETE body content for it now (minimum 150 words). Do NOT leave it empty or reference other sections:\n${heading}`;
+                sendToken('\n\n' + heading + '\n');
+                sendToken('[Sezione ' + (si + 1) + ' di ' + headingLines.length + '...] ');
+                let secContent = '';
+                try {
+                  secContent = await streamCall(secSys, secUser, { max_tokens: 4000, thinking: 'off' }, 90000, sendToken);
+                } catch {}
+                if (secContent.trim()) {
+                  sectionParts.push(heading + '\n\n' + secContent.trim());
+                  fullOutput += '\n\n' + heading + '\n\n' + secContent.trim();
+                }
+              }
+              fullOutputClean = fullOutput.trim();
+            }
+
+          } else {
+            // ── Live-data agents: single stream ───────────────────────
+            sendToken('');
+            try {
+              fullOutput = await streamCall(sysPrompt, userMsg, { max_tokens: 8192, thinking_budget: 2048 }, 120000, sendToken);
+            } catch (e) { sendToken(`[Error: ${e.message}]`); }
+            fullOutputClean = stripThink(fullOutput);
           }
 
-          // Strip think tags from fullOutput before emptiness check
-          let fullOutputClean = fullOutput.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-          // Remove empty sections: headings (## N. Title) immediately followed by another heading or end-of-text
-          // These appear when LLM runs out of tokens mid-response
-          fullOutputClean = fullOutputClean.replace(/^(#{1,4}\s+[^\n]+)\n+(?=#{1,4}\s|$)/gm, '');
-          // Also strip trailing lone headings at end of output
-          fullOutputClean = fullOutputClean.replace(/(#{1,4}\s+[^\n]+)\s*$/g, '').trim();
+          // Note: do NOT strip trailing headings — a heading with content follows in the structured
+          // output and stripping it would silently delete the last section of the report.
 
           // Fallback: if LLM returned empty and we have tool data, send it directly
           if (!isCanvasAgent && !fullOutputClean && toolData) {
@@ -3485,11 +3800,16 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the wo
               return out.join('');
             };
 
-            // If LLM output has no HTML tags → it's markdown → convert
-            if (!bodyHtml || !bodyHtml.includes('<')) {
-              const source = bodyHtml || context;
+            // Quality check: count <p> and <li> tags — if output is a sparse skeleton
+            // (many sections but almost no paragraph/list content), fall back to converting context directly.
+            const sectionCount = (bodyHtml.match(/<div[^>]*class="section/g) || []).length;
+            const contentCount = (bodyHtml.match(/<p[\s>]|<li[\s>]/g) || []).length;
+            const isSparse = bodyHtml.includes('<') && sectionCount > 0 && contentCount < sectionCount;
+
+            // If LLM output has no HTML tags, or is a sparse skeleton → use context directly
+            if (!bodyHtml || !bodyHtml.includes('<') || isSparse) {
+              const source = context || bodyHtml;
               const converted = mdToNhaHtml(source);
-              const agentNames = (stepDef && Array.isArray(stepDef)) ? '' : '';
               bodyHtml = `<div class="header"><h1>${reportTitle.replace(/</g,'&lt;')}</h1><p>NHA Studio Report \u00b7 ${today}</p><div class="meta"><span>${today}</span></div></div>` +
                 converted +
                 `<div class="footer">NHA Studio \u00b7 ${today}</div>`;
@@ -3506,8 +3826,11 @@ ${context ? `## OUTPUT FROM PREVIOUS AGENTS (use only what is RELEVANT to the wo
           }
 
           // Estimate token usage (aprox: 1 token ≈ 4 chars)
-          const inTokens = Math.ceil((sysPrompt.length + userMsg.length) / 4);
-          const outTokens = Math.ceil(fullOutput.length / 4);
+          // Include context + toolData in input estimate since they're sent in the prompt
+          const contextLen = (context || '').length;
+          const toolDataLen = (toolData || '').length;
+          const inTokens = Math.ceil((sysPrompt.length + userMsg.length + contextLen + toolDataLen) / 4);
+          const outTokens = Math.ceil(fullOutputClean.length / 4);
           clearInterval(keepalive);
           sendEvent({ usage: { input: inTokens, output: outTokens } });
           sendEvent({ done: true });
@@ -3621,7 +3944,7 @@ DELIBERATION ROUND 2 — REFINEMENT:
             let r2Out = '';
             let r2TokCount = 0;
             try {
-              await callLLMStream(config, r2Sys, 'Produce your refined Round 2 response.',
+              await callLLMStream(config, r2Sys, 'Produce your refined Round 2 response. Write complete content under every heading — never leave a section title without body text.',
                 (tok) => {
                   r2Out += tok;
                   r2TokCount += Math.ceil(tok.length / 4);
@@ -3629,7 +3952,7 @@ DELIBERATION ROUND 2 — REFINEMENT:
                   if (r2TokCount % 20 < 3) {
                     sendTok2(`[Round 2 ${proposal.label || proposal.agent}: ${r2TokCount} token] `);
                   }
-                }, { max_tokens: 6144 });
+                }, { max_tokens: 8192 });
             } catch (e) { r2Out = proposal.output; }
             r2Results.push({ agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out });
             sendEv2({ deliberation_r2: { agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out } });
@@ -3640,31 +3963,64 @@ DELIBERATION ROUND 2 — REFINEMENT:
           sendTok2(`[Parlamento — Round 2 convergenza: ${(r2Convergence * 100).toFixed(0)}%] `);
           const converged = r2Convergence >= 0.30;
 
-          // Round 3: mediation only if still divergent
+          // Round 3: HERALD always produces the final unified synthesis.
+          // If converged: synthesize the consensus + surface any surviving divergences.
+          // If divergent: actively mediate and make editorial choices.
           let mediationOutput = '';
-          if (!converged) {
-            sendTok2('[Parlamento — Round 3: Mediazione...] ');
+          {
             const allR2Ctx = r2Results
-              .map(r => `## ${r.label || r.agent}:\n${r.output.slice(0, 1500)}`)
+              .map(r => `## ${r.label || r.agent}:\n${r.output.slice(0, 2000)}`)
               .join('\n\n---\n\n');
+
+            // Extract [CONTRADICTION] tags from R2 outputs to surface them explicitly
+            const contradictions = [];
+            for (const r of r2Results) {
+              const matches = r.output.match(/\[CONTRADICTION\][^\n]*/g) || [];
+              matches.forEach(m => contradictions.push(`- ${r.label || r.agent}: ${m.replace('[CONTRADICTION]', '').trim()}`));
+            }
+            const contradictionBlock = contradictions.length > 0
+              ? `\n\n## DIVERGENZE RILEVATE DAL ROUND 2:\n${contradictions.join('\n')}`
+              : '';
+
+            if (!converged) {
+              sendTok2('[Parlamento — Round 3: Mediazione HERALD...] ');
+            } else {
+              sendTok2('[Parlamento — Round 3: Sintesi finale HERALD...] ');
+            }
+
+            const medTask = converged
+              ? `SYNTHESIS TASK (convergenza ${(r2Convergence * 100).toFixed(0)}% — agenti sostanzialmente d'accordo):
+1. Presenta il CONSENSO raggiunto — cosa tutti gli agenti concordano
+2. Segnala esplicitamente ogni sfumatura o punto di divergenza residua, nominando l'agente che la ha sollevata e perché è stata inclusa o scartata
+3. Produci un executive summary unificato con azioni concrete per: ${task}
+4. Includi una sezione "Voci dissonanti" se esistono posizioni che meritano attenzione nonostante la convergenza`
+              : `MEDIATION TASK (convergenza ${(r2Convergence * 100).toFixed(0)}% — divergenza significativa):
+1. Identifica i punti di ACCORDO tra tutti gli agenti
+2. Per ogni disaccordo: valuta quale posizione ha evidenze più solide, NOMINA l'agente che ha sollevato la posizione minoritaria e spiega perché è stata accolta o scartata
+3. Produci una sintesi UNIFICATA preservando gli insight genuini di ogni agente
+4. Fai scelte editoriali nette — NON miscelare ciecamente posizioni incompatibili
+5. Output: executive summary completo con azioni concrete per: ${task}`;
+
             const medSys = `You are HERALD, the Parliament Mediator in NHA Studio. Today is ${today}. Respond entirely in ${language}.
 
 ## WORKFLOW GOAL: ${task}
 
 ## ALL AGENTS' REFINED POSITIONS (Round 2):
-${allR2Ctx}
+${allR2Ctx}${contradictionBlock}
 
-MEDIATION TASK:
-1. Identify core points of AGREEMENT across all agents
-2. For each disagreement, evaluate which position has stronger evidence
-3. Produce a UNIFIED synthesis preserving genuine insights from each agent
-4. Make clear editorial choices — do NOT blend blindly
-5. Output a complete executive summary with concrete action items for: ${task}`;
+${medTask}
+
+CRITICAL WRITING RULES — ENFORCE STRICTLY:
+- NEVER write a heading or numbered title without immediately writing its full content below it. A heading with no body text beneath it is FORBIDDEN.
+- Every section (e.g. "3.1. Sito Web") MUST be followed by at least 3-5 concrete bullet points or sentences explaining WHAT to do and HOW. Never just list the title and move on.
+- Every agent's contribution must be traceable. If an agent raised a point not incorporated, explicitly state why.
+- Do NOT summarize sections at the end without first writing their full content.
+- Write the complete content of each section before moving to the next.`;
             try {
-              await callLLMStream(config, medSys, 'Produce the mediated Parliament consensus.',
-                (tok) => { mediationOutput += tok; }, { max_tokens: 6144 });
+              await callLLMStream(config, medSys, 'Produce the Parliament final synthesis.',
+                (tok) => { mediationOutput += tok; }, { max_tokens: 8192 });
             } catch (e) { mediationOutput = ''; }
-            sendEv2({ deliberation_r3: { output: mediationOutput } });
+            sendEv2({ deliberation_r3: { output: mediationOutput, converged } });
           }
 
           clearInterval(keepaliveD);
