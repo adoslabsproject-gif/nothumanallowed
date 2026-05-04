@@ -44,7 +44,10 @@ async function graphFetch(config, urlPath, options = {}) {
     throw new Error(`Microsoft Calendar API ${res.status}: ${err}`);
   }
 
-  return res.json();
+  if (res.status === 204 || res.headers.get('content-length') === '0') return {};
+  const text = await res.text();
+  if (!text) return {};
+  try { return JSON.parse(text); } catch { return {}; }
 }
 
 /**
@@ -226,6 +229,13 @@ export async function updateEvent(config, calendarId, eventId, patch) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+export async function deleteEvent(config, calendarId, eventId) {
+  const calPath = calendarId === 'primary'
+    ? `/calendar/events/${eventId}`
+    : `/calendars/${calendarId}/events/${eventId}`;
+  await graphFetch(config, calPath, { method: 'DELETE' });
 }
 
 // ── Event Parser ───────────────────────────────────────────────────────────

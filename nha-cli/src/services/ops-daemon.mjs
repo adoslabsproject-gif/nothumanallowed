@@ -36,7 +36,236 @@ const STATE_FILE = path.join(DAEMON_DIR, 'state.json');
 const LOG_FILE = path.join(DAEMON_DIR, 'daemon.log');
 const BRIEFS_DIR = path.join(NHA_DIR, 'ops', 'briefs');
 const INSIGHTS_DIR = path.join(NHA_DIR, 'ops', 'insights');
+const CRON_FILE = path.join(DAEMON_DIR, 'cron.json');
+const HEARTBEAT_FILE = path.join(DAEMON_DIR, 'heartbeat.json');
 const WS_PORT = 3848;
+
+// ── Cron / Heartbeat Persistence ────────────────────────────────────────────
+
+function loadCronJobs() {
+  if (!fs.existsSync(CRON_FILE)) return [];
+  try { return JSON.parse(fs.readFileSync(CRON_FILE, 'utf-8')); } catch { return []; }
+}
+
+function saveCronJobs(jobs) {
+  fs.mkdirSync(DAEMON_DIR, { recursive: true });
+  fs.writeFileSync(CRON_FILE, JSON.stringify(jobs, null, 2), { mode: 0o600 });
+}
+
+function loadHeartbeats() {
+  if (!fs.existsSync(HEARTBEAT_FILE)) return [];
+  try { return JSON.parse(fs.readFileSync(HEARTBEAT_FILE, 'utf-8')); } catch { return []; }
+}
+
+function saveHeartbeats(beats) {
+  fs.mkdirSync(DAEMON_DIR, { recursive: true });
+  fs.writeFileSync(HEARTBEAT_FILE, JSON.stringify(beats, null, 2), { mode: 0o600 });
+}
+
+/**
+ * Parse a human-readable schedule into a cron-like spec.
+ * Supports:
+ *   "every 5m" / "every 2h" / "every 30min"
+ *   "every monday 9am" / "every friday 17:00"
+ *   "every day 8:30" / "daily 9am"
+ *   "every hour"
+ *   "at 14:00" (once daily)
+ *
+ * Returns { type: 'interval'|'daily'|'weekly', intervalMs?, hour?, minute?, dayOfWeek? }
+ */
+function parseSchedule(schedule) {
+  const s = schedule.toLowerCase().trim();
+
+  // Interval: "every 5m", "every 2h", "every 30min", "every 1 hour"
+  const intervalMatch = s.match(/every\s+(\d+)\s*(m(?:in(?:utes?)?)?|h(?:ours?)?|s(?:ec(?:onds?)?)?)/);
+  if (intervalMatch) {
+    const num = parseInt(intervalMatch[1]);
+    const unit = intervalMatch[2][0]; // m, h, or s
+    const ms = unit === 'h' ? num * 3_600_000 : unit === 'm' ? num * 60_000 : num * 1_000;
+    return { type: 'interval', intervalMs: Math.max(ms, 60_000) }; // min 1 minute
+  }
+
+  // "every hour"
+  if (s === 'every hour' || s === 'hourly') {
+    return { type: 'interval', intervalMs: 3_600_000 };
+  }
+
+  // Weekly: "every monday 9am", "every friday 17:00"
+  const weeklyMatch = s.match(/every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (weeklyMatch) {
+    const days = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+    let hour = parseInt(weeklyMatch[2]);
+    const minute = parseInt(weeklyMatch[3] || '0');
+    const ampm = weeklyMatch[4];
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    return { type: 'weekly', dayOfWeek: days[weeklyMatch[1]], hour, minute };
+  }
+
+  // Daily: "every day 8:30", "daily 9am", "at 14:00"
+  const dailyMatch = s.match(/(?:every\s*day|daily|at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (dailyMatch) {
+    let hour = parseInt(dailyMatch[1]);
+    const minute = parseInt(dailyMatch[2] || '0');
+    const ampm = dailyMatch[3];
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    return { type: 'daily', hour, minute };
+  }
+
+  return null;
+}
+
+/**
+ * Check if a cron job should run now (within the current minute).
+ */
+function shouldRunNow(spec, lastRun) {
+  const now = new Date();
+
+  if (spec.type === 'interval') {
+    if (!lastRun) return true;
+    return (now.getTime() - lastRun) >= spec.intervalMs;
+  }
+
+  if (spec.type === 'daily') {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const targetMinutes = spec.hour * 60 + spec.minute;
+    // Run if we're in the right minute and haven't run today
+    if (Math.abs(nowMinutes - targetMinutes) > 1) return false;
+    if (lastRun) {
+      const lastRunDate = new Date(lastRun);
+      if (lastRunDate.toDateString() === now.toDateString()) return false;
+    }
+    return true;
+  }
+
+  if (spec.type === 'weekly') {
+    if (now.getDay() !== spec.dayOfWeek) return false;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const targetMinutes = spec.hour * 60 + spec.minute;
+    if (Math.abs(nowMinutes - targetMinutes) > 1) return false;
+    if (lastRun) {
+      const lastRunDate = new Date(lastRun);
+      const daysDiff = (now.getTime() - lastRunDate.getTime()) / 86_400_000;
+      if (daysDiff < 1) return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Add a cron job. Returns the job object.
+ */
+export function addCronJob(schedule, prompt, options = {}) {
+  const spec = parseSchedule(schedule);
+  if (!spec) return { ok: false, error: `Cannot parse schedule: "${schedule}"` };
+
+  const jobs = loadCronJobs();
+  const job = {
+    id: crypto.randomUUID(),
+    schedule,
+    spec,
+    prompt,
+    agent: options.agent || null,    // null = auto-route
+    notify: options.notify !== false, // default: send notification
+    enabled: true,
+    createdAt: new Date().toISOString(),
+    lastRun: null,
+    lastResult: null,
+    runCount: 0,
+  };
+  jobs.push(job);
+  saveCronJobs(jobs);
+
+  // Notify daemon if running (it will pick up changes on next tick)
+  if (isRunning()) {
+    wsBroadcast({ type: 'cron_added', data: { id: job.id, schedule, prompt } });
+  }
+
+  return { ok: true, job };
+}
+
+/**
+ * Remove a cron job by ID or index.
+ */
+export function removeCronJob(idOrIndex) {
+  const jobs = loadCronJobs();
+  let removed;
+  if (typeof idOrIndex === 'number' || /^\d+$/.test(idOrIndex)) {
+    const idx = parseInt(idOrIndex) - 1; // 1-based
+    if (idx < 0 || idx >= jobs.length) return { ok: false, error: 'Invalid job index' };
+    removed = jobs.splice(idx, 1)[0];
+  } else {
+    const idx = jobs.findIndex(j => j.id === idOrIndex);
+    if (idx === -1) return { ok: false, error: 'Job not found' };
+    removed = jobs.splice(idx, 1)[0];
+  }
+  saveCronJobs(jobs);
+  return { ok: true, removed };
+}
+
+/**
+ * List all cron jobs.
+ */
+export function listCronJobs() {
+  return loadCronJobs();
+}
+
+/**
+ * Add a heartbeat (recurring prompt at fixed interval).
+ * Convenience wrapper over cron with interval spec.
+ */
+export function addHeartbeat(intervalStr, prompt, options = {}) {
+  return addCronJob(`every ${intervalStr}`, prompt, options);
+}
+
+/**
+ * Execute cron jobs that are due. Called from daemon loop.
+ */
+async function executeDueCronJobs(config) {
+  const jobs = loadCronJobs();
+  let changed = false;
+
+  for (const job of jobs) {
+    if (!job.enabled) continue;
+    if (!shouldRunNow(job.spec, job.lastRun)) continue;
+
+    log(`[Cron] Executing: "${job.prompt}" (schedule: ${job.schedule})`);
+
+    try {
+      const agent = job.agent || 'conductor';
+      const result = await callAgent(config, agent, job.prompt);
+      job.lastRun = Date.now();
+      job.lastResult = result.slice(0, 500); // cap stored result
+      job.runCount++;
+      changed = true;
+
+      log(`[Cron] Completed: "${job.prompt}" → ${result.slice(0, 100)}...`);
+
+      // Broadcast result to connected clients
+      wsBroadcast({
+        type: 'cron_result',
+        timestamp: new Date().toISOString(),
+        data: { id: job.id, schedule: job.schedule, prompt: job.prompt, result: result.slice(0, 500) },
+      });
+
+      // Send notification if enabled
+      if (job.notify) {
+        await notify('Scheduled Task', `${job.prompt}\n\n${result.slice(0, 200)}`, config);
+      }
+    } catch (err) {
+      log(`[Cron] Error executing "${job.prompt}": ${err.message}`);
+      job.lastRun = Date.now();
+      job.lastResult = `ERROR: ${err.message}`;
+      job.runCount++;
+      changed = true;
+    }
+  }
+
+  if (changed) saveCronJobs(jobs);
+}
 
 // ── Daemon Control ─────────────────────────────────────────────────────────
 
@@ -709,11 +938,19 @@ async function daemonLoop() {
             },
           });
 
-          // SABER quick scan for suspicious emails
-          if (email.urls.length > 0 || email.from.includes('paypal') || email.from.includes('bank') || email.subject.toLowerCase().includes('urgent')) {
+          // SABER quick scan — only for emails with suspicious URLs (not known domains)
+          const suspiciousUrls = (email.urls || []).filter(u => {
+            try {
+              const host = new URL(u).hostname.toLowerCase();
+              // Skip known legitimate domains
+              const safe = ['google.com','accounts.google.com','paypal.com','paypal.it','apple.com','microsoft.com','github.com','linkedin.com','amazon.com','facebook.com','instagram.com','twitter.com','x.com','youtube.com','netflix.com','disneyplus.com','spotify.com'];
+              return !safe.some(d => host === d || host.endsWith('.' + d));
+            } catch { return true; } // malformed URL = suspicious
+          });
+          if (suspiciousUrls.length > 0) {
             try {
               const scanResult = await callAgent(config, 'saber',
-                `Quick security scan: From="${email.from}" Subject="${email.subject}" URLs=${email.urls.join(', ')}\nIs this potentially phishing? Respond: SAFE or FLAGGED with reason (one line).`
+                `Quick phishing scan. ONLY flag if there are CLEAR red flags (domain spoofing, credential harvesting URLs, mismatched sender/domain). Do NOT flag legitimate emails from real companies.\n\nFrom: "${email.from}"\nSubject: "${email.subject}"\nSuspicious URLs: ${suspiciousUrls.join(', ')}\n\nRespond ONLY: SAFE or FLAGGED with one-line reason. Default to SAFE unless clearly malicious.`
               );
               if (scanResult.toUpperCase().includes('FLAGGED')) {
                 await notify('Security Alert', `Suspicious email from ${email.from}: ${email.subject}\n${scanResult}`, config);
@@ -835,6 +1072,13 @@ async function daemonLoop() {
       } catch (err) {
         log(`Plan generation error: ${err.message}`);
       }
+    }
+
+    // ── User-defined Cron Jobs ────────────────────────────
+    try {
+      await executeDueCronJobs(config);
+    } catch (err) {
+      log(`[Cron] Execution error: ${err.message}`);
     }
 
     // Reset daily flags at midnight

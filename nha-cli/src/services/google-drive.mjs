@@ -165,6 +165,147 @@ export async function downloadFileContent(config, fileId) {
   };
 }
 
+/**
+ * Upload a file to Google Drive.
+ * @param {object} config
+ * @param {string} name — filename
+ * @param {string|Buffer} content — file content (string for text, Buffer for binary)
+ * @param {string} mimeType — e.g. 'text/plain', 'application/pdf'
+ * @param {string} folderId — parent folder ID (default: root)
+ * @returns {Promise<object>} uploaded file metadata
+ */
+export async function uploadFile(config, name, content, mimeType = 'text/plain', folderId = 'root') {
+  const token = await getAccessToken(config);
+  const metadata = {
+    name,
+    parents: [folderId],
+  };
+
+  // Multipart upload
+  const boundary = '===NHA_UPLOAD_BOUNDARY===';
+  const body = [
+    `--${boundary}`,
+    'Content-Type: application/json; charset=UTF-8',
+    '',
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    `Content-Type: ${mimeType}`,
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from(content).toString('base64'),
+    `--${boundary}--`,
+  ].join('\r\n');
+
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`,
+    },
+    body,
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Drive upload ${res.status}: ${err.slice(0, 200)}`);
+  }
+
+  return parseFile(await res.json());
+}
+
+/**
+ * Update (overwrite) file content on Drive.
+ */
+export async function updateFileContent(config, fileId, content, mimeType = 'text/plain') {
+  const token = await getAccessToken(config);
+  const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name,mimeType,size,webViewLink`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': mimeType,
+    },
+    body: content,
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Drive update ${res.status}: ${err.slice(0, 200)}`);
+  }
+
+  return parseFile(await res.json());
+}
+
+/**
+ * Delete a file (move to trash).
+ */
+export async function trashFile(config, fileId) {
+  const token = await getAccessToken(config);
+  const res = await fetch(`${DRIVE_BASE}/files/${fileId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ trashed: true }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Drive trash ${res.status}: ${err.slice(0, 200)}`);
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Read text content of a file directly (for text files, code, docs).
+ * For Google Docs, exports as plain text. For other text files, downloads raw.
+ * @returns {Promise<string>} file content as text
+ */
+export async function readFileAsText(config, fileId) {
+  const token = await getAccessToken(config);
+  const meta = await getFile(config, fileId);
+
+  let downloadUrl;
+
+  // Google Workspace files need export
+  if (meta.mimeType === 'application/vnd.google-apps.document') {
+    downloadUrl = `${DRIVE_BASE}/files/${fileId}/export?mimeType=text/plain`;
+  } else if (meta.mimeType === 'application/vnd.google-apps.spreadsheet') {
+    downloadUrl = `${DRIVE_BASE}/files/${fileId}/export?mimeType=text/csv`;
+  } else if (meta.mimeType.startsWith('application/vnd.google-apps.')) {
+    downloadUrl = `${DRIVE_BASE}/files/${fileId}/export?mimeType=text/plain`;
+  } else {
+    downloadUrl = `${DRIVE_BASE}/files/${fileId}?alt=media`;
+  }
+
+  const res = await fetch(downloadUrl, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Drive read ${res.status}: ${err.slice(0, 200)}`);
+  }
+
+  return res.text();
+}
+
+/**
+ * Create a folder on Drive.
+ */
+export async function createFolder(config, name, parentId = 'root') {
+  return driveFetch(config, '/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId],
+    }),
+  });
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function parseFile(raw) {

@@ -102,6 +102,7 @@ const DEFAULT_CONFIG = {
   },
   github: {
     token: '',
+    defaultRepo: '',
   },
   notion: {
     token: '',
@@ -264,6 +265,8 @@ export function setConfigValue(key, value) {
     'proactive-deadlines': 'ops.proactive.deadlines',
     'github-token': 'github.token',
     'gh-token': 'github.token',
+    'github-repo': 'github.defaultRepo',
+    'gh-repo': 'github.defaultRepo',
     'notion-token': 'notion.token',
     'slack-token': 'slack.token',
     'name': 'profile.name',

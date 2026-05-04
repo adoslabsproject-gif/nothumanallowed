@@ -166,6 +166,104 @@ export async function listPRsRaw(config, repo, state = 'open', maxResults = 15) 
 /**
  * Mark all notifications as read.
  */
+export async function listUserRepos(config, maxResults = 30) {
+  const data = await ghFetch(config, `/user/repos?sort=pushed&direction=desc&per_page=${maxResults}&affiliation=owner,collaborator`);
+  const user = await ghFetch(config, '/user');
+  return {
+    login: user.login,
+    name: user.name,
+    avatar: user.avatar_url,
+    repos: (Array.isArray(data) ? data : []).map(r => ({
+      full_name: r.full_name,
+      description: r.description || '',
+      language: r.language || '',
+      stars: r.stargazers_count || 0,
+      open_issues: r.open_issues_count || 0,
+      pushed: r.pushed_at ? r.pushed_at.slice(0, 10) : '',
+      private: r.private,
+    })),
+  };
+}
+
+/**
+ * Get repository metadata: description, stars, forks, language, topics, license, last push.
+ */
+export async function getRepoInfo(config, repo) {
+  const data = await ghFetch(config, `/repos/${repo}`);
+  return {
+    full_name: data.full_name,
+    description: data.description || '',
+    stars: data.stargazers_count || 0,
+    forks: data.forks_count || 0,
+    watchers: data.watchers_count || 0,
+    open_issues: data.open_issues_count || 0,
+    language: data.language || 'N/A',
+    topics: (data.topics || []).join(', ') || 'none',
+    license: data.license?.name || 'none',
+    default_branch: data.default_branch || 'main',
+    pushed_at: data.pushed_at ? data.pushed_at.slice(0, 10) : 'unknown',
+    created_at: data.created_at ? data.created_at.slice(0, 10) : 'unknown',
+    homepage: data.homepage || '',
+    private: data.private,
+    archived: data.archived,
+  };
+}
+
+/**
+ * Get programming languages breakdown for a repo.
+ */
+export async function getRepoLanguages(config, repo) {
+  const data = await ghFetch(config, `/repos/${repo}/languages`);
+  const total = Object.values(data).reduce((a, b) => a + b, 0) || 1;
+  return Object.entries(data)
+    .map(([lang, bytes]) => `${lang}: ${((bytes / total) * 100).toFixed(1)}%`)
+    .join(', ');
+}
+
+/**
+ * Get recent commits for a repo (last N).
+ */
+export async function getRecentCommits(config, repo, maxResults = 10) {
+  const data = await ghFetch(config, `/repos/${repo}/commits?per_page=${maxResults}`);
+  if (!Array.isArray(data) || data.length === 0) return `No commits found in ${repo}.`;
+  return data.map((c, i) => {
+    const sha = c.sha ? c.sha.slice(0, 7) : '?';
+    const msg = (c.commit?.message || '').split('\n')[0].slice(0, 100);
+    const author = c.commit?.author?.name || c.author?.login || 'unknown';
+    const date = c.commit?.author?.date ? c.commit.author.date.slice(0, 10) : '';
+    return `${i + 1}. [${sha}] ${date} — ${author}: ${msg}`;
+  }).join('\n');
+}
+
+/**
+ * Get README content for a repo.
+ */
+export async function getReadme(config, repo) {
+  try {
+    const data = await ghFetch(config, `/repos/${repo}/readme`);
+    if (data.content) {
+      const text = Buffer.from(data.content, 'base64').toString('utf-8');
+      return text.slice(0, 6000); // cap at 6KB
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Get contributors for a repo.
+ */
+export async function getContributors(config, repo, maxResults = 10) {
+  try {
+    const data = await ghFetch(config, `/repos/${repo}/contributors?per_page=${maxResults}`);
+    if (!Array.isArray(data) || data.length === 0) return 'No contributors data.';
+    return data.map((c, i) => `${i + 1}. @${c.login} — ${c.contributions} commits`).join('\n');
+  } catch {
+    return 'Contributors data unavailable.';
+  }
+}
+
 export async function markNotificationsRead(config) {
   await ghFetch(config, '/notifications', {
     method: 'PUT',

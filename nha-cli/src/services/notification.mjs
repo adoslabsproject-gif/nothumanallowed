@@ -46,13 +46,19 @@ function sendDesktop(title, body) {
   const platform = os.platform();
   try {
     if (platform === 'darwin') {
-      const escaped = body.replace(/"/g, '\\"').slice(0, 200);
-      execSync(`osascript -e 'display notification "${escaped}" with title "NHA: ${title.replace(/"/g, '\\"')}"'`);
+      const escaped = body.replace(/"/g, '\\"').replace(/'/g, "'").slice(0, 200);
+      const escapedTitle = 'NHA: ' + title.replace(/"/g, '\\"');
+      // Try terminal-notifier first (supports click-to-open)
+      try {
+        execSync(`which terminal-notifier`, { stdio: 'ignore' });
+        execSync(`terminal-notifier -title "${escapedTitle}" -message "${escaped}" -open "http://127.0.0.1:3847" -appIcon "" -group nha 2>/dev/null`);
+      } catch {
+        // Fallback to osascript — use "NHA" as subtitle so click goes nowhere confusing
+        execSync(`osascript -e 'display notification "${escaped}" with title "${escapedTitle}" subtitle "Open nha ui to see details"'`);
+      }
     } else if (platform === 'linux') {
       execSync(`notify-send "NHA: ${title}" "${body.slice(0, 200)}"`);
-    }
-    // Windows: PowerShell toast (best effort)
-    else if (platform === 'win32') {
+    } else if (platform === 'win32') {
       execSync(`powershell -Command "New-BurntToastNotification -Text 'NHA: ${title}', '${body.slice(0, 200)}'" 2>NUL`);
     }
   } catch { /* non-fatal */ }

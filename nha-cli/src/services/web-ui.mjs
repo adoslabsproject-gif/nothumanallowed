@@ -231,6 +231,9 @@ var agentChatHistory = []; // [{role:'user'|'agent', text:'...'}]
 
 // ---- NAV ----
 function switchView(v) {
+  // Close any open modal (e.g. calendar day detail) before switching view
+  var modal=document.getElementById('agentModal');
+  if(modal&&modal.classList.contains('modal-overlay--open')){closeModal();}
   currentView = v;
   // Invalidate cached data so pages always show fresh content
   if(v==='contacts')contactsData=null;
@@ -245,7 +248,10 @@ function switchView(v) {
   if(spt)spt.textContent=t('nav_'+v)||v;
   // Toggle content--chat class for proper chat layout (no overflow, flex column)
   var ct=document.getElementById('content');
-  if(ct){if(v==='chat'){ct.classList.add('content--chat')}else{ct.classList.remove('content--chat')}}
+  if(ct){
+    if(v==='chat'){ct.classList.add('content--chat')}else{ct.classList.remove('content--chat')}
+    if(v==='webcraft'){ct.classList.add('content--webcraft')}else{ct.classList.remove('content--webcraft')}
+  }
   closeSidebar();
   // Auto-close floating panels when leaving chat/studio
   if(v!=='chat'&&v!=='studio'){closeBrowserViewer();closeCanvas();}
@@ -254,10 +260,12 @@ function switchView(v) {
 function openSidebar() {
   document.getElementById('sidebar').classList.add('sidebar--open');
   document.getElementById('overlay').classList.add('sidebar__overlay--open');
+  var mb = document.getElementById('mobileBurger'); if (mb) mb.style.display = 'none';
 }
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('sidebar--open');
   document.getElementById('overlay').classList.remove('sidebar__overlay--open');
+  var mb = document.getElementById('mobileBurger'); if (mb) mb.style.display = '';
 }
 function toggleSidebar() {
   var sb = document.getElementById('sidebar');
@@ -321,6 +329,7 @@ function render(){
     case 'birthdays':renderBirthdays(el);break;
     case 'agents':renderAgents(el);break;
     case 'studio':renderStudio(el);break;
+    case 'webcraft':renderWebCraft(el);break;
     case 'collab':renderCollab(el);break;
     case 'settings':renderSettings(el);break;
   }
@@ -729,6 +738,7 @@ function openCanvasPanel(){
   var cp = document.getElementById('canvasPanel');
   if (!cp) return;
   cp.classList.add('open');
+  document.body.classList.add('canvas-open');
   // Always reset tracker so renderCanvasPanel reloads fresh content
   _canvasFrameLoadedHtml = null;
   canvasMode = 'canvas';
@@ -746,7 +756,7 @@ function reopenCanvas(){
   else{canvasMode='canvas';} // show empty state
   renderCanvasPanel();
 }
-function closeCanvas(){var p=document.getElementById('canvasPanel');if(p)p.classList.remove('open');}
+function closeCanvas(){var p=document.getElementById('canvasPanel');if(p)p.classList.remove('open');document.body.classList.remove('canvas-open');}
 function canvasDownloadHTML(){
   var d=getConvCanvasData();var item=d.canvases[canvasIdx];
   var html=(item&&item.html)||studioState.canvas;
@@ -1194,6 +1204,16 @@ function calKey(y,m,d){return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).pa
 function isToday(y,m,d){var t=new Date();return t.getFullYear()===y&&t.getMonth()===m&&t.getDate()===d}
 
 function renderCalendar(el){
+  // Guard: if Google not connected, show setup message — don't block on API call
+  if(!settingsData.hasGoogle){
+    el.innerHTML='<div style="max-width:400px;margin:60px auto;text-align:center;padding:32px;border:1px solid var(--border);border-radius:12px;background:var(--bg2)">' +
+      '<div style="font-size:40px;margin-bottom:16px">&#128197;</div>' +
+      '<div style="color:var(--bright);font-size:18px;font-weight:700;margin-bottom:8px">Calendar</div>' +
+      '<div style="color:var(--dim);font-size:13px;margin-bottom:24px">Connect your Google account to view and manage calendar events.</div>' +
+      '<button onclick="switchView(\\x27settings\\x27)" style="background:var(--green3);color:var(--bg);padding:10px 24px;border-radius:var(--r);font-weight:700;font-size:13px;cursor:pointer;border:none">Connect Google \u2192</button>' +
+    '</div>';
+    return;
+  }
   var firstDay=new Date(calYear,calMonth,1).getDay();
   var daysInMonth=new Date(calYear,calMonth+1,0).getDate();
   var monthName=new Date(calYear,calMonth,1).toLocaleDateString('en',{month:'long',year:'numeric'});
@@ -2619,8 +2639,11 @@ function renderSettings(el) {
     ]) +
     '<div class="card" style="margin-top:16px"><div class="card__title">Google Account</div>' +
     '<div style="font-size:11px;color:var(--dim);margin-bottom:8px">Connect Gmail, Calendar, Drive, Contacts, and Tasks. Opens a browser window for Google sign-in.</div>' +
-    (settingsData.hasGoogle ? '<div style="color:var(--green);font-size:12px;margin-bottom:8px">\\u2705 Connected</div>' : '') +
+    (settingsData.hasGoogle ? '<div style="color:var(--green);font-size:12px;margin-bottom:8px">&#9989; Connected</div>' : '') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
     '<button onclick="connectGoogle()" style="background:var(--green3);color:var(--bg);padding:8px 20px;border-radius:var(--r);font-weight:700;font-size:12px;cursor:pointer;border:none">' + (settingsData.hasGoogle ? 'Reconnect Google' : 'Connect Google') + '</button>' +
+    (settingsData.hasGoogle ? '<button onclick="disconnectGoogle()" style="background:var(--red3,#7f1d1d);color:#fca5a5;padding:8px 16px;border-radius:var(--r);font-weight:700;font-size:12px;cursor:pointer;border:1px solid var(--red,#ef4444)">Disconnect Google</button>' : '') +
+    '</div>' +
     '<div id="googleStatus" style="margin-top:8px;font-size:10px;color:var(--dim)"></div>' +
     '</div>' +
   '</div>';
@@ -2634,6 +2657,17 @@ function connectGoogle() {
     if (s) s.style.color = 'var(--green)';
   }).catch(function(e) {
     if (s) { s.textContent = 'Error: ' + e.message; s.style.color = 'var(--red)'; }
+  });
+}
+function disconnectGoogle() {
+  var s = document.getElementById('googleStatus');
+  if (s) s.textContent = 'Disconnecting...';
+  apiPost('/api/google/revoke', {}).then(function() {
+    if (s) { s.textContent = 'Google account disconnected.'; s.style.color = 'var(--dim)'; }
+    setTimeout(function(){ location.reload(); }, 1200);
+  }).catch(function() {
+    // Fallback: delete token file via CLI hint
+    if (s) { s.textContent = 'Run: nha google revoke'; s.style.color = 'var(--amber)'; }
   });
 }
 
@@ -3105,6 +3139,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Birthdays', nav_agents:'Agents',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Settings',
     nav_docs:'Documentation', nav_agents_guide:'Agents Guide', nav_mobile:'Mobile App',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'Generate enterprise-grade web projects — security headers A+, BEM CSS, PostgreSQL pool, Auth, GDPR cookie banner.',
+    wc_project:'Project', wc_project_name:'Project name (e.g. MySaaS)', wc_desc:'Describe your project...',
+    wc_blocks:'Included Blocks', wc_auth_fields:'Auth Fields', wc_add_field:'+ Add field',
+    wc_required_hint:'Checked = Required | Edit label & type inline',
+    wc_generate:'Generate Project', wc_generating:'Generating',
+    wc_download:'Download Archive', wc_describe_first:'Please describe your project first.',
+    wc_no_files:'Describe your project and click Generate',
+    wc_examples_label:'Examples',
+    wc_sandbox_start:'Launch Sandbox',
+    wc_projects:'Projects',
+    wc_no_projects:'No saved projects yet',
+    wc_no_projects_hint:'Generate a project and it will be saved automatically',
   },
   it: {
     chat:'Chat', studio:'Studio', settings:'Impostazioni', agents:'Agenti',
@@ -3132,6 +3179,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Compleanni', nav_agents:'Agenti',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Impostazioni',
     nav_docs:'Documentazione', nav_agents_guide:'Guida Agenti', nav_mobile:'App Mobile',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'Genera progetti web enterprise — security headers A+, CSS BEM, PostgreSQL pool, Auth, cookie banner GDPR.',
+    wc_project:'Progetto', wc_project_name:'Nome progetto (es. MioSaaS)', wc_desc:'Descrivi il tuo progetto...',
+    wc_blocks:'Blocchi inclusi', wc_auth_fields:'Campi registrazione', wc_add_field:'+ Aggiungi campo',
+    wc_required_hint:'Spuntato = Obbligatorio | Modifica etichetta e tipo inline',
+    wc_generate:'Genera progetto', wc_generating:'Generazione in corso',
+    wc_download:'Scarica archivio', wc_describe_first:'Descrivi prima il tuo progetto.',
+    wc_no_files:'Descrivi il progetto e clicca Genera',
+    wc_examples_label:'Esempi',
+    wc_sandbox_start:'Avvia Sandbox',
+    wc_projects:'Progetti',
+    wc_no_projects:'Nessun progetto salvato',
+    wc_no_projects_hint:'Genera un progetto e verr\u00e0 salvato automaticamente',
   },
   es: {
     chat:'Chat', studio:'Studio', settings:'Configuración', agents:'Agentes',
@@ -3158,6 +3218,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Cumplea\u00f1os', nav_agents:'Agentes',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Configuraci\u00f3n',
     nav_docs:'Documentaci\u00f3n', nav_agents_guide:'Gu\u00eda Agentes', nav_mobile:'App M\u00f3vil',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'Genera proyectos web empresariales — headers A+, CSS BEM, PostgreSQL pool, Auth, banner de cookies GDPR.',
+    wc_project:'Proyecto', wc_project_name:'Nombre del proyecto (ej. MiSaaS)', wc_desc:'Describe tu proyecto...',
+    wc_blocks:'Bloques incluidos', wc_auth_fields:'Campos de registro', wc_add_field:'+ A\u00f1adir campo',
+    wc_required_hint:'Marcado = Obligatorio | Edita etiqueta y tipo inline',
+    wc_generate:'Generar proyecto', wc_generating:'Generando',
+    wc_download:'Descargar archivo', wc_describe_first:'Por favor describe tu proyecto primero.',
+    wc_no_files:'Describe el proyecto y haz clic en Generar',
+    wc_examples_label:'Ejemplos',
+    wc_sandbox_start:'Iniciar Sandbox',
+    wc_projects:'Proyectos',
+    wc_no_projects:'No hay proyectos guardados',
+    wc_no_projects_hint:'Genera un proyecto y se guardar\u00e1 autom\u00e1ticamente',
   },
   fr: {
     chat:'Chat', studio:'Studio', settings:'Paramètres', agents:'Agents',
@@ -3184,6 +3257,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Anniversaires', nav_agents:'Agents',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Param\u00e8tres',
     nav_docs:'Documentation', nav_agents_guide:'Guide Agents', nav_mobile:'App Mobile',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'G\u00e9n\u00e9rez des projets web entreprise — headers A+, CSS BEM, pool PostgreSQL, Auth, bandeau cookies RGPD.',
+    wc_project:'Projet', wc_project_name:'Nom du projet (ex. MonSaaS)', wc_desc:'D\u00e9crivez votre projet...',
+    wc_blocks:'Blocs inclus', wc_auth_fields:'Champs inscription', wc_add_field:'+ Ajouter un champ',
+    wc_required_hint:'Coch\u00e9 = Obligatoire | Modifier \u00e9tiquette et type inline',
+    wc_generate:'G\u00e9n\u00e9rer le projet', wc_generating:'G\u00e9n\u00e9ration en cours',
+    wc_download:'T\u00e9l\u00e9charger archive', wc_describe_first:'Veuillez d\u00e9crire votre projet.',
+    wc_no_files:'D\u00e9crivez le projet et cliquez sur G\u00e9n\u00e9rer',
+    wc_examples_label:'Exemples',
+    wc_sandbox_start:'Lancer Sandbox',
+    wc_projects:'Projets',
+    wc_no_projects:'Aucun projet sauvegard\u00e9',
+    wc_no_projects_hint:'G\u00e9n\u00e9rez un projet et il sera sauvegard\u00e9 automatiquement',
   },
   de: {
     chat:'Chat', studio:'Studio', settings:'Einstellungen', agents:'Agenten',
@@ -3210,6 +3296,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Geburtstage', nav_agents:'Agenten',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Einstellungen',
     nav_docs:'Dokumentation', nav_agents_guide:'Agenten-Leitfaden', nav_mobile:'Mobile App',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'Enterprise-Web-Projekte generieren — Security-Headers A+, BEM CSS, PostgreSQL Pool, Auth, DSGVO Cookie-Banner.',
+    wc_project:'Projekt', wc_project_name:'Projektname (z.B. MeinSaaS)', wc_desc:'Beschreibe dein Projekt...',
+    wc_blocks:'Enthaltene Bl\u00f6cke', wc_auth_fields:'Registrierungsfelder', wc_add_field:'+ Feld hinzuf\u00fcgen',
+    wc_required_hint:'Aktiviert = Pflichtfeld | Beschriftung und Typ inline bearbeiten',
+    wc_generate:'Projekt generieren', wc_generating:'Generierung',
+    wc_download:'Archiv herunterladen', wc_describe_first:'Bitte beschreibe zuerst dein Projekt.',
+    wc_no_files:'Beschreibe das Projekt und klicke auf Generieren',
+    wc_examples_label:'Beispiele',
+    wc_sandbox_start:'Sandbox starten',
+    wc_projects:'Projekte',
+    wc_no_projects:'Keine gespeicherten Projekte',
+    wc_no_projects_hint:'Generiere ein Projekt und es wird automatisch gespeichert',
   },
 };
 // Fallback to 'en' for unmapped languages
@@ -3237,7 +3336,7 @@ function renderSidebar() {
     \x27<div class="sidebar__brand">\x27+
       \x27<button class="sidebar__close" onclick="closeSidebar()" title="Close menu">&times;</button>\x27+
       \x27<div style="display:flex;align-items:center;gap:8px">\x27+
-        \x27<div class="sidebar__brand-name">NHA</div>\x27+
+        \x27<div class="sidebar__brand-name">NHA <span style="font-size:11px;font-weight:500;opacity:.7;letter-spacing:.5px">3rdArm</span></div>\x27+
         \x27<span id="wsIndicator" style="color:var(--dim);font-size:8px" title="Daemon WebSocket">&#9679;</span>\x27+
       \x27</div>\x27+
       \x27<div id="sidebarPageTitle" style="font-size:11px;color:var(--bright);margin-top:4px;font-weight:600">\x27+t(\x27nav_dashboard\x27)+\x27</div>\x27+
@@ -3277,6 +3376,10 @@ function renderSidebar() {
         \x27<span class="nav-item__icon">&#9881;</span> \x27+t(\x27nav_studio\x27)+
         \x27<span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(99,102,241,.25);color:var(--green);margin-left:4px;font-weight:700">NEW</span>\x27+
       \x27</div>\x27+
+      \x27<div class="nav-item\x27+(activeView===\x27webcraft\x27?\x27 nav-item--active\x27:\x27\x27)+\x27" data-view="webcraft" onclick="switchView(\\\x27webcraft\\\x27)">\x27+
+        \x27<span class="nav-item__icon">&#128736;</span> \x27+t(\x27nav_webcraft\x27)+
+        \x27<span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(99,102,241,.25);color:var(--green);margin-left:4px;font-weight:700">NEW</span>\x27+
+      \x27</div>\x27+
       \x27<div class="nav-item\x27+(activeView===\x27collab\x27?\x27 nav-item--active\x27:\x27\x27)+\x27" data-view="collab" onclick="switchView(\\\x27collab\\\x27)">\x27+
         \x27<span class="nav-item__icon">&#128274;</span> \x27+t(\x27nav_collab\x27)+
         \x27<span id="collabBadge" style="display:none;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px;font-family:var(--mono)">0</span>\x27+
@@ -3307,6 +3410,10 @@ var studioState = {
 };
 
 var studioAbortController = null;
+var parlActiveAgent = null;   // active agent label during parliament streaming
+var parlDoneAgents = {};      // set of completed agent labels during parliament
+var _parlPersistHtml = null;  // persists parliament block HTML across tab navigations
+var _PARL_STAMP = '<!--nha-parl-v13.5.39-->';
 
 function stopStudio() {
   if (!studioState.running) return;
@@ -3402,7 +3509,20 @@ function studioLog(agent, icon, text, type, update) {
   var time = new Date().toLocaleTimeString('en', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false});
   if (update && studioState.log.length) {
     var last = studioState.log[studioState.log.length - 1];
-    if (last.agent === agent) { last.text = text; last.type = type || last.type; renderStudioLog(); return; }
+    if (last.agent === agent) {
+      last.text = text; last.type = type || last.type;
+      // Streaming finished: remove data-rlen from the DOM entry so renderStudioLog re-renders it as markdown
+      var logEl = document.getElementById('studioLog');
+      if (logEl) {
+        var entries = logEl.querySelectorAll('.studio-log-entry');
+        var lastEntry = entries[entries.length - 1];
+        if (lastEntry) {
+          var tb2 = lastEntry.querySelector('.studio-log-entry__text');
+          if (tb2) tb2.removeAttribute(String.fromCharCode(100,97,116,97,45,114,108,101,110));
+        }
+      }
+      renderStudioLog(); return;
+    }
   }
   studioState.log.push({agent: agent, icon: icon, text: text, time: time, type: type||'agent'});
   renderStudioLog();
@@ -3423,12 +3543,14 @@ function buildWorkflowChar(n) {
   var shirt = shirtColors[skinIdx];
   var hairColors = [\x27#1a1a1a\x27,\x27#4a3728\x27,\x27#c4a35a\x27,\x27#8b0000\x27,\x27#2c4a7c\x27,\x27#3d2b1f\x27];
   var hair = hairColors[skinIdx];
-  var accentColor = isActive ? \x27#6366f1\x27 : (isDone ? \x27#22c55e\x27 : \x27#333360\x27);
-  var deskBg = isDone ? \x27#1a3a1a\x27 : (isActive ? \x27#1a1a3e\x27 : \x27#1a1a2a\x27);
-  var monGlow = isActive ? \x27filter:drop-shadow(0 0 4px #6366f1)\x27 : \x27\x27;
+  // Idle agents still have lit screens (dim amber glow — standby mode)
+  var accentColor = isActive ? \x27#6366f1\x27 : (isDone ? \x27#22c55e\x27 : \x27#3b3b6e\x27);
+  var idleScreenColor = \x27#1e1b38\x27; // dim purple-blue for idle screens — lit but standby
+  var deskBg = isDone ? \x27#1a3a1a\x27 : (isActive ? \x27#1a1a3e\x27 : \x27#181830\x27);
+  var monGlow = isActive ? \x27filter:drop-shadow(0 0 4px #6366f1)\x27 : (isDone ? \x27filter:drop-shadow(0 0 3px #22c55e44)\x27 : \x27filter:drop-shadow(0 0 3px #3b3b6e66)\x27);
   var armCls = isActive ? \x27class="prl-arm"\x27 : \x27\x27;
   var headCls = isActive ? \x27class="prl-head"\x27 : \x27\x27;
-  var glowStyle = isActive ? \x27filter:drop-shadow(0 0 5px #6366f1)\x27 : \x27\x27;
+  var glowStyle = isActive ? \x27filter:drop-shadow(0 0 5px #6366f1)\x27 : (isDone ? \x27filter:drop-shadow(0 0 4px #22c55e44)\x27 : \x27\x27);
   var svg = \x27<svg viewBox="0 0 80 96" width="70" height="84" xmlns="http://www.w3.org/2000/svg" style="\x27+glowStyle+\x27;display:block;margin:0 auto">\x27+
     // Desk
     \x27<path d="M4 55 L76 55 L76 63 L4 63 Z" fill="\x27+deskBg+\x27" stroke="\x27+accentColor+\x27" stroke-width="1.2"/>\x27+
@@ -3443,7 +3565,8 @@ function buildWorkflowChar(n) {
     \x27<rect x="33" y="50" width="4" height="6" rx="1" fill="#1a1a2e"/>\x27+
     \x27<rect x="17" y="26" width="36" height="25" rx="4" fill="#050510"/>\x27+
     \x27<rect x="18" y="27" width="34" height="23" rx="3" fill="#0d0d20" stroke="\x27+accentColor+\x27" stroke-width="\x27+(isActive?\x272\x27:\x271\x27)+\x27" style="\x27+monGlow+\x27"/>\x27+
-    \x27<rect x="20" y="29" width="30" height="18" rx="2" fill="#0a0a18"/>\x27+
+    // Screen glass — idle=dim standby blue, done=dim green, active=lit
+    \x27<rect x="20" y="29" width="30" height="18" rx="2" fill="\x27+(isDone?\x27#0a1a0a\x27:(isActive?\x27#0a0a18\x27:\x27#0e0e22\x27))+\x27"/>\x27+
     (isActive ?
       \x27<defs><linearGradient id="wsg\x27+skinIdx+\x27" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6366f122"/><stop offset="1" stop-color="#6366f108"/></linearGradient></defs>\x27+
       \x27<rect x="20" y="29" width="30" height="18" rx="2" fill="url(#wsg\x27+skinIdx+\x27)"/>\x27+
@@ -3452,13 +3575,24 @@ function buildWorkflowChar(n) {
       \x27<line x1="22" y1="38" x2="46" y2="38" stroke="#6366f188" stroke-width="1" stroke-linecap="round"/>\x27+
       \x27<line x1="22" y1="41" x2="40" y2="41" stroke="#6366f166" stroke-width="1" stroke-linecap="round"/>\x27+
       \x27<line x1="22" y1="44" x2="43" y2="44" stroke="#6366f144" stroke-width="1" stroke-linecap="round"/>\x27
+      : isDone ?
+      // Done: green screen with completed code
+      \x27<rect x="20" y="29" width="30" height="18" rx="2" fill="#0a1a0a88"/>\x27+
+      \x27<line x1="22" y1="32" x2="44" y2="32" stroke="#22c55e99" stroke-width="1" stroke-linecap="round"/>\x27+
+      \x27<line x1="22" y1="35" x2="46" y2="35" stroke="#22c55e77" stroke-width="1" stroke-linecap="round"/>\x27+
+      \x27<line x1="22" y1="38" x2="40" y2="38" stroke="#22c55e55" stroke-width="1" stroke-linecap="round"/>\x27+
+      \x27<line x1="22" y1="41" x2="43" y2="41" stroke="#22c55e44" stroke-width="1" stroke-linecap="round"/>\x27
       :
-      \x27<line x1="22" y1="33" x2="46" y2="33" stroke="#1e1e30" stroke-width="1" stroke-linecap="round"/>\x27+
-      \x27<line x1="22" y1="36" x2="42" y2="36" stroke="#1e1e30" stroke-width="1" stroke-linecap="round"/>\x27+
-      \x27<line x1="22" y1="39" x2="44" y2="39" stroke="#1e1e30" stroke-width="1" stroke-linecap="round"/>\x27+
-      \x27<line x1="22" y1="42" x2="38" y2="42" stroke="#1e1e30" stroke-width="1" stroke-linecap="round"/>\x27
+      // Idle: dim standby screen — agent is waiting, screen lit but quiet
+      \x27<rect x="20" y="29" width="30" height="18" rx="2" fill="rgba(90,80,180,.35)"/>\x27+
+      \x27<line x1="22" y1="33" x2="46" y2="33" stroke="#9090cc" stroke-width="1" stroke-linecap="round" opacity=".8"/>\x27+
+      \x27<line x1="22" y1="36" x2="38" y2="36" stroke="#8080bb" stroke-width="1" stroke-linecap="round" opacity=".65"/>\x27+
+      \x27<line x1="22" y1="39" x2="44" y2="39" stroke="#7070aa" stroke-width="1" stroke-linecap="round" opacity=".5"/>\x27+
+      \x27<line x1="22" y1="42" x2="34" y2="42" stroke="#6060a0" stroke-width="1" stroke-linecap="round" opacity=".4"/>\x27+
+      // Standby dot — blinking cursor
+      \x27<circle cx="22" cy="45" r="1" fill="#6366f1" opacity=".6" class="prl-doc-hold"/>\x27
     )+
-    \x27<circle cx="35" cy="28.2" r=".9" fill="\x27+(isActive?\x27#6366f1\x27:\x27#2a2a40\x27)+\x27"/>\x27+
+    \x27<circle cx="35" cy="28.2" r=".9" fill="\x27+(isActive?\x27#6366f1\x27:(isDone?\x27#22c55e\x27:\x27#4040a0\x27))+\x27"/>\x27+
     // Keyboard
     \x27<rect x="13" y="48" width="36" height="7" rx="2.5" fill="#0c0c1e" stroke="#202036" stroke-width="1"/>\x27+
     \x27<rect x="14" y="49.5" width="3" height="2" rx=".5" fill="#181830"/>\x27+
@@ -3527,16 +3661,337 @@ function buildWorkflowChar(n) {
       \x27<circle cx="67" cy="9" r="5.5" fill="#22c55e"/>\x27+
       \x27<path d="M63 9 L66 12 L71 5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>\x27
       : \x27\x27)+
-    // Flying papers when running
+    // Floating document icon when running (bobbing above desk)
     (isActive ?
-      \x27<g class="prl-fly-doc" style="animation-delay:.2s;animation-duration:1.6s;transform-origin:35px 50px">\x27+
-      \x27<path d="M0,0 L11,0 L14,3 L14,18 L0,18 Z" fill="#0d0d20" stroke="#6366f1" stroke-width="1.2" transform="translate(35,50)"/>\x27+
-      \x27<line x1="37" y1="53" x2="47" y2="53" stroke="#6366f1" stroke-width=".8" opacity=".7"/>\x27+
-      \x27<line x1="37" y1="56" x2="47" y2="56" stroke="#6366f1" stroke-width=".8" opacity=".5"/>\x27+
+      \x27<g class="prl-doc-hold" style="transform-origin:58px 10px">\x27+
+      \x27<path d="M52 4 L66 4 L69 7 L69 22 L52 22 Z" fill="#0d0d20" stroke="#6366f1" stroke-width="1.5"/>\x27+
+      \x27<path d="M66 4 L66 7 L69 7" fill="none" stroke="#6366f1" stroke-width="1"/>\x27+
+      \x27<line x1="55" y1="10" x2="66" y2="10" stroke="#6366f1ee" stroke-width=".9" stroke-linecap="round"/>\x27+
+      \x27<line x1="55" y1="13" x2="64" y2="13" stroke="#6366f1aa" stroke-width=".9" stroke-linecap="round"/>\x27+
+      \x27<line x1="55" y1="16" x2="65" y2="16" stroke="#6366f188" stroke-width=".9" stroke-linecap="round"/>\x27+
       \x27</g>\x27
       : \x27\x27)+
     \x27</svg>\x27;
   return svg;
+}
+
+// ── Office room decorations — window, wall art, plants, lamp ──────────────────
+// Used in both workflow and parliament office blocks.
+function officeRoomDecor() {
+  // SVG plant: pot + soil + stem + leaves (monstera-ish)
+  var plantSvg = \x27<svg viewBox="0 0 20 36" width="20" height="36" xmlns="http://www.w3.org/2000/svg">\x27+
+    // Pot
+    \x27<path d="M4 27 L6 34 L14 34 L16 27 Z" fill="#2a1a0a" stroke="#3d2810" stroke-width=".8"/>\x27+
+    // Pot rim
+    \x27<rect x="3" y="25" width="14" height="3" rx="1.5" fill="#3d2810" stroke="#4d3215" stroke-width=".5"/>\x27+
+    // Soil
+    \x27<ellipse cx="10" cy="26.5" rx="6" ry="1.5" fill="#1a0f05"/>\x27+
+    // Main stem
+    \x27<path d="M10 25 C10 20 9 14 10 8" stroke="#1a4a10" stroke-width="1.2" fill="none" stroke-linecap="round"/>\x27+
+    // Left leaf
+    \x27<path d="M10 18 C6 14 3 15 4 19 C5 22 9 21 10 18" fill="#166534" opacity=".9"/>\x27+
+    \x27<path d="M10 18 C7.5 16.5 6 17.5 7 19" stroke="#14532d" stroke-width=".5" fill="none"/>\x27+
+    // Right leaf
+    \x27<path d="M10 13 C14 9 17 10 16 14 C15 17 11 16 10 13" fill="#15803d" opacity=".9"/>\x27+
+    \x27<path d="M10 13 C12.5 11.5 14 12.5 13 14" stroke="#14532d" stroke-width=".5" fill="none"/>\x27+
+    // Top leaf
+    \x27<path d="M10 8 C8 4 5 5 6 8 C7 11 10 10 10 8" fill="#166534" opacity=".85"/>\x27+
+    \x27</svg>\x27;
+  // Second plant (taller, cactus-ish)
+  var plant2Svg = \x27<svg viewBox="0 0 20 36" width="20" height="36" xmlns="http://www.w3.org/2000/svg">\x27+
+    // Pot
+    \x27<path d="M4 27 L6 34 L14 34 L16 27 Z" fill="#2a1a0a" stroke="#3d2810" stroke-width=".8"/>\x27+
+    \x27<rect x="3" y="25" width="14" height="3" rx="1.5" fill="#3d2810" stroke="#4d3215" stroke-width=".5"/>\x27+
+    \x27<ellipse cx="10" cy="26.5" rx="6" ry="1.5" fill="#1a0f05"/>\x27+
+    // Main trunk (cactus)
+    \x27<path d="M9 25 L9 10 Q9 8 10 8 Q11 8 11 10 L11 25 Z" fill="#1a5c18" stroke="#145214" stroke-width=".5"/>\x27+
+    // Left arm
+    \x27<path d="M9 16 C5 16 4 14 4 12 Q4 10 6 10 L9 10" fill="#166534" stroke="#145214" stroke-width=".5"/>\x27+
+    // Right arm
+    \x27<path d="M11 19 C15 19 16 17 16 15 Q16 13 14 13 L11 13" fill="#15803d" stroke="#145214" stroke-width=".5"/>\x27+
+    // Spines
+    \x27<line x1="10" y1="20" x2="12" y2="19" stroke="#4ade80" stroke-width=".6" opacity=".4"/>\x27+
+    \x27<line x1="10" y1="14" x2="8" y2="13" stroke="#4ade80" stroke-width=".6" opacity=".4"/>\x27+
+    \x27</svg>\x27;
+  return \x27<div class="prl-office-window"></div>\x27+
+    \x27<div class="prl-office-window-light"></div>\x27+
+    \x27<div class="prl-office-frame"></div>\x27+
+    \x27<div class="prl-office-frame2"></div>\x27+
+    \x27<div class="prl-office-poster"></div>\x27+
+    \x27<div class="prl-office-lamp"></div>\x27+
+    \x27<div class="prl-office-lamp2"></div>\x27+
+    \x27<div class="prl-office-plant">\x27+plantSvg+\x27</div>\x27+
+    \x27<div class="prl-office-plant2">\x27+plant2Svg+\x27</div>\x27;
+}
+
+// ── Isometric JRPG-style scene renderer ────────────────────────────────────
+// Projects grid positions onto an isometric plane.
+// iso(col, row) → {x, y} pixel coordinates in the scene container.
+// Characters are positioned with position:absolute, scale by row for depth.
+var ISO_TILE_W = 80;
+var ISO_TILE_H = 40;
+var ISO_ORIGIN_X = 500;
+var ISO_ORIGIN_Y = 80;
+function isoProject(col, row) {
+  return {
+    x: ISO_ORIGIN_X + (col - row) * (ISO_TILE_W / 2),
+    y: ISO_ORIGIN_Y + (col + row) * (ISO_TILE_H / 2)
+  };
+}
+
+// Full bright office scene — wide SVG background (1000x560)
+function isoFloorSvg(cols, rows) {
+  var W = 1000; var H = 560;
+  var out = \x27<svg viewBox="0 0 \x27+W+\x27 \x27+H+\x27" width="\x27+W+\x27" height="\x27+H+\x27" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;pointer-events:none;z-index:0">\x27;
+
+  // ── DEFS ────────────────────────────────────────────────────────────
+  out += \x27<defs>\x27;
+  out += \x27<filter id="bGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>\x27;
+  out += \x27<radialGradient id="lampGlow" cx="50%" cy="20%" r="70%"><stop offset="0%" stop-color="rgba(255,248,200,.28)"/><stop offset="100%" stop-color="rgba(255,248,200,0)"/></radialGradient>\x27;
+  out += \x27<linearGradient id="wallL" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#f8f6f0"/><stop offset="100%" stop-color="#ede9e0"/></linearGradient>\x27;
+  out += \x27<linearGradient id="wallR" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#e8e4dc"/><stop offset="100%" stop-color="#ddd8ce"/></linearGradient>\x27;
+  out += \x27</defs>\x27;
+
+  // ── WALLS ────────────────────────────────────────────────────────────
+  // Left wall (back-left)
+  out += \x27<polygon points="0,200 500,40 500,280 0,440" fill="url(#wallL)"/>\x27;
+  // Right wall (back-right)
+  out += \x27<polygon points="500,40 1000,200 1000,440 500,280" fill="url(#wallR)"/>\x27;
+  // Wall top ridge
+  out += \x27<line x1="0" y1="200" x2="500" y2="40" stroke="#c8c0b0" stroke-width="2"/>\x27;
+  out += \x27<line x1="500" y1="40" x2="1000" y2="200" stroke="#bbb0a0" stroke-width="2"/>\x27;
+  out += \x27<line x1="500" y1="40" x2="500" y2="280" stroke="#c0b8a8" stroke-width="1.5"/>\x27;
+
+  // ── WINDOWS on left wall — 3 evenly spaced ──────────────────────────
+  // Helper: window at left-wall position (xL,yTop)→(xR,yTop-slope)
+  // Left wall goes from (0,200)→(500,40), slope = -160/500 per x
+  // Window 1
+  out += \x27<polygon points="60,232 160,206 160,272 60,300" fill="#ceeaff" stroke="#90bcd8" stroke-width="1.5"/>\x27;
+  out += \x27<polygon points="60,232 160,206 160,213 60,239" fill="#a8d8f8" opacity=".6"/>\x27;
+  out += \x27<line x1="60" y1="266" x2="160" y2="239" stroke="#90bcd8" stroke-width="1"/>\x27;
+  out += \x27<line x1="110" y1="219" x2="110" y2="286" stroke="#90bcd8" stroke-width="1"/>\x27;
+  out += \x27<polygon points="60,232 160,206 160,272 60,300" fill="rgba(180,220,255,.1)"/>\x27;
+  // Window 2
+  out += \x27<polygon points="200,178 300,152 300,218 200,246" fill="#ceeaff" stroke="#90bcd8" stroke-width="1.5"/>\x27;
+  out += \x27<polygon points="200,178 300,152 300,159 200,185" fill="#a8d8f8" opacity=".6"/>\x27;
+  out += \x27<line x1="200" y1="212" x2="300" y2="185" stroke="#90bcd8" stroke-width="1"/>\x27;
+  out += \x27<line x1="250" y1="165" x2="250" y2="232" stroke="#90bcd8" stroke-width="1"/>\x27;
+  out += \x27<polygon points="200,178 300,152 300,218 200,246" fill="rgba(180,220,255,.1)"/>\x27;
+  // Window 3
+  out += \x27<polygon points="340,126 440,100 440,166 340,192" fill="#ceeaff" stroke="#90bcd8" stroke-width="1.5"/>\x27;
+  out += \x27<polygon points="340,126 440,100 440,107 340,133" fill="#a8d8f8" opacity=".6"/>\x27;
+  out += \x27<line x1="340" y1="159" x2="440" y2="133" stroke="#90bcd8" stroke-width="1"/>\x27;
+  out += \x27<line x1="390" y1="113" x2="390" y2="179" stroke="#90bcd8" stroke-width="1"/>\x27;
+  out += \x27<polygon points="340,126 440,100 440,166 340,192" fill="rgba(180,220,255,.1)"/>\x27;
+  // Sun shafts
+  out += \x27<polygon points="80,300 160,272 190,540 110,560" fill="rgba(255,248,200,.07)"/>\x27;
+  out += \x27<polygon points="215,246 300,218 320,540 235,560" fill="rgba(255,248,200,.06)"/>\x27;
+  out += \x27<polygon points="352,192 440,166 455,540 367,560" fill="rgba(255,248,200,.05)"/>\x27;
+
+  // ── PAINTING on left wall (between W2 and W3) ────────────────────────
+  out += \x27<polygon points="463,112 490,104 490,132 463,140" fill="#e8e2d8" stroke="#c0b090" stroke-width="1.5"/>\x27;
+  out += \x27<polygon points="466,114 488,107 488,130 466,137" fill="#5080b0"/>\x27;
+  out += \x27<polygon points="469,116 488,110 488,120 469,123" fill="#7aa0c8"/>\x27;
+  out += \x27<ellipse cx="478" cy="120" rx="5" ry="4" fill="#fff" opacity=".35"/>\x27;
+
+  // ── PLANT right wall corner ─────────────────────────────────────────
+  out += \x27<ellipse cx="920" cy="360" rx="14" ry="7" fill="#2d5018" opacity=".6"/>\x27;
+  out += \x27<rect x="912" y="348" width="14" height="14" rx="3" fill="#7a4a20"/>\x27;
+  out += \x27<path d="M919 348 C912 328 900 312 905 300 C910 290 919 300 919 348" fill="#3a8020"/>\x27;
+  out += \x27<path d="M919 348 C926 328 938 315 933 302 C928 292 919 303 919 348" fill="#4a9228"/>\x27;
+  out += \x27<path d="M919 342 C908 332 900 322 902 312" stroke="#3a8020" stroke-width="2.5" fill="none" stroke-linecap="round"/>\x27;
+  out += \x27<path d="M919 336 C930 326 938 318 936 306" stroke="#4a9228" stroke-width="2.5" fill="none" stroke-linecap="round"/>\x27;
+
+  // ── CHANDELIER ────────────────────────────────────────────────────────
+  out += \x27<line x1="500" y1="0" x2="500" y2="30" stroke="#aaa" stroke-width="3"/>\x27;
+  out += \x27<ellipse cx="500" cy="30" rx="38" ry="11" fill="#d8c870" stroke="#b8a850" stroke-width="2"/>\x27;
+  out += \x27<ellipse cx="500" cy="36" rx="30" ry="8" fill="#ece090"/>\x27;
+  out += \x27<line x1="478" y1="36" x2="478" y2="46" stroke="#aaa" stroke-width="1.2"/>\x27;
+  out += \x27<line x1="500" y1="36" x2="500" y2="42" stroke="#aaa" stroke-width="1.2"/>\x27;
+  out += \x27<line x1="522" y1="36" x2="522" y2="46" stroke="#aaa" stroke-width="1.2"/>\x27;
+  out += \x27<circle cx="478" cy="50" r="8" fill="#fffbe0" filter="url(#bGlow)"/>\x27;
+  out += \x27<circle cx="500" cy="46" r="10" fill="#fffbe0" filter="url(#bGlow)"/>\x27;
+  out += \x27<circle cx="522" cy="50" r="8" fill="#fffbe0" filter="url(#bGlow)"/>\x27;
+  // Light glow on scene
+  out += \x27<ellipse cx="500" cy="320" rx="360" ry="220" fill="url(#lampGlow)"/>\x27;
+
+  // ── PARQUET FLOOR ──────────────────────────────────────────────────────
+  var plankCols = [\x27#c8924a\x27,\x27#b8823c\x27,\x27#d4a055\x27,\x27#be9248\x27,\x27#a87838\x27];
+  for (var r2 = 0; r2 < rows; r2++) {
+    for (var c2 = 0; c2 < cols; c2++) {
+      var pp = isoProject(c2, r2);
+      var ptx = pp.x; var pty = pp.y + 120;
+      var pFill = plankCols[(r2*3+c2) % plankCols.length];
+      var ppts = ptx+\x27,\x27+pty+\x27 \x27+(ptx+ISO_TILE_W/2)+\x27,\x27+(pty+ISO_TILE_H/2)+\x27 \x27+ptx+\x27,\x27+(pty+ISO_TILE_H)+\x27 \x27+(ptx-ISO_TILE_W/2)+\x27,\x27+(pty+ISO_TILE_H/2);
+      out += \x27<polygon points="\x27+ppts+\x27" fill="\x27+pFill+\x27" stroke="#906820" stroke-width=".8"/>\x27;
+      // long grain line along the plank
+      out += \x27<line x1="\x27+(ptx-ISO_TILE_W/2+5)+\x27" y1="\x27+(pty+ISO_TILE_H/2)+\x27" x2="\x27+(ptx+ISO_TILE_W/2-5)+\x27" y2="\x27+(pty+ISO_TILE_H/2)+\x27" stroke="rgba(0,0,0,.08)" stroke-width=".6"/>\x27;
+    }
+  }
+  out += \x27<ellipse cx="500" cy="380" rx="120" ry="40" fill="rgba(255,248,200,.1)"/>\x27;
+
+  out += \x27</svg>\x27;
+  return out;
+}
+
+// Isometric desk — proper 3D look: flat top surface + two visible faces + monitor + keyboard
+function isoDeskSvg(x, y, accentColor) {
+  var ac = accentColor || \x27#888\x27;
+  var isDone = ac === \x27#22c55e\x27;
+  var isActive = ac === \x27#6366f1\x27;
+  var screenFill = isDone ? \x27#0a2010\x27 : (isActive ? \x27#0d102a\x27 : \x27#111828\x27);
+  var screenGlow = isDone ? \x27#22c55e\x27 : (isActive ? \x27#818cf8\x27 : \x27#4466aa\x27);
+  // Desk is 90x56 viewBox — wide enough to look like a real desk
+  return \x27<svg viewBox="0 0 90 56" width="90" height="56" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:\x27+(x-45)+\x27px;top:\x27+(y+4)+\x27px;z-index:\x27+(Math.round(y))+\x27;pointer-events:none">\x27+
+    // ── DESK LEGS (4 corners, visible as small rectangles) ──
+    \x27<rect x="14" y="42" width="5" height="10" rx="1" fill="#8a5c20"/>\x27+
+    \x27<rect x="56" y="47" width="5" height="8" rx="1" fill="#8a5c20"/>\x27+
+    \x27<rect x="70" y="40" width="5" height="8" rx="1" fill="#7a4e18"/>\x27+
+    \x27<rect x="28" y="36" width="5" height="8" rx="1" fill="#7a4e18"/>\x27+
+    // ── DESK TOP SURFACE (iso diamond) ──
+    \x27<polygon points="45,4 78,21 45,38 12,21" fill="#d4a448" stroke="#b88830" stroke-width="1.2"/>\x27+
+    // wood grain on top
+    \x27<line x1="28" y1="21" x2="62" y2="12" stroke="rgba(0,0,0,.09)" stroke-width=".9"/>\x27+
+    \x27<line x1="24" y1="26" x2="58" y2="17" stroke="rgba(0,0,0,.07)" stroke-width=".9"/>\x27+
+    \x27<line x1="32" y1="17" x2="66" y2="8" stroke="rgba(0,0,0,.06)" stroke-width=".7"/>\x27+
+    // shine
+    \x27<polygon points="45,4 78,21 74,23 45,8 16,23 12,21" fill="rgba(255,255,255,.12)"/>\x27+
+    // ── RIGHT FACE ──
+    \x27<polygon points="78,21 78,36 45,53 45,38" fill="#a87028" stroke="#906018" stroke-width=".8"/>\x27+
+    // ── LEFT FACE ──
+    \x27<polygon points="12,21 45,38 45,53 12,36" fill="#c08838" stroke="#a07028" stroke-width=".8"/>\x27+
+    // ── MONITOR — proper isometric screen ──
+    // Stand
+    \x27<polygon points="54,14 62,18 62,22 54,18" fill="#555" stroke="#333" stroke-width=".6"/>\x27+
+    // Screen back
+    \x27<polygon points="54,4 72,12 72,24 54,16" fill="#2a2a3a" stroke="#222" stroke-width=".8"/>\x27+
+    // Screen front (bezel)
+    \x27<polygon points="55,5 71,13 71,23 55,15" fill="#1a1a28"/>\x27+
+    // Screen content
+    \x27<polygon points="57,7 69,13 69,21 57,15" fill="\x27+screenFill+\x27"/>\x27+
+    \x27<line x1="58" y1="10" x2="68" y2="14" stroke="\x27+screenGlow+\x27" stroke-width="1" opacity=".9"/>\x27+
+    \x27<line x1="58" y1="13" x2="67" y2="17" stroke="\x27+screenGlow+\x27" stroke-width=".9" opacity=".6"/>\x27+
+    \x27<line x1="58" y1="16" x2="66" y2="19" stroke="\x27+screenGlow+\x27" stroke-width=".8" opacity=".4"/>\x27+
+    // ── KEYBOARD ──
+    \x27<polygon points="24,25 44,32 40,36 20,29" fill="#ddd" stroke="#bbb" stroke-width=".6"/>\x27+
+    \x27<line x1="24" y1="28" x2="44" y2="34" stroke="#aaa" stroke-width=".5"/>\x27+
+    \x27<line x1="28" y1="26" x2="28" y2="30" stroke="#aaa" stroke-width=".4"/>\x27+
+    \x27<line x1="33" y1="28" x2="33" y2="32" stroke="#aaa" stroke-width=".4"/>\x27+
+    \x27<line x1="38" y1="30" x2="38" y2="34" stroke="#aaa" stroke-width=".4"/>\x27+
+    // ── PAPERS on desk ──
+    \x27<polygon points="14,24 28,29 25,34 11,29" fill="#f8f6ee" stroke="#ddd" stroke-width=".6" transform="rotate(-6 20 29)"/>\x27+
+    \x27<polygon points="15,23 29,28 26,33 12,28" fill="#fff" stroke="#eee" stroke-width=".5" transform="rotate(-3 21 28)"/>\x27+
+    \x27</svg>\x27;
+}
+// Isometric JRPG sprite character — top-down 3/4 perspective, Pokemon-style
+// Agent emojis — rotate through professional/diverse set
+var AGENT_EMOJIS = [
+  String.fromCodePoint(0x1F9D1,0x200D,0x1F4BB), // person at laptop
+  String.fromCodePoint(0x1F469,0x200D,0x1F4BC), // woman office worker
+  String.fromCodePoint(0x1F468,0x200D,0x1F4BC), // man office worker
+  String.fromCodePoint(0x1F9D1,0x200D,0x1F52C), // scientist
+  String.fromCodePoint(0x1F469,0x200D,0x1F4BB), // woman technologist
+  String.fromCodePoint(0x1F468,0x200D,0x1F4BB), // man technologist
+  String.fromCodePoint(0x1F9D1,0x200D,0x1F3A8), // artist
+  String.fromCodePoint(0x1F9D1,0x200D,0x2696,0xFE0F), // judge
+];
+
+function isoCharSvg(opts) {
+  var isActive = opts.isActive;
+  var isDone = opts.isDone;
+  var scale = opts.scale || 1;
+  var accentColor = opts.accentColor || \x27#6366f1\x27;
+  var idx = opts.emojiIdx || 0;
+  var emoji = AGENT_EMOJIS[idx % AGENT_EMOJIS.length];
+  var sz = Math.round(52 * scale);
+  var glowColor = isActive ? accentColor : (isDone ? \x27#22c55e\x27 : \x27transparent\x27);
+  var glowFilter = (isActive || isDone) ? (\x27filter:drop-shadow(0 0 8px \x27+glowColor+\x27aa)\x27) : \x27\x27;
+  var badgeHtml = isDone
+    ? \x27<div style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;background:#22c55e;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;box-shadow:0 0 6px #22c55e88">&#10003;</div>\x27
+    : (isActive
+        ? \x27<div style="position:absolute;top:-4px;right:-4px;width:14px;height:14px;background:\x27+accentColor+\x27;border-radius:50%;animation:statusPulse 1s ease-in-out infinite;box-shadow:0 0 8px \x27+accentColor+\x27"></div>\x27
+        : \x27\x27);
+  var ringStyle = isActive
+    ? (\x27outline:2.5px solid \x27+accentColor+\x27;box-shadow:0 0 16px \x27+accentColor+\x27AA\x27)
+    : (isDone ? \x27outline:2px solid rgba(0,0,0,.2)\x27 : \x27outline:none\x27);
+  var animClass = isActive ? \x27 prl-head\x27 : \x27\x27;
+  return \x27<div class="iso-char-wrap\x27+animClass+\x27" style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:\x27+sz+\x27px;height:\x27+sz+\x27px;border-radius:50%;background:rgba(255,255,255,.15);\x27+ringStyle+\x27;\x27+glowFilter+\x27;transition:all .3s">\x27+
+    \x27<span style="font-size:\x27+Math.round(36*scale)+\x27px;line-height:1;user-select:none">\x27+emoji+\x27</span>\x27+
+    badgeHtml+
+    \x27</div>\x27;
+}
+// Orchestrator — emoji-based, crowned
+function isoOrchSvg(hasActive, doneRatio) {
+  void doneRatio;
+  var orchEmoji = String.fromCodePoint(0x1F9D1, 0x200D, 0x1F4BC); // person in suit
+  var animClass = hasActive ? \x27 prl-head\x27 : \x27\x27;
+  var glowFilter = hasActive ? \x27filter:drop-shadow(0 0 12px #818cf8AA)\x27 : \x27filter:drop-shadow(0 0 6px rgba(0,0,0,.25))\x27;
+  var crown = String.fromCodePoint(0x1F451); // crown emoji above
+  return \x27<div class="iso-orch-wrap\x27+animClass+\x27" style="display:inline-flex;flex-direction:column;align-items:center;gap:0">\x27+
+    \x27<span style="font-size:18px;line-height:1;display:block;text-align:center">\x27+crown+\x27</span>\x27+
+    \x27<span style="font-size:52px;line-height:1;user-select:none;display:block;\x27+glowFilter+\x27">\x27+orchEmoji+\x27</span>\x27+
+    \x27</div>\x27;
+}
+
+// Skin/shirt/hair palette per agent label
+function agentPalette(lbl) {
+  var skins = [\x27#fbbf24\x27,\x27#f97316\x27,\x27#e8c99a\x27,\x27#c8a97a\x27,\x27#d4a97a\x27,\x27#f5c07a\x27];
+  var shirts = [\x27#4f46e5\x27,\x27#0891b2\x27,\x27#7c3aed\x27,\x27#059669\x27,\x27#dc2626\x27,\x27#d97706\x27];
+  var hairs = [\x27#1a0e08\x27,\x27#4a3728\x27,\x27#c4a35a\x27,\x27#8b0000\x27,\x27#2c4a7c\x27,\x27#3d2b1f\x27];
+  var i = Math.abs((lbl.charCodeAt(0)||65) + (lbl.charCodeAt(lbl.length-1)||90)) % 6;
+  return {skin: skins[i], shirt: shirts[i], hair: hairs[i]};
+}
+
+var TOOL_EMOJI_MAP = {
+  websearch: String.fromCodePoint(0x1F50D),
+  search: String.fromCodePoint(0x1F50D),
+  browser: String.fromCodePoint(0x1F310),
+  email: String.fromCodePoint(0x1F4E7),
+  gmail: String.fromCodePoint(0x1F4E7),
+  calendar: String.fromCodePoint(0x1F4C5),
+  github: String.fromCodePoint(0x1F431),
+  notion: String.fromCodePoint(0x1F4D3),
+  slack: String.fromCodePoint(0x1F4AC),
+  data: String.fromCodePoint(0x1F4CA),
+  analyst: String.fromCodePoint(0x1F4CA),
+  writer: String.fromCodePoint(0x270F,0xFE0F),
+  summary: String.fromCodePoint(0x1F4CB),
+  research: String.fromCodePoint(0x1F52C),
+  canvas: String.fromCodePoint(0x1F3A8),
+  security: String.fromCodePoint(0x1F6E1,0xFE0F),
+  devops: String.fromCodePoint(0x2699,0xFE0F),
+  code: String.fromCodePoint(0x1F4BB),
+  file: String.fromCodePoint(0x1F4C2),
+  drive: String.fromCodePoint(0x1F4BE),
+  maps: String.fromCodePoint(0x1F5FA,0xFE0F),
+  voice: String.fromCodePoint(0x1F3A4),
+  pdf: String.fromCodePoint(0x1F4DC),
+  document: String.fromCodePoint(0x1F4DC),
+  task: String.fromCodePoint(0x2705),
+  contacts: String.fromCodePoint(0x1F4F1),
+  reminder: String.fromCodePoint(0x23F0),
+  news: String.fromCodePoint(0x1F4F0),
+  image: String.fromCodePoint(0x1F5BC,0xFE0F),
+  video: String.fromCodePoint(0x1F3AC),
+  music: String.fromCodePoint(0x1F3B5),
+  translate: String.fromCodePoint(0x1F30D),
+  math: String.fromCodePoint(0x1F9EE),
+  sql: String.fromCodePoint(0x1F5C4,0xFE0F),
+  api: String.fromCodePoint(0x1F517),
+  test: String.fromCodePoint(0x1F9EA),
+  monitor: String.fromCodePoint(0x1F4F6),
+  _default: String.fromCodePoint(0x1F527)
+};
+
+function getNodeEmoji(n) {
+  var lbl = (n.label || n.agent || '').toLowerCase();
+  var icon = n.icon || '';
+  var keys = Object.keys(TOOL_EMOJI_MAP);
+  for (var ki = 0; ki < keys.length; ki++) {
+    if (keys[ki] !== '_default' && lbl.indexOf(keys[ki]) >= 0) return TOOL_EMOJI_MAP[keys[ki]];
+  }
+  if (icon && icon.length > 0 && icon.charCodeAt(0) > 127) return icon;
+  return TOOL_EMOJI_MAP._default;
 }
 
 function renderStudioNodes() {
@@ -3546,50 +4001,178 @@ function renderStudioNodes() {
     el.innerHTML = '<div class="studio-canvas__empty"><div class="studio-canvas__empty-icon">&#9881;</div><div>Describe a task and click Run</div></div>';
     return;
   }
-  var html = '<div class="studio-nodes">';
-  studioState.nodes.forEach(function(n, i) {
-    var isActive = n.status === 'running';
-    var isDone = n.status === 'done';
-    var isErr = n.status === 'error';
-    var isWait = !isActive && !isDone && !isErr;
-    var cls = 'studio-node';
-    if (isActive) cls += ' studio-node--active';
-    else if (isDone) cls += ' studio-node--done';
-    else if (isErr) cls += ' studio-node--error';
-    // Only animate entrance on first appearance
-    var style = n._rendered ? '' : 'animation-delay:' + (i * 110) + 'ms';
-    html += '<div class="' + cls + '" data-agent-label="' + esc(n.label || n.agent) + '" style="' + style + ';cursor:pointer" onclick="studioScrollToAgent(this.getAttribute(String.fromCharCode(100,97,116,97,45,97,103,101,110,116,45,108,97,98,101,108)))" title="' + esc(n.label || n.agent) + '">';
-    if (isActive || isDone) {
-      // Show animated office character
-      html += '<div class="studio-node__char">' + buildWorkflowChar(n) + '</div>';
-      if (isActive) {
-        var desc = n.label || n.agent;
-        html += '<div class="studio-node__bubble prl-action-bubble prl-action-bubble--active">...analizza</div>';
-      } else {
-        html += '<div class="studio-node__bubble prl-action-bubble" style="background:#0a2010;border-color:#22c55e;color:#4ade80">\u2714 completato</div>';
-      }
-      html += '<div class="studio-node__label studio-node__label--char">' + esc(n.label) + '</div>';
-    } else {
-      // Waiting / error: keep original compact pill
-      html += '<div class="studio-node__circle">' + n.icon + '</div>';
-      html += '<div class="studio-node__label">' + esc(n.label) + '</div>';
-    }
-    if (n.reason) {
-      html += '<div class="studio-node__reason" onclick="event.stopPropagation();this.classList.toggle(String.fromCharCode(111,112,101,110))" title="' + esc(n.reason) + '">&#x2139;<span class="studio-node__reason-tip">' + esc(n.reason) + '</span></div>';
-    }
-    html += '</div>';
-    if (i < studioState.nodes.length - 1) {
-      var next = studioState.nodes[i + 1];
-      var arrowCls = 'studio-arrow';
-      if (isDone && next.status === 'running') arrowCls += ' studio-arrow--active';
-      else if (isDone) arrowCls += ' studio-arrow--done';
-      var arrowStyle = n._rendered ? '' : 'opacity:0;animation:stNodeIn .3s ease ' + (i * 110 + 55) + 'ms forwards';
-      html += '<div class="' + arrowCls + '" style="' + arrowStyle + '">&#8594;</div>';
-    }
-    n._rendered = true;
+
+  var nodes = studioState.nodes;
+  var hasActive = nodes.some(function(n){ return n.status === \x27running\x27; });
+  var doneCount = nodes.filter(function(n){ return n.status === \x27done\x27; }).length;
+  var totalCount = nodes.length;
+
+  var phaseLabel2 = hasActive
+    ? (\x27Workflow in esecuzione \u2014 \x27+doneCount+\x27/\x27+totalCount)
+    : (doneCount===totalCount && totalCount>0 ? \x27Workflow completato\x27 : \x27Workflow pianificato\x27);
+  var phaseColor2 = hasActive ? \x27#6366f1\x27 : (doneCount===totalCount && totalCount>0 ? \x27#1f2937\x27 : \x27#6b7280\x27);
+
+  // ── CSS Grid layout: 100% width, responsive ──────────────────────────────
+  var totalStations = totalCount + 1; // +1 for orchestrator
+  var cols = totalStations <= 2 ? totalStations : (totalStations <= 4 ? 2 : (totalStations <= 6 ? 3 : 4));
+  var gridTpl = \x27repeat(\x27+cols+\x27,1fr)\x27;
+
+  var bigPlant = String.fromCodePoint(0x1FAB4);
+  var plantEmoji = String.fromCodePoint(0x1F331);
+
+  // Find the index of the currently active node (for orchestrator positioning)
+  var activeNodeIdx = -1;
+  nodes.forEach(function(n, i) { if (n.status === \x27running\x27) activeNodeIdx = i; });
+
+  function buildStation2(label, toolEmoji, isOrch, isActive, isDone, isErr, emojiIdx, nodeIdx) {
+    var accentColor = isOrch ? \x27#818cf8\x27 : (isActive ? \x27#6366f1\x27 : (isDone ? \x27#374151\x27 : (isErr ? \x27#ef4444\x27 : \x27#9ca3af\x27)));
+    var nameBg = isDone ? \x27rgba(0,0,0,.1)\x27 : (isActive ? \x27#ede9fe\x27 : (isOrch ? \x27#e0e7ff\x27 : \x27rgba(255,255,255,.85)\x27));
+    var nameColor = isDone ? \x27#111827\x27 : (isActive ? \x27#4f46e5\x27 : (isOrch ? \x27#4338ca\x27 : (isErr ? \x27#dc2626\x27 : \x27#374151\x27)));
+    var monScreen = isOrch
+      ? \x27<span style="font-size:11px">&#128269;</span>\x27
+      : (isDone ? \x27<span style="color:#111827;font-size:13px">&#10003;</span>\x27
+         : (isActive ? \x27<span class="iso-monitor-blink"></span>\x27
+            : \x27<span style="font-size:8px;opacity:.35;color:#818cf8">&#9632;</span>\x27));
+    // Bubble: for agents, leave text empty so JS streaming fills it live; show "✓ fatto" when done
+    var bubbleText = isOrch
+      ? (hasActive ? (\x27Assegno step \x27+(doneCount+1)+\x27/\x27+totalCount) : (doneCount===totalCount&&totalCount>0 ? \x27\u2714 Fatto!\x27 : \x27In attesa\x27))
+      : (isDone ? \x27\u2714 fatto\x27 : (isErr ? \x27\u2715 errore\x27 : (isActive ? \x27\x27 : \x27\x27)));
+    var bubbleBg = isOrch ? \x27rgba(255,255,255,.95)\x27 : (isActive ? \x27#ffffff\x27 : (isDone ? \x27rgba(0,0,0,.08)\x27 : \x27rgba(239,68,68,.12)\x27));
+    var bubbleColor = isActive ? \x27#000000\x27 : (isOrch ? \x27#111827\x27 : (isDone ? \x27#374151\x27 : \x27#6b7280\x27));
+    var bubbleFontWeight = isActive ? \x27700\x27 : \x27500\x27;
+    var glowBox = isActive ? (\x270 0 0 3px \x27+accentColor+\x2744,0 8px 24px \x27+accentColor+\x2733\x27) : (isDone ? (\x270 0 0 2px rgba(0,0,0,.25)\x27) : \x27none\x27);
+    // Orchestrator char: no CSS walk animation — JS moves it via inline transform toward the active agent column
+    var charIdAttr = isOrch ? \x27 id="wfOrchChar"\x27 : \x27\x27;
+    var charHtml = \x27<div class="iso-char-mover"\x27+charIdAttr+\x27>\x27+isoCharSvg({emojiIdx: isOrch ? 99 : emojiIdx, isActive: isActive, isDone: isDone, scale: 1.1, accentColor: accentColor})+\x27</div>\x27;
+    var clickAttr = isOrch ? \x27\x27 : (\x27data-agent-label="\x27+esc(label)+\x27" onclick="studioScrollToAgent(this.getAttribute(String.fromCharCode(100,97,116,97,45,97,103,101,110,116,45,108,97,98,101,108)))"\x27);
+    // Flying doc emoji when active
+    // 3 paper sheets flying up from above the monitor — staggered animation via nth-child
+    var flyDoc = isActive ? \x27<div class="iso-fly-doc"><span>\x27+String.fromCodePoint(0x1F4C4)+\x27</span><span>\x27+String.fromCodePoint(0x1F4C3)+\x27</span><span>\x27+String.fromCodePoint(0x1F4C4)+\x27</span></div>\x27 : \x27\x27;
+    // Bubble id: orchestrator gets wfOrchBubble, agents get isobubble_IDX
+    var bubbleId = isOrch ? \x27wfOrchBubble\x27 : (\x27isobubble_\x27+nodeIdx);
+    var bubbleVisible = (bubbleText || isOrch || isActive) ? \x27visible\x27 : \x27hidden\x27;
+    return \x27<div class="iso-station" \x27+clickAttr+\x27 data-station-idx="\x27+(isOrch?-1:nodeIdx)+\x27" style="box-shadow:\x27+glowBox+\x27;border-color:\x27+accentColor+\x27;transition:box-shadow .4s">\x27+
+      flyDoc+
+      \x27<div class="iso-bubble\x27+(isActive?\x27 iso-bubble--active\x27:\x27\x27)+\x27" id="\x27+bubbleId+\x27" style="border-color:\x27+accentColor+\x27;color:\x27+bubbleColor+\x27;font-weight:\x27+bubbleFontWeight+\x27;background:\x27+bubbleBg+\x27;visibility:\x27+bubbleVisible+\x27">\x27+esc(bubbleText)+\x27</div>\x27+
+      \x27<div class="iso-tool-badge">\x27+toolEmoji+\x27</div>\x27+
+      charHtml+
+      \x27<div class="iso-desk" style="width:85%;border-top-color:\x27+accentColor+\x2733"></div>\x27+
+      \x27<div class="iso-monitor" style="border-color:\x27+accentColor+\x2777"><div class="iso-monitor-screen">\x27+monScreen+\x27</div></div>\x27+
+      \x27<div class="iso-name" style="color:\x27+nameColor+\x27;background:\x27+nameBg+\x27">\x27+(isOrch?\x27\u2666\xA0\x27:\x27\x27)+esc(label)+\x27</div>\x27+
+      \x27</div>\x27;
+  }
+
+  var stationsHtml = \x27\x27;
+  var orchDone2 = !hasActive && doneCount===totalCount && totalCount>0;
+  stationsHtml += buildStation2(\x27Orchestratore\x27, String.fromCodePoint(0x1F4CB), true, hasActive, orchDone2, false, 99, -1);
+  nodes.forEach(function(n, idx) {
+    stationsHtml += buildStation2(
+      n.label || n.agent,
+      getNodeEmoji(n),
+      false,
+      n.status===\x27running\x27,
+      n.status===\x27done\x27,
+      n.status===\x27error\x27,
+      idx,
+      idx
+    );
   });
-  html += '</div>';
-  el.innerHTML = html;
+
+  // Floor SVG
+  var FW = 1000; var FH = 600;
+  var wallH = Math.round(FH * 0.30);
+  var floorSvg = \x27<svg viewBox="0 0 \x27+FW+\x27 \x27+FH+\x27" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none">\x27;
+  floorSvg += \x27<defs>\x27;
+  floorSvg += \x27<filter id="bGlow2" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>\x27;
+  floorSvg += \x27<linearGradient id="wallGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#faf7f2"/><stop offset="1" stop-color="#ede8e0"/></linearGradient>\x27;
+  floorSvg += \x27</defs>\x27;
+  floorSvg += \x27<rect x="0" y="0" width="\x27+FW+\x27" height="\x27+wallH+\x27" fill="url(#wallGrad)"/>\x27;
+  floorSvg += \x27<rect x="0" y="\x27+(wallH-5)+\x27" width="\x27+FW+\x27" height="7" fill="#d4c4a8" rx="2"/>\x27;
+  var plankColors2 = [\x27#c8a06a\x27,\x27#bf9860\x27,\x27#d4aa72\x27,\x27#ba9458\x27,\x27#caa86e\x27];
+  var pH = 32; var pW = 120;
+  for (var fy = wallH; fy < FH+pH; fy += pH) {
+    var ro2 = (Math.floor((fy-wallH)/pH) % 2) * (pW/2);
+    for (var fx = -pW+ro2; fx < FW+pW; fx += pW) {
+      var pc2 = plankColors2[Math.abs(Math.round(fx/pW+fy/pH*1.3)) % plankColors2.length];
+      floorSvg += \x27<rect x="\x27+Math.round(fx)+\x27" y="\x27+fy+\x27" width="\x27+(pW-2)+\x27" height="\x27+(pH-2)+\x27" fill="\x27+pc2+\x27" rx="2"/>\x27;
+      floorSvg += \x27<line x1="\x27+Math.round(fx+pW*0.4)+\x27" y1="\x27+fy+\x27" x2="\x27+Math.round(fx+pW*0.4)+\x27" y2="\x27+(fy+pH-2)+\x27" stroke="rgba(0,0,0,.04)" stroke-width="1.5"/>\x27;
+    }
+  }
+  function svgWindow(wx, wy, ww, wh) {
+    var r = \x27<rect x="\x27+wx+\x27" y="\x27+wy+\x27" width="\x27+ww+\x27" height="\x27+wh+\x27" rx="4" fill="#c8e6f8" stroke="#a8cce0" stroke-width="3"/>\x27;
+    r += \x27<rect x="\x27+wx+\x27" y="\x27+wy+\x27" width="\x27+ww+\x27" height="\x27+wh+\x27" rx="4" fill="rgba(255,255,255,.2)"/>\x27;
+    r += \x27<line x1="\x27+(wx+ww/2)+\x27" y1="\x27+wy+\x27" x2="\x27+(wx+ww/2)+\x27" y2="\x27+(wy+wh)+\x27" stroke="#a8cce0" stroke-width="2"/>\x27;
+    r += \x27<line x1="\x27+wx+\x27" y1="\x27+(wy+wh/2)+\x27" x2="\x27+(wx+ww)+\x27" y2="\x27+(wy+wh/2)+\x27" stroke="#a8cce0" stroke-width="2"/>\x27;
+    return r;
+  }
+  floorSvg += svgWindow(40, 20, 100, 80);
+  floorSvg += svgWindow(180, 20, 100, 80);
+  floorSvg += svgWindow(FW-200, 20, 120, 80);
+  floorSvg += \x27<rect x="\x27+(FW/2-35)+\x27" y="0" width="70" height="\x27+wallH+\x27" fill="#c8a87a" stroke="#a07848" stroke-width="2"/>\x27;
+  floorSvg += \x27<rect x="\x27+(FW/2-25)+\x27" y="8" width="50" height="36" rx="4" fill="rgba(255,255,255,.18)"/>\x27;
+  floorSvg += \x27<circle cx="\x27+(FW/2+22)+\x27" cy="\x27+(wallH/2)+\x27" r="5" fill="#8a6028"/>\x27;
+  floorSvg += \x27<line x1="\x27+(FW/2)+\x27" y1="0" x2="\x27+(FW/2)+\x27" y2="30" stroke="#bbb" stroke-width="3"/>\x27;
+  floorSvg += \x27<ellipse cx="\x27+(FW/2)+\x27" cy="38" rx="50" ry="14" fill="#e8d960" stroke="#c8b030" stroke-width="2"/>\x27;
+  floorSvg += \x27<circle cx="\x27+(FW/2-28)+\x27" cy="46" r="8" fill="#fffde0" filter="url(#bGlow2)"/>\x27;
+  floorSvg += \x27<circle cx="\x27+(FW/2)+\x27" cy="50" r="8" fill="#fffde0" filter="url(#bGlow2)"/>\x27;
+  floorSvg += \x27<circle cx="\x27+(FW/2+28)+\x27" cy="46" r="8" fill="#fffde0" filter="url(#bGlow2)"/>\x27;
+  floorSvg += \x27<polygon points="\x27+(FW/2-60)+\x27,60 \x27+(FW/2+60)+\x27,60 \x27+(FW/2+160)+\x27,\x27+FH+\x27 \x27+(FW/2-160)+\x27,\x27+FH+\x27" fill="rgba(255,252,200,.06)"/>\x27;
+  floorSvg += \x27</svg>\x27;
+
+  var decoHtml =
+    \x27<div style="position:absolute;bottom:10px;left:12px;font-size:40px;line-height:1;filter:drop-shadow(0 3px 6px rgba(0,0,0,.25));z-index:5">\x27+bigPlant+\x27</div>\x27+
+    \x27<div style="position:absolute;bottom:10px;right:12px;font-size:40px;line-height:1;filter:drop-shadow(0 3px 6px rgba(0,0,0,.25));z-index:5">\x27+bigPlant+\x27</div>\x27+
+    \x27<div style="position:absolute;top:12px;left:310px;font-size:24px;line-height:1;z-index:5">\x27+plantEmoji+\x27</div>\x27+
+    \x27<div style="position:absolute;top:12px;right:230px;font-size:24px;line-height:1;z-index:5">\x27+plantEmoji+\x27</div>\x27;
+
+  el.innerHTML =
+    \x27<div class="prl-wrap" style="border-color:\x27+phaseColor2+\x2744;padding-bottom:8px">\x27+
+    \x27<div class="prl-header"><span class="prl-phase-chip" style="--pc:\x27+phaseColor2+\x27">\x27+phaseLabel2+\x27</span></div>\x27+
+    \x27<div class="iso-scene" style="position:relative">\x27+
+    floorSvg+
+    decoHtml+
+    \x27<div style="position:relative;z-index:10;display:grid;grid-template-columns:\x27+gridTpl+\x27;gap:0;padding:12px 16px;box-sizing:border-box;align-items:end;min-height:440px">\x27+
+    \x27<div style="grid-column:1/-1;height:calc(30% - 12px)"></div>\x27+
+    stationsHtml+
+    \x27</div>\x27+
+    \x27</div>\x27+
+    \x27</div>\x27;
+
+  // Move orchestrator character toward the active agent column.
+  // Grid: col 0 = orchestrator, col 1..N = agents. Each column is 1fr.
+  // We measure the pixel offset between the orchestrator station and the active agent station.
+  if (activeNodeIdx >= 0) {
+    requestAnimationFrame(function() {
+      var orchChar = document.getElementById(\x27wfOrchChar\x27);
+      var orchStation = document.querySelector(\x27[data-station-idx="-1"]\x27);
+      var activeStation = document.querySelector(\x27[data-station-idx="\x27+activeNodeIdx+\x27"]\x27);
+      if (orchChar && orchStation && activeStation) {
+        var orchRect = orchStation.getBoundingClientRect();
+        var activeRect = activeStation.getBoundingClientRect();
+        var delta = (activeRect.left + activeRect.width/2) - (orchRect.left + orchRect.width/2);
+        var shift = Math.round(delta * 0.62);
+        orchChar.style.transition = \x27transform 1.2s cubic-bezier(.4,0,.2,1)\x27;
+        orchChar.style.transform = \x27translateX(\x27+shift+\x27px)\x27;
+        orchChar.setAttribute(\x27data-last-shift\x27, String(shift));
+        // Also update orch bubble to show what it is assigning
+        var orchBubble = document.getElementById(\x27wfOrchBubble\x27);
+        if (orchBubble) {
+          var activeNode = studioState.nodes[activeNodeIdx];
+          orchBubble.style.visibility = \x27visible\x27;
+          orchBubble.textContent = \x27Assegno a \x27+(activeNode ? (activeNode.label || activeNode.agent) : \x27agente\x27);
+        }
+      }
+    });
+  } else {
+    // No active agent: reset orchestrator to home position
+    requestAnimationFrame(function() {
+      var orchChar = document.getElementById(\x27wfOrchChar\x27);
+      if (orchChar) {
+        orchChar.style.transition = \x27transform 0.8s cubic-bezier(.4,0,.2,1)\x27;
+        orchChar.style.transform = \x27translateX(0)\x27;
+      }
+    });
+  }
 }
 
 function studioScrollToAgent(agentLabel) {
@@ -3635,9 +4218,18 @@ function renderStudioLog() {
   if (!el) return;
   if (!studioState.log.length) { el.style.display = 'none'; return; }
   el.style.display = 'block';
-  el.innerHTML = studioState.log.map(function(e) {
+  var existingEntries = el.querySelectorAll('.studio-log-entry');
+  studioState.log.forEach(function(e, i) {
+    var isStreaming = false;
+    if (existingEntries[i]) {
+      var tb = existingEntries[i].querySelector('.studio-log-entry__text');
+      if (tb && tb.getAttribute(String.fromCharCode(100,97,116,97,45,114,108,101,110)) !== null) {
+        isStreaming = true;
+      }
+    }
+    if (isStreaming) return; // leave streaming entry DOM untouched
     var cls = 'studio-log-entry' + (e.type === 'system' ? ' studio-log-entry--system' : e.type === 'error' ? ' studio-log-entry--error' : '');
-    return '<div class="' + cls + '">' +
+    var html = '<div class="' + cls + '">' +
       '<div class="studio-log-entry__header">' +
         '<span class="studio-log-entry__icon">' + e.icon + '</span>' +
         '<span class="studio-log-entry__agent">' + esc(e.agent) + '</span>' +
@@ -3645,7 +4237,20 @@ function renderStudioLog() {
       '</div>' +
       '<div class="studio-log-entry__text md-body">' + renderMd(e.text) + '</div>' +
     '</div>';
-  }).join('');
+    if (existingEntries[i]) {
+      existingEntries[i].outerHTML = html;
+    } else {
+      var div = document.createElement('div');
+      div.innerHTML = html;
+      el.appendChild(div.firstChild);
+    }
+    // refresh reference after replacement
+    existingEntries = el.querySelectorAll('.studio-log-entry');
+  });
+  // remove extra entries (shouldn't happen but be safe)
+  while (el.querySelectorAll('.studio-log-entry').length > studioState.log.length) {
+    el.removeChild(el.lastChild);
+  }
   el.scrollTop = el.scrollHeight;
 }
 
@@ -3924,9 +4529,12 @@ function downloadStudioPDF() {
   '</div>' +
   '</body></html>';
 
-  // Generate PDF — injects print-safe CSS then uses html2canvas at 2.5x for crisp output.
-  // Page breaks are avoided inside .section/.card/.priority-item by injecting break-inside:avoid.
-  var pdfFileName = (studioState.task || 'NHA Studio Report').slice(0, 60).replace(/[^a-z0-9\s]/gi,'').trim().replace(/\s+/g,'-') + '.pdf';
+  // ── Generate PDF via hidden in-page iframe ─────────────────────────────────
+  // Uses a hidden iframe instead of window.open() to avoid popup blockers.
+  // The iframe loads the full report HTML (with Chart.js), waits for charts to
+  // render, then calls contentWindow.print() — browser handles all page breaks
+  // via the @media print block already in NHA_CSS (break-inside:avoid, etc.)
+  // User gets the native "Save as PDF" dialog from the browser print dialog.
   function doGeneratePdf() {
     var btn2 = document.getElementById('studioInlinePdfBtn');
     var dlBtn2 = document.querySelector('button[onclick="downloadStudioPDF()"]');
@@ -3936,160 +4544,46 @@ function downloadStudioPDF() {
     }
     setBusy(true);
 
-    // Inject page-break-safe CSS into the HTML before rendering
-    var printCss = '<style>body{padding:20px!important;max-width:800px!important;margin:0 auto!important}' +
-      '.section,.card,.priority-item,.source-item,.bar-row{break-inside:avoid;page-break-inside:avoid}' +
-      '.header{break-after:avoid;page-break-after:avoid}' +
-      'h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}' +
-      '@media print{body{background:#fff!important;color:#111!important}' +
-      '.header{background:linear-gradient(135deg,#4f46e5,#06b6d4)!important;-webkit-print-color-adjust:exact}' +
-      '.section{background:#f8f9fa!important;border:1px solid #e0e0e0!important}' +
-      '.section-title{color:#4f46e5!important}}</style>';
-    var pdfHtml = html.replace('</head>', printCss + '</head>');
+    // Remove any previous print iframe
+    var oldIframe = document.getElementById('nhaPrintFrame');
+    if (oldIframe) oldIframe.remove();
 
-    // Inject light-mode overrides for PDF — dark backgrounds become unreadable on paper
-    var lightOverride = '<style>' +
-      'body{background:#ffffff!important;color:#1a1a2e!important;padding:28px!important;max-width:760px!important;margin:0 auto!important}' +
-      '.header{background:linear-gradient(135deg,#4f46e5 0%,#06b6d4 100%)!important;-webkit-print-color-adjust:exact!important;color-adjust:exact!important}' +
-      '.header h1,.header p,.meta span{color:#fff!important}' +
-      '.card,.section{background:#f4f6fb!important;border:1px solid #dde1ee!important}' +
-      '.card h3,.section h3,.section-title,.card-label{color:#4f46e5!important}' +
-      '.card p,.section p,ul li,ol li{color:#374151!important}' +
-      '.priority-item{background:#eef0f8!important}' +
-      '.priority-item h4{color:#1a1a2e!important}' +
-      '.priority-item p{color:#374151!important}' +
-      '.source-item{background:#eef0f8!important;border-left-color:#4f46e5!important}' +
-      '.source-item h4{color:#1a1a2e!important}' +
-      '.source-item p{color:#374151!important}' +
-      '.bar-track{background:#e0e4ef!important}' +
-      '.footer{color:#9ca3af!important}' +
-      'a{color:#4f46e5!important}' +
-      '.section,.card,.priority-item,.source-item,.bar-row{break-inside:avoid;page-break-inside:avoid}' +
-      'h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}' +
-      '.header{break-after:avoid;page-break-after:avoid}' +
-      '.section-body h4{font-size:12px;font-weight:600;color:#6366f1!important;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.4px}' +
-      '</style>';
-    var pdfHtml2 = html.replace('</head>', lightOverride + '</head>');
-
-    // Build hidden iframe at 794px (A4 width at 96dpi = 210mm)
     var iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1px;border:none;visibility:hidden';
-    document.body.appendChild(iframe);
-    var ifrDoc = iframe.contentDocument || iframe.contentWindow.document;
-    ifrDoc.open(); ifrDoc.write(pdfHtml2); ifrDoc.close();
+    iframe.id = 'nhaPrintFrame';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;height:700px;border:none;opacity:0;pointer-events:none';
+
+    // Set up onload BEFORE appending — avoids WebKit race condition
     iframe.onload = function() {
-      var ifrBody = ifrDoc.body;
-      var totalH = Math.max(ifrBody.scrollHeight, ifrBody.offsetHeight, ifrDoc.documentElement.scrollHeight);
-      iframe.style.height = totalH + 'px';
-
-      // Collect smart page-break candidates using offsetTop (document-relative, not viewport-relative).
-      // We use offsetTop + offsetHeight of each .section element so breaks land after each agent section.
-      var breakCandidates = [0];
-      var sectionEls = ifrDoc.querySelectorAll('.section,.cover,.toc,.workflow-bar');
-      for (var si2 = 0; si2 < sectionEls.length; si2++) {
-        var el2 = sectionEls[si2];
-        // Walk up to get absolute offsetTop within the iframe document
-        var absTop = 0; var cur = el2;
-        while (cur && cur !== ifrDoc.body) { absTop += cur.offsetTop; cur = cur.offsetParent; }
-        breakCandidates.push(absTop); // start of section (new page begins here)
-        breakCandidates.push(absTop + el2.offsetHeight); // end of section
-      }
-      breakCandidates.push(totalH);
-      breakCandidates.sort(function(a,b){ return a-b; });
-      // Deduplicate
-      breakCandidates = breakCandidates.filter(function(v,i,a){ return i===0||v!==a[i-1]; });
-
-      // Scale: 3x on HiDPI screens, minimum 2.5x for sharp text at A4
-      var renderScale = Math.max(2.5, Math.min(3, window.devicePixelRatio * 1.5));
-      window.html2canvas(ifrBody, {
-        scale: renderScale,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: 794,
-        windowWidth: 794,
-        scrollX: 0,
-        scrollY: 0,
-        logging: false,
-        imageTimeout: 15000,
-        ignoreElements: function(el){ return el.tagName === 'SCRIPT' || el.tagName === 'NOSCRIPT'; }
-      }).then(function(canvas) {
-        var pdf = new window.jspdf.jsPDF({orientation:'portrait', unit:'pt', format:'a4', compress:true});
-        var pageW = pdf.internal.pageSize.getWidth();   // 595.28pt
-        var pageH = pdf.internal.pageSize.getHeight();  // 841.89pt
-        var margin = 28; // pt — ~10mm margins
-        var usableW = pageW - margin * 2;
-        var usableH = pageH - margin * 2;
-
-        // px per rendered page: canvas.width / usableW gives canvas-px per pt;
-        // usableH (pt) * that ratio = canvas px per A4 usable page height
-        var pxPerPt = canvas.width / usableW;
-        var maxSliceH = Math.floor(usableH * pxPerPt); // max canvas px per page
-
-        // Convert DOM break candidates to canvas px coordinates
-        // (DOM px * renderScale because html2canvas renders at renderScale)
-        var canvasBreaks = breakCandidates.map(function(domPx){ return Math.round(domPx * renderScale); });
-
-        // Smart page-break slicer: each slice ends at the nearest break candidate that fits within maxSliceH.
-        // Falls back to hard-cut only when a single section is taller than one full page.
-        var yCanvas = 0;
-        var pageNum = 0;
-        while (yCanvas < canvas.height) {
-          if (pageNum > 0) pdf.addPage();
-          var maxEnd = yCanvas + maxSliceH;
-          // Find the largest break candidate <= maxEnd (that is also > yCanvas)
-          var bestBreak = -1;
-          for (var bi2 = 0; bi2 < canvasBreaks.length; bi2++) {
-            var bp = canvasBreaks[bi2];
-            if (bp > yCanvas && bp <= maxEnd) { bestBreak = bp; }
-          }
-          // If no break found (section taller than a page), hard-cut at maxEnd
-          var sliceEnd = (bestBreak > yCanvas) ? bestBreak : Math.min(maxEnd, canvas.height);
-          var thisSlice = sliceEnd - yCanvas;
-          if (thisSlice <= 0) break; // safety guard
-
-          var sliceCanvas = document.createElement('canvas');
-          sliceCanvas.width = canvas.width;
-          sliceCanvas.height = thisSlice;
-          var ctx = sliceCanvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-          ctx.drawImage(canvas, 0, yCanvas, canvas.width, thisSlice, 0, 0, canvas.width, thisSlice);
-          var sliceData = sliceCanvas.toDataURL('image/png');
-          // Proportional height in pt: thisSlice / pxPerPt
-          var sliceImgH = thisSlice / pxPerPt;
-          pdf.addImage(sliceData, 'PNG', margin, margin, usableW, sliceImgH, '', 'FAST');
-          yCanvas = sliceEnd;
-          pageNum++;
+      // Wait for Chart.js to initialize all charts (needs ~800ms for animation frames)
+      setTimeout(function() {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch(e2) {
+          // Cross-origin fallback should not happen since we write the content
         }
-        pdf.save(pdfFileName);
-        document.body.removeChild(iframe);
         setBusy(false);
-      }).catch(function(e2) {
-        document.body.removeChild(iframe);
-        setBusy(false);
-        alert('PDF error: ' + e2.message);
-      });
+        // Remove iframe after print dialog closes (delayed to allow Safari)
+        setTimeout(function(){ try { iframe.remove(); } catch(e3){} }, 8000);
+      }, 800);
     };
+
+    document.body.appendChild(iframe);
+
+    // Write HTML into iframe document
+    try {
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(html);
+      iframe.contentDocument.close();
+    } catch(e4) {
+      // If contentDocument write fails (very rare), fall back to srcdoc
+      iframe.srcdoc = html;
+    }
+
+    // Safety fallback: if onload never fires (e.g. Safari blank srcdoc), force after 3s
+    setTimeout(function() { setBusy(false); }, 5000);
   }
-  // Load jsPDF + html2canvas from CDN if not already loaded
-  if (window.jspdf && window.html2canvas) {
-    doGeneratePdf();
-  } else {
-    var loaded = 0;
-    function onLibLoad() { loaded++; if (loaded >= 2) doGeneratePdf(); }
-    if (!window.html2canvas) {
-      var s1 = document.createElement('script');
-      s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      s1.onload = onLibLoad; document.head.appendChild(s1);
-    } else { loaded++; }
-    if (!window.jspdf) {
-      var s2 = document.createElement('script');
-      s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-      s2.onload = onLibLoad; document.head.appendChild(s2);
-    } else { loaded++; }
-    if (loaded >= 2) doGeneratePdf();
-  }
+  doGeneratePdf();
 }
 
 function renderStudioResult() {
@@ -4150,8 +4644,11 @@ async function runStudio() {
   studioState.running = true;
   studioState.planned = false;
   // Keep attachmentContext — it was loaded before hitting Run
+  parlActiveAgent = null;
+  parlDoneAgents = {};
+  _parlPersistHtml = null; // clear persisted parliament for fresh run
   var parlBlockEl = document.getElementById('studioParliamentBlock');
-  if (parlBlockEl) parlBlockEl.style.display = 'none';
+  if (parlBlockEl) { parlBlockEl.innerHTML = ''; parlBlockEl.style.display = 'none'; }
   renderStudioNodes();
   renderStudioLog();
   renderStudioResult();
@@ -4203,7 +4700,7 @@ async function runStudio() {
         nudge = document.createElement(\x27div\x27);
         nudge.id = \x27studioParliamentNudge\x27;
         nudge.style.cssText = \x27margin:8px 0;padding:8px 12px;background:#1a1a2e;border:1px solid #6366f1;border-radius:8px;font-size:11px;color:#a5b4fc;display:flex;align-items:center;gap:10px\x27;
-        nudge.innerHTML = \x27&#x2656; <span><strong>Suggerimento:</strong> questo workflow ha \x27 + specialistAgents.length + \x27 agenti specialisti — attiva <strong>Parlamento</strong> per un confronto critico tra le loro analisi.</span><button onclick="document.getElementById(\\\x27studioParliamentMode\\\x27).checked=true;studioState.parliamentMode=true;this.parentNode.remove()" style="margin-left:auto;background:#6366f1;border:none;border-radius:6px;color:#fff;padding:4px 10px;cursor:pointer;font-size:10px;white-space:nowrap">Attiva &#x2656;</button>\x27;
+        nudge.innerHTML = \x27&#x1f4bc; <span><strong>Suggerimento:</strong> questo workflow ha \x27 + specialistAgents.length + \x27 agenti specialisti — attiva il <strong>Consiglio</strong> per un confronto critico tra le loro analisi.</span><button onclick="document.getElementById(\\\x27studioParliamentMode\\\x27).checked=true;studioState.parliamentMode=true;this.parentNode.remove()" style="margin-left:auto;background:#6366f1;border:none;border-radius:6px;color:#fff;padding:4px 10px;cursor:pointer;font-size:10px;white-space:nowrap">Attiva &#x1f4bc;</button>\x27;
         var tokenBar = document.getElementById(\x27studioTokenBar\x27);
         if (tokenBar && tokenBar.parentNode) tokenBar.parentNode.insertBefore(nudge, tokenBar.parentNode.firstChild);
       }
@@ -4214,7 +4711,7 @@ async function runStudio() {
     for (var i = 0; i < studioState.nodes.length; i++) {
       var node = studioState.nodes[i];
       studioSetNodeStatus(i, 'running');
-      studioLog(node.label, node.icon, 'Starting...', 'agent');
+      studioLog(node.label, node.icon, t('starting_agent') || 'Elaborazione in corso...', 'agent');
 
       if (!studioState.running) break; // stopped by user
       var stepResult = await runStudioStep(i, node, task, context, planRes.steps[i], studioAbortController ? studioAbortController.signal : null);
@@ -4258,7 +4755,7 @@ async function runStudio() {
     // Read from both DOM and studioState (supports mid-run activation via nudge)
     var parliamentChk = document.getElementById(\x27studioParliamentMode\x27);
     var parliamentActive = studioState.parliamentMode || (parliamentChk && parliamentChk.checked);
-    if (parliamentActive && studioState.nodes.length >= 1) {
+    if (parliamentActive && studioState.nodes.length >= 1 && studioState.running) {
       var proposals = studioState.nodes
         .filter(function(n) {
           if (!n.output || n.output === \x27(no output)\x27) return false;
@@ -4274,469 +4771,428 @@ async function runStudio() {
         proposals.push({agent: \x27Context\x27, label: \x27Contesto workflow\x27, output: context});
       }
       if (proposals.length >= 2) {
-        studioLog(\x27Parlamento\x27, \x27&#x2656;\x27, \x27Avvio deliberazione — Round 2 cross-reading tra agenti...\x27, \x27system\x27);
-        // Add Parliament node to pipeline visual
+        studioLog(\x27Consiglio\x27, \x27&#x1f4bc;\x27, \x27Avvio Consiglio — gli agenti si riuniscono per confrontare e raffinare i risultati...\x27, \x27system\x27);
+        // Add Consiglio node to pipeline visual
         var parlNodeIdx = studioState.nodes.length;
-        studioState.nodes.push({icon:\x27&#x2656;\x27, agent:\x27Parliament\x27, label:\x27Parlamento\x27, status:\x27running\x27, output:\x27\x27, _rendered:false});
+        studioState.nodes.push({icon:\x27&#x1f4bc;\x27, agent:\x27Consiglio\x27, label:\x27Consiglio\x27, status:\x27running\x27, output:\x27\x27, _rendered:false});
         renderStudioNodes();
 
         // ── Parliament visual block ──────────────────────────────────────
-        // Track active R2 agent for visual block
-        var parlActiveAgent = null;
-        var parlDoneAgents = {};
+        // Track active R2 agent for visual block (module-level vars)
+        parlActiveAgent = null;
+        parlDoneAgents = {};
+
+        // ── Parliament boardroom: first call builds DOM, subsequent calls only update state ──
+        var parlBlockBuilt = false;
 
         function renderParlBlock(phase, activeLabel, convergence) {
           var pb = document.getElementById(\x27studioParliamentBlock\x27);
           if (!pb) return;
           pb.style.display = \x27block\x27;
-          if (convergence != null) {
-            pb.style.position = \x27\x27; pb.style.top = \x27\x27; pb.style.zIndex = \x27\x27; pb.style.boxShadow = \x27\x27;
-          } else {
-            pb.style.position = \x27sticky\x27; pb.style.top = \x278px\x27; pb.style.zIndex = \x27200\x27;
-            pb.style.boxShadow = \x270 4px 32px rgba(99,102,241,.35)\x27;
-          }
 
-          // ── OFFICE CARTOON ANIMATION ─────────────────────────────────────────
-          // Each agent = a character at a desk doing visible work.
-          // Documents fly between agents during R2. MASTER walks around in R1.
           var phaseColor = {r1:\x27#6366f1\x27,r2:\x27#22d3ee\x27,r3:\x27#f59e0b\x27,done:\x27#22c55e\x27}[phase]||\x27#6366f1\x27;
           var phaseLabel = {
-            r1:\x27Round 1 \u2014 Ogni agente analizza il task in autonomia\x27,
-            r2:\x27Round 2 \u2014 Gli agenti si scambiano le analisi e le raffinano\x27,
-            r3:\x27Round 3 \u2014 HERALD media le posizioni divergenti\x27,
-            done:\x27Deliberazione completata\x27
+            r1:\x27Consiglio \u2014 Analisi individuale\x27,
+            r2:\x27Consiglio \u2014 Confronto e raffinamento\x27,
+            r3:\x27Consiglio \u2014 Sintesi finale HERALD\x27,
+            done:\x27Consiglio concluso \u2014 consenso raggiunto\x27
           }[phase]||\x27\x27;
-
           var n = proposals.length;
           var doneCount = Object.keys(parlDoneAgents).length;
           var progressPct = n > 0 ? Math.round(doneCount / n * 100) : 0;
 
-          // ── Build one desk+character card per agent ───────────────────────
-          // Character is SVG-drawn inline: head + body + arms + desk.
-          // Active = character types (arms animate). Done = character leans back, checkmark.
-          // R2 active = character holds document up and turns head.
+          // ─────────────────────────────────────────────────────────────────────
+          // BOARDROOM 3D — first call builds the full DOM structure.
+          // Subsequent calls ONLY update agent states (no innerHTML overwrite).
+          // ─────────────────────────────────────────────────────────────────────
 
-          function buildChar(prop, isDone, isActive, isOrchestratorTarget) {
-            var lbl = prop.label || prop.agent;
-            var ico = prop.icon || String.fromCharCode(9632);
-            // skin tones cycle through a palette for visual variety
-            var skinColors = [\x27#fbbf24\x27,\x27#f97316\x27,\x27#a78bfa\x27,\x27#34d399\x27,\x27#60a5fa\x27,\x27#f472b6\x27];
-            var skinIdx = Math.abs(lbl.charCodeAt(0)+lbl.charCodeAt(lbl.length-1)) % skinColors.length;
-            var skin = skinColors[skinIdx];
-            var deskColor = isDone ? \x27#1a3a1a\x27 : (isActive ? \x27#1a1a3e\x27 : \x27#1a1a2a\x27);
-            var deskBorder = isDone ? \x27#22c55e\x27 : (isActive ? phaseColor : \x27#333360\x27);
-            var shadow = isActive ? (\x270 0 18px \x27+phaseColor+\x2744\x27) : \x27none\x27;
+          if (!parlBlockBuilt || !pb.innerHTML.trim()) {
+            parlBlockBuilt = true;
 
-            // Action text shown above character
-            var actionStr = \x27\x27;
-            if (phase===\x27r1\x27 && isActive) actionStr = \x27...analizza\x27;
-            else if (phase===\x27r1\x27 && isDone) actionStr = \x27\u2714 bozza pronta\x27;
-            else if (phase===\x27r2\x27 && isActive) actionStr = \x27...legge + raffina\x27;
-            else if (phase===\x27r2\x27 && isDone) actionStr = \x27\u2714 raffinato\x27;
-            else if (phase===\x27r3\x27 && isActive) actionStr = \x27...media\x27;
-            else if (phase===\x27done\x27) actionStr = \x27\u2714 consenso\x27;
-
-            // SVG character (80px wide, 70px tall)
-            // Desk: rectangle at bottom. Chair back. Body. Head. Arms animated.
-            var armAnim = (isActive && phase!==\x27done\x27) ? \x27class="prl-arm"\x27 : \x27\x27;
-            var headAnim = (isActive && phase!==\x27done\x27) ? \x27class="prl-head"\x27 : \x27\x27;
-            var glowStyle = isActive ? (\x27filter:drop-shadow(0 0 6px \x27+phaseColor+\x27)\x27) : \x27\x27;
-
-            // Document held up during R2 cross-reading
-            var docHtml = \x27\x27;
-            if (phase===\x27r2\x27 && isActive) {
-              docHtml = \x27<rect x="46" y="6" width="14" height="18" rx="2" fill="#0f0f1e" stroke="#22d3ee" stroke-width="1.5" class="prl-doc-hold"/>\x27+
-                \x27<line x1="49" y1="11" x2="57" y2="11" stroke="#22d3ee" stroke-width="1" opacity=".7"/>\x27+
-                \x27<line x1="49" y1="14" x2="57" y2="14" stroke="#22d3ee" stroke-width="1" opacity=".5"/>\x27+
-                \x27<line x1="49" y1="17" x2="54" y2="17" stroke="#22d3ee" stroke-width="1" opacity=".4"/>\x27;
-            }
-            if (phase===\x27r3\x27 && isActive) {
-              docHtml = \x27<rect x="46" y="6" width="14" height="18" rx="2" fill="#0f0f1e" stroke="#f59e0b" stroke-width="1.5" class="prl-doc-hold"/>\x27+
-                \x27<line x1="49" y1="11" x2="57" y2="11" stroke="#f59e0b" stroke-width="1" opacity=".7"/>\x27+
-                \x27<line x1="49" y1="14" x2="57" y2="14" stroke="#f59e0b" stroke-width="1" opacity=".5"/>\x27;
+            // ── FREE agent builder — no box, just floating emoji+name ─────────
+            function buildSeat(prop, seatIdx) {
+              var lbl = prop.label || prop.agent;
+              var safeLbl = lbl.replace(new RegExp('[^a-zA-Z0-9_-]','g'),\x27_\x27);
+              var emojiIdx = Math.abs(lbl.charCodeAt(0)+(lbl.charCodeAt(lbl.length-1)||0)) % AGENT_EMOJIS.length;
+              var agentEmoji = AGENT_EMOJIS[emojiIdx];
+              void seatIdx;
+              return \x27<div class="br-seat" id="brseat_\x27+safeLbl+\x27" data-lbl="\x27+esc(lbl)+\x27">\x27+
+                \x27<div class="br-bubble" id="brbubble_\x27+safeLbl+\x27" style="display:none"></div>\x27+
+                \x27<div class="br-char" id="brchar_\x27+safeLbl+\x27">\x27+agentEmoji+\x27</div>\x27+
+                \x27<div class="br-seat-name" id="brname_\x27+safeLbl+\x27">\x27+esc(lbl)+\x27</div>\x27+
+                \x27</div>\x27;
             }
 
-            // Shirt colors — vibrant, professional palette
-            var shirtColors = [\x27#4f46e5\x27,\x27#0891b2\x27,\x27#7c3aed\x27,\x27#059669\x27,\x27#dc2626\x27,\x27#d97706\x27];
-            var shirt = shirtColors[skinIdx];
-            // Hair colors — varied and realistic
-            var hairColors = [\x27#1a1a1a\x27,\x27#4a3728\x27,\x27#c4a35a\x27,\x27#8b0000\x27,\x27#2c4a7c\x27,\x27#3d2b1f\x27];
-            var hair = hairColors[skinIdx];
-            var monitorGlow = isActive ? (\x27filter:drop-shadow(0 0 5px \x27+phaseColor+\x2780)\x27) : \x27\x27;
+            var topSeats = [];
+            var botSeats = [];
+            proposals.forEach(function(prop, si) {
+              if (si % 2 === 0) topSeats.push(prop); else botSeats.push(prop);
+            });
+            var topHtml = topSeats.map(buildSeat).join(\x27\x27);
+            var botHtml = botSeats.map(buildSeat).join(\x27\x27);
 
-            var svgChar = \x27<svg viewBox="0 0 80 96" width="76" height="90" xmlns="http://www.w3.org/2000/svg" style="\x27+glowStyle+\x27;display:block;margin:0 auto">\x27+
-              // ════ ISOMETRIC-STYLE DESK ════
-              // Desk top — parallelogram for 3D feel (top face)
-              \x27<path d="M4 55 L76 55 L76 63 L4 63 Z" fill="\x27+deskColor+\x27" stroke="\x27+deskBorder+\x27" stroke-width="1.2"/>\x27+
-              // Desk front face (darker) — 3D depth
-              \x27<path d="M4 63 L76 63 L76 70 L4 70 Z" fill="\x27+(isDone?\x27#0d2010\x27:(isActive?\x27#0c0c22\x27:\x27#0e0e1c\x27))+\x27"/>\x27+
-              // Desk left side face
-              \x27<path d="M4 55 L4 70 L4 70" fill="none"/>\x27+
-              // Desk front edge highlight
-              \x27<line x1="4" y1="63" x2="76" y2="63" stroke="\x27+deskBorder+\x2760" stroke-width=".8"/>\x27+
-              // Desk legs — rounded, tapered
-              \x27<path d="M10 70 C10 70 9 82 9 84 C9 86 11 87 13 87 C15 87 17 86 17 84 C17 82 16 70 16 70 Z" fill="#111128"/>\x27+
-              \x27<path d="M63 70 C63 70 62 82 62 84 C62 86 64 87 66 87 C68 87 70 86 70 84 C70 82 69 70 69 70 Z" fill="#111128"/>\x27+
-              // Desk shelf between legs
-              \x27<rect x="17" y="79" width="46" height="3" rx="1.5" fill="#161626"/>\x27+
-              // ════ MONITOR (sleek, thin-bezel) ════
-              // Monitor shadow on desk
-              \x27<ellipse cx="35" cy="56" rx="14" ry="2" fill="rgba(0,0,0,.4)"/>\x27+
-              // Monitor stand base
-              \x27<ellipse cx="35" cy="57" rx="7" ry="1.5" fill="#1a1a2e"/>\x27+
-              // Monitor stand pole
-              \x27<rect x="33" y="50" width="4" height="6" rx="1" fill="#1a1a2e"/>\x27+
-              // Monitor outer bezel — shadow/depth
-              \x27<rect x="17" y="26" width="36" height="25" rx="4" fill="#050510"/>\x27+
-              // Monitor bezel
-              \x27<rect x="18" y="27" width="34" height="23" rx="3" fill="#0d0d20" stroke="\x27+(isActive?phaseColor:\x27#252535\x27)+\x27" stroke-width="\x27+(isActive?\x272\x27:\x271\x27)+\x27" style="\x27+monitorGlow+\x27"/>\x27+
-              // Screen glass — subtle gradient
-              \x27<rect x="20" y="29" width="30" height="18" rx="2" fill="#0a0a18"/>\x27+
-              // Screen content
-              (isActive ?
-                // Active: glowing code/data on screen
-                \x27<defs><linearGradient id="sg\x27+skinIdx+\x27" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="\x27+phaseColor+\x2722"/><stop offset="1" stop-color="\x27+phaseColor+\x2708"/></linearGradient></defs>\x27+
-                \x27<rect x="20" y="29" width="30" height="18" rx="2" fill="url(#sg\x27+skinIdx+\x27)"/>\x27+
-                \x27<line x1="22" y1="32" x2="48" y2="32" stroke="\x27+phaseColor+\x27ee" stroke-width="1.2" stroke-linecap="round"/>\x27+
-                \x27<line x1="22" y1="35" x2="44" y2="35" stroke="\x27+phaseColor+\x27aa" stroke-width="1" stroke-linecap="round"/>\x27+
-                \x27<line x1="22" y1="38" x2="46" y2="38" stroke="\x27+phaseColor+\x2788" stroke-width="1" stroke-linecap="round"/>\x27+
-                \x27<line x1="22" y1="41" x2="40" y2="41" stroke="\x27+phaseColor+\x2766" stroke-width="1" stroke-linecap="round"/>\x27+
-                \x27<line x1="22" y1="44" x2="43" y2="44" stroke="\x27+phaseColor+\x2744" stroke-width="1" stroke-linecap="round"/>\x27+
-                \x27<rect x="22" y="30" width="10" height="2.5" rx="1" fill="\x27+phaseColor+\x2733"/>\x27
-                :
-                // Idle: dim screen with faint lines
-                \x27<line x1="22" y1="33" x2="46" y2="33" stroke="#1e1e30" stroke-width="1" stroke-linecap="round"/>\x27+
-                \x27<line x1="22" y1="36" x2="42" y2="36" stroke="#1e1e30" stroke-width="1" stroke-linecap="round"/>\x27+
-                \x27<line x1="22" y1="39" x2="44" y2="39" stroke="#1e1e30" stroke-width="1" stroke-linecap="round"/>\x27+
-                \x27<line x1="22" y1="42" x2="38" y2="42" stroke="#1e1e30" stroke-width="1" stroke-linecap="round"/>\x27
-              )+
-              // Monitor camera dot
-              \x27<circle cx="35" cy="28.2" r=".9" fill="\x27+(isActive?phaseColor:\x27#2a2a40\x27)+\x27"/>\x27+
-              // ════ KEYBOARD (detailed, realistic) ════
-              \x27<rect x="13" y="48" width="36" height="7" rx="2.5" fill="#0c0c1e" stroke="#202036" stroke-width="1"/>\x27+
-              // Key rows
-              \x27<rect x="14" y="49.5" width="3" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="18" y="49.5" width="3" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="22" y="49.5" width="3" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="26" y="49.5" width="3" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="30" y="49.5" width="3" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="34" y="49.5" width="3" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="38" y="49.5" width="3" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="15" y="52.5" width="5" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="21" y="52.5" width="5" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="27" y="52.5" width="5" height="2" rx=".5" fill="#181830"/>\x27+
-              \x27<rect x="33" y="52.5" width="5" height="2" rx=".5" fill="#181830"/>\x27+
-              // Spacebar
-              \x27<rect x="19" y="55" width="24" height="1.8" rx=".9" fill="#181830"/>\x27+
-              // ════ ERGONOMIC CHAIR ════
-              // Chair base
-              \x27<ellipse cx="34" cy="72" rx="12" ry="4" fill="#111124"/>\x27+
-              // Chair gas lift
-              \x27<rect x="32" y="65" width="4" height="8" rx="1" fill="#1a1a2c"/>\x27+
-              // Chair seat
-              \x27<path d="M22 60 Q22 56 34 56 Q46 56 46 60 L46 66 Q46 68 34 68 Q22 68 22 66 Z" fill="#1c1c2c" stroke="#2a2a3e" stroke-width="1"/>\x27+
-              // Chair backrest
-              \x27<path d="M24 44 Q23 38 34 37 Q45 38 44 44 L44 58 Q44 60 34 60 Q24 60 24 58 Z" fill="#191928" stroke="#2a2a3c" stroke-width="1"/>\x27+
-              // Chair backrest cushion
-              \x27<path d="M26 46 Q26 41 34 40 Q42 41 42 46 L42 57 Q42 58 34 58 Q26 58 26 57 Z" fill="#1e1e30"/>\x27+
-              // Chair headrest
-              \x27<path d="M28 37 Q28 33 34 33 Q40 33 40 37 L40 39 Q40 40 34 40 Q28 40 28 39 Z" fill="#191928" stroke="#2a2a3c" stroke-width="1"/>\x27+
-              // Chair armrests
-              \x27<path d="M22 55 L18 55 Q16 55 16 57 L16 60 Q16 62 18 62 L22 62 Q24 62 24 60 L24 55 Z" fill="#1c1c2c"/>\x27+
-              \x27<path d="M46 55 L50 55 Q52 55 52 57 L52 60 Q52 62 50 62 L46 62 Q44 62 44 60 L44 55 Z" fill="#1c1c2c"/>\x27+
-              // ════ TORSO / SHIRT ════
-              // shirt back visible above chair
-              \x27<path d="M27 58 Q27 54 34 53 Q41 54 41 58 L42 65 L26 65 Z" fill="\x27+shirt+\x27cc"/>\x27+
-              // shirt body
-              \x27<path d="M27 44 Q27 42 34 41 Q41 42 41 44 L42 58 L26 58 Z" fill="\x27+shirt+\x27"/>\x27+
-              // shirt shading (left side)
-              \x27<path d="M27 44 Q27 42 34 41 L34 58 L26 58 Z" fill="rgba(0,0,0,.12)"/>\x27+
-              // collar / V-neck
-              \x27<path d="M34 41 L31 46 L34 44.5 L37 46 Z" fill="\x27+skin+\x27ee"/>\x27+
-              // shirt wrinkle detail
-              \x27<line x1="34" y1="46" x2="34" y2="57" stroke="rgba(0,0,0,.08)" stroke-width="2" stroke-linecap="round"/>\x27+
-              // ════ ARMS (typing position) ════
-              \x27<g \x27+armAnim+\x27>\x27+
-              // Left upper arm
-              \x27<path d="M28 45 C24 47 22 50 21 53 C21 55 23 56 25 55 C27 54 27 52 28 49 Z" fill="\x27+shirt+\x27"/>\x27+
-              // Left forearm
-              \x27<path d="M21 53 C19 55 18 57 18 59 C18 61 20 62 22 61 C24 60 24 58 25 55 Z" fill="\x27+skin+\x27"/>\x27+
-              // Left hand
-              \x27<ellipse cx="19" cy="60" rx="4" ry="3" fill="\x27+skin+\x27" transform="rotate(-10 19 60)"/>\x27+
-              // Right upper arm
-              \x27<path d="M40 45 C44 47 46 50 47 53 C47 55 45 56 43 55 C41 54 41 52 40 49 Z" fill="\x27+shirt+\x27"/>\x27+
-              // Right forearm
-              \x27<path d="M47 53 C49 55 50 57 50 59 C50 61 48 62 46 61 C44 60 44 58 43 55 Z" fill="\x27+skin+\x27"/>\x27+
-              // Right hand
-              \x27<ellipse cx="49" cy="60" rx="4" ry="3" fill="\x27+skin+\x27" transform="rotate(10 49 60)"/>\x27+
-              \x27</g>\x27+
-              // ════ HEAD (smooth, expressive) ════
-              \x27<g \x27+headAnim+\x27>\x27+
-              // Neck with shadow
-              \x27<path d="M30 40 L38 40 L38 43 Q38 45 34 45 Q30 45 30 43 Z" fill="\x27+skin+\x27"/>\x27+
-              \x27<path d="M30 40 L34 40 L34 45 Q30 45 30 43 Z" fill="rgba(0,0,0,.08)"/>\x27+
-              // Head — well-proportioned ellipse
-              \x27<ellipse cx="34" cy="29" rx="11" ry="12.5" fill="\x27+skin+\x27"/>\x27+
-              // Cheek blush (subtle)
-              \x27<ellipse cx="26" cy="32" rx="3.5" ry="2" fill="\x27+skin+\x27" opacity=".6"/>\x27+
-              \x27<ellipse cx="42" cy="32" rx="3.5" ry="2" fill="\x27+skin+\x27" opacity=".6"/>\x27+
-              // Head shadow (right)
-              \x27<ellipse cx="41" cy="29" rx="5" ry="11" fill="rgba(0,0,0,.06)"/>\x27+
-              // Ears — detailed
-              \x27<path d="M23 28 C21 28 20 30 20 31.5 C20 33 21 34.5 23 34.5 C24 34.5 24.5 33.5 24 31.5 C24.5 29.5 24 28 23 28" fill="\x27+skin+\x27"/>\x27+
-              \x27<path d="M45 28 C47 28 48 30 48 31.5 C48 33 47 34.5 45 34.5 C44 34.5 43.5 33.5 44 31.5 C43.5 29.5 44 28 45 28" fill="\x27+skin+\x27"/>\x27+
-              \x27<path d="M23.5 30 C22.5 30.5 22.5 32.5 23.5 33" stroke="\x27+skin+\x27" stroke-width="1" fill="none" opacity=".5"/>\x27+
-              // Hair — styled, voluminous
-              \x27<path d="M23 28 C22 22 24 16 34 15 C44 16 46 22 45 28 C44 22 42 18 34 17 C26 18 24 22 23 28" fill="\x27+hair+\x27"/>\x27+
-              \x27<path d="M23 27 C22 24 23 19 26 17 C24 20 23 24 24 27" fill="\x27+hair+\x2788"/>\x27+
-              // Hair highlight
-              \x27<path d="M28 17 C30 15 33 15 36 16 C33 14 29 15 28 17" fill="rgba(255,255,255,.12)"/>\x27+
-              // Eyebrows — expressive
-              \x27<path d="M27 23 Q29.5 21.5 32 23" stroke="\x27+hair+\x27" stroke-width="1.6" fill="none" stroke-linecap="round"/>\x27+
-              \x27<path d="M36 23 Q38.5 21.5 41 23" stroke="\x27+hair+\x27" stroke-width="1.6" fill="none" stroke-linecap="round"/>\x27+
-              // Eyes — full detail: white + iris + pupil + highlight
-              \x27<ellipse cx="30" cy="27.5" rx="3" ry="3.5" fill="#fff" stroke="\x27+skin+\x2740" stroke-width=".5"/>\x27+
-              \x27<ellipse cx="38" cy="27.5" rx="3" ry="3.5" fill="#fff" stroke="\x27+skin+\x2740" stroke-width=".5"/>\x27+
-              // Iris
-              \x27<circle cx="30" cy="28" r="2.2" fill="#3d4a6b"/>\x27+
-              \x27<circle cx="38" cy="28" r="2.2" fill="#3d4a6b"/>\x27+
-              // Pupil
-              \x27<circle cx="30" cy="28" r="1.3" fill="#0a0a14"/>\x27+
-              \x27<circle cx="38" cy="28" r="1.3" fill="#0a0a14"/>\x27+
-              // Eye shine
-              \x27<circle cx="31" cy="27" r=".8" fill="rgba(255,255,255,.9)"/>\x27+
-              \x27<circle cx="39" cy="27" r=".8" fill="rgba(255,255,255,.9)"/>\x27+
-              \x27<circle cx="29.5" cy="29" r=".35" fill="rgba(255,255,255,.4)"/>\x27+
-              // Lower eyelid line
-              \x27<path d="M27 30 Q30 31.5 33 30" stroke="\x27+skin+\x27" stroke-width=".7" fill="none" opacity=".5"/>\x27+
-              \x27<path d="M35 30 Q38 31.5 41 30" stroke="\x27+skin+\x27" stroke-width=".7" fill="none" opacity=".5"/>\x27+
-              // Nose — soft curved
-              \x27<path d="M33 31 Q33 33 34 33.5 Q35 34 35 33 Q36 33 36 31" stroke="\x27+skin+\x27" stroke-width="1.1" fill="none" stroke-linecap="round" opacity=".7"/>\x27+
-              \x27<ellipse cx="31.5" cy="33.5" rx="1.2" ry=".7" fill="rgba(0,0,0,.08)"/>\x27+
-              \x27<ellipse cx="36.5" cy="33.5" rx="1.2" ry=".7" fill="rgba(0,0,0,.08)"/>\x27+
-              // Mouth — expressive
-              (isDone ?
-                // Big smile when done
-                \x27<path d="M29 37 Q34 42 39 37" stroke="#8b4513" stroke-width="1.8" fill="none" stroke-linecap="round"/>\x27+
-                \x27<path d="M29 37 Q34 41 39 37" stroke="rgba(255,255,255,.3)" stroke-width=".5" fill="none" stroke-linecap="round"/>\x27+
-                // Teeth
-                \x27<path d="M30 37.5 Q34 41 38 37.5 Q34 40 30 37.5" fill="#fff" opacity=".8"/>\x27
-                :
-                // Focused expression
-                \x27<path d="M30.5 37 Q34 38.5 37.5 37" stroke="#8b4513" stroke-width="1.4" fill="none" stroke-linecap="round"/>\x27
-              )+
-              // Agent badge/pin on shirt
-              \x27<circle cx="38.5" cy="48" r="5.5" fill="#0f0f1e" stroke="\x27+shirt+\x2780" stroke-width="1.2"/>\x27+
-              \x27<circle cx="38.5" cy="48" r="4" fill="#161622"/>\x27+
-              \x27<text x="38.5" y="51" text-anchor="middle" font-size="6">\x27+ico+\x27</text>\x27+
-              \x27</g>\x27+
-              // ════ DONE BADGE (top right corner, polished) ════
-              (isDone ?
-                \x27<circle cx="67" cy="9" r="10" fill="#0a2010"/>\x27+
-                \x27<circle cx="67" cy="9" r="8" fill="#16a34a"/>\x27+
-                \x27<circle cx="67" cy="9" r="6" fill="#22c55e"/>\x27+
-                \x27<path d="M62.5 9 L65.5 12 L71.5 5" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>\x27
-                : \x27\x27)+
-              docHtml+
+            // Orchestrator head — free floating, no box
+            var orchEmoji2 = String.fromCodePoint(0x1F9D1,0x200D,0x1F4BC);
+            var crownEm = String.fromCodePoint(0x1F451);
+            var orchHeadHtml = \x27<div class="br-orch" id="brOrch">\x27+
+              \x27<div class="br-orch-speech" id="brOrchSpeech" style="display:none"></div>\x27+
+              \x27<div class="br-orch-inner">\x27+
+              \x27<span class="br-orch-crown">\x27+crownEm+\x27</span>\x27+
+              \x27<span class="br-orch-emoji" id="brOrchEmoji">\x27+orchEmoji2+\x27</span>\x27+
+              \x27</div>\x27+
+              \x27<div class="br-orch-label">Orchestratore</div>\x27+
+              \x27</div>\x27;
+
+            // ── Conference table SVG — rich walnut with real objects ────────────
+            var tblSvg = \x27<svg viewBox="0 0 1000 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:50%;left:0;width:100%;height:140px;transform:translateY(-50%);z-index:1;pointer-events:none">\x27+
+              \x27<defs>\x27+
+              \x27<linearGradient id="tblGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b4423"/><stop offset="0.4" stop-color="#4a2e12"/><stop offset="1" stop-color="#2e1a08"/></linearGradient>\x27+
+              \x27<linearGradient id="tblSheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="rgba(255,255,255,0)"/><stop offset="0.3" stop-color="rgba(255,255,255,.04)"/><stop offset="0.7" stop-color="rgba(255,255,255,.06)"/><stop offset="1" stop-color="rgba(255,255,255,0)"/></linearGradient>\x27+
+              \x27</defs>\x27+
+              // Shadow
+              \x27<rect x="6" y="10" width="988" height="178" rx="22" fill="rgba(0,0,0,.28)"/>\x27+
+              // Table body
+              \x27<rect x="0" y="2" width="1000" height="178" rx="20" fill="url(#tblGrad)"/>\x27+
+              // Wood grain lines
+              \x27<line x1="0" y1="48" x2="1000" y2="48" stroke="rgba(0,0,0,.07)" stroke-width="2"/>\x27+
+              \x27<line x1="0" y1="96" x2="1000" y2="96" stroke="rgba(0,0,0,.09)" stroke-width="2.5"/>\x27+
+              \x27<line x1="0" y1="144" x2="1000" y2="144" stroke="rgba(0,0,0,.07)" stroke-width="2"/>\x27+
+              // Sheen
+              \x27<rect x="0" y="2" width="1000" height="178" rx="20" fill="url(#tblSheen)"/>\x27+
+              // Top edge highlight
+              \x27<rect x="0" y="2" width="1000" height="6" rx="4" fill="rgba(255,255,255,.1)"/>\x27+
+              // NHA monogram
+              \x27<text x="500" y="118" text-anchor="middle" font-family="system-ui" font-size="58" font-weight="900" fill="rgba(160,140,255,.09)" letter-spacing="10">NHA</text>\x27+
+              // Laptop 1
+              \x27<rect x="155" y="55" width="68" height="46" rx="5" fill="#1a1a2e" stroke="#4a4a8a" stroke-width="2"/>\x27+
+              \x27<rect x="160" y="59" width="58" height="34" rx="3" fill="#0d0d1a"/>\x27+
+              \x27<rect x="162" y="61" width="54" height="30" rx="2" fill="#1e3a5f"/>\x27+
+              \x27<rect x="148" y="101" width="82" height="5" rx="2" fill="#333"/>\x27+
+              // Laptop 2
+              \x27<rect x="770" y="55" width="68" height="46" rx="5" fill="#1a1a2e" stroke="#4a4a8a" stroke-width="2"/>\x27+
+              \x27<rect x="775" y="59" width="58" height="34" rx="3" fill="#0d0d1a"/>\x27+
+              \x27<rect x="777" y="61" width="54" height="30" rx="2" fill="#1e3a5f"/>\x27+
+              \x27<rect x="763" y="101" width="82" height="5" rx="2" fill="#333"/>\x27+
+              // Telephone with handset (center-left)
+              \x27<rect x="360" y="62" width="52" height="38" rx="4" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>\x27+
+              \x27<ellipse cx="366" cy="72" rx="6" ry="8" fill="#1a1a1a" stroke="#888" stroke-width="1"/>\x27+
+              \x27<ellipse cx="406" cy="72" rx="6" ry="8" fill="#1a1a1a" stroke="#888" stroke-width="1"/>\x27+
+              \x27<line x1="366" y1="72" x2="406" y2="72" stroke="#666" stroke-width="3" stroke-linecap="round"/>\x27+
+              \x27<rect x="372" y="76" width="40" height="18" rx="2" fill="#333"/>\x27+
+              // Coffee cup 1
+              \x27<rect x="570" y="68" width="28" height="28" rx="4" fill="#f5f0e8" stroke="#c8b08a" stroke-width="1.5"/>\x27+
+              \x27<rect x="575" y="73" width="18" height="15" rx="2" fill="#6b3a1f" opacity=".8"/>\x27+
+              \x27<path d="M598 78 Q608 83 598 88" stroke="#c8b08a" stroke-width="2" fill="none"/>\x27+
+              // Mini plant on table
+              \x27<rect x="470" y="72" width="14" height="16" rx="2" fill="#8B6914"/>\x27+
+              \x27<ellipse cx="477" cy="68" rx="10" ry="12" fill="#2d6a2d"/>\x27+
+              \x27<ellipse cx="470" cy="65" rx="7" ry="9" fill="#3a8a3a"/>\x27+
+              \x27<ellipse cx="484" cy="65" rx="7" ry="9" fill="#2d7a2d"/>\x27+
               \x27</svg>\x27;
 
-            return \x27<div class="prl-desk\x27+(isActive?\x27 prl-desk--active\x27:\x27\x27)+(isDone?\x27 prl-desk--done\x27:\x27\x27)+\x27" style="--dc:\x27+phaseColor+\x27;box-shadow:\x27+shadow+\x27">\x27+
-              (actionStr ? \x27<div class="prl-action-bubble\x27+(isActive?\x27 prl-action-bubble--active\x27:\x27\x27)+\x27">\x27+actionStr+\x27</div>\x27 : \x27\x27)+
-              svgChar+
-              \x27<div class="prl-desk-name" style="color:\x27+(isDone?\x27#4ade80\x27:(isActive?phaseColor:\x27#6b7280\x27))+\x27">\x27+esc(lbl.slice(0,14))+\x27</div>\x27+
+            // ── Background SVG — enhanced room with art, detailed door, windows ─
+            var bgSvg = \x27<svg viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none">\x27+
+              \x27<defs>\x27+
+              \x27<filter id="brGlow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>\x27+
+              \x27<filter id="brShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,.2)"/></filter>\x27+
+              \x27<linearGradient id="brWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5f0e8"/><stop offset="1" stop-color="#e8e0d0"/></linearGradient>\x27+
+              \x27<linearGradient id="winGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8dff8"/><stop offset="1" stop-color="#d8f0ff"/></linearGradient>\x27+
+              \x27<linearGradient id="doorGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a0724a"/><stop offset="0.5" stop-color="#c8905c"/><stop offset="1" stop-color="#a0724a"/></linearGradient>\x27+
+              \x27</defs>\x27+
+              // Wall
+              \x27<rect x="0" y="0" width="1000" height="215" fill="url(#brWall)"/>\x27+
+              // Crown molding
+              \x27<rect x="0" y="0" width="1000" height="8" fill="#d8cfc0"/>\x27+
+              \x27<rect x="0" y="8" width="1000" height="4" fill="#e8e0d0"/>\x27+
+              // Baseboard
+              \x27<rect x="0" y="206" width="1000" height="9" fill="#c8b898" rx="1"/>\x27+
+              \x27<rect x="0" y="210" width="1000" height="3" fill="#b0a080"/>\x27+
+              // Parquet floor
+              function() {
+                var s3 = \x27\x27;
+                var pC = [\x27#c8a06a\x27,\x27#bf9860\x27,\x27#d4aa72\x27,\x27#ba9458\x27,\x27#caa86e\x27];
+                var pH3 = 32; var pW3 = 120;
+                for (var fy3 = 215; fy3 < 600+pH3; fy3 += pH3) {
+                  var ro4 = (Math.floor((fy3-215)/pH3) % 2) * (pW3/2);
+                  for (var fx3 = -pW3+ro4; fx3 < 1000+pW3; fx3 += pW3) {
+                    var pc4 = pC[Math.abs(Math.round(fx3/pW3+fy3/pH3*1.3)) % pC.length];
+                    s3 += \x27<rect x="\x27+Math.round(fx3)+\x27" y="\x27+fy3+\x27" width="\x27+(pW3-2)+\x27" height="\x27+(pH3-2)+\x27" fill="\x27+pc4+\x27" rx="2"/>\x27;
+                    s3 += \x27<line x1="\x27+Math.round(fx3+pW3*.4)+\x27" y1="\x27+fy3+\x27" x2="\x27+Math.round(fx3+pW3*.4)+\x27" y2="\x27+(fy3+pH3-2)+\x27" stroke="rgba(0,0,0,.04)" stroke-width="1.5"/>\x27;
+                  }
+                }
+                return s3;
+              }()+
+              // Window LEFT — thick frame, venetian blinds effect
+              \x27<rect x="28" y="18" width="126" height="96" rx="3" fill="#4a6080" stroke="#2a3a50" stroke-width="4"/>\x27+
+              \x27<rect x="34" y="24" width="114" height="84" rx="2" fill="url(#winGrad)"/>\x27+
+              \x27<rect x="34" y="24" width="114" height="84" rx="2" fill="rgba(255,255,255,.12)"/>\x27+
+              \x27<line x1="91" y1="24" x2="91" y2="108" stroke="#3a5070" stroke-width="3"/>\x27+
+              \x27<line x1="34" y1="66" x2="148" y2="66" stroke="#3a5070" stroke-width="3"/>\x27+
+              // window sill
+              \x27<rect x="22" y="114" width="138" height="8" rx="2" fill="#c8b898"/>\x27+
+              // Window RIGHT
+              \x27<rect x="846" y="18" width="126" height="96" rx="3" fill="#4a6080" stroke="#2a3a50" stroke-width="4"/>\x27+
+              \x27<rect x="852" y="24" width="114" height="84" rx="2" fill="url(#winGrad)"/>\x27+
+              \x27<rect x="852" y="24" width="114" height="84" rx="2" fill="rgba(255,255,255,.12)"/>\x27+
+              \x27<line x1="909" y1="24" x2="909" y2="108" stroke="#3a5070" stroke-width="3"/>\x27+
+              \x27<line x1="852" y1="66" x2="966" y2="66" stroke="#3a5070" stroke-width="3"/>\x27+
+              \x27<rect x="840" y="114" width="138" height="8" rx="2" fill="#c8b898"/>\x27+
+              // Door CENTER — detailed with panels and handle
+              \x27<rect x="455" y="0" width="90" height="215" fill="url(#doorGrad)" stroke="#7a5030" stroke-width="3"/>\x27+
+              // Door panels
+              \x27<rect x="463" y="10" width="74" height="55" rx="3" fill="rgba(0,0,0,.08)" stroke="rgba(0,0,0,.15)" stroke-width="1.5"/>\x27+
+              \x27<rect x="463" y="72" width="74" height="55" rx="3" fill="rgba(0,0,0,.08)" stroke="rgba(0,0,0,.15)" stroke-width="1.5"/>\x27+
+              \x27<rect x="463" y="134" width="74" height="55" rx="3" fill="rgba(0,0,0,.06)" stroke="rgba(0,0,0,.12)" stroke-width="1.5"/>\x27+
+              // Door handle
+              \x27<circle cx="533" cy="118" r="7" fill="#c8a040" stroke="#a07828" stroke-width="2"/>\x27+
+              \x27<rect x="530" y="118" width="14" height="4" rx="2" fill="#c8a040" stroke="#a07828" stroke-width="1"/>\x27+
+              // Door frame
+              \x27<rect x="451" y="0" width="5" height="215" fill="#7a5030"/>\x27+
+              \x27<rect x="544" y="0" width="5" height="215" fill="#7a5030"/>\x27+
+              // Painting LEFT — abstract NHA art
+              \x27<rect x="190" y="18" width="100" height="76" rx="3" fill="#f8f4ee" stroke="#8a7050" stroke-width="4" filter="url(#brShadow)"/>\x27+
+              \x27<rect x="196" y="24" width="88" height="64" rx="1" fill="#1a1060"/>\x27+
+              \x27<circle cx="240" cy="56" r="22" fill="#6366f1" opacity=".7"/>\x27+
+              \x27<circle cx="240" cy="56" r="14" fill="#818cf8" opacity=".8"/>\x27+
+              \x27<circle cx="240" cy="56" r="6" fill="#c7d2fe"/>\x27+
+              \x27<text x="240" y="60" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="system-ui">NHA</text>\x27+
+              // Painting RIGHT — landscape
+              \x27<rect x="710" y="18" width="110" height="76" rx="3" fill="#f8f4ee" stroke="#8a7050" stroke-width="4" filter="url(#brShadow)"/>\x27+
+              \x27<rect x="716" y="24" width="98" height="64" rx="1" fill="#87CEEB"/>\x27+
+              \x27<ellipse cx="765" cy="65" rx="48" ry="20" fill="#228B22"/>\x27+
+              \x27<circle cx="748" cy="52" rx="14" ry="14" fill="#ffed4a" opacity=".9"/>\x27+
+              \x27<ellipse cx="730" cy="62" rx="12" ry="16" fill="#1a5c1a"/>\x27+
+              \x27<ellipse cx="780" cy="60" rx="10" ry="14" fill="#2a7a2a"/>\x27+
+              // Chandelier
+              \x27<line x1="500" y1="0" x2="500" y2="28" stroke="#aaa" stroke-width="4"/>\x27+
+              \x27<ellipse cx="500" cy="36" rx="52" ry="14" fill="#f0d830" stroke="#c8a820" stroke-width="3"/>\x27+
+              \x27<ellipse cx="500" cy="36" rx="45" ry="10" fill="#ffe850" opacity=".5"/>\x27+
+              \x27<circle cx="470" cy="47" r="9" fill="#fffce0" filter="url(#brGlow)"/>\x27+
+              \x27<circle cx="500" cy="50" r="9" fill="#fffce0" filter="url(#brGlow)"/>\x27+
+              \x27<circle cx="530" cy="47" r="9" fill="#fffce0" filter="url(#brGlow)"/>\x27+
+              \x27<circle cx="455" cy="40" r="6" fill="#ffe060" filter="url(#brGlow)"/>\x27+
+              \x27<circle cx="545" cy="40" r="6" fill="#ffe060" filter="url(#brGlow)"/>\x27+
+              \x27<polygon points="448,62 552,62 680,600 320,600" fill="rgba(255,252,180,.07)"/>\x27+
+              // Cross-agent conversation lines overlay placeholder (updated dynamically)
+              \x27<g id="brConvLines"></g>\x27+
+              \x27</svg>\x27;
+
+            var headerHtml = \x27<div class="br-header">\x27+
+              \x27<span class="br-phase-chip" id="brPhaseChip"></span>\x27+
+              \x27<div class="br-progress-wrap" id="brProgressWrap"><div class="br-progress-bar" id="brProgressBar"></div></div>\x27+
+              \x27</div>\x27;
+
+            var convergeHtml = \x27<div class="br-convergence" id="brConvergence" style="display:none"></div>\x27;
+
+            pb.innerHTML =
+              \x27<div class="br-wrap">\x27+
+              headerHtml+
+              \x27<div class="br-room">\x27+
+              bgSvg+
+              // Decorative plants at corners
+              \x27<div style="position:absolute;bottom:8px;left:10px;font-size:44px;z-index:5;filter:drop-shadow(0 3px 8px rgba(0,0,0,.3))">\x27+String.fromCodePoint(0x1FAB4)+\x27</div>\x27+
+              \x27<div style="position:absolute;bottom:8px;right:10px;font-size:44px;z-index:5;filter:drop-shadow(0 3px 8px rgba(0,0,0,.3))">\x27+String.fromCodePoint(0x1FAB4)+\x27</div>\x27+
+              // Small plants on window sills
+              \x27<div style="position:absolute;top:112px;left:58px;font-size:20px;z-index:5">\x27+String.fromCodePoint(0x1F331)+\x27</div>\x27+
+              \x27<div style="position:absolute;top:112px;right:58px;font-size:20px;z-index:5">\x27+String.fromCodePoint(0x1F331)+\x27</div>\x27+
+              // Cross-agent communication SVG overlay (dynamic, updated per call)
+              \x27<svg id="brCommSvg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20;overflow:visible"></svg>\x27+
+              \x27<div style="position:relative;z-index:10;display:flex;flex-direction:column;justify-content:center;min-height:480px;padding:20px 16px;gap:0;box-sizing:border-box">\x27+
+              \x27<div class="br-seats-row">\x27+topHtml+\x27</div>\x27+
+              \x27<div style="position:relative;display:flex;align-items:center;width:100%;min-height:160px">\x27+
+              orchHeadHtml+
+              \x27<div style="position:relative;flex:1;min-height:140px">\x27+tblSvg+\x27</div>\x27+
+              \x27</div>\x27+
+              \x27<div class="br-seats-row">\x27+botHtml+\x27</div>\x27+
+              \x27</div>\x27+
+              \x27</div>\x27+
+              convergeHtml+
               \x27</div>\x27;
           }
 
-          // ── MASTER ORCHESTRATOR walking animation ─────────────────────────
-          // In R1: walks left-right between desks (CSS animation).
-          // In R2: stands at the active agent's desk.
-          // In R3: stands center with lightning bolt.
-          var masterIcon = phase===\x27r3\x27 ? \x27\u26a1\x27 : (phase===\x27done\x27 ? \x27\u2714\x27 : \x27\u2666\x27);
-          var masterColor2 = {r1:\x27#818cf8\x27,r2:\x27#818cf8\x27,r3:\x27#f59e0b\x27,done:\x27#22c55e\x27}[phase]||\x27#818cf8\x27;
-          var masterAnim = (phase===\x27r1\x27) ? \x27prl-master-walk\x27 : (phase===\x27r2\x27 ? \x27prl-master-supervise\x27 : \x27\x27);
-          var masterSvg = \x27<svg viewBox="0 0 60 90" width="56" height="86" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 12px \x27+masterColor2+\x27aa)">\x27+
-            // ════ LEGS (walking when R1) ════
-            // Left leg — trouser
-            \x27<path d="M22 55 C21 63 19 72 18 77 C17 80 18 82 21 82 C23 82 24 80 24 77 C25 71 25 62 26 55 Z" fill="#1e1c4a" class="prl-master-leg-l"/>\x27+
-            // Right leg — trouser
-            \x27<path d="M28 55 C29 63 31 72 32 77 C33 80 32 82 29 82 C27 82 26 80 26 77 C25 71 25 62 24 55 Z" fill="#1e1c4a" class="prl-master-leg-r"/>\x27+
-            // Left shoe — detailed
-            \x27<path d="M16 79 C14 79 13 81 14 83 C15 85 18 85 21 84 C23 83 24 82 23 80 C22 79 19 79 16 79" fill="#0a0a14"/>\x27+
-            \x27<path d="M16 79 C15 80 14 82 15 83" stroke="#1a1a2e" stroke-width=".8" fill="none"/>\x27+
-            // Right shoe
-            \x27<path d="M34 79 C36 79 37 81 36 83 C35 85 32 85 29 84 C27 83 26 82 27 80 C28 79 31 79 34 79" fill="#0a0a14"/>\x27+
-            // Trouser crease
-            \x27<line x1="23" y1="55" x2="21" y2="77" stroke="rgba(255,255,255,.08)" stroke-width="1" stroke-linecap="round"/>\x27+
-            \x27<line x1="27" y1="55" x2="29" y2="77" stroke="rgba(255,255,255,.08)" stroke-width="1" stroke-linecap="round"/>\x27+
-            // ════ TORSO — Premium dark suit ════
-            // Suit jacket base
-            \x27<path d="M13 32 C12 30 15 27 25 25 C35 27 38 30 37 32 L38 55 L12 55 Z" fill="#252450"/>\x27+
-            // Left suit front panel
-            \x27<path d="M13 32 C12 30 15 27 25 25 L25 55 L12 55 Z" fill="#1e1d44"/>\x27+
-            // Right suit front panel (lighter)
-            \x27<path d="M25 25 C35 27 38 30 37 32 L38 55 L25 55 Z" fill="#272660"/>\x27+
-            // Suit lapels — left
-            \x27<path d="M25 25 L19 33 L22 36 L25 29 Z" fill="#1a1940" stroke="#252450" stroke-width=".5"/>\x27+
-            // Suit lapels — right
-            \x27<path d="M25 25 L31 33 L28 36 L25 29 Z" fill="#1a1940" stroke="#252450" stroke-width=".5"/>\x27+
-            // White shirt / tie visible between lapels
-            \x27<path d="M25 29 L22 36 L25 34 L28 36 Z" fill="#f0f0fa"/>\x27+
-            // Tie — authority color
-            \x27<path d="M25 33 L24 44 L25 48 L26 44 Z" fill="\x27+masterColor2+\x27"/>\x27+
-            \x27<path d="M24 44 L25 48 L26 44 L25 43 Z" fill="\x27+masterColor2+\x27cc"/>\x27+
-            // Tie knot
-            \x27<path d="M23.5 32 L26.5 32 L25 34 Z" fill="\x27+masterColor2+\x27"/>\x27+
-            // Suit pocket square
-            \x27<path d="M33 35 L36 33 L37 36 L34 37 Z" fill="\x27+masterColor2+\x2799"/>\x27+
-            // Suit buttons
-            \x27<circle cx="25" cy="42" r="1.2" fill="\x27+masterColor2+\x27aa"/>\x27+
-            \x27<circle cx="25" cy="46" r="1.2" fill="\x27+masterColor2+\x27aa"/>\x27+
-            // Suit lapel badge / NHA logo
-            \x27<circle cx="20" cy="36" r="2.5" fill="#0d0d1e" stroke="\x27+masterColor2+\x2799" stroke-width="1"/>\x27+
-            \x27<text x="20" y="39" text-anchor="middle" font-size="4" fill="\x27+masterColor2+\x27">N</text>\x27+
-            // ════ ARMS ════
-            \x27<g class="prl-master-arm-l">\x27+
-            // Left upper arm
-            \x27<path d="M13 34 C8 37 6 42 6 46 C6 49 9 50 11 49 C13 48 13 45 14 41 C15 38 14 35 13 34" fill="#252450"/>\x27+
-            // Left forearm
-            \x27<path d="M6 46 C4 48 4 51 5 53 C6 55 9 55 10 53 C11 51 10 48 10 46 Z" fill="#d4a97a"/>\x27+
-            // Left hand
-            \x27<ellipse cx="7" cy="54" rx="4.5" ry="3.5" fill="#d4a97a" transform="rotate(-15 7 54)"/>\x27+
-            \x27</g>\x27+
-            // Right arm — holds clipboard
-            \x27<g class="prl-master-arm-r">\x27+
-            // Right upper arm
-            \x27<path d="M37 34 C42 37 44 41 44 45 C44 48 41 49 39 48 C37 47 37 44 37 40 C37 37 37 35 37 34" fill="#252450"/>\x27+
-            // Right forearm
-            \x27<path d="M44 44 C46 46 47 49 46 52 C45 54 42 54 41 52 C40 50 41 47 41 45 Z" fill="#d4a97a"/>\x27+
-            // Right hand
-            \x27<ellipse cx="45" cy="52" rx="4" ry="3" fill="#d4a97a" transform="rotate(15 45 52)"/>\x27+
-            // Clipboard — premium design
-            \x27<rect x="43" y="32" width="14" height="19" rx="2.5" fill="#1a1a2e" stroke="\x27+masterColor2+\x2799" stroke-width="1.5"/>\x27+
-            // Clipboard clip
-            \x27<rect x="47" y="30" width="6" height="5" rx="1.5" fill="\x27+masterColor2+\x27" stroke="\x27+masterColor2+\x27" stroke-width="1"/>\x27+
-            \x27<rect x="48" y="31" width="4" height="3" rx="1" fill="#0f0f1e"/>\x27+
-            // Clipboard lines
-            \x27<line x1="46" y1="36" x2="54" y2="36" stroke="\x27+masterColor2+\x27cc" stroke-width="1" stroke-linecap="round"/>\x27+
-            \x27<line x1="46" y1="39" x2="54" y2="39" stroke="\x27+masterColor2+\x27aa" stroke-width="1" stroke-linecap="round"/>\x27+
-            \x27<line x1="46" y1="42" x2="54" y2="42" stroke="\x27+masterColor2+\x2788" stroke-width="1" stroke-linecap="round"/>\x27+
-            \x27<line x1="46" y1="45" x2="50" y2="45" stroke="\x27+masterColor2+\x2766" stroke-width="1" stroke-linecap="round"/>\x27+
-            // Data chart on clipboard
-            \x27<rect x="46" y="37" width="3" height="2" rx=".5" fill="\x27+masterColor2+\x2744"/>\x27+
-            \x27<rect x="50" y="36" width="3" height="3" rx=".5" fill="\x27+masterColor2+\x2766"/>\x27+
-            \x27</g>\x27+
-            // ════ HEAD — authoritative, confident ════
-            // Neck
-            \x27<path d="M22 25 L28 25 L28 29 Q28 31 25 31 Q22 31 22 29 Z" fill="#d4a97a"/>\x27+
-            \x27<path d="M22 25 L25 25 L25 31 Q22 31 22 29 Z" fill="rgba(0,0,0,.1)"/>\x27+
-            // Head shape
-            \x27<ellipse cx="25" cy="15" rx="12" ry="13" fill="#d4a97a"/>\x27+
-            // Jaw/chin
-            \x27<path d="M14 15 C14 22 18 26 25 27 C32 26 36 22 36 15" fill="#d4a97a"/>\x27+
-            // Head shading
-            \x27<ellipse cx="32" cy="15" rx="6" ry="11" fill="rgba(0,0,0,.07)"/>\x27+
-            // Ears
-            \x27<path d="M13 13 C11 13 10 15 10 17 C10 19 11 20 13 20 C14 20 14.5 19 14 17 C14.5 15 14 13 13 13" fill="#d4a97a"/>\x27+
-            \x27<path d="M37 13 C39 13 40 15 40 17 C40 19 39 20 37 20 C36 20 35.5 19 36 17 C35.5 15 36 13 37 13" fill="#d4a97a"/>\x27+
-            \x27<path d="M13.5 15 C12.5 16 12.5 18 13.5 19" stroke="#c4935a" stroke-width="1" fill="none"/>\x27+
-            // Hair — executive styled, neat
-            \x27<path d="M13 14 C12 7 16 2 25 1 C34 2 38 7 37 14 C36 7 32 4 25 3 C18 4 14 7 13 14" fill="#1a0e08"/>\x27+
-            // Side part
-            \x27<path d="M22 3 C21 4 21 6 22 8" stroke="rgba(255,255,255,.15)" stroke-width="1.5" fill="none" stroke-linecap="round"/>\x27+
-            // Hair sheen
-            \x27<path d="M20 3 C22 1 27 1 30 2 C27 0 22 1 20 3" fill="rgba(255,255,255,.1)"/>\x27+
-            // Eyebrows — thick, authoritative
-            \x27<path d="M16.5 11 Q19 9.5 21.5 11" stroke="#1a0e08" stroke-width="1.8" fill="none" stroke-linecap="round"/>\x27+
-            \x27<path d="M28.5 11 Q31 9.5 33.5 11" stroke="#1a0e08" stroke-width="1.8" fill="none" stroke-linecap="round"/>\x27+
-            // Eyes — confident, forward-looking
-            \x27<ellipse cx="19.5" cy="14.5" rx="3.2" ry="3.5" fill="#fff" stroke="#d4a97a" stroke-width=".4"/>\x27+
-            \x27<ellipse cx="30.5" cy="14.5" rx="3.2" ry="3.5" fill="#fff" stroke="#d4a97a" stroke-width=".4"/>\x27+
-            \x27<circle cx="19.5" cy="15" r="2.3" fill="#1e3a6e"/>\x27+
-            \x27<circle cx="30.5" cy="15" r="2.3" fill="#1e3a6e"/>\x27+
-            \x27<circle cx="19.5" cy="15" r="1.3" fill="#0a0a18"/>\x27+
-            \x27<circle cx="30.5" cy="15" r="1.3" fill="#0a0a18"/>\x27+
-            \x27<circle cx="20.5" cy="13.7" r=".9" fill="rgba(255,255,255,.95)"/>\x27+
-            \x27<circle cx="31.5" cy="13.7" r=".9" fill="rgba(255,255,255,.95)"/>\x27+
-            // Nose — subtle
-            \x27<path d="M24 18 Q24 20 25 20.5 Q26 21 26 19.5" stroke="#c4935a" stroke-width="1.1" fill="none" stroke-linecap="round" opacity=".8"/>\x27+
-            \x27<ellipse cx="22.5" cy="20.5" rx="1.3" ry=".8" fill="rgba(0,0,0,.1)"/>\x27+
-            \x27<ellipse cx="27.5" cy="20.5" rx="1.3" ry=".8" fill="rgba(0,0,0,.1)"/>\x27+
-            // Confident smile
-            \x27<path d="M19.5 24 Q25 27.5 30.5 24" stroke="#8b4513" stroke-width="1.8" fill="none" stroke-linecap="round"/>\x27+
-            \x27<path d="M20 24.5 Q25 27 30 24.5 Q25 26.5 20 24.5" fill="#fff" opacity=".7"/>\x27+
-            // Crown / authority icon above head
-            \x27<text x="25" y="-1" text-anchor="middle" font-size="11" style="filter:drop-shadow(0 0 4px \x27+masterColor2+\x27)">\x27+masterIcon+\x27</text>\x27+
-            // Subtle glow ring around crown icon
-            \x27<circle cx="25" cy="-2" r="8" fill="none" stroke="\x27+masterColor2+\x2730" stroke-width="1.5"/>\x27+
-            \x27</svg>\x27;
+          // ── Update state (runs every call, including initial build) ──────────
 
-          var masterLabel2 = {r1:\x27Orchestratore\x27,r2:\x27Coordina\x27,r3:\x27HERALD\x27,done:\x27Completato\x27}[phase]||\x27MASTER\x27;
-          var masterHtml = \x27<div class="prl-master \x27+masterAnim+\x27">\x27+masterSvg+\x27<div class="prl-master-label" style="color:\x27+masterColor2+\x27">\x27+masterLabel2+\x27</div></div>\x27;
+          // Phase chip
+          var chipEl = document.getElementById(\x27brPhaseChip\x27);
+          if (chipEl) { chipEl.textContent = phaseLabel; chipEl.style.setProperty(\x27--pc\x27, phaseColor); }
 
-          // ── Flying document animation for R2 (agent-to-agent) ────────────
-          // One flying doc per active cross-reading event, CSS keyframe arc.
-          var flyingDocHtml = \x27\x27;
-          if (phase===\x27r2\x27 && activeLabel) {
-            var others2 = proposals.filter(function(x){return (x.label||x.agent)!==activeLabel;});
-            flyingDocHtml = \x27<div class="prl-fly-container" aria-hidden="true">\x27;
-            others2.forEach(function(other, oi) {
-              var delay = (oi * 0.35).toFixed(2);
-              flyingDocHtml += \x27<div class="prl-fly-doc" style="animation-delay:\x27+delay+\x27s;animation-duration:\x27+(1.5+oi*0.2).toFixed(1)+\x27s">\x27+
-                // Document — dog-ear corner, realistic paper look
-                \x27<svg viewBox="0 0 22 28" width="22" height="28">\x27+
-                \x27<defs><filter id="dsf\x27+oi+\x27" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#22d3ee" flood-opacity=".5"/></filter></defs>\x27+
-                // Paper body
-                \x27<path d="M2 1 L16 1 L21 6 L21 27 Q21 28 20 28 L2 28 Q1 28 1 27 L1 2 Q1 1 2 1" fill="#0c0c1e" stroke="#22d3ee" stroke-width="1.5" filter="url(#dsf\x27+oi+\x27)"/>\x27+
-                // Dog-ear fold
-                \x27<path d="M16 1 L16 6 L21 6" fill="none" stroke="#22d3ee" stroke-width="1.2"/>\x27+
-                \x27<path d="M16 1 L21 6 L16 6 Z" fill="#0f0f28"/>\x27+
-                // Header bar (colored)
-                \x27<rect x="2" y="2" width="13" height="3" rx="1" fill="#22d3ee22"/>\x27+
-                // Text lines
-                \x27<line x1="3" y1="9" x2="19" y2="9" stroke="#22d3ee" stroke-width="1" opacity=".8" stroke-linecap="round"/>\x27+
-                \x27<line x1="3" y1="12" x2="17" y2="12" stroke="#22d3ee" stroke-width="1" opacity=".6" stroke-linecap="round"/>\x27+
-                \x27<line x1="3" y1="15" x2="19" y2="15" stroke="#22d3ee" stroke-width="1" opacity=".5" stroke-linecap="round"/>\x27+
-                \x27<line x1="3" y1="18" x2="14" y2="18" stroke="#22d3ee" stroke-width="1" opacity=".4" stroke-linecap="round"/>\x27+
-                // Chart bar (mini)
-                \x27<rect x="3" y="21" width="3" height="5" rx=".5" fill="#22d3ee44"/>\x27+
-                \x27<rect x="7" y="19" width="3" height="7" rx=".5" fill="#22d3ee66"/>\x27+
-                \x27<rect x="11" y="22" width="3" height="4" rx=".5" fill="#22d3ee44"/>\x27+
-                \x27<rect x="15" y="20" width="3" height="6" rx=".5" fill="#22d3ee55"/>\x27+
-                \x27</svg></div>\x27;
-            });
-            flyingDocHtml += \x27</div>\x27;
+          // Progress bar
+          var pbBar = document.getElementById(\x27brProgressBar\x27);
+          if (pbBar) pbBar.style.width = progressPct + \x27%\x27;
+          var pbWrap = document.getElementById(\x27brProgressWrap\x27);
+          if (pbWrap) pbWrap.style.display = convergence != null ? \x27none\x27 : \x27\x27;
+
+          // Convergence
+          var convEl = document.getElementById(\x27brConvergence\x27);
+          if (convEl && convergence != null) {
+            convEl.style.display = \x27block\x27;
+            convEl.innerHTML = \x27<div class="br-conv-bar-outer"><div class="br-conv-bar-inner" style="width:\x27+Math.min(convergence,100)+\x27%"></div></div>\x27+
+              \x27<div class="br-conv-text"><strong>\u2714 Convergenza: \x27+convergence+\x27%</strong> \u2014 Il Consiglio ha raggiunto il consenso. HERALD ha sintetizzato il risultato finale.</div>\x27;
           }
 
-          // ── Assemble agent desks row ──────────────────────────────────────
-          var desksHtml = proposals.map(function(prop) {
+          // Orchestrator speech bubble
+          var orchSpeech = document.getElementById(\x27brOrchSpeech\x27);
+          if (orchSpeech) {
+            var orchSpeeches = {
+              r1: [\x27Analisi in corso...\x27,\x27Ogni team al lavoro\x27,\x27Raccolta dati\x27,\x27Prima bozza...\x27],
+              r2: [\x27Confronto in corso\x27,\x27Cross-review...\x27,\x27Raffinamento\x27,\x27Scambio idee\x27],
+              r3: [\x27Sintesi finale\x27,\x27Convergenza...\x27,\x27Accordo in vista\x27],
+              done: [\x27Consiglio concluso\x27,\x27Consenso raggiunto\x27,\x27Report pronto\x27]
+            };
+            var spArr = orchSpeeches[phase] || orchSpeeches.r1;
+            if (phase === \x27done\x27) {
+              orchSpeech.style.display = \x27none\x27;
+            } else {
+              orchSpeech.style.display = \x27\x27;
+              // Rotate through phrases based on progress
+              orchSpeech.textContent = spArr[doneCount % spArr.length];
+              orchSpeech.style.borderColor = \x27#374151\x27;
+              orchSpeech.style.color = \x27#000000\x27;
+              orchSpeech.style.fontWeight = \x27700\x27;
+            }
+          }
+
+          // Orchestrator animation class
+          var orchEl = document.getElementById(\x27brOrch\x27);
+          if (orchEl) {
+            orchEl.className = \x27br-orch\x27 + (phase===\x27done\x27 ? \x27 br-orch--done\x27 : \x27 br-orch--active\x27);
+            orchEl.style.setProperty(\x27--oc\x27, phaseColor);
+          }
+
+          // ── Update each agent seat state ────────────────────────────────────
+          proposals.forEach(function(prop) {
             var lbl = prop.label || prop.agent;
-            return buildChar(prop, !!parlDoneAgents[lbl], lbl===activeLabel, false);
-          }).join(\x27\x27);
+            var safeLbl = lbl.replace(/[^a-zA-Z0-9_-]/g,\x27_\x27);
+            var seatEl = document.getElementById(\x27brseat_\x27+safeLbl);
+            var bubbleEl = document.getElementById(\x27brbubble_\x27+safeLbl);
+            var nameEl = document.getElementById(\x27brname_\x27+safeLbl);
+            var charEl = document.getElementById(\x27brchar_\x27+safeLbl);
+            var isDone = !!parlDoneAgents[lbl];
+            var isActive = lbl === activeLabel;
 
-          var convergenceHtml = convergence != null
-            ? (\x27<div class="prl-conv-wrap"><div class="prl-conv-bar-outer"><div class="prl-conv-bar-inner" style="width:\x27+Math.min(convergence,100)+\x27%"></div></div>\x27+
-               \x27<div class="prl-conv-text"><strong>\u2714 Convergenza \x27+convergence+\x27%</strong> &mdash; le analisi condividono il \x27+convergence+\x27% dei concetti chiave (Jaccard). HERALD ha sintetizzato il consenso finale.</div></div>\x27)
-            : (\x27<div class="prl-progress"><div class="prl-progress__bar" style="width:\x27+progressPct+\x27%"></div></div>\x27);
-
-          pb.innerHTML =
-            \x27<div class="prl-wrap">\x27+
-            \x27<div class="prl-header"><span class="prl-phase-chip" style="--pc:\x27+phaseColor+\x27">\x27+phaseLabel+\x27</span></div>\x27+
-            \x27<div class="prl-office">\x27+
-            \x27<div class="prl-office-floor"></div>\x27+
-            \x27<div class="prl-desks-row">\x27+desksHtml+\x27</div>\x27+
-            masterHtml+
-            flyingDocHtml+
-            \x27</div>\x27+
-            convergenceHtml+
-            \x27</div>\x27;
-
-          // Force Safari compositing repaint
-          void pb.offsetHeight;
-          pb.style.transform = \x27translateZ(0)\x27;
-          requestAnimationFrame(function(){
-            pb.style.opacity = \x270.99\x27;
-            requestAnimationFrame(function(){ pb.style.opacity = \x271\x27; });
+            if (seatEl) {
+              seatEl.className = \x27br-seat\x27 +
+                (isActive ? \x27 br-seat--active\x27 : \x27\x27) +
+                (isDone ? \x27 br-seat--done\x27 : \x27\x27);
+              seatEl.style.setProperty(\x27--sc\x27, phaseColor);
+            }
+            // Character animation: bob when active
+            if (charEl) {
+              charEl.style.animation = isActive ? \x27brCharBob .8s ease-in-out infinite\x27 : \x27\x27;
+              charEl.style.filter = isActive
+                ? (\x27drop-shadow(0 0 12px \x27+phaseColor+\x27)\x27)
+                : (isDone ? \x27none\x27 : \x27grayscale(.4)\x27);
+            }
+            if (bubbleEl) {
+              var actionStr2 = \x27\x27;
+              if (phase===\x27r1\x27 && isActive) actionStr2 = \x27...analizza\x27;
+              else if (phase===\x27r1\x27 && isDone) actionStr2 = \x27\u2714 bozza pronta\x27;
+              else if (phase===\x27r2\x27 && isActive) actionStr2 = \x27...legge proposte\x27;
+              else if (phase===\x27r2\x27 && isDone) actionStr2 = \x27\u2714 raffinato\x27;
+              else if (phase===\x27r3\x27 && isActive) actionStr2 = \x27...media\x27;
+              else if (phase===\x27done\x27) actionStr2 = \x27\u2714 consenso\x27;
+              else if (!isActive && !isDone && phase===\x27r2\x27) actionStr2 = \x27legge...\x27;
+              else if (!isActive && !isDone) actionStr2 = \x27in attesa\x27;
+              bubbleEl.textContent = actionStr2;
+              bubbleEl.style.display = actionStr2 ? \x27\x27 : \x27none\x27;
+              bubbleEl.style.borderColor = isActive ? phaseColor : (isDone ? \x27rgba(0,0,0,.25)\x27 : \x27rgba(0,0,0,.15)\x27);
+              bubbleEl.style.color = isActive ? \x27#000000\x27 : (isDone ? \x27#111827\x27 : \x27#6b7280\x27);
+              bubbleEl.style.background = isActive ? \x27rgba(255,255,255,.95)\x27 : \x27rgba(255,255,255,.82)\x27;
+              bubbleEl.style.fontWeight = isActive ? \x27700\x27 : \x27500\x27;
+            }
+            if (nameEl) {
+              nameEl.style.color = isDone ? \x27#111827\x27 : (isActive ? \x27#000000\x27 : \x27#374151\x27);
+              nameEl.style.fontWeight = isActive ? \x27800\x27 : \x27600\x27;
+            }
           });
+
+          // ── Cross-agent communication lines (R2/R3 only) ────────────────────
+          // In R2: show lines from active agent to all done agents (cross-reading)
+          // In R1/done: show orch→active line only
+          var commSvg = document.getElementById(\x27brCommSvg\x27);
+          var brRoom2 = commSvg ? commSvg.closest(\x27.br-room\x27) : null;
+          if (commSvg && brRoom2) {
+            commSvg.innerHTML = \x27\x27;
+            var roomRect2 = brRoom2.getBoundingClientRect();
+            var ns = \x27http://www.w3.org/2000/svg\x27;
+
+            function addCommLine(fromEl, toEl, color, dash, width, opacity, anim) {
+              if (!fromEl || !toEl) return;
+              var fr = fromEl.getBoundingClientRect();
+              var tr = toEl.getBoundingClientRect();
+              var lx1 = Math.round(fr.left + fr.width/2 - roomRect2.left);
+              var ly1 = Math.round(fr.top + fr.height/2 - roomRect2.top);
+              var lx2 = Math.round(tr.left + tr.width/2 - roomRect2.left);
+              var ly2 = Math.round(tr.top + tr.height/2 - roomRect2.top);
+              // Bezier curve for elegance
+              var mx = (lx1+lx2)/2; var my = Math.min(ly1,ly2) - 30;
+              var path = document.createElementNS(ns, \x27path\x27);
+              path.setAttribute(\x27d\x27, \x27M\x27+lx1+\x27,\x27+ly1+\x27 Q\x27+mx+\x27,\x27+my+\x27 \x27+lx2+\x27,\x27+ly2);
+              path.setAttribute(\x27stroke\x27, color);
+              path.setAttribute(\x27stroke-width\x27, String(width||2));
+              path.setAttribute(\x27stroke-dasharray\x27, dash||\x27\x27);
+              path.setAttribute(\x27fill\x27, \x27none\x27);
+              path.setAttribute(\x27opacity\x27, String(opacity||.6));
+              if (anim) path.style.animation = anim;
+              // Arrow marker at end
+              var mk = document.createElementNS(ns, \x27marker\x27);
+              var mkId = \x27arr\x27+Math.random().toString(36).slice(2,6);
+              mk.setAttribute(\x27id\x27, mkId);
+              mk.setAttribute(\x27markerWidth\x27,\x278\x27);mk.setAttribute(\x27markerHeight\x27,\x276\x27);
+              mk.setAttribute(\x27refX\x27,\x278\x27);mk.setAttribute(\x27refY\x27,\x273\x27);
+              mk.setAttribute(\x27orient\x27,\x27auto\x27);
+              var poly = document.createElementNS(ns,\x27polygon\x27);
+              poly.setAttribute(\x27points\x27,\x270 0, 8 3, 0 6\x27);
+              poly.setAttribute(\x27fill\x27, color);
+              mk.appendChild(poly);
+              var defs2 = document.createElementNS(ns,\x27defs\x27);
+              defs2.appendChild(mk);
+              commSvg.appendChild(defs2);
+              path.setAttribute(\x27marker-end\x27,\x27url(#\x27+mkId+\x27)\x27);
+              commSvg.appendChild(path);
+              // Floating emoji dot on path midpoint
+              var dot = document.createElementNS(ns, \x27text\x27);
+              dot.setAttribute(\x27x\x27, String(Math.round(mx)));
+              dot.setAttribute(\x27y\x27, String(Math.round(my-8)));
+              dot.setAttribute(\x27text-anchor\x27, \x27middle\x27);
+              dot.setAttribute(\x27font-size\x27, \x2714\x27);
+              dot.textContent = phase===\x27r2\x27 ? String.fromCodePoint(0x1F4AC) : (phase===\x27r3\x27 ? String.fromCodePoint(0x1F91D) : String.fromCodePoint(0x1F4E8));
+              dot.style.animation = \x27brDotFloat 1.5s ease-in-out infinite\x27;
+              commSvg.appendChild(dot);
+            }
+
+            var orchEl2 = document.getElementById(\x27brOrch\x27);
+            if (phase === \x27done\x27) {
+              // All done: show web of solid connections between all agents
+              proposals.forEach(function(pa, ia) {
+                proposals.forEach(function(pb2, ib2) {
+                  if (ib2 <= ia) return;
+                  var ea = document.getElementById(\x27brseat_\x27+pa.label.replace(/[^a-zA-Z0-9_-]/g,\x27_\x27));
+                  var eb = document.getElementById(\x27brseat_\x27+pb2.label.replace(/[^a-zA-Z0-9_-]/g,\x27_\x27));
+                  addCommLine(ea, eb, \x27#111827\x27, \x274 3\x27, 2, 0.9, \x27\x27);
+                });
+              });
+            } else if (activeLabel) {
+              var aLblSafe2 = activeLabel.replace(/[^a-zA-Z0-9_-]/g,\x27_\x27);
+              var activeSeatEl2 = document.getElementById(\x27brseat_\x27+aLblSafe2);
+              // Orch → active agent: thick black dashed animated line
+              addCommLine(orchEl2, activeSeatEl2, \x27#111827\x27, \x276 4\x27, 3, 1, \x27brDashFlow 1s linear infinite\x27);
+              // R2/R3: done agents → active agent: dark grey dashed
+              if (phase === \x27r2\x27 || phase === \x27r3\x27) {
+                proposals.forEach(function(pp2) {
+                  var doneL = pp2.label || pp2.agent;
+                  if (doneL === activeLabel) return;
+                  if (!parlDoneAgents[doneL]) return;
+                  var doneSeat = document.getElementById(\x27brseat_\x27+doneL.replace(/[^a-zA-Z0-9_-]/g,\x27_\x27));
+                  addCommLine(doneSeat, activeSeatEl2, \x27#374151\x27, \x275 3\x27, 2.5, 1, \x27brDashFlow 1.4s linear infinite\x27);
+                });
+              }
+            }
+          }
+
+          // Persist across tab navigations
+          if (pb.innerHTML && pb.innerHTML.length < 60000) { _parlPersistHtml = _PARL_STAMP + pb.innerHTML; }
+
         }
 
         // Show initial R1 block and scroll into view
@@ -4774,7 +5230,7 @@ async function runStudio() {
                     if (r2StartM) {
                       var r2Label = r2StartM[1];
                       parlActiveAgent = r2Label;
-                      studioLog(r2Label, \x27&#x2656;\x27, \x27\x27, \x27agent\x27, false);
+                      studioLog(r2Label, \x27&#x1f4bc;\x27, \x27\x27, \x27agent\x27, false);
                       var delEnts2 = document.querySelectorAll(\x27.studio-log-entry\x27);
                       var delL2 = delEnts2[delEnts2.length - 1];
                       if (delL2) {
@@ -4808,10 +5264,25 @@ async function runStudio() {
                       var delEntries = document.querySelectorAll(\x27.studio-log-entry\x27);
                       var delLast = delEntries[delEntries.length - 1];
                       if (delLast) { var delTb = delLast.querySelector(\x27.studio-log-entry__text\x27); if (delTb) delTb.textContent = dev.token.replace(new RegExp(\x27[\\r\\n]+\x27,\x27g\x27),\x27 \x27); }
+                      // Mirror live token to the active agent boardroom bubble
+                      if (parlActiveAgent) {
+                        var brSafe2 = parlActiveAgent.replace(new RegExp(\x27[^a-zA-Z0-9_-]\x27,\x27g\x27),\x27_\x27);
+                        var brLiveBubble = document.getElementById(\x27brbubble_\x27+brSafe2);
+                        if (brLiveBubble) {
+                          var rawTok = dev.token.replace(new RegExp(\x27[\\r\\n]+\x27,\x27g\x27),\x27 \x27);
+                          var safeTok = rawTok.replace(/&/g,\x27&amp;\x27).replace(/</g,\x27&lt;\x27).replace(/>/g,\x27&gt;\x27);
+                          var truncTok = rawTok.length > 60 ? rawTok.slice(-60) : rawTok;
+                          var safeTrunc = truncTok.replace(/&/g,\x27&amp;\x27).replace(/</g,\x27&lt;\x27).replace(/>/g,\x27&gt;\x27);
+                          brLiveBubble.style.display = \x27\x27;
+                          brLiveBubble.innerHTML = safeTrunc + \x27<span style="display:inline-block;width:2px;height:8px;background:var(--green);margin-left:1px;vertical-align:text-bottom;animation:streamBlink .7s step-end infinite">&#8203;</span>\x27;
+                          brLiveBubble.style.borderColor = \x27#6366f1\x27;
+                          brLiveBubble.style.color = \x27#a5b4fc\x27;
+                        }
+                      }
                     }
                   } else if (dev.deliberation_r2) {
                     var r2d = dev.deliberation_r2;
-                    studioLog(r2d.label || r2d.agent, \x27&#x2656;\x27, \x27[R2] \x27 + (r2d.output || \x27\x27), \x27agent\x27, true);
+                    studioLog(r2d.label || r2d.agent, \x27&#x1f4bc;\x27, \x27[Consiglio R2] \x27 + (r2d.output || \x27\x27), \x27agent\x27, true);
                     var ni2 = studioState.nodes.findIndex(function(x){return x.agent===r2d.agent;});
                     if (ni2 >= 0) { studioState.nodes[ni2].output = r2d.output; studioState.nodes[ni2].status = \x27done\x27; }
                     studioAddTokens(0, Math.ceil((r2d.output||'').length / 4));
@@ -4823,17 +5294,18 @@ async function runStudio() {
                     context = r2d.output || context;
                   } else if (dev.deliberation_r3) {
                     renderParlBlock(\x27r3\x27, null, null);
-                    studioLog(\x27HERALD\x27, \x27&#128295;\x27, \x27[Mediazione] \x27 + (dev.deliberation_r3.output || \x27\x27), \x27system\x27, true);
+                    var r3label = dev.deliberation_r3.converged ? \x27[Sintesi Consiglio] \x27 : \x27[Mediazione] \x27;
+                    studioLog(\x27HERALD\x27, \x27&#128295;\x27, r3label + (dev.deliberation_r3.output || \x27\x27), \x27system\x27, true);
                     studioAddTokens(0, Math.ceil((dev.deliberation_r3.output||'').length / 4));
                     context = dev.deliberation_r3.output || context;
                   } else if (dev.deliberation_done) {
                     var r2Conv = Math.round((dev.r2_convergence || 0) * 100);
-                    studioLog(\x27Parlamento\x27, \x27&#x2656;\x27, \x27Deliberazione completa — convergenza R2: \x27 + r2Conv + \x27%\x27, \x27system\x27);
+                    studioLog(\x27Consiglio\x27, \x27&#x1f4bc;\x27, \x27Consiglio concluso — convergenza R2: \x27 + r2Conv + \x27%\x27, \x27system\x27);
                     if (dev.mediation) { context = dev.mediation; }
                     renderParlBlock(\x27done\x27, null, r2Conv);
                     if (studioState.nodes[parlNodeIdx]) {
                       studioState.nodes[parlNodeIdx].status = \x27done\x27;
-                      studioState.nodes[parlNodeIdx].label = \x27Parlamento (\x27 + r2Conv + \x27%)\x27;
+                      studioState.nodes[parlNodeIdx].label = \x27Consiglio (\x27 + r2Conv + \x27%)\x27;
                       renderStudioNodes();
                     }
                     delDone = true;
@@ -4846,8 +5318,8 @@ async function runStudio() {
           }
         } catch(e3) {
           if (e3.name !== \x27AbortError\x27) {
-            studioLog(\x27Parlamento\x27, \x27&#x2656;\x27, \x27Deliberazione non disponibile: \x27 + (e3.message || String(e3)), \x27error\x27);
-            var pb2 = document.getElementById(\x27studioParliamentBlock\x27); if (pb2) pb2.style.display = \x27none\x27;
+            studioLog(\x27Consiglio\x27, \x27&#x1f4bc;\x27, \x27Consiglio non disponibile: \x27 + (e3.message || String(e3)), \x27error\x27);
+            // Do NOT hide the parliament block if it already has content — user is watching it
           }
         }
       }
@@ -4888,6 +5360,7 @@ async function runStudio() {
         }
       }
       if (parlFinal && parlFinal.style.display !== 'none' && parlFinal.innerHTML) {
+        _parlPersistHtml = _PARL_STAMP + parlFinal.innerHTML; // persist so tab nav doesn't lose it
         doScroll(parlFinal);
         setTimeout(function(){ doScroll(resEl); }, 2200);
       } else if (resEl) {
@@ -4915,21 +5388,42 @@ async function runStudio() {
 function saveStudioSession(task, nodes, log, result) {
   try {
     var sessions = JSON.parse(localStorage.getItem('nha_studio_sessions') || '[]');
-    // Save parliament block HTML if present (static snapshot — animations not needed on restore)
+    // Save parliament as compact node list — NOT raw HTML (too large, gets truncated)
     var parlEl = document.getElementById('studioParliamentBlock');
-    var parlHtml = (parlEl && parlEl.style.display !== 'none') ? parlEl.innerHTML : null;
+    var hasParl = parlEl && parlEl.style.display !== 'none' && parlEl.innerHTML.length > 200;
+    // Derive parliament nodes from workflow nodes (exclude Canvas/tool-only agents)
+    var parlNodes = hasParl ? nodes
+      .filter(function(n){ return n.agent !== 'CanvasAgent' && n.agent !== 'GitHubAgent' && n.agent !== 'EmailAgent' && n.agent !== 'CalendarAgent'; })
+      .map(function(n){ return {label:n.label,agent:n.agent,icon:n.icon}; })
+      : null;
+    // Extract r2Conv from the Consiglio node label e.g. "Consiglio (72%)"
+    var r2Conv = 0;
+    if (hasParl) {
+      var parlNode = nodes.find(function(n){ return n.agent === 'Consiglio'; });
+      if (parlNode && parlNode.label) {
+        var cm = parlNode.label.match(/\((\d+)%\)/);
+        if (cm) r2Conv = parseInt(cm[1], 10);
+      }
+    }
     sessions.unshift({
       id: Date.now(),
       task: task,
-      nodes: nodes.map(function(n){return {label:n.label,icon:n.icon,agent:n.agent};}),
+      nodes: nodes.map(function(n){return {label:n.label,icon:n.icon,agent:n.agent,output:n.output||''};}),
       result: result,
       canvas: studioState.canvas || null,
-      parlHtml: parlHtml,
+      parlNodes: parlNodes,
+      parlR2Conv: r2Conv,
       log: log.map(function(e){return {agent:e.agent,icon:e.icon,text:e.text,type:e.type,time:e.time};}),
       ts: new Date().toLocaleString()
     });
-    sessions = sessions.slice(0, 20); // keep last 20
-    localStorage.setItem('nha_studio_sessions', JSON.stringify(sessions));
+    sessions = sessions.slice(0, 10); // keep last 10 (save space)
+    try {
+      localStorage.setItem('nha_studio_sessions', JSON.stringify(sessions));
+    } catch(qe) {
+      // Quota exceeded: save without canvas/parlHtml
+      sessions[0].canvas = null; sessions[0].parlHtml = null;
+      try { localStorage.setItem('nha_studio_sessions', JSON.stringify(sessions)); } catch(e2) {}
+    }
   } catch(e) {}
 }
 
@@ -4944,28 +5438,104 @@ function renderStudioSessionsBar() {
   var sessions = loadStudioSessions();
   if (!sessions.length) { el.style.display = 'none'; return; }
   el.style.display = 'block';
-  el.innerHTML = '<div style="font-size:10px;color:var(--dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">' + t('recent_sessions') + '</div>' +
-    '<div style="max-height:220px;overflow-y:auto;padding-right:4px">' +
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+      '<span style="font-size:11px;font-weight:700;color:#f8fafc;text-transform:uppercase;letter-spacing:.8px">' + t('recent_sessions') + '</span>' +
+      '<span style="font-size:10px;color:#94a3b8">' + sessions.length + ' saved</span>' +
+    '</div>' +
+    '<div style="max-height:240px;overflow-y:auto;padding-right:2px;display:flex;flex-direction:column;gap:6px">' +
     sessions.map(function(s,i) {
-      return '<div class="studio-session-item">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
-          '<span class="studio-session-task">' + esc(s.task.slice(0,60)) + (s.task.length>60?'...':'') + '</span>' +
-          '<span style="font-size:9px;color:var(--dim);white-space:nowrap">' + esc(s.ts) + '</span>' +
+      return '<div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 12px">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px">' +
+          '<span style="font-size:11px;color:#f1f5f9;font-weight:600;line-height:1.4;flex:1">' + esc(s.task.slice(0,65)) + (s.task.length>65?'...':'') + '</span>' +
+          '<button onclick="deleteStudioSession('+i+')" style="flex-shrink:0;font-size:14px;line-height:1;background:none;border:none;color:#64748b;cursor:pointer;padding:0 2px" title="Delete">&times;</button>' +
         '</div>' +
-        '<div style="display:flex;gap:6px;margin-top:6px">' +
-          '<button onclick="restoreStudioSession('+i+')" style="font-size:10px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--green);cursor:pointer">Restore</button>' +
-          '<button onclick="importStudioToChat('+i+')" style="font-size:10px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--cyan);cursor:pointer">Send to Chat</button>' +
-          '<button onclick="deleteStudioSession('+i+')" style="font-size:10px;padding:3px 8px;background:none;border:none;color:var(--dim);cursor:pointer">&times;</button>' +
+        '<div style="font-size:10px;color:#64748b;margin-bottom:8px">' + esc(s.ts) + '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button onclick="restoreStudioSession('+i+')" style="font-size:10px;font-weight:600;padding:4px 10px;background:#0ea5e9;border:none;border-radius:5px;color:#fff;cursor:pointer">Restore</button>' +
+          '<button onclick="importStudioToChat('+i+')" style="font-size:10px;font-weight:600;padding:4px 10px;background:#334155;border:1px solid #475569;border-radius:5px;color:#cbd5e1;cursor:pointer">Send to Chat</button>' +
         '</div>' +
       '</div>';
     }).join('') + '</div>';
+}
+
+// Renders the parliament boardroom in "done" state from a compact node list.
+// Used by restoreStudioSession — independent of the runStudio closure.
+function renderParlBlockStatic(parlNodes, r2Conv) {
+  var pb = document.getElementById('studioParliamentBlock');
+  if (!pb || !parlNodes || parlNodes.length < 1) return;
+  pb.style.display = 'block';
+
+  var proposals2 = parlNodes;
+  var crownEm = String.fromCodePoint(0x1F451);
+  var orchEmoji2 = String.fromCodePoint(0x1F9D1,0x200D,0x1F4BC);
+
+  function buildSeat2(prop) {
+    var lbl = prop.label || prop.agent;
+    var safeLbl = lbl.replace(/[^a-zA-Z0-9_-]/g,'_');
+    var emojiIdx = Math.abs(lbl.charCodeAt(0)+(lbl.charCodeAt(lbl.length-1)||0)) % AGENT_EMOJIS.length;
+    var agentEmoji = AGENT_EMOJIS[emojiIdx];
+    return '<div class="br-seat" id="brseat_'+safeLbl+'" data-lbl="'+esc(lbl)+'">' +
+      '<div class="br-char" style="font-size:40px;filter:none">'+agentEmoji+'</div>' +
+      '<div class="br-seat-name">'+esc(lbl)+'</div>' +
+      '</div>';
+  }
+
+  var topSeats2 = []; var botSeats2 = [];
+  proposals2.forEach(function(p,i){ if(i%2===0) topSeats2.push(p); else botSeats2.push(p); });
+
+  var tblSvg2 = '<svg viewBox="0 0 1000 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:50%;left:0;width:100%;height:140px;transform:translateY(-50%);z-index:1;pointer-events:none">' +
+    '<defs><linearGradient id="tblGrad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b4423"/><stop offset="0.4" stop-color="#4a2e12"/><stop offset="1" stop-color="#2e1a08"/></linearGradient></defs>' +
+    '<rect x="6" y="10" width="988" height="178" rx="22" fill="rgba(0,0,0,.28)"/>' +
+    '<rect x="0" y="2" width="1000" height="178" rx="20" fill="url(#tblGrad2)"/>' +
+    '<text x="500" y="118" text-anchor="middle" font-family="system-ui" font-size="58" font-weight="900" fill="rgba(160,140,255,.09)" letter-spacing="10">NHA</text>' +
+    '</svg>';
+
+  var bgSvg2 = '<svg viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none">' +
+    '<defs>' +
+    '<linearGradient id="brWall2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5f0e8"/><stop offset="1" stop-color="#e8e0d0"/></linearGradient>' +
+    '<linearGradient id="winGrad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8dff8"/><stop offset="1" stop-color="#d8f0ff"/></linearGradient>' +
+    '<linearGradient id="doorGrad2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a0724a"/><stop offset="0.5" stop-color="#c8905c"/><stop offset="1" stop-color="#a0724a"/></linearGradient>' +
+    '</defs>' +
+    '<rect x="0" y="0" width="1000" height="215" fill="url(#brWall2)"/>' +
+    '<rect x="0" y="0" width="1000" height="8" fill="#d8cfc0"/>' +
+    '<rect x="0" y="206" width="1000" height="9" fill="#c8b898" rx="1"/>' +
+    (function(){ var s=''; var pC=['#c8a06a','#bf9860','#d4aa72','#ba9458','#caa86e']; for(var fy=215;fy<600+32;fy+=32){var ro=(Math.floor((fy-215)/32)%2)*60; for(var fx=-120+ro;fx<1000+120;fx+=120){var pc=pC[Math.abs(Math.round(fx/120+fy/32*1.3))%pC.length]; s+='<rect x="'+Math.round(fx)+'" y="'+fy+'" width="118" height="30" fill="'+pc+'" rx="2"/>';}} return s; }()) +
+    '<rect x="28" y="18" width="126" height="96" rx="3" fill="#4a6080" stroke="#2a3a50" stroke-width="4"/>' +
+    '<rect x="34" y="24" width="114" height="84" rx="2" fill="url(#winGrad2)"/>' +
+    '<rect x="846" y="18" width="126" height="96" rx="3" fill="#4a6080" stroke="#2a3a50" stroke-width="4"/>' +
+    '<rect x="852" y="24" width="114" height="84" rx="2" fill="url(#winGrad2)"/>' +
+    '<rect x="455" y="0" width="90" height="215" fill="url(#doorGrad2)" stroke="#7a5030" stroke-width="3"/>' +
+    '<line x1="500" y1="0" x2="500" y2="28" stroke="#aaa" stroke-width="4"/>' +
+    '<ellipse cx="500" cy="36" rx="52" ry="14" fill="#f0d830" stroke="#c8a820" stroke-width="3"/>' +
+    '<circle cx="470" cy="47" r="9" fill="#fffce0"/><circle cx="500" cy="50" r="9" fill="#fffce0"/><circle cx="530" cy="47" r="9" fill="#fffce0"/>' +
+    '</svg>';
+
+  var convPct = r2Conv || 0;
+  pb.innerHTML =
+    '<div class="br-wrap">' +
+    '<div class="br-header"><span class="br-phase-chip" style="--pc:#22c55e">Consiglio concluso — convergenza ' + convPct + '%</span></div>' +
+    '<div class="br-room">' +
+    bgSvg2 +
+    '<div style="position:absolute;bottom:8px;left:10px;font-size:44px;z-index:5">' + String.fromCodePoint(0x1FAB4) + '</div>' +
+    '<div style="position:absolute;bottom:8px;right:10px;font-size:44px;z-index:5">' + String.fromCodePoint(0x1FAB4) + '</div>' +
+    '<div style="position:relative;z-index:10;display:flex;flex-direction:column;justify-content:center;min-height:480px;padding:20px 16px;gap:0;box-sizing:border-box">' +
+    '<div class="br-seats-row">' + topSeats2.map(buildSeat2).join('') + '</div>' +
+    '<div style="position:relative;display:flex;align-items:center;width:100%;min-height:160px">' +
+    '<div class="br-orch" id="brOrch"><div class="br-orch-inner"><span class="br-orch-crown">' + crownEm + '</span><span class="br-orch-emoji">' + orchEmoji2 + '</span></div><div class="br-orch-label">Orchestratore</div></div>' +
+    '<div style="position:relative;flex:1;min-height:140px">' + tblSvg2 + '</div>' +
+    '</div>' +
+    '<div class="br-seats-row">' + botSeats2.map(buildSeat2).join('') + '</div>' +
+    '</div>' +
+    '</div>' +
+    '<div class="br-convergence" style="display:block">Consenso raggiunto — convergenza R2: <strong>' + convPct + '%</strong></div>' +
+    '</div>';
 }
 
 function restoreStudioSession(idx) {
   var sessions = loadStudioSessions();
   var s = sessions[idx]; if (!s) return;
   studioState.task = s.task;
-  studioState.nodes = s.nodes.map(function(n){return {icon:n.icon,agent:n.agent,label:n.label,status:'done'};});
+  studioState.nodes = s.nodes.map(function(n){return {icon:n.icon,agent:n.agent,label:n.label,output:n.output||'',status:'done'};});
   studioState.log = s.log;
   studioState.result = s.result;
   studioState.canvas = s.canvas || null;
@@ -4973,12 +5543,16 @@ function restoreStudioSession(idx) {
   var ta = document.getElementById('studioTaskInput');
   if (ta) ta.value = s.task;
   renderStudioNodes(); renderStudioLog(); renderStudioResult();
-  // Restore parliament block if present
+  // Restore parliament block — rebuild from compact parlNodes (not raw HTML)
   var parlEl = document.getElementById('studioParliamentBlock');
   if (parlEl) {
-    if (s.parlHtml) {
-      parlEl.innerHTML = s.parlHtml;
-      parlEl.style.display = 'block';
+    var parlNodes = s.parlNodes || null;
+    // Legacy: old sessions might have parlHtml instead — ignore it (it was truncated)
+    if (parlNodes && parlNodes.length >= 2) {
+      renderParlBlockStatic(parlNodes, s.parlR2Conv || 0);
+      setTimeout(function() {
+        if (parlEl) parlEl.scrollIntoView({behavior: 'smooth', block: 'start'});
+      }, 150);
     } else {
       parlEl.style.display = 'none';
     }
@@ -5122,19 +5696,94 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
                   if (tb) {
                     if (isStatus) {
                       var st = ev.token.replace(new RegExp(\x27[\\\\r\\\\n]+\x27,\x27g\x27), \x27 \x27);
-                      // Render [Searching: "query"] as a styled search chip
-                      var srchM = st.match(/^\\[Searching:\\s*"([^"]+)"\\]\\s*$/);
+                      // Strip surrounding brackets for display
+                      var stLabel = st.replace(new RegExp(\x27^\\\\[\x27), \x27\x27).replace(new RegExp(\x27\\\\]\\\\s*$\x27), \x27\x27).trim();
+                      // Special chip for Searching
+                      var srchM = st.match(new RegExp(\x27^\\\\[Searching:\\\\s*"([^"]+)"\\\\]\\\\s*$\x27));
                       if (srchM) {
                         var qEsc = srchM[1].replace(/&/g,\x27&amp;\x27).replace(/</g,\x27&lt;\x27).replace(/>/g,\x27&gt;\x27);
-                        tb.innerHTML = \x27<span style="display:inline-flex;align-items:center;gap:6px;background:#1c1c28;border:1px solid #6366f133;border-radius:20px;padding:3px 10px 3px 8px;font-size:11px;font-family:var(--mono)"><span style="color:#6366f1">&#128269;</span><span style="color:var(--dim)">Cercando</span><strong style="color:#a5b4fc">\x27 + qEsc + \x27</strong><span style="color:#6366f1;animation:pulse 1s infinite">&#183;&#183;&#183;</span></span>\x27;
+                        tb.innerHTML = \x27<span class="iso-status-chip"><span class="iso-status-dot"></span>&#128269; <span style="color:var(--dim)">Cercando</span> <strong style="color:#a5b4fc">\x27+qEsc+\x27</strong></span>\x27;
                       } else {
-                        tb.textContent = st;
+                        var stEsc = stLabel.replace(/&/g,\x27&amp;\x27).replace(/</g,\x27&lt;\x27).replace(/>/g,\x27&gt;\x27);
+                        tb.innerHTML = \x27<span class="iso-status-chip"><span class="iso-status-dot"></span>\x27+stEsc+\x27</span>\x27;
                       }
                     } else {
-                      // Live token counter — shows progress without raw content
-                      var chars = output.length;
-                      var toks = Math.ceil(chars / 4);
-                      tb.innerHTML = \x27<span style="color:var(--green);font-family:var(--mono);font-size:10px">&#9679; Generating\u2026 \x27 + toks + \x27 token</span>\x27;
+                      // Word-by-word streaming: APPEND new chars, never overwrite
+                      var renderedLen = parseInt(tb.getAttribute(String.fromCharCode(100,97,116,97,45,114,108,101,110)) || \x270\x27, 10);
+                      if (renderedLen === 0) {
+                        // First token: set up container + cursor
+                        tb.innerHTML = \x27\x27;
+                        tb.setAttribute(String.fromCharCode(100,97,116,97,45,114,108,101,110), \x270\x27);
+                        var streamSpan = document.createElement(\x27span\x27);
+                        streamSpan.id = \x27streamText_\x27 + idx;
+                        streamSpan.style.cssText = \x27font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word;font-family:var(--font)\x27;
+                        tb.appendChild(streamSpan);
+                        var cursorEl = document.createElement(\x27span\x27);
+                        cursorEl.id = \x27streamCursor_\x27 + idx;
+                        cursorEl.style.cssText = \x27display:inline-block;width:2px;height:13px;background:var(--green);margin-left:1px;vertical-align:text-bottom;animation:streamBlink .7s step-end infinite\x27;
+                        tb.appendChild(cursorEl);
+                      }
+                      // Append only newly arrived chars
+                      var newChars = output.slice(renderedLen);
+                      if (newChars.length > 0) {
+                        var stEl = document.getElementById(\x27streamText_\x27 + idx);
+                        if (stEl) { stEl.appendChild(document.createTextNode(newChars)); }
+                        tb.setAttribute(String.fromCharCode(100,97,116,97,45,114,108,101,110), String(output.length));
+                        // Keep studioState.log in sync so renderStudioLog() final call has current text
+                        var logLen = studioState.log.length;
+                        if (logLen > 0) { studioState.log[logLen - 1].text = output; }
+                      }
+                      // Update iso thought bubble of the active agent
+                      var isoB = document.getElementById(\x27isobubble_\x27+idx);
+                      if (isoB) {
+                        // Show last ~6 complete words from the streaming output
+                        var wfClean = output.replace(new RegExp(\x27[\\r\\n]+\x27, \x27g\x27), \x27 \x27).trim();
+                        var wfWords = wfClean.split(\x27 \x27).filter(function(w){return w.length>0;});
+                        var wfSnippet = wfWords.slice(-6).join(\x27 \x27);
+                        if (wfSnippet.length > 52) wfSnippet = wfSnippet.slice(-52);
+                        var wfSafe = wfSnippet.replace(/&/g,\x27&amp;\x27).replace(/</g,\x27&lt;\x27).replace(/>/g,\x27&gt;\x27);
+                        isoB.className = \x27iso-bubble iso-bubble--active\x27;
+                        isoB.style.visibility = \x27visible\x27;
+                        isoB.style.color = \x27#000000\x27;
+                        isoB.style.fontWeight = \x27700\x27;
+                        isoB.style.background = \x27#ffffff\x27;
+                        isoB.innerHTML = wfSafe + \x27<span style="display:inline-block;width:2px;height:8px;background:#1d4ed8;margin-left:1px;vertical-align:text-bottom;animation:streamBlink .7s step-end infinite">&#8203;</span>\x27;
+                      }
+                      // Update orchestrator bubble: show which agent it assigned and move the char
+                      var orchB = document.getElementById(\x27wfOrchBubble\x27);
+                      if (orchB) {
+                        var activeNode2 = studioState.nodes[idx];
+                        orchB.style.visibility = \x27visible\x27;
+                        orchB.textContent = \x27Assegno a \x27+(activeNode2 ? (activeNode2.label || activeNode2.agent) : \x27agente\x27);
+                      }
+                      // Move orchestrator char toward active agent column (live, every token)
+                      var orchCharEl = document.getElementById(\x27wfOrchChar\x27);
+                      var orchStEl = document.querySelector(\x27[data-station-idx="-1"]\x27);
+                      var actStEl = document.querySelector(\x27[data-station-idx="\x27+idx+\x27"]\x27);
+                      if (orchCharEl && orchStEl && actStEl) {
+                        var orchR = orchStEl.getBoundingClientRect();
+                        var actR = actStEl.getBoundingClientRect();
+                        var dlt = (actR.left + actR.width/2) - (orchR.left + orchR.width/2);
+                        var shft = Math.round(dlt * 0.62);
+                        // Only update if shift changed by more than 4px (avoid jitter)
+                        var lastShft = parseFloat(orchCharEl.getAttribute(\x27data-last-shift\x27) || \x270\x27);
+                        if (Math.abs(shft - lastShft) > 4) {
+                          orchCharEl.style.transition = \x27transform 1.2s cubic-bezier(.4,0,.2,1)\x27;
+                          orchCharEl.style.transform = \x27translateX(\x27+shft+\x27px)\x27;
+                          orchCharEl.setAttribute(\x27data-last-shift\x27, String(shft));
+                        }
+                      }
+                      // Update boardroom seat bubble if parliament is active
+                      if (parlActiveAgent) {
+                        var brSafeLbl = parlActiveAgent.replace(new RegExp(\x27[^a-zA-Z0-9_-]\x27,\x27g\x27),\x27_\x27);
+                        var brBubbleEl = document.getElementById(\x27brbubble_\x27+brSafeLbl);
+                        if (brBubbleEl) {
+                          var brRaw = output.length > 48 ? output.slice(-48) : output;
+                          var brSafe = brRaw.replace(/&/g,\x27&amp;\x27).replace(/</g,\x27&lt;\x27).replace(/>/g,\x27&gt;\x27);
+                          brBubbleEl.style.display = \x27\x27;
+                          brBubbleEl.innerHTML = brSafe + \x27<span style="display:inline-block;width:2px;height:8px;background:var(--green);margin-left:1px;vertical-align:text-bottom;animation:streamBlink .7s step-end infinite">&#8203;</span>\x27;
+                        }
+                      }
                     }
                   }
                 }
@@ -5167,9 +5816,14 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
                 }
               }
               if (ev.usage) {
+                // Backend sends accurate usage at end: add input, replace out estimate with real value
                 var uIn = ev.usage.input||0; var uOut = ev.usage.output||0;
-                stepTokensIn += uIn; stepTokensOut += uOut;
-                studioAddTokens(uIn, uOut);
+                // Correct output: remove per-token estimate already added, replace with real count
+                var outDiff = uOut - stepTokensOut;
+                studioTokens.out = Math.max(0, studioTokens.out + outDiff);
+                stepTokensIn += uIn; stepTokensOut = uOut;
+                studioTokens.in += uIn;
+                studioUpdateTokenBar();
               } else if (ev.token && !isStatus) {
                 var est = Math.ceil(ev.token.length/4);
                 stepTokensOut += est; studioTokens.out += est; studioUpdateTokenBar();
@@ -5191,6 +5845,12 @@ function runStudioStep(idx, node, task, context, stepDef, signal) {
 }
 
 function renderStudio(el) {
+  // Persist parliament block across tab navigations
+  var existingParl = document.getElementById('studioParliamentBlock');
+  if (existingParl && existingParl.innerHTML.trim()) {
+    _parlPersistHtml = _PARL_STAMP + existingParl.innerHTML;
+  }
+
   var examplesHtml = STUDIO_EXAMPLES.map(function(ex) {
     return '<button class="studio-example-btn" onclick="document.getElementById(\\'studioTaskInput\\').value=' + JSON.stringify(ex) + '">' + esc(ex.slice(0, 52)) + (ex.length > 52 ? '...' : '') + '</button>';
   }).join('');
@@ -5211,6 +5871,8 @@ function renderStudio(el) {
     {icon:'&#128247;',name:'CanvasAgent',desc:'Generate HTML visual report'},
     {icon:'&#128274;',name:'SecurityAgent',desc:'Security analysis'},
     {icon:'&#128295;',name:'DevOpsAgent',desc:'Infrastructure analysis'},
+    {icon:'&#128190;',name:'CodeExecutorAgent',desc:'Run Python/JS/TS code in sandbox'},
+    {icon:'&#128193;',name:'FileReaderAgent',desc:'Read local files & directories'},
   ];
 
   var toolsHtml = STUDIO_AGENTS.map(function(t){
@@ -5276,8 +5938,9 @@ function renderStudio(el) {
       '<h2>&#9881; NHA Studio</h2>' +
       '<p>Build a pipeline manually — click agents to add them in order — or describe your task in natural language and let Studio plan it automatically.</p>' +
     '</div>' +
-    '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">' +
+    '<div style="display:flex;gap:16px;align-items:flex-start" id="studioMainRow">' +
       '<div style="flex:1;min-width:0">' +
+        '<button class="studio-sidebar-toggle" onclick="(function(){var sb=document.getElementById(\\x27studioSidebar\\x27);sb.classList.toggle(\\x27studio-sidebar--open\\x27)})()" title="Tools &amp; Agents">&#128295; Tools &amp; Agents</button>' +
 
         // ── MODE TABS ──
         '<div style="display:flex;gap:0;margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
@@ -5305,7 +5968,7 @@ function renderStudio(el) {
           '</div>' +
           '<label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;user-select:none">' +
             '<input type="checkbox" id="studioParliamentMode" style="width:15px;height:15px;accent-color:var(--green3)" ' + (studioState.parliamentMode ? \x27checked\x27 : \x27\x27) + ' onchange="studioState.parliamentMode=this.checked">' +
-            '<span style="font-size:12px;color:var(--dim)">&#x2656; <strong style="color:var(--green)">Parlamento</strong> — Round 2 cross-reading tra agenti (2x token)</span>' +
+            '<span style="font-size:12px;color:var(--dim)">&#x1f4bc; <strong style="color:var(--green)">Consiglio</strong> — gli agenti si confrontano dopo aver lavorato in autonomia (2x token)</span>' +
           '</label>' +
         '</div>' +
 
@@ -5331,19 +5994,21 @@ function renderStudio(el) {
         '<div class="studio-log" id="studioLog" style="display:none"></div>' +
         '<div id="studioParliamentBlock" style="display:none;margin-bottom:12px"></div>' +
         '<div id="studioResult"></div>' +
-        '<div id="studioSessionsBar" style="margin-top:16px;display:none"></div>' +
       '</div>' +
 
       // ── AGENT SIDEBAR ──
-      '<div class="studio-tools-panel">' +
-        // Tab bar
-        '<div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden">' +
-          '<button id="sideTabTools" onclick="studioSideTab(\\x27tools\\x27)" style="flex:1;padding:5px;font-size:10px;font-weight:600;background:var(--green3);color:#fff;border:none;cursor:pointer">&#128295; Tools</button>' +
-          '<button id="sideTabAgents" onclick="studioSideTab(\\x27agents\\x27)" style="flex:1;padding:5px;font-size:10px;font-weight:600;background:var(--bg3);color:var(--dim);border:none;cursor:pointer">&#129302; Agents</button>' +
+      '<div id="studioSidebar" class="studio-sidebar">' +
+        '<div class="studio-tools-panel">' +
+          // Tab bar
+          '<div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden">' +
+            '<button id="sideTabTools" onclick="studioSideTab(\\x27tools\\x27)" style="flex:1;padding:5px;font-size:10px;font-weight:600;background:var(--green3);color:#fff;border:none;cursor:pointer">&#128295; Tools</button>' +
+            '<button id="sideTabAgents" onclick="studioSideTab(\\x27agents\\x27)" style="flex:1;padding:5px;font-size:10px;font-weight:600;background:var(--bg3);color:var(--dim);border:none;cursor:pointer">&#129302; Agents</button>' +
+          '</div>' +
+          '<div style="font-size:9px;color:var(--dim);margin-bottom:8px">Click to add to pipeline</div>' +
+          '<div id="sideToolsList">'+toolsHtml+'</div>' +
+          '<div id="sideAgentsList" style="display:none">'+specialistHtml+'</div>' +
         '</div>' +
-        '<div style="font-size:9px;color:var(--dim);margin-bottom:8px">Click to add to pipeline</div>' +
-        '<div id="sideToolsList">'+toolsHtml+'</div>' +
-        '<div id="sideAgentsList" style="display:none">'+specialistHtml+'</div>' +
+        '<div id="studioSessionsBar" style="display:none;border:1px solid #334155;border-radius:10px;padding:12px 14px;background:#0f172a"></div>' +
       '</div>' +
     '</div>';
 
@@ -5351,9 +6016,21 @@ function renderStudio(el) {
   renderStudioLog();
   renderStudioResult();
   renderStudioSessionsBar();
-  studioTokens = {in:0,out:0};
+  // Restore token bar (preserve counts across re-renders)
+  studioUpdateTokenBar();
   // Restore pipeline from state
   renderBuilderPipeline();
+  // Restore parliament block if it was visible before tab navigation
+  // Version stamp check: discard stale HTML from older versions
+  if (_parlPersistHtml && _parlPersistHtml.indexOf(_PARL_STAMP) === 0) {
+    var parlRestoreEl = document.getElementById('studioParliamentBlock');
+    if (parlRestoreEl) {
+      parlRestoreEl.innerHTML = _parlPersistHtml.slice(_PARL_STAMP.length);
+      parlRestoreEl.style.display = 'block';
+    }
+  } else {
+    _parlPersistHtml = null;
+  }
 }
 
 // ---- STUDIO SIDEBAR TAB ----
@@ -5546,6 +6223,641 @@ function init(){
   },3000);
 }
 init();
+
+// ---- WEBCRAFT ----
+var wcState = {
+  description: '',
+  authFields: [{name:'firstName',label:'First name',type:'text',required:true},{name:'lastName',label:'Last name',type:'text',required:true},{name:'email',label:'Email',type:'email',required:true},{name:'password',label:'Password',type:'password',required:true}],
+  blocks: {auth:true, cookieBanner:true, securityMiddleware:true, emailVerification:true},
+  generatedFiles: [],   // [{name, content, lang}]
+  activeFile: 0,
+  running: false,
+  projectName: '',
+  rightTab: 'files',    // 'files' | 'preview'
+  sandbox: {
+    running: false,
+    port: null,
+    dir: null,
+    logs: [],
+    error: null
+  }
+};
+var wcRightTab = 'files';
+var wcMainTab = 'new';     // 'new' | 'projects'
+var wcProjectsList = [];   // cached list from server
+var wcSandboxExpanded = {};  // { phaseKey: true/false }
+
+function wcEsc(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
+
+function renderWebCraft(el) {
+  var fileTabsHtml = wcState.generatedFiles.length > 0
+    ? '<div style="display:flex;gap:0;overflow-x:auto;border-bottom:1px solid var(--border);margin-bottom:0;flex-shrink:0">' +
+        wcState.generatedFiles.map(function(f,i){
+          var active = i === wcState.activeFile;
+          return '<button onclick="wcSetFile('+i+')" style="padding:6px 14px;font-size:11px;font-family:var(--mono);font-weight:'+(active?'700':'400')+';background:'+(active?'var(--bg3)':'transparent')+';border:none;border-bottom:2px solid '+(active?'var(--green3)':'transparent')+';color:'+(active?'var(--green)':'var(--dim)')+';cursor:pointer;white-space:nowrap;flex-shrink:0">'+wcEsc(f.name)+'</button>';
+        }).join('') +
+      '</div>'
+    : '';
+
+  var codeHtml = wcState.generatedFiles.length > 0 && wcState.generatedFiles[wcState.activeFile]
+    ? '<div id="wcCodeWrap" style="flex:1;overflow:auto;background:var(--bg3);border-radius:0 0 8px 8px">' +
+        '<pre style="margin:0;padding:14px 16px;font-size:11px;line-height:1.6;color:var(--text);font-family:var(--mono);white-space:pre-wrap;word-break:break-all">'+wcEsc(wcState.generatedFiles[wcState.activeFile].content)+'</pre>' +
+      '</div>'
+    : '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:12px;flex-direction:column;gap:8px">' +
+        '<span style="font-size:36px;opacity:.25">&#128736;</span>' +
+        '<span>'+t('wc_no_files')+'</span>' +
+      '</div>';
+
+  var authFieldsHtml = wcState.authFields.map(function(f,i){
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg3);border-radius:6px;margin-bottom:4px;overflow:hidden">' +
+      '<input value="'+wcEsc(f.label)+'" onchange="wcUpdateField('+i+',this.value)" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text);font-size:11px;font-family:var(--mono);width:0" />' +
+      '<select onchange="wcUpdateFieldType('+i+',this.value)" style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--dim);font-size:10px;padding:2px 2px;width:68px;flex-shrink:0">' +
+        ['text','email','password','tel','date','number'].map(function(t){return '<option value="'+t+'"'+(f.type===t?' selected':'')+'>'+t+'</option>'}).join('') +
+      '</select>' +
+      '<input type="checkbox"'+(f.required?' checked':'')+' onchange="wcToggleRequired('+i+',this.checked)" title="Required" style="accent-color:var(--green3)">' +
+      '<button onclick="wcRemoveField('+i+')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;line-height:1;padding:0 2px">&times;</button>' +
+    '</div>';
+  }).join('');
+
+  // Example prompts — clicking fills project name + description
+  var wcExamples = [
+    {name:'MySaaS',    desc:'SaaS landing page with hero section, pricing table (free/pro/enterprise), feature comparison grid, user registration (name, email, password), login, protected dashboard with sidebar navigation (overview, settings, billing), account settings page, and email verification flow.'},
+    {name:'MyShop',    desc:'E-commerce site with homepage showcasing featured products, product catalog with filters (category, price range), product detail page with image gallery, shopping cart with quantity controls, checkout form with address and payment fields, user registration and login, order history page, and admin panel for product management.'},
+    {name:'MyBlog',    desc:'Blog and CMS with homepage listing recent articles (title, excerpt, cover image, author, date), article detail page with markdown rendering, category and tag filtering, author profile page, admin panel for writing and publishing posts (rich text editor), user comments with moderation, and RSS feed endpoint.'},
+    {name:'MyPortfolio', desc:'Professional portfolio with animated hero section (name, role, call-to-action), projects showcase grid with lightbox modal, skills section with progress bars, about page with timeline, contact form with SMTP email sending, dark/light mode toggle, and smooth scroll navigation.'},
+    {name:'MyRestaurant', desc:'Restaurant website with hero with background video, menu page organized by category (starters, mains, desserts, drinks) with photos and prices, online booking form (date, time, party size, special requests) with email confirmation, about us page, gallery section, and contact page with embedded map.'},
+    {name:'MyJobBoard',  desc:'Job board platform with homepage listing recent job postings (title, company, location, type), job detail page, company profile pages, candidate registration and login, job application form with resume upload, employer dashboard to post and manage listings, saved jobs for candidates, and job search with filters (location, type, salary range).'}
+  ];
+  var wcExHtml = '<div style="margin-bottom:12px;flex-shrink:0"><div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">'+t('wc_examples_label')+'</div><div style="display:flex;gap:6px;flex-wrap:wrap">' +
+    wcExamples.map(function(ex,i){
+      return '<button onclick="wcPickExample('+i+')" style="padding:4px 10px;border-radius:14px;border:1px solid var(--border2);background:var(--bg3);color:var(--dim);font-size:11px;cursor:pointer;white-space:nowrap">'+wcEsc(ex.name)+'</button>';
+    }).join('') +
+  '</div></div>';
+
+  var headerHtml =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">' +
+      '<div>' +
+        '<h2 style="font-size:15px;color:var(--green);margin-bottom:2px">&#128736; '+t('wc_title')+'</h2>' +
+        '<p style="font-size:11px;color:var(--dim);line-height:1.5">'+t('wc_subtitle')+'</p>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;flex-shrink:0">' +
+        '<button onclick="wcMainTabNew()" style="padding:5px 14px;border-radius:6px;border:1px solid var(--border2);background:'+(wcMainTab==='new'?'var(--green3)':'var(--bg3)')+';color:'+(wcMainTab==='new'?'var(--bg)':'var(--dim)')+';font-size:11px;font-weight:600;cursor:pointer">+ Nuovo</button>' +
+        '<button onclick="wcMainTabProjects()" style="padding:5px 14px;border-radius:6px;border:1px solid var(--border2);background:'+(wcMainTab==='projects'?'var(--green3)':'var(--bg3)')+';color:'+(wcMainTab==='projects'?'var(--bg)':'var(--dim)')+';font-size:11px;font-weight:600;cursor:pointer">&#128193; '+t('wc_projects')+'</button>' +
+      '</div>' +
+    '</div>';
+
+  var editorHtml =
+    wcExHtml +
+    '<div style="display:flex;gap:14px;align-items:flex-start;flex:1;min-height:0">' +
+      '<div style="width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:calc(100vh - 120px)">' +
+        '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px">' +
+          '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">'+t('wc_project')+'</div>' +
+          '<input id="wcProjectName" placeholder="'+t('wc_project_name')+'" value="'+wcEsc(wcState.projectName)+'" oninput="wcState.projectName=this.value" style="width:100%;padding:8px 10px;font-size:12px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);margin-bottom:8px;box-sizing:border-box">' +
+          '<textarea id="wcDesc" placeholder="'+t('wc_desc')+'" rows="4" oninput="wcState.description=this.value" style="width:100%;padding:8px 10px;font-size:12px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);resize:vertical;box-sizing:border-box;line-height:1.5">'+wcEsc(wcState.description)+'</textarea>' +
+        '</div>' +
+        '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px">' +
+          '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">'+t('wc_blocks')+'</div>' +
+          ['auth','cookieBanner','securityMiddleware','emailVerification'].map(function(b){
+            var labels = {auth:'Auth (register/login/JWT)',cookieBanner:'GDPR Cookie Banner',securityMiddleware:'Security Middleware',emailVerification:'Email Verification'};
+            var icons  = {auth:'&#128274;',cookieBanner:'&#127850;',securityMiddleware:'&#128737;',emailVerification:'&#9993;'};
+            return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:11px;color:var(--text)">' +
+              '<input type="checkbox"'+(wcState.blocks[b]?' checked':'')+' onchange="wcState.blocks['+JSON.stringify(b)+']=this.checked" style="accent-color:var(--green3);width:14px;height:14px">' +
+              '<span>'+icons[b]+'</span><span>'+labels[b]+'</span>' +
+            '</label>';
+          }).join('') +
+        '</div>' +
+        '<div id="wcAuthFieldsPanel" style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;'+(wcState.blocks.auth?'':'display:none')+'">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px">'+t('wc_auth_fields')+'</div>' +
+            '<button onclick="wcAddField()" style="font-size:10px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:5px;color:var(--green);cursor:pointer">'+t('wc_add_field')+'</button>' +
+          '</div>' +
+          '<div id="wcFieldsList">'+authFieldsHtml+'</div>' +
+          '<div style="font-size:9px;color:var(--dim);margin-top:4px">'+t('wc_required_hint')+'</div>' +
+        '</div>' +
+        '<button id="wcRunBtn" onclick="wcGenerate()" style="width:100%;padding:12px;background:var(--green3);border:none;border-radius:8px;color:var(--bg);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.2px"'+(wcState.running?' disabled':'')+'>'+
+          (wcState.running ? '&#9203; '+t('wc_generating')+'...' : '&#9654; '+t('wc_generate')) +
+        '</button>' +
+        (wcState.generatedFiles.length > 0 && !wcState.running ?
+          '<button onclick="wcDownloadZip()" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer">&#8681; '+t('wc_download')+'</button>' +
+          '<button onclick="wcStartSandbox()" id="wcSandboxBtn" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">&#9654; '+t('wc_sandbox_start')+'</button>'
+        : '') +
+      '</div>' +
+      '<div style="flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;height:calc(100vh - 120px);overflow:hidden">' +
+        '<div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">' +
+          '<button onclick="wcTabFiles()" style="padding:8px 16px;background:'+(wcRightTab==='preview'?'transparent':'var(--bg3)')+';border:none;border-right:1px solid var(--border);color:'+(wcRightTab==='preview'?'var(--dim)':'var(--text)')+';font-size:11px;font-weight:600;cursor:pointer">&#128196; File</button>' +
+          '<button onclick="wcTabPreview()" style="padding:8px 16px;background:'+(wcRightTab==='preview'?'var(--bg3)':'transparent')+';border:none;color:'+(wcRightTab==='preview'?'var(--text)':'var(--dim)')+';font-size:11px;font-weight:600;cursor:pointer">&#127760; Sandbox</button>' +
+        '</div>' +
+        (wcRightTab === 'preview' ? wcSandboxPanelHtml() : (fileTabsHtml + codeHtml)) +
+      '</div>' +
+    '</div>';
+
+  el.innerHTML =
+    '<div style="display:flex;flex-direction:column;height:100%;min-height:0;padding:0 4px">' +
+      headerHtml +
+      (wcMainTab === 'projects' ? wcProjectsPanelHtml() : editorHtml) +
+    '</div>';
+}
+
+function wcPickExample(i) {
+  var wcExamplesData = [
+    {name:'MySaaS',    desc:'SaaS landing page with hero section, pricing table (free/pro/enterprise), feature comparison grid, user registration (name, email, password), login, protected dashboard with sidebar navigation (overview, settings, billing), account settings page, and email verification flow.'},
+    {name:'MyShop',    desc:'E-commerce site with homepage showcasing featured products, product catalog with filters (category, price range), product detail page with image gallery, shopping cart with quantity controls, checkout form with address and payment fields, user registration and login, order history page, and admin panel for product management.'},
+    {name:'MyBlog',    desc:'Blog and CMS with homepage listing recent articles (title, excerpt, cover image, author, date), article detail page with markdown rendering, category and tag filtering, author profile page, admin panel for writing and publishing posts (rich text editor), user comments with moderation, and RSS feed endpoint.'},
+    {name:'MyPortfolio', desc:'Professional portfolio with animated hero section (name, role, call-to-action), projects showcase grid with lightbox modal, skills section with progress bars, about page with timeline, contact form with SMTP email sending, dark/light mode toggle, and smooth scroll navigation.'},
+    {name:'MyRestaurant', desc:'Restaurant website with hero with background video, menu page organized by category (starters, mains, desserts, drinks) with photos and prices, online booking form (date, time, party size, special requests) with email confirmation, about us page, gallery section, and contact page with embedded map.'},
+    {name:'MyJobBoard',  desc:'Job board platform with homepage listing recent job postings (title, company, location, type), job detail page, company profile pages, candidate registration and login, job application form with resume upload, employer dashboard to post and manage listings, saved jobs for candidates, and job search with filters (location, type, salary range).'}
+  ];
+  var ex = wcExamplesData[i];
+  if (!ex) return;
+  wcState.projectName = ex.name;
+  wcState.description = ex.desc;
+  renderWebCraft(document.getElementById('content'));
+}
+function wcTabFiles() { wcRightTab = 'files'; renderWebCraft(document.getElementById('content')); }
+function wcTabPreview() { wcRightTab = 'preview'; renderWebCraft(document.getElementById('content')); }
+function wcOpenSandbox() { if (wcState.sandbox.port) window.open('http://127.0.0.1:' + wcState.sandbox.port, '_blank'); }
+var _wcPhaseKeys = ['files','shims','pkg','env','deps','install','start'];
+function wcTogglePhase(idx) { var k = _wcPhaseKeys[idx]; if (k) { wcSandboxExpanded[k] = !wcSandboxExpanded[k]; renderWebCraft(document.getElementById('content')); } }
+
+function wcMainTabNew() { wcMainTab = 'new'; renderWebCraft(document.getElementById('content')); }
+function wcMainTabProjects() {
+  wcMainTab = 'projects';
+  renderWebCraft(document.getElementById('content'));
+  // Load projects list from server
+  fetch(API + '/api/studio/webcraft/projects').then(function(r){ return r.json(); }).then(function(d){
+    wcProjectsList = d.projects || [];
+    renderWebCraft(document.getElementById('content'));
+  }).catch(function(){});
+}
+
+function wcProjectsPanelHtml() {
+  if (!wcProjectsList.length) {
+    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:10px;padding:40px;color:var(--dim)">' +
+      '<div style="font-size:32px">&#128193;</div>' +
+      '<div style="font-size:13px">'+t('wc_no_projects')+'</div>' +
+      '<div style="font-size:11px">'+t('wc_no_projects_hint')+'</div>' +
+    '</div>';
+  }
+  return '<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 0">' +
+    wcProjectsList.map(function(p, pi){
+      var date = p.createdAt ? new Date(p.createdAt).toLocaleString() : '';
+      return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+wcEsc(p.name)+'</div>' +
+          '<div style="font-size:10px;color:var(--dim);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+wcEsc(p.description||'')+'</div>' +
+          '<div style="display:flex;gap:10px;font-size:10px;color:var(--dim)">' +
+            '<span>&#128196; '+p.fileCount+' file</span>' +
+            '<span>&#128197; '+date+'</span>' +
+            '<span style="font-family:var(--mono);font-size:9px">'+wcEsc(p.dir||'')+'</span>' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="wcLoadProject('+pi+')" style="padding:6px 14px;background:var(--green3);border:none;border-radius:6px;color:var(--bg);font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">&#8599; Apri</button>' +
+        '<button onclick="wcDeleteProject('+pi+')" style="padding:6px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--red);font-size:11px;cursor:pointer;flex-shrink:0">&#128465;</button>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+
+async function wcLoadProject(pi) {
+  var p = wcProjectsList[pi];
+  if (!p) return;
+  var r = await fetch(API + '/api/studio/webcraft/projects/load/' + encodeURIComponent(p.name));
+  if (!r.ok) return;
+  var d = await r.json();
+  wcState.projectName = d.projectName || p.name;
+  wcState.description = d.description || '';
+  wcState.generatedFiles = d.files || [];
+  wcState.activeFile = 0;
+  wcMainTab = 'new';
+  wcRightTab = 'files';
+  renderWebCraft(document.getElementById('content'));
+}
+
+async function wcDeleteProject(pi) {
+  var p = wcProjectsList[pi];
+  if (!p) return;
+  if (!confirm('Eliminare: ' + p.name + ' - ' + p.dir + ' ?')) return;
+  await fetch(API + '/api/studio/webcraft/projects/' + encodeURIComponent(p.name), {method:'DELETE'});
+  wcProjectsList.splice(pi, 1);
+  renderWebCraft(document.getElementById('content'));
+}
+function wcUpdateField(i, val) { wcState.authFields[i].label = val; }
+function wcUpdateFieldType(i, t) { wcState.authFields[i].type = t; }
+function wcToggleRequired(i, v) { wcState.authFields[i].required = v; }
+function wcRemoveField(i) { wcState.authFields.splice(i,1); renderWebCraft(document.getElementById('content')); }
+function wcAddField() {
+  wcState.authFields.push({name:'field'+wcState.authFields.length,label:'New field',type:'text',required:false});
+  renderWebCraft(document.getElementById('content'));
+}
+function wcSetFile(i) { wcState.activeFile = i; renderWebCraft(document.getElementById('content')); }
+
+async function wcGenerate() {
+  if (wcState.running) return;
+  var desc = (document.getElementById('wcDesc')||{}).value || wcState.description;
+  var projName = (document.getElementById('wcProjectName')||{}).value || wcState.projectName || 'myproject';
+  if (!desc || desc.length < 10) { alert(t('wc_describe_first')); return; }
+  wcState.description = desc;
+  wcState.projectName = projName;
+  wcState.running = true;
+  wcState.generatedFiles = [];
+  wcState.activeFile = 0;
+  renderWebCraft(document.getElementById('content'));
+
+  // Security rules always injected
+  var SECURITY_RULES = [
+    'ALWAYS use security headers: X-Content-Type-Options, X-Frame-Options: DENY, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy: geolocation=(), microphone=(), camera=(), Strict-Transport-Security: max-age=31536000; includeSubDomains; preload.',
+    'NEVER put secrets, API keys, or DB credentials in frontend code. Only in .env server-side.',
+    'ALWAYS use prepared statements / parameterized queries. NEVER string-concatenate SQL.',
+    'ALWAYS hash passwords with bcrypt (cost factor 12+). NEVER store plain passwords.',
+    'ALWAYS validate and sanitize all user inputs server-side.',
+    'ALWAYS use httpOnly, secure, sameSite=Strict cookies for session tokens.',
+    'ALWAYS rate-limit auth endpoints (max 5 attempts / 15min per IP).',
+    'CSS MUST follow BEM naming: block__element--modifier. No inline styles except dynamic values.',
+    'PostgreSQL: use pg.Pool (max:10, idleTimeoutMillis:30000). Export singleton. Always use parameterized queries.',
+    'JWT: access token 15min, refresh token 7 days with rotation. Store refresh in httpOnly cookie.',
+  ].join(String.fromCharCode(10));
+
+  var authFieldsDef = wcState.authFields.map(function(f){ return f.label+' ('+f.type+(f.required?', required':'')+')'; }).join(', ');
+  var blocksEnabled = Object.keys(wcState.blocks).filter(function(b){ return wcState.blocks[b]; }).join(', ');
+
+  // File plan — always this structure
+  var filePlan = [
+    { name: 'package.json',          lang: 'json',       prompt: 'Generate package.json for an Express/PostgreSQL project named "'+projName+'". Dependencies: express, pg, bcryptjs, jsonwebtoken, nodemailer, helmet, express-rate-limit, cors, dotenv, express-validator, ioredis. DevDependencies: nodemon. Scripts: start, dev.' },
+    { name: '.env.example',          lang: 'bash',       prompt: 'Generate .env.example with all required env vars: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, JWT_SECRET, JWT_REFRESH_SECRET, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SENDGRID_API_KEY (commented as optional fallback), REDIS_URL (default redis://localhost:6379, works with Dragonfly too), PORT, NODE_ENV, CORS_ORIGIN, BASE_URL. Add helpful comments for each. Note that REDIS_URL is optional — app falls back to in-memory LRU if Redis unavailable.' },
+    { name: 'server/db.js',          lang: 'javascript', prompt: 'Generate server/db.js: pg.Pool singleton (max:10, idleTimeoutMillis:30000, connectionTimeoutMillis:2000). Circuit breaker: if DB fails 5+ times in 60s, open circuit (throw immediately) for 30s, then half-open (try one query). Export pool, query(text, params) with circuit breaker, transaction(callback) helper (BEGIN/COMMIT/ROLLBACK). Graceful shutdown on SIGTERM/SIGINT.' },
+    { name: 'server/middleware/security.js', lang: 'javascript', prompt: 'Generate server/middleware/security.js: helmet with full CSP (defaultSrc self, scriptSrc self, styleSrc self unsafe-inline, imgSrc self data:, connectSrc self, frameSrc none, objectSrc none), HSTS, X-Frame-Options DENY, Referrer-Policy. Add express-rate-limit for general routes (100/15min) and strict limiter for auth (5/15min). Export { applySecurityMiddleware, authLimiter }.' },
+    { name: 'server/middleware/validate.js', lang: 'javascript', prompt: 'Generate server/middleware/validate.js using express-validator. Export handleValidationErrors middleware. Export auth field validators: registerValidator (fields: '+authFieldsDef+'), loginValidator (email + password).' },
+    { name: 'server/services/email.js', lang: 'javascript', prompt: 'Generate server/services/email.js: Nodemailer transporter using SMTP from env. Function sendVerificationEmail(to, token, baseUrl): sends HTML email with verification link. Function sendPasswordResetEmail(to, token, baseUrl). Add SendGrid fallback (commented out, predisposed with transporter swap). Never expose credentials.' },
+    { name: 'server/routes/auth.js',  lang: 'javascript', prompt: 'Generate server/routes/auth.js: POST /register (validate fields: '+authFieldsDef+', check duplicate email, bcrypt hash password cost 12, insert user, send verification email, return 201), POST /login (validate, check email verified, compare bcrypt, issue JWT access 15min + refresh 7d httpOnly cookie), POST /logout (clear refresh cookie), POST /refresh-token (validate refresh from httpOnly cookie, rotate token), GET /verify-email/:token (mark email verified). Use parameterized queries only. Apply authLimiter to register and login.' },
+    { name: 'server/routes/api.js',   lang: 'javascript', prompt: 'Generate server/routes/api.js: Express router with a verifyToken middleware (validates JWT Bearer). GET /api/me returns authenticated user profile (no password hash). GET /api/health returns {status: ok, timestamp}. Structure ready for adding more routes.' },
+    { name: 'server/index.js',        lang: 'javascript', prompt: 'Generate server/index.js: Express app entry point. Apply applySecurityMiddleware first. Then apply sentinelMiddleware (import from ./middleware/sentinel.js). Use CORS with env CORS_ORIGIN. Parse JSON body (limit 10kb). Mount /api/auth → auth.js, /api → api.js. Serve public/ as static. 404 handler and global error handler (never leak stack traces in production). Start on PORT from env.' },
+    { name: 'db/migrations/001_init.sql', lang: 'sql',   prompt: 'Generate PostgreSQL migration 001_init.sql: CREATE TABLE users with id UUID default gen_random_uuid(), fields for '+authFieldsDef+', email_verified BOOLEAN default false, verification_token VARCHAR, reset_token VARCHAR, reset_token_expires TIMESTAMPTZ, refresh_token_hash VARCHAR, created_at TIMESTAMPTZ default now(), updated_at TIMESTAMPTZ default now(). CREATE INDEX on email. CREATE TABLE refresh_tokens (id, user_id FK, token_hash, expires_at, created_at). Add updated_at trigger function.' },
+    { name: 'public/css/base.css',    lang: 'css',       prompt: 'Generate public/css/base.css: CSS custom properties (color palette, spacing scale, font scale, border-radius, shadows, transitions). CSS reset (*, box-sizing). Base typography (Inter or system-ui). Utility classes using BEM where applicable. Dark/light mode via prefers-color-scheme.' },
+    { name: 'public/css/components.css', lang: 'css',    prompt: 'Generate public/css/components.css following STRICT BEM (block__element--modifier). Components: .btn (--primary, --secondary, --danger, --ghost), .form (form__field, form__label, form__input, form__error, form__hint), .card (card__header, card__body, card__footer), .nav (nav__brand, nav__links, nav__link--active), .alert (--success, --error, --warning, --info), .spinner, .badge, .modal (modal__overlay, modal__content, modal__header, modal__body, modal__footer). Fully accessible (focus states, aria).' },
+    { name: 'public/css/pages.css',   lang: 'css',       prompt: 'Generate public/css/pages.css: page-level layout classes using BEM. .page-auth (centered card layout for login/register), .page-dashboard (sidebar + content grid), .page-landing (hero section, features grid, pricing cards). Responsive at 768px and 480px breakpoints.' },
+    { name: 'public/js/main.js',      lang: 'javascript', prompt: 'Generate public/js/main.js: vanilla JS, no dependencies. authAPI object with methods register(data), login(data), logout(), refreshToken(), getMe(). Cookie banner controller: reads localStorage consent, shows banner if not set, sets consent by category (necessary/analytics/marketing). Form handlers for register and login pages. Global error display utility. Export nothing (IIFE).' },
+    { name: 'public/index.html',      lang: 'html',       prompt: 'Generate public/index.html for "'+projName+'": '+desc+'. Full HTML5. Security meta tags (CSP via meta as fallback, X-UA-Compatible). Include base.css, components.css, pages.css. GDPR cookie banner HTML (class .cookie-banner, .cookie-banner__text, .cookie-banner__actions, .cookie-banner__btn--accept, .cookie-banner__btn--reject). Navigation. Hero section. Include main.js at end of body. Semantic HTML, ARIA roles, lang attribute.' },
+    { name: 'public/login.html',      lang: 'html',       prompt: 'Generate public/login.html: login page for "'+projName+'". Form with email + password fields using .form BEM classes. Link to register.html. Error display area. Include same CSS files. ARIA labels, autocomplete attributes.' },
+    { name: 'public/register.html',   lang: 'html',       prompt: 'Generate public/register.html: registration page for "'+projName+'". Form fields: '+authFieldsDef+'. Use .form BEM classes. Client-side validation hints. Link to login.html. Error/success display. Include same CSS files. ARIA labels, autocomplete attributes.' },
+    { name: 'server/middleware/sentinel.js', lang: 'javascript', prompt: 'Generate server/middleware/sentinel.js: a lightweight WAF middleware for Express. Check request for: SQL injection patterns (UNION SELECT, DROP TABLE, etc.), XSS patterns (<script, javascript:, onerror=), path traversal (../), oversized payloads (>100KB body). Rate limit by IP using an in-memory sliding window (fallback when Redis unavailable). Log blocked requests with IP, method, path, reason to stderr. Export sentinelMiddleware(req, res, next).' },
+    { name: 'server/services/cache.js',     lang: 'javascript', prompt: 'Generate server/services/cache.js: Redis/Dragonfly client using ioredis. Connect to REDIS_URL from env. Export: get(key), set(key, value, ttlSeconds), del(key), exists(key). Add circuit breaker pattern: if Redis fails 3+ times in 30s, switch to in-memory LRU fallback (Map with max 1000 entries, LRU eviction). Reconnect Redis in background every 60s. Log circuit state changes. This makes the app resilient when Redis is down.' },
+    { name: 'README.md',              lang: 'markdown',   prompt: 'Generate README.md for "'+projName+'": project description, tech stack (Express, PostgreSQL with circuit breaker, Redis/Dragonfly with LRU fallback, JWT auth, Nodemailer SMTP + SendGrid fallback, Sentinel WAF, BEM CSS), folder structure, setup instructions (clone, npm install, copy .env.example to .env, run migrations with psql, optional: start Redis/Dragonfly, npm run dev), environment variables table (including REDIS_URL), API endpoints table, security notes, email configuration guide.' },
+    { name: 'nginx.conf',             lang: 'nginx',      prompt: 'Generate a production-ready nginx.conf for "'+projName+'" running as an Express app on localhost:3000. Include: HTTPS with TLS 1.2/1.3 only, strong cipher suites, HSTS (max-age=31536000; includeSubDomains; preload), X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy (geolocation=(), microphone=(), camera=()), Content-Security-Policy (default-src self, script-src self, style-src self unsafe-inline, img-src self data:, connect-src self, frame-src none, object-src none), rate limiting (limit_req_zone 10r/s burst 20), gzip compression, proxy_pass to http://127.0.0.1:3000 with correct headers (X-Real-IP, X-Forwarded-For, X-Forwarded-Proto), static files served directly from public/ with long cache headers, Certbot/ACME path. Use server_name example.com with a TODO comment. Security rating: A+ on securityheaders.com.' },
+  ];
+
+  // Filter by selected blocks
+  if (!wcState.blocks.auth) {
+    filePlan = filePlan.filter(function(f){ return !['server/routes/auth.js','public/login.html','public/register.html','server/middleware/validate.js'].includes(f.name); });
+  }
+  if (!wcState.blocks.cookieBanner) {
+    // keep index.html but note no cookie banner
+  }
+  if (!wcState.blocks.emailVerification) {
+    // mark in prompt
+    filePlan = filePlan.map(function(f){ return f.name === 'server/services/email.js' ? Object.assign({},f,{prompt:f.prompt+' (Skip email verification — not enabled)'}) : f; });
+  }
+
+  var _nl = String.fromCharCode(10);
+  var sysPreamble = 'You are an expert full-stack engineer generating production-quality code.' + _nl + _nl + 'SECURITY RULES (non-negotiable):' + _nl + SECURITY_RULES + _nl + _nl + 'Project: ' + projName + _nl + 'Description: ' + desc + _nl + 'Enabled blocks: ' + blocksEnabled + _nl + _nl + 'Generate ONLY the file content requested. No explanations, no markdown code fences, no comments like "here is the file". Output raw file content only.';
+
+  for (var fi = 0; fi < filePlan.length; fi++) {
+    var fp = filePlan[fi];
+    var runBtn = document.getElementById('wcRunBtn');
+    if (runBtn) runBtn.innerHTML = '&#9203; '+t('wc_generating')+' ' + fp.name + ' (' + (fi+1) + '/' + filePlan.length + ')...';
+    try {
+      var _nl2 = String.fromCharCode(10);
+      var content = await wcCallLLM(sysPreamble, fp.prompt + _nl2 + _nl2 + 'File to generate: ' + fp.name);
+      // Strip markdown code fences if model added them anyway
+      var _fence = String.fromCharCode(96,96,96);
+      var wcLines = content.split(_nl2);
+      if (wcLines.length > 0 && wcLines[0].indexOf(_fence) === 0) wcLines.shift();
+      if (wcLines.length > 0 && wcLines[wcLines.length-1].trim() === _fence) wcLines.pop();
+      content = wcLines.join(_nl2).trim();
+      wcState.generatedFiles.push({ name: fp.name, content: content, lang: fp.lang });
+      if (fi === 0) wcState.activeFile = 0;
+      renderWebCraft(document.getElementById('content'));
+    } catch(e) {
+      wcState.generatedFiles.push({ name: fp.name, content: '// Error generating this file: ' + e.message, lang: fp.lang });
+    }
+  }
+
+  wcState.running = false;
+
+  // Auto-save project to ~/.nha/webcraft/<projectName>/
+  try {
+    await fetch(API + '/api/studio/webcraft/projects/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ projectName: wcState.projectName, description: wcState.description, files: wcState.generatedFiles })
+    });
+  } catch(_) {}
+
+  renderWebCraft(document.getElementById('content'));
+}
+
+async function wcCallLLM(sys, user) {
+  var r = await fetch(API + '/api/studio/webcraft', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({system: sys, user: user, max_tokens: 4096})
+  });
+  if (!r.ok) throw new Error('LLM error ' + r.status);
+  var d = await r.json();
+  return (d && (d.text || d.content || d.result)) || '';
+}
+
+function wcSandboxPanelHtml() {
+  var sb = wcState.sandbox;
+  if (!wcState.generatedFiles.length) {
+    return '<div style="display:flex;align-items:center;justify-content:center;flex:1;color:var(--dim);font-size:13px">Genera prima il progetto</div>';
+  }
+
+  // Server ready — show iframe with top bar
+  if (sb.port && !sb.running) {
+    return '<div style="display:flex;flex-direction:column;flex:1;min-height:0">' +
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg3)">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;flex-shrink:0"></span>' +
+        '<span style="font-size:11px;color:var(--text);font-family:var(--mono);font-weight:600">http://127.0.0.1:'+sb.port+'</span>' +
+        '<span style="font-size:10px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+wcEsc(sb.dir||'')+'</span>' +
+        '<button onclick="wcStopSandbox()" style="padding:3px 10px;background:transparent;border:1px solid var(--border2);border-radius:5px;color:var(--dim);font-size:11px;cursor:pointer;flex-shrink:0">&#9632; Ferma</button>' +
+        '<button onclick="wcOpenSandbox()" style="padding:3px 12px;background:var(--green3);border:none;border-radius:5px;color:var(--bg);font-size:11px;cursor:pointer;font-weight:700;flex-shrink:0">&#8599; Apri nel browser</button>' +
+      '</div>' +
+      '<iframe src="http://127.0.0.1:'+sb.port+'" style="flex:1;border:none;width:100%;background:#fff" sandbox="allow-scripts allow-forms allow-same-origin allow-popups"></iframe>' +
+    '</div>';
+  }
+
+  // Pre-launch info panel
+  if (!sb.running && !sb.port && !sb.logs.length) {
+    return '<div style="display:flex;flex-direction:column;flex:1;min-height:0;padding:20px">' +
+      '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:12px">&#9654; Cosa succede quando avvii la sandbox:</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;font-size:11px;color:var(--dim)">' +
+          '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--green);flex-shrink:0">1.</span><span>I file vengono scritti in <span style="font-family:var(--mono);color:var(--green)">~/.nha/webcraft/'+wcEsc(wcState.projectName||'project')+'</span></span></div>' +
+          '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--green);flex-shrink:0">2.</span><span>npm install delle dipendenze (solo in quella cartella)</span></div>' +
+          '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--green);flex-shrink:0">3.</span><span>Il server Express parte su una porta locale casuale</span></div>' +
+          '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--green);flex-shrink:0">4.</span><span>DB in-memory (no PostgreSQL richiesto) — i dati si azzerano al riavvio</span></div>' +
+        '</div>' +
+        '<div style="margin-top:12px;padding:8px 10px;background:var(--amberdim);border:1px solid var(--amber3);border-radius:6px;font-size:10px;color:var(--amber)">&#9888; Solo locale — nessun dato esce dal tuo Mac</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // Running — show structured phases log
+  var phases = [
+    { key: 'files',   label: 'Scrittura file',         icon: '&#128196;' },
+    { key: 'shims',   label: 'Shim iniettati',          icon: '&#128295;' },
+    { key: 'pkg',     label: 'package.json',            icon: '&#128230;' },
+    { key: 'env',     label: '.env sandbox',            icon: '&#9881;'   },
+    { key: 'deps',    label: 'Dipendenze',              icon: '&#128230;' },
+    { key: 'install', label: 'npm install',             icon: '&#9203;'   },
+    { key: 'start',   label: 'Avvio server',            icon: '&#9654;'   },
+  ];
+  var logs = sb.logs;
+  // Classify each log line into a phase
+  function phaseOf(l) {
+    if (!l) return 'start';
+    if (l.indexOf('Scrittura') !== -1 || l.indexOf('file...') !== -1 || l[0] === ' ' && l.indexOf('.') !== -1 && l.indexOf('✓') !== -1) return 'files';
+    if (l.indexOf('Shim') !== -1 || l.indexOf('shim') !== -1 || l.indexOf('DB shim') !== -1) return 'shims';
+    if (l.indexOf('package.json') !== -1) return 'pkg';
+    if (l.indexOf('.env') !== -1) return 'env';
+    if (l.indexOf('Dipendenze') !== -1 || l.indexOf('Percorso:') !== -1 || (l.indexOf('•') !== -1 && l.indexOf('@') !== -1)) return 'deps';
+    if (l.indexOf('npm install') !== -1 || l.indexOf('added') !== -1 || l.indexOf('packages') !== -1 || l.indexOf('npm error') !== -1 || l.indexOf('audit') !== -1 || l.indexOf('funding') !== -1 || l.indexOf('vulnerability') !== -1) return 'install';
+    return 'start';
+  }
+  var byPhase = {};
+  logs.forEach(function(l){ var p = phaseOf(l); if (!byPhase[p]) byPhase[p] = []; byPhase[p].push(l); });
+
+  // Check if a phase is done (next phase has lines)
+  var phaseKeys = phases.map(function(p){ return p.key; });
+  function phaseStatus(pk) {
+    var idx = phaseKeys.indexOf(pk);
+    if (!byPhase[pk] || !byPhase[pk].length) return 'pending';
+    // Done if next phase has started or if error
+    for (var i = idx+1; i < phaseKeys.length; i++) {
+      if (byPhase[phaseKeys[i]] && byPhase[phaseKeys[i]].length) return 'done';
+    }
+    if (sb.error) return 'error';
+    return 'active';
+  }
+
+  var statusColor = { done:'var(--green)', active:'var(--amber)', pending:'var(--dim)', error:'var(--red)' };
+  var statusIcon  = { done:'&#10003;', active:'&#9203;', pending:'&#9675;', error:'&#10060;' };
+
+  var phasesHtml = phases.map(function(ph, phi){
+    var st = phaseStatus(ph.key);
+    var lines = byPhase[ph.key] || [];
+    var clean = lines.filter(function(l){ return l.indexOf('npm fund') === -1 && l.indexOf('run ') === -1 && l.indexOf('npm audit') === -1; });
+    var isOpen = !!wcSandboxExpanded[ph.key];
+    var hasContent = clean.length > 0;
+
+    // Summary line (always visible)
+    var summary = '';
+    if (ph.key === 'files') {
+      var cnt = clean.filter(function(l){ return l.indexOf('✓') !== -1; }).length;
+      summary = cnt ? cnt + ' file scritti' : '';
+    } else if (ph.key === 'deps') {
+      var dcnt = clean.filter(function(l){ return l.indexOf('•') !== -1; }).length;
+      summary = dcnt ? dcnt + ' dipendenze' : '';
+    } else if (clean.length > 0) {
+      var last = clean.filter(function(l){ return l.trim(); }).slice(-1)[0] || '';
+      summary = wcEsc(last.trim().slice(0, 60));
+    }
+
+    // Expanded detail — all lines
+    var expandedHtml = '';
+    if (isOpen && hasContent) {
+      expandedHtml = '<div style="margin-top:6px;padding:8px;background:var(--bg);border-radius:6px;max-height:180px;overflow-y:auto">' +
+        clean.map(function(l){
+          var col = l.indexOf('❌') !== -1 || l.indexOf('Error') !== -1 ? 'var(--red)' : l.indexOf('✓') !== -1 || l.indexOf('✅') !== -1 ? 'var(--green)' : 'var(--dim)';
+          return '<div style="font-size:10px;font-family:var(--mono);color:'+col+';line-height:1.6;white-space:pre-wrap;word-break:break-all">'+wcEsc(l)+'</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    var clickable = hasContent && st !== 'pending';
+    return '<div style="border-bottom:1px solid var(--border)">' +
+      '<div onclick="'+(clickable?'wcTogglePhase('+phi+')':'')+'" style="display:flex;gap:10px;align-items:center;padding:9px 12px;cursor:'+(clickable?'pointer':'default')+'">' +
+        '<span style="font-size:13px;flex-shrink:0">'+ph.icon+'</span>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:11px;font-weight:600;color:'+(st==='pending'?'var(--dim)':'var(--text)')+'">'+ph.label+'</div>' +
+          (summary && !isOpen ? '<div style="font-size:10px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+summary+'</div>' : '') +
+        '</div>' +
+        (clickable ? '<span style="font-size:10px;color:var(--dim);flex-shrink:0">'+(isOpen?'&#9650;':'&#9660;')+'</span>' : '') +
+        '<span style="font-size:13px;color:'+statusColor[st]+';flex-shrink:0;margin-left:4px">'+statusIcon[st]+'</span>' +
+      '</div>' +
+      (isOpen ? '<div style="padding:0 12px 10px">' + expandedHtml + '</div>' : '') +
+    '</div>';
+  }).join('');
+
+  return '<div style="display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto">' +
+    phasesHtml +
+    (sb.error ? '<div style="padding:10px 14px;color:var(--red);font-size:11px;font-family:var(--mono);border-top:1px solid var(--border)">&#10060; '+wcEsc(sb.error)+'</div>' : '') +
+  '</div>';
+}
+
+async function wcStartSandbox() {
+  if (wcState.sandbox.running) return;
+  wcState.sandbox = { running: true, port: null, dir: null, logs: [], error: null };
+  wcState.rightTab = 'preview';
+  wcRightTab = 'preview';
+  renderWebCraft(document.getElementById('content'));
+
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/sandbox/start', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        projectName: wcState.projectName || 'webcraft-sandbox',
+        files: wcState.generatedFiles
+      })
+    });
+    if (!r.ok || !r.body) throw new Error('Sandbox error ' + r.status);
+    var reader = r.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '';
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      buf += dec.decode(chunk.value, {stream: true});
+      var _dbl = String.fromCharCode(10)+String.fromCharCode(10);
+      var parts = buf.split(_dbl);
+      buf = parts.pop();
+      for (var i = 0; i < parts.length; i++) {
+        var line = parts[i].trim();
+        if (!line.startsWith('data:')) continue;
+        try {
+          var evt = JSON.parse(line.slice(5).trim());
+          if (evt.type === 'log') {
+            wcState.sandbox.logs.push(evt.msg);
+            // Live update logs only (avoid full re-render on every line)
+            var logsEl = document.getElementById('wcSbLogs');
+            if (logsEl) {
+              var d = document.createElement('div');
+              d.textContent = evt.msg;
+              logsEl.appendChild(d);
+              logsEl.scrollTop = logsEl.scrollHeight;
+            } else {
+              renderWebCraft(document.getElementById('content'));
+            }
+          } else if (evt.type === 'ready') {
+            wcState.sandbox.running = false;
+            wcState.sandbox.port = evt.port;
+            wcState.sandbox.dir = evt.dir;
+            renderWebCraft(document.getElementById('content'));
+          } else if (evt.type === 'error') {
+            wcState.sandbox.running = false;
+            wcState.sandbox.error = evt.msg;
+            renderWebCraft(document.getElementById('content'));
+          }
+        } catch(_) {}
+      }
+    }
+  } catch(e) {
+    wcState.sandbox.running = false;
+    wcState.sandbox.error = e.message;
+    renderWebCraft(document.getElementById('content'));
+  }
+}
+
+async function wcStopSandbox() {
+  await fetch(API + '/api/studio/webcraft/sandbox', {method:'DELETE'});
+  wcState.sandbox = { running: false, port: null, dir: null, logs: [], error: null };
+  renderWebCraft(document.getElementById('content'));
+}
+
+var _wcLastDownload = 0;
+function wcDownloadZip() {
+  if (!wcState.generatedFiles.length) return;
+  var now = Date.now();
+  if (now - _wcLastDownload < 30000) {
+    var wait = Math.ceil((30000 - (now - _wcLastDownload)) / 1000);
+    alert('Attendi ' + wait + 's prima di scaricare di nuovo.');
+    return;
+  }
+  _wcLastDownload = now;
+  // Build a real ZIP file (PKZIP format, stored/no compression) — zero dependencies
+  var enc = new TextEncoder();
+  var parts = [];
+  var centralDir = [];
+  var offset = 0;
+  wcState.generatedFiles.forEach(function(f) {
+    var namBytes = enc.encode(f.name);
+    var dataBytes = enc.encode(f.content);
+    // Local file header
+    var lfh = new Uint8Array(30 + namBytes.length);
+    var lv = new DataView(lfh.buffer);
+    lv.setUint32(0, 0x04034b50, true); // signature
+    lv.setUint16(4, 20, true);  // version needed
+    lv.setUint16(6, 0, true);   // flags
+    lv.setUint16(8, 0, true);   // compression: stored
+    lv.setUint16(10, 0, true);  // mod time
+    lv.setUint16(12, 0, true);  // mod date
+    var crc = wcCrc32(dataBytes);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, dataBytes.length, true);
+    lv.setUint32(22, dataBytes.length, true);
+    lv.setUint16(26, namBytes.length, true);
+    lv.setUint16(28, 0, true);
+    lfh.set(namBytes, 30);
+    // Central directory entry
+    var cde = new Uint8Array(46 + namBytes.length);
+    var cv = new DataView(cde.buffer);
+    cv.setUint32(0, 0x02014b50, true); // signature
+    cv.setUint16(4, 20, true);  // version made by
+    cv.setUint16(6, 20, true);  // version needed
+    cv.setUint16(8, 0, true);   // flags
+    cv.setUint16(10, 0, true);  // compression
+    cv.setUint16(12, 0, true);  // mod time
+    cv.setUint16(14, 0, true);  // mod date
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, dataBytes.length, true);
+    cv.setUint32(24, dataBytes.length, true);
+    cv.setUint16(28, namBytes.length, true);
+    cv.setUint16(30, 0, true);  // extra
+    cv.setUint16(32, 0, true);  // comment
+    cv.setUint16(34, 0, true);  // disk start
+    cv.setUint16(36, 0, true);  // internal attr
+    cv.setUint32(38, 0, true);  // external attr
+    cv.setUint32(42, offset, true); // local header offset
+    cde.set(namBytes, 46);
+    parts.push(lfh, dataBytes);
+    centralDir.push(cde);
+    offset += lfh.length + dataBytes.length;
+  });
+  var cdSize = centralDir.reduce(function(s,c){return s+c.length;},0);
+  var eocd = new Uint8Array(22);
+  var ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, centralDir.length, true);
+  ev.setUint16(10, centralDir.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  ev.setUint16(20, 0, true);
+  var all = parts.concat(centralDir).concat([eocd]);
+  var total = all.reduce(function(s,b){return s+b.length;},0);
+  var out = new Uint8Array(total);
+  var pos = 0;
+  all.forEach(function(b){out.set(b,pos);pos+=b.length;});
+  var blob = new Blob([out], {type:'application/zip'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (wcState.projectName || 'project') + '-webcraft.zip';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function wcCrc32(buf) {
+  var table = wcCrc32.t;
+  if (!table) {
+    table = new Uint32Array(256);
+    for (var i=0;i<256;i++){var c=i;for(var k=0;k<8;k++)c=c&1?(0xEDB88320^(c>>>1)):(c>>>1);table[i]=c;}
+    wcCrc32.t = table;
+  }
+  var crc = 0xFFFFFFFF;
+  for (var j=0;j<buf.length;j++) crc = table[(crc^buf[j])&0xFF]^(crc>>>8);
+  return (crc^0xFFFFFFFF)>>>0;
+}
 `;
 
 export function getHTML(port) {
@@ -5611,9 +6923,11 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .nav-item__badge{background:var(--red);color:var(--bright);font-size:9px;padding:1px 5px;border-radius:8px;margin-left:auto}
 
 .content{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+.content--webcraft{overflow:hidden;display:flex;flex-direction:column}
 
 /* Mobile burger button */
 #mobileBurger{display:block}
+.sidebar--open~* #mobileBurger,.sidebar--open+* #mobileBurger{opacity:0;pointer-events:none}
 .sidebar__close{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:4px 8px;z-index:10;line-height:1}
 .sidebar__close:hover{color:var(--bright)}
 .sidebar__brand{position:relative}
@@ -5667,6 +6981,7 @@ input:focus,textarea:focus{border-color:var(--green3)}
 #canvasPanel .cvs-header span{font-family:var(--mono);color:var(--green);font-size:12px}
 #canvasPanel .cvs-header button{background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;margin-left:8px}
 #canvasPanel iframe{flex:1;border:none;background:#fff;min-height:350px;width:100%}
+@media(max-width:600px){#canvasPanel{top:0;right:0;left:0;width:100%;max-width:100%;height:100dvh;max-height:100dvh;border-radius:0;border-left:none;border-right:none}}
 .msg--thinking{color:var(--dim);font-style:italic}
 .tool-indicator{display:inline-block;padding:2px 8px;margin:2px 0;border-radius:4px;font-size:11px;background:var(--bg3);border:1px solid var(--border)}
 .tool-indicator--browser{border-color:#9c27b0;color:#ce93d8}
@@ -5839,10 +7154,21 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .studio-header{margin-bottom:20px}
 .studio-header h2{font-size:15px;color:var(--green);margin-bottom:4px}
 .studio-header p{font-size:11px;color:var(--dim);line-height:1.5}
-.studio-input-row{display:flex;gap:8px;margin-bottom:20px}
-.studio-input-row textarea{flex:1;resize:none;height:60px;padding:10px 14px;font-size:13px;border-radius:var(--r);border:1px solid var(--border2)}
+.studio-sidebar{display:flex;flex-direction:column;gap:12px;width:220px;flex-shrink:0;position:sticky;top:16px;align-self:flex-start}
+.studio-sidebar-toggle{display:none}
+@media(max-width:600px){
+  #studioMainRow{flex-direction:column}
+  .studio-sidebar{position:fixed;top:0;right:0;bottom:0;width:260px;max-width:85vw;background:var(--bg2);border-left:1px solid var(--border);z-index:500;padding:16px 12px;overflow-y:auto;transform:translateX(110%);transition:transform .3s cubic-bezier(.4,0,.2,1);box-shadow:-4px 0 24px rgba(0,0,0,.4);flex-shrink:0}
+  .studio-sidebar--open{transform:translateX(0)}
+  .studio-sidebar-toggle{display:flex;align-items:center;gap:6px;margin-bottom:12px;padding:8px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--cyan);font-size:12px;font-weight:600;cursor:pointer;width:100%;justify-content:center}
+  .studio-header p{display:none}
+  .studio-input-row{flex-direction:column}
+  .studio-input-row textarea{min-height:72px;font-size:13px}
+}
+.studio-input-row{display:flex;gap:8px;margin-bottom:16px;align-items:flex-start}
+.studio-input-row textarea{flex:1;resize:vertical;min-height:90px;max-height:200px;padding:10px 14px;font-size:13px;border-radius:var(--r);border:1px solid var(--border2);line-height:1.5}
 .studio-input-row textarea:focus{border-color:var(--green3)}
-.studio-run-btn{background:var(--green3);color:var(--bg);padding:0 20px;border-radius:var(--r);font-weight:700;font-size:13px;white-space:nowrap;align-self:stretch;min-width:90px}
+.studio-run-btn{background:var(--green3);color:var(--bg);padding:0 16px;border-radius:var(--r);font-weight:600;font-size:12px;white-space:nowrap;align-self:stretch;min-width:80px;letter-spacing:.2px}
 .studio-run-btn:disabled{opacity:.4}
 .studio-canvas{position:relative;width:100%;min-height:220px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:20px;overflow:hidden}
 .studio-canvas__empty{display:flex;align-items:center;justify-content:center;height:180px;color:var(--dim);font-size:11px;flex-direction:column;gap:8px}
@@ -5873,33 +7199,159 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .studio-arrow{display:flex;align-items:center;color:var(--border2);font-size:18px;padding:0 8px;flex-shrink:0;margin-bottom:30px;transition:color .4s}
 .studio-arrow--active{color:var(--green3);animation:stFlow .5s ease-in-out infinite alternate}
 .studio-arrow--done{color:#22c55e}
-/* ── Workflow node animated character ── */
-.studio-nodes{align-items:flex-end!important;min-height:190px!important}
-.studio-node--active,.studio-node--done{min-width:118px!important;max-width:140px!important;gap:4px!important}
-.studio-node__char{display:flex;align-items:center;justify-content:center;width:100%}
-.studio-node__bubble{font-size:9px;padding:2px 7px;border-radius:20px;white-space:nowrap;text-align:center;margin:0 auto}
-.studio-node__label--char{font-size:10px;text-align:center;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700;letter-spacing:.3px;color:#6366f1}
-.studio-node--done .studio-node__label--char{color:#22c55e}
-/* ── Parliament Office Cartoon ── */
-.prl-wrap{background:#07070f;border:1.5px solid #6366f1;border-radius:14px;padding:14px 16px 12px;margin-bottom:16px;animation:stNodeIn .35s ease forwards;overflow:hidden}
-#studioParliamentBlock[style*="sticky"] .prl-wrap{animation:stNodeIn .35s ease forwards,parlPulse 2.2s ease-in-out infinite}
+/* ── Workflow scene (office layout, replaces cramped pill nodes) ── */
+.studio-canvas{background:none!important;border:none!important;padding:0!important;margin-bottom:0!important}
+#studioNodes .prl-office{border-radius:10px;border:1px solid rgba(99,102,241,.25);margin-bottom:16px;min-height:200px;padding:16px 12px 12px;position:relative;overflow:hidden}
+.wf-office{display:block}
+.wf-desks-row{display:flex;align-items:flex-end;justify-content:center;gap:6px;flex-wrap:wrap;padding-bottom:10px}
+.wf-desk{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;transition:opacity .2s}
+.wf-desk:hover{opacity:.85}
+.wf-desk--active{filter:drop-shadow(0 0 8px #6366f188)}
+.wf-desk--done{filter:drop-shadow(0 0 6px #22c55e55)}
+.wf-desk--err{filter:drop-shadow(0 0 6px #ef444455)}
+.wf-desk-name{font-size:9px;font-weight:600;text-align:center;max-width:88px;word-break:break-word;line-height:1.3;padding:0 2px;margin-top:2px}
+.wf-master{position:absolute;bottom:20px;right:16px}
+/* Orchestrator speech bubble — sbraita */
+.wf-sbraita-bubble{position:absolute;top:-28px;left:50%;transform:translateX(-50%);background:#1a0a0a;border:1.5px solid #ef4444;color:#fca5a5;font-family:var(--mono);font-size:9px;font-weight:800;padding:3px 8px;border-radius:8px;white-space:nowrap;letter-spacing:.5px;animation:sbraitaPop .4s ease-in-out infinite alternate;pointer-events:none;z-index:4}
+.wf-sbraita-bubble::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#ef4444}
+@keyframes sbraitaPop{0%{transform:translateX(-50%) scale(1) rotate(-2deg)}100%{transform:translateX(-50%) scale(1.06) rotate(2deg)}}
+/* ── Parliament Boardroom — bright office, same palette as workflow scene ── */
+.br-wrap{background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:16px;animation:stNodeIn .35s ease forwards;overflow:hidden;width:100%;box-sizing:border-box}
+.br-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.br-phase-chip{font-size:10px;font-weight:800;font-family:var(--mono);letter-spacing:.3px;color:var(--pc,#6366f1);background:rgba(99,102,241,.1);border:1px solid var(--pc,rgba(99,102,241,.35));border-radius:20px;padding:3px 12px;display:inline-block;transition:color .4s,border-color .4s}
+.br-progress-wrap{flex:1;height:3px;background:var(--border);border-radius:4px;overflow:hidden;min-width:60px}
+.br-progress-bar{height:100%;background:linear-gradient(90deg,#6366f1,#22d3ee);border-radius:4px;transition:width .5s ease;width:0%}
+/* Boardroom scene — bgSvg covers background */
+.br-room{position:relative;width:100%;min-height:480px;overflow:hidden;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.18)}
+/* Seats rows above/below table */
+.br-seats-row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;justify-content:space-around}
+/* Agent seat — FREE (no box, just emoji + name floating) */
+.br-seat{display:flex;flex-direction:column;align-items:center;gap:2px;transition:transform .35s;padding:4px 6px;border-radius:10px;background:transparent;border:none;box-shadow:none;min-width:56px;cursor:default}
+.br-seat--active{transform:scale(1.14) translateY(-5px)}
+.br-seat--done{opacity:.88}
+/* Emoji character */
+.br-char{font-size:40px;line-height:1;user-select:none;transition:filter .4s}
+@keyframes brCharBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+/* Orchestrator head — large, no box */
+.br-orch{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;flex-shrink:0;position:relative}
+.br-orch-inner{display:flex;flex-direction:column;align-items:center;gap:0;position:relative}
+.br-orch-crown{font-size:22px;line-height:1;display:block;text-align:center;animation:brCrownFloat 2s ease-in-out infinite}
+@keyframes brCrownFloat{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-3px) rotate(4deg)}}
+.br-orch-emoji{font-size:54px;line-height:1;display:block;filter:drop-shadow(0 0 16px #818cf8AA);transition:filter .3s}
+.br-orch--active .br-orch-emoji{animation:brOrchWalk 1.4s ease-in-out infinite alternate;filter:drop-shadow(0 0 20px #6366f1CC)}
+@keyframes brOrchWalk{0%{transform:translateX(0) scale(1)}100%{transform:translateX(14px) scale(1.07)}}
+.br-orch--done .br-orch-emoji{animation:orchBounce .7s ease forwards}
+.br-orch-speech{font-size:10px;font-weight:800;font-family:var(--mono);padding:4px 10px;border:2px solid #374151;border-radius:10px;background:#ffffff;color:#000000;white-space:nowrap;animation:brSpeechPop .7s ease-in-out infinite alternate;pointer-events:none;margin-bottom:4px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+@keyframes brSpeechPop{0%{transform:scale(1) rotate(-1deg)}100%{transform:scale(1.06) rotate(1deg)}}
+.br-orch-label{font-size:9px;font-family:var(--mono);font-weight:800;color:#000000;background:rgba(255,255,255,.92);border-radius:6px;padding:2px 8px;margin-top:2px}
+/* Bubble above agent */
+.br-bubble{font-size:9px;font-family:var(--mono);font-weight:700;padding:4px 9px;border-radius:10px 10px 10px 2px;border:1.5px solid #374151;background:#ffffff;color:#000000;line-height:1.4;word-break:break-word;max-width:120px;white-space:normal;box-shadow:0 2px 8px rgba(0,0,0,.12);margin-bottom:3px}
+/* Agent name pill */
+.br-seat-name{font-size:9px;font-family:var(--mono);font-weight:600;color:#374151;text-align:center;white-space:normal;word-break:break-word;max-width:100px;line-height:1.3;margin-top:1px;background:rgba(255,255,255,.75);border-radius:4px;padding:1px 4px;transition:color .3s,font-weight .2s;backdrop-filter:blur(2px)}
+.br-seat--active .br-seat-name{color:#000000;font-weight:800}
+.br-seat--done .br-seat-name{color:#111827}
+@keyframes brDotFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+/* Convergence */
+.br-convergence{margin-top:10px;padding:8px 12px;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2);border-radius:8px}
+.br-conv-bar-outer{height:4px;background:rgba(99,102,241,.15);border-radius:4px;overflow:hidden;margin-bottom:6px}
+.br-conv-bar-inner{height:100%;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:4px;transition:width .8s ease}
+.br-conv-text{font-size:9px;color:#86efac;line-height:1.55}
+@keyframes brDashFlow{0%{stroke-dashoffset:20}100%{stroke-dashoffset:0}}
+/* Keep old prl-* classes for workflow (not touched) */
+.prl-wrap{background:#0b0918;border:1.5px solid #6366f1;border-radius:14px;padding:14px 16px 12px;margin-bottom:16px;animation:stNodeIn .35s ease forwards;overflow:hidden}
 @keyframes parlPulse{0%,100%{border-color:#6366f1;box-shadow:none}50%{border-color:#818cf8;box-shadow:0 0 20px rgba(99,102,241,.3)}}
 .prl-header{display:flex;align-items:center;margin-bottom:10px}
 .prl-phase-chip{font-size:10px;font-weight:800;font-family:var(--mono);letter-spacing:.3px;color:var(--pc,#6366f1);background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.35);border-radius:20px;padding:3px 12px;display:inline-block}
-/* Office scene container */
-.prl-office{position:relative;min-height:130px;display:flex;align-items:flex-end;padding-bottom:8px;overflow:hidden}
-/* Floor — gradient wood planks effect */
-.prl-office-floor{position:absolute;bottom:0;left:0;right:0;height:8px;background:linear-gradient(90deg,#1c1a2e,#26243e,#1e1c32,#28263c,#1c1a2e);border-radius:4px;box-shadow:0 -1px 0 rgba(255,255,255,.05)}
-/* Desks row */
+/* ── Office room — bright, lit, full scene ── */
+.prl-office{position:relative;min-height:160px;display:flex;align-items:flex-end;padding:0 0 14px 0;overflow:hidden;border-radius:10px;
+  background:linear-gradient(180deg,#1a1440 0%,#221a52 40%,#2a2060 70%,#1e1a42 100%)}
+/* Back wall — ambient light from ceiling + panel lines */
+.prl-office::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(ellipse 80% 60% at 50% 0%,rgba(180,160,255,.18) 0%,transparent 70%),
+  repeating-linear-gradient(90deg,transparent,transparent 79px,rgba(255,255,255,.04) 80px);pointer-events:none;z-index:0}
+/* Floor — warm parquet with shine */
+.prl-office-floor{position:absolute;bottom:0;left:0;right:0;height:16px;
+  background:repeating-linear-gradient(90deg,#2a1c10 0px,#3d2a18 40px,#2c1e12 41px,#2a1c10 80px);
+  border-top:2px solid rgba(180,120,60,.3);box-shadow:0 -1px 0 rgba(255,200,100,.08),inset 0 2px 4px rgba(255,180,80,.06);z-index:1}
+/* THREE centered windows — sky blue with sunlight */
+.prl-office-window{position:absolute;top:4px;left:50%;transform:translateX(-50%);width:120px;height:52px;display:flex;gap:4px;z-index:1;pointer-events:none}
+.prl-office-window::before,.prl-office-window::after{content:"";flex:1;background:linear-gradient(180deg,#7ecfff 0%,#a8e4ff 40%,#c8f0ff 100%);border:1.5px solid #4a8fbb;border-radius:3px;
+  box-shadow:inset 0 0 8px rgba(255,255,255,.4),0 0 16px rgba(100,200,255,.25);position:relative}
+/* Center divider of each window pane */
+/* Sunlight shafts from windows */
+.prl-office-window-light{position:absolute;top:0;left:50%;transform:translateX(-50%);width:200px;height:100%;
+  background:linear-gradient(175deg,rgba(200,240,255,.12) 0%,rgba(180,220,255,.06) 30%,transparent 60%);pointer-events:none;z-index:1}
+/* Chandelier hanging from ceiling — center */
+.prl-office-lamp{position:absolute;top:0;left:50%;transform:translateX(-50%);width:4px;height:18px;background:rgba(255,220,150,.3);z-index:3}
+.prl-office-lamp::before{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:32px;height:14px;border-radius:50%;background:radial-gradient(ellipse,rgba(255,220,100,.5) 0%,rgba(255,180,50,.2) 60%,transparent 100%);box-shadow:0 0 30px rgba(255,200,80,.5),0 0 60px rgba(255,200,80,.2),0 0 100px rgba(255,200,80,.08)}
+.prl-office-lamp::after{content:"";position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);width:20px;height:10px;background:radial-gradient(ellipse,rgba(255,220,150,.8) 0%,rgba(255,200,100,.4) 50%,transparent 100%);border-radius:50%;filter:blur(3px)}
+/* Standing lamp (floor lamp) — right side */
+.prl-office-lamp2{position:absolute;bottom:14px;right:28px;width:3px;height:44px;background:linear-gradient(180deg,#4a4060 0%,#3a3050 100%);border-radius:2px;z-index:2}
+.prl-office-lamp2::before{content:"";position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:18px;height:10px;background:linear-gradient(135deg,#4a4060,#6a6080);border-radius:3px 3px 0 0;box-shadow:0 -4px 20px rgba(255,220,150,.4),0 -2px 40px rgba(255,200,80,.2)}
+.prl-office-lamp2::after{content:"";position:absolute;top:-3px;left:50%;transform:translateX(-50%);width:22px;height:16px;background:radial-gradient(ellipse,rgba(255,220,120,.6) 0%,rgba(255,200,80,.2) 60%,transparent 100%);border-radius:50%;filter:blur(4px)}
+/* Wall art frames — left+center+right */
+.prl-office-frame{position:absolute;top:6px;right:8px;width:30px;height:22px;border:2px solid rgba(180,160,255,.4);border-radius:2px;background:linear-gradient(135deg,#2a1060,#103060);box-shadow:0 2px 6px rgba(0,0,0,.4),inset 0 0 6px rgba(150,100,255,.15);z-index:1;overflow:hidden}
+.prl-office-frame::before{content:"";position:absolute;inset:2px;border-radius:1px;background:linear-gradient(135deg,#3a1a6e 0%,#0a2060 50%,#1a3a20 100%)}
+.prl-office-frame::after{content:"";position:absolute;top:4px;left:50%;transform:translateX(-50%);width:60%;height:1px;background:rgba(255,255,255,.2)}
+/* Second frame */
+.prl-office-frame2{position:absolute;top:6px;right:46px;width:22px;height:16px;border:2px solid rgba(180,160,255,.35);border-radius:2px;background:linear-gradient(135deg,#1a1030,#0a2030);box-shadow:0 2px 4px rgba(0,0,0,.3);z-index:1}
+.prl-office-frame2::before{content:"";position:absolute;inset:2px;background:linear-gradient(45deg,#2e1060,#102040);border-radius:1px}
+/* Poster left — inspirational */
+.prl-office-poster{position:absolute;top:6px;left:8px;width:28px;height:20px;border:1.5px solid rgba(100,200,255,.3);border-radius:2px;background:linear-gradient(135deg,#0a1840,#0a3040);box-shadow:0 2px 4px rgba(0,0,0,.3);z-index:1}
+.prl-office-poster::before{content:"";position:absolute;inset:2px;background:linear-gradient(180deg,#0a2060 0%,#103050 40%,#0a1040 100%);border-radius:1px}
+.prl-office-poster::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(100,200,255,.05) 3px);border-radius:1px}
+/* Plant left — larger, luminous */
+.prl-office-plant{position:absolute;bottom:14px;left:4px;width:22px;height:42px;z-index:2;pointer-events:none}
+/* Plant right */
+.prl-office-plant2{position:absolute;bottom:14px;right:8px;width:22px;height:42px;z-index:2;pointer-events:none}
+/* ── OFFICE SCENE ── */
+.iso-scene{background:#f0ede6;cursor:default;max-width:100%;overflow-x:auto;box-shadow:0 4px 24px rgba(0,0,0,.18);border-radius:12px;overflow:hidden}
+.iso-station{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;transition:filter .2s,transform .2s;padding:8px 4px;border-radius:12px;border:1.5px solid transparent;position:relative}
+.iso-station:hover{filter:brightness(1.06);transform:translateY(-2px)}
+.iso-char-mover{position:relative;transition:transform 0.9s cubic-bezier(.4,0,.2,1)}
+.iso-char-mover.iso-orch-done{animation:orchBounce .7s ease forwards}
+@keyframes orchBounce{0%{transform:scale(1)}40%{transform:scale(1.18) translateY(-6px)}100%{transform:scale(1)}}
+/* Fly-doc: multiple sheets flying from monitor upward */
+.iso-fly-doc{position:absolute;top:2px;left:50%;font-size:14px;pointer-events:none;z-index:25}
+.iso-fly-doc span{position:absolute;display:block;animation:flySheet 1.4s ease-in-out infinite}
+.iso-fly-doc span:nth-child(1){animation-delay:0s;left:-10px}
+.iso-fly-doc span:nth-child(2){animation-delay:.45s;left:2px}
+.iso-fly-doc span:nth-child(3){animation-delay:.9s;left:12px}
+@keyframes flySheet{0%{transform:translateY(0) rotate(-8deg);opacity:0}15%{opacity:1}60%{transform:translateY(-38px) rotate(14deg);opacity:.9}100%{transform:translateY(-58px) rotate(-5deg);opacity:0}}
+.iso-desk{width:90%;height:16px;background:linear-gradient(180deg,#d4a448 0%,#b8832a 100%);border-radius:4px 4px 2px 2px;box-shadow:0 4px 0 #8a5e18,0 6px 10px rgba(0,0,0,.3);border-top:2px solid #e8c060;position:relative;margin-top:4px}
+.iso-desk::after{content:'';position:absolute;bottom:-4px;left:8px;right:8px;height:4px;background:#7a5010;border-radius:0 0 3px 3px}
+.iso-monitor{width:56px;height:40px;background:#12101e;border:2px solid #3a3070;border-radius:5px;display:flex;align-items:center;justify-content:center;position:relative;margin-bottom:-2px}
+.iso-monitor::after{content:'';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:10px;height:5px;background:#252436;border-radius:0 0 3px 3px}
+.iso-monitor-screen{width:44px;height:28px;background:rgba(60,40,160,.35);border-radius:2px;display:flex;align-items:center;justify-content:center}
+.iso-monitor-blink{width:7px;height:7px;border-radius:50%;background:#6366f1;animation:monBlink .9s ease-in-out infinite;margin-right:6px}
+@keyframes monBlink{0%,100%{opacity:1;box-shadow:0 0 8px #6366f1}50%{opacity:.25;box-shadow:none}}
+.iso-tool-badge{font-size:22px;line-height:1;filter:drop-shadow(0 2px 5px rgba(0,0,0,.35));user-select:none;margin-bottom:1px}
+/* Animated status chip for [bracket tokens] */
+.iso-status-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:20px;padding:3px 10px;font-size:11px;font-family:var(--mono);color:#818cf8;animation:statusPulse 2s ease-in-out infinite}
+@keyframes statusPulse{0%,100%{opacity:.7;border-color:rgba(99,102,241,.3)}50%{opacity:1;border-color:rgba(99,102,241,.7);box-shadow:0 0 8px rgba(99,102,241,.3)}}
+.iso-status-dot{width:6px;height:6px;border-radius:50%;background:#6366f1;animation:dotBounce 1s ease-in-out infinite}
+.iso-agent{transition:filter .3s}
+.iso-agent:hover{filter:brightness(1.1) saturate(1.2)}
+.iso-char-wrap{transition:transform .2s,box-shadow .3s}
+.iso-char-wrap.prl-head{animation:isoCharBob 1.2s ease-in-out infinite}
+@keyframes isoCharBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.iso-orch-wrap{transition:transform .2s}
+.iso-orch-wrap.prl-head{animation:isoCharBob 1.4s ease-in-out infinite}
+/* Thought bubble / speech bubble above character */
+.iso-bubble{font-size:9px;font-family:var(--mono);padding:3px 9px;border-radius:12px;border:1px solid #ccc;background:rgba(255,255,255,.9);color:#6b7280;white-space:normal;word-break:break-word;max-width:160px;line-height:1.4;transition:all .25s;pointer-events:none;backdrop-filter:blur(6px);text-align:center}
+.iso-bubble--active{background:#ffffff;border-color:#1d4ed8;color:#000000;animation:isoBubblePop .35s ease;white-space:normal;max-width:160px;word-break:break-word;line-height:1.35}
+.iso-bubble--orch{font-size:9px;padding:3px 9px;border-radius:12px;border-color:#374151;color:#111827;background:rgba(255,255,255,.92)}
+@keyframes isoBubblePop{0%{transform:scale(.8) translateY(4px);opacity:.4}100%{transform:scale(1) translateY(0);opacity:1}}
+.iso-name{font-size:10px;font-family:var(--mono);font-weight:700;letter-spacing:.3px;text-align:center;max-width:160px;white-space:normal;word-break:break-word;line-height:1.3;background:rgba(255,255,255,.85);border-radius:6px;padding:2px 6px;pointer-events:none;backdrop-filter:blur(4px)}
+/* Desks row — kept for boardroom compat */
 .prl-desks-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;position:relative;z-index:2;padding-bottom:8px}
-/* Individual desk card */
-.prl-desk{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 6px 4px;border-radius:12px;background:#0a0a18;border:1.5px solid #252535;transition:border-color .4s,background .4s,box-shadow .4s;position:relative;min-width:80px}
-.prl-desk--active{background:#0c0c20;border-color:var(--dc,#6366f1);box-shadow:0 0 20px rgba(99,102,241,.2),0 0 40px rgba(99,102,241,.08)}
-.prl-desk--done{border-color:#1e3a1e;background:#0a150a}
-/* Action bubble above character */
-.prl-action-bubble{font-size:9px;color:#6b7280;font-family:var(--mono);padding:2px 6px;border-radius:8px;background:#111;border:1px solid #2a2a38;min-height:16px;text-align:center;transition:all .3s}
-.prl-action-bubble--active{color:var(--dc,#6366f1);border-color:var(--dc,#6366f1);background:rgba(99,102,241,.08);animation:parlBubblePop .4s ease}
+.prl-desk{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 6px 4px;border-radius:12px;background:#1a1535;border:1.5px solid #3a3060;transition:border-color .4s,background .4s,box-shadow .4s;position:relative;min-width:80px;box-shadow:0 2px 8px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)}
+.prl-desk--active{background:#1e1a45;border-color:var(--dc,#6366f1);box-shadow:0 0 20px rgba(99,102,241,.3),0 0 40px rgba(99,102,241,.1),inset 0 1px 0 rgba(150,130,255,.15)}
+.prl-desk--done{border-color:#2a4a2a;background:#162516}
+.prl-action-bubble{font-size:9px;color:#6b7280;font-family:var(--mono);padding:2px 6px;border-radius:8px;background:#111;border:1px solid #2a2a38;min-height:16px;text-align:center;white-space:normal;word-break:break-word;max-width:88px;line-height:1.3;transition:all .3s}
+.prl-action-bubble--active{color:#000000;font-weight:700;border-color:#374151;background:#ffffff;animation:parlBubblePop .4s ease}
 @keyframes parlBubblePop{0%{transform:scale(.85);opacity:.5}100%{transform:scale(1);opacity:1}}
+@keyframes streamBlink{0%,100%{opacity:1}50%{opacity:0}}
 /* Character SVG animations */
 @keyframes parlArmType{0%,100%{transform:rotate(-8deg) translateY(0)}50%{transform:rotate(8deg) translateY(2px)}}
 @keyframes parlHeadNod{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(2px) rotate(4deg)}}
@@ -5908,27 +7360,37 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .prl-head{transform-origin:50% 100%;animation:parlHeadNod .8s ease-in-out infinite}
 .prl-doc-hold{transform-origin:center center;animation:parlDocBob .7s ease-in-out infinite}
 /* Agent name label */
-.prl-desk-name{font-size:9px;font-family:var(--mono);font-weight:700;letter-spacing:.3px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68px}
+.prl-desk-name{font-size:9px;font-family:var(--mono);font-weight:700;letter-spacing:.3px;text-align:center;white-space:normal;word-break:break-word;max-width:88px;line-height:1.3}
 /* MASTER ORCHESTRATOR */
 .prl-master{position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;align-items:center;gap:1px;z-index:3;transition:right .8s cubic-bezier(.4,0,.2,1)}
 .prl-master-label{font-size:8px;font-family:var(--mono);font-weight:700;letter-spacing:.4px;text-align:center;text-shadow:0 0 8px currentColor}
 /* Walking animation — smooth left-right patrol */
-@keyframes parlMasterWalk{0%{right:8px}25%{right:calc(100% - 70px)}50%{right:calc(100% - 70px)}75%{right:8px}100%{right:8px}}
-/* Leg swing for natural walking gait */
-@keyframes parlMasterLegL{0%,100%{transform:rotate(0deg)}25%{transform:rotate(25deg)}75%{transform:rotate(-20deg)}}
-@keyframes parlMasterLegR{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-20deg)}75%{transform:rotate(25deg)}}
-/* Arm swing (opposite to legs) */
-@keyframes parlMasterArmSwing{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-18deg)}75%{transform:rotate(18deg)}}
-/* Head bob while walking */
-@keyframes parlMasterBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
-.prl-master-walk{animation:parlMasterWalk 4s ease-in-out infinite}
-.prl-master-walk .prl-master-leg-l{transform-origin:50% 0;animation:parlMasterLegL .5s ease-in-out infinite}
-.prl-master-walk .prl-master-leg-r{transform-origin:50% 0;animation:parlMasterLegR .5s ease-in-out infinite}
-.prl-master-walk .prl-master-arm-l{transform-origin:50% 0;animation:parlMasterArmSwing .5s ease-in-out infinite}
-.prl-master-walk .prl-master-arm-r{transform-origin:50% 0;animation:parlMasterArmSwing .5s ease-in-out infinite reverse}
-/* R2 supervise: gentle idle bob at active desk */
-@keyframes parlMasterSupervise{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-.prl-master-supervise{animation:parlMasterSupervise 2s ease-in-out infinite}
+/* Executive walk: slow measured patrol left↔right */
+@keyframes parlMasterWalk{0%{right:8px;transform:scaleX(1)}35%{right:calc(100% - 70px);transform:scaleX(1)}40%{right:calc(100% - 70px);transform:scaleX(-1)}75%{right:8px;transform:scaleX(-1)}80%{right:8px;transform:scaleX(1)}100%{right:8px;transform:scaleX(1)}}
+/* Legs: slow dignified stride */
+@keyframes parlMasterLegL{0%,100%{transform:rotate(0deg)}25%{transform:rotate(18deg)}75%{transform:rotate(-14deg)}}
+@keyframes parlMasterLegR{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-14deg)}75%{transform:rotate(18deg)}}
+/* Arms: clipboard-holding executive swing — tight, not flailing */
+@keyframes parlMasterArmL{0%,100%{transform:rotate(0deg)}50%{transform:rotate(-12deg)}}
+@keyframes parlMasterArmR{0%,100%{transform:rotate(0deg)}50%{transform:rotate(8deg)}}
+/* Clipboard bob while walking — authority gesture */
+@keyframes parlMasterClipboard{0%,100%{transform:rotate(0deg) translateY(0)}30%{transform:rotate(-6deg) translateY(-1px)}70%{transform:rotate(4deg) translateY(1px)}}
+/* Whole body: subtle sway of a confident executive */
+@keyframes parlMasterBodySway{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-2px) rotate(.6deg)}75%{transform:translateY(-1px) rotate(-.5deg)}}
+.prl-master-walk{animation:parlMasterWalk 16s cubic-bezier(.45,0,.55,1) infinite}
+.prl-master-walk .prl-master-leg-l{transform-origin:50% 0;animation:parlMasterLegL 1.8s ease-in-out infinite}
+.prl-master-walk .prl-master-leg-r{transform-origin:50% 0;animation:parlMasterLegR 1.8s ease-in-out infinite}
+.prl-master-walk .prl-master-arm-l{transform-origin:50% 0;animation:parlMasterArmL 2.2s ease-in-out infinite}
+.prl-master-walk .prl-master-arm-r{transform-origin:50% 0;animation:parlMasterArmR 2.2s ease-in-out infinite}
+/* R2 supervise: executive pacing — short back-and-forth at the active desk */
+@keyframes parlMasterSupervise{0%{right:8px}30%{right:28px}60%{right:10px}80%{right:24px}100%{right:8px}}
+.prl-master-supervise{animation:parlMasterSupervise 8s ease-in-out infinite}
+.prl-master-supervise .prl-master-leg-l{transform-origin:50% 0;animation:parlMasterLegL 1.8s ease-in-out infinite}
+.prl-master-supervise .prl-master-leg-r{transform-origin:50% 0;animation:parlMasterLegR 1.8s ease-in-out infinite}
+.prl-master-supervise .prl-master-arm-l{transform-origin:50% 0;animation:parlMasterArmL 2.2s ease-in-out infinite}
+.prl-master-supervise .prl-master-arm-r{transform-origin:50% 0;animation:parlMasterArmR 2.2s ease-in-out infinite}
+/* Done: standing still — no walk animation */
+.prl-master-done{animation:none}
 /* Flying documents: smooth parabolic arc between agents */
 .prl-fly-container{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;overflow:hidden;z-index:4}
 @keyframes parlFlyDoc{0%{transform:translate(0,70px) scale(.6) rotate(-20deg);opacity:0}15%{opacity:1;transform:translate(8%,20px) scale(.9) rotate(-5deg)}40%{transform:translate(30%,-15px) scale(1.1) rotate(3deg);opacity:1}65%{transform:translate(60%,5px) scale(.95) rotate(8deg);opacity:.9}85%{opacity:.6}100%{transform:translate(90%,60px) scale(.6) rotate(15deg);opacity:0}}
@@ -5942,7 +7404,7 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .prl-conv-bar-inner{height:100%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:4px;transition:width .8s ease}
 .prl-conv-text{font-size:9px;color:#86efac;line-height:1.55}
 .studio-log{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;max-height:380px;overflow-y:auto;font-size:11.5px;line-height:1.65}
-.studio-log-entry{margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--bg3);border:1px solid var(--border)}
+.studio-log-entry{margin-bottom:10px;padding:14px 16px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);min-height:80px}
 .studio-log-entry:last-child{margin-bottom:0}
 .studio-log-entry__header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .studio-log-entry__icon{font-size:15px}
@@ -5956,7 +7418,7 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .studio-result__body{font-size:13px;color:var(--text);word-wrap:break-word;line-height:1.7}
 .studio-example-btn{display:inline-block;padding:5px 12px;border:1px solid var(--border2);border-radius:20px;font-size:10px;color:var(--dim);cursor:pointer;background:none;margin:0 4px 6px 0;transition:all .15s}
 .studio-example-btn:hover{border-color:var(--green3);color:var(--green);background:var(--greendim)}
-.studio-tools-panel{width:220px;flex-shrink:0;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg2);max-height:600px;overflow-y:auto}
+.studio-tools-panel{width:100%;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg2);max-height:calc(100vh - 200px);overflow-y:auto}
 .studio-tool-item{display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:6px;cursor:pointer;transition:background .15s;margin-bottom:4px}
 .studio-tool-item:hover{background:var(--bg3);border-radius:6px}
 .studio-tool-icon{font-size:16px;flex-shrink:0;margin-top:1px}
@@ -6019,7 +7481,7 @@ input:focus,textarea:focus{border-color:var(--green3)}
 <div class="app">
   <nav class="sidebar" id="sidebar"></nav>
 
-  <button onclick="openSidebar()" style="position:fixed;top:6px;left:6px;z-index:100;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);color:var(--green);font-size:16px;padding:4px 8px;cursor:pointer;line-height:1;opacity:0.85" id="mobileBurger">&#9776;</button>
+  <button onclick="openSidebar()" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100;background:var(--bg2);border:1px solid var(--green3);border-radius:24px;color:var(--green);font-size:13px;font-weight:700;padding:8px 20px;cursor:pointer;line-height:1;box-shadow:0 2px 12px rgba(0,0,0,.5);letter-spacing:.3px" id="mobileBurger">&#9776; Menu</button>
 
   <div class="content" id="content"></div>
 

@@ -32,6 +32,16 @@ export async function main(argv) {
     if (cmd === 'setup') return; // setup was the goal
   }
 
+  // ── Telemetry ping (anonymous, fire-and-forget, non-blocking) ────────────
+  if (cmd !== 'help' && cmd !== 'version' && cmd !== '--help' && cmd !== '-h') {
+    fetch('https://nothumanallowed.com/api/v1/telemetry/ping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform: 'cli', version: VERSION }),
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => {});
+  }
+
   // ── Background update check (non-blocking) ──────────────────────────────
   if (cmd !== 'update' && cmd !== 'help' && cmd !== 'version') {
     checkForUpdates().then(updates => {
@@ -95,6 +105,22 @@ export async function main(argv) {
 
     case 'voice':
       return cmdVoice(args);
+
+    case 'cron':
+      return cmdCron(args);
+
+    case 'heartbeat':
+      return cmdHeartbeat(args);
+
+    case 'daemon':
+      // Alias for nha ops (friendlier name)
+      return cmdOps(args.length ? args : ['start']);
+
+    case 'collab':
+    case 'alexandria': {
+      const { cmdCollab } = await import('./commands/collab.mjs');
+      return cmdCollab(args);
+    }
 
     case 'plugin':
     case 'plugins':
@@ -443,6 +469,92 @@ function cmdConfig(args) {
   console.log('');
 }
 
+// ── nha cron ──────────────────────────────────────────────────────────────
+
+async function cmdCron(args) {
+  const { addCronJob, removeCronJob, listCronJobs } = await import('./services/ops-daemon.mjs');
+  const sub = args[0];
+
+  if (!sub || sub === 'list' || sub === 'ls') {
+    const jobs = listCronJobs();
+    if (jobs.length === 0) {
+      info('No cron jobs configured.');
+      info('Add one: nha cron add "every monday 9am" "check my open PRs"');
+      return;
+    }
+    console.log(`\n  ${BOLD}Scheduled Jobs (${jobs.length})${NC}\n`);
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      const status = j.enabled ? `${G}active${NC}` : `${R}paused${NC}`;
+      const lastRun = j.lastRun ? new Date(j.lastRun).toLocaleString() : 'never';
+      console.log(`  ${Y}${i + 1}.${NC} ${C}${j.schedule}${NC} → ${j.prompt}`);
+      console.log(`     Status: ${status}  Runs: ${j.runCount}  Last: ${lastRun}`);
+      if (j.lastResult) console.log(`     Result: ${D}${j.lastResult.slice(0, 80)}...${NC}`);
+      console.log('');
+    }
+    return;
+  }
+
+  if (sub === 'add') {
+    const schedule = args[1];
+    const prompt = args.slice(2).join(' ');
+    if (!schedule || !prompt) {
+      fail('Usage: nha cron add "every monday 9am" "check open PRs on my repos"');
+      info('Schedules: "every 5m", "every 2h", "every monday 9am", "daily 8:30", "at 14:00"');
+      return;
+    }
+    const result = addCronJob(schedule, prompt);
+    if (result.ok) {
+      ok(`Cron job added: ${schedule} → ${prompt}`);
+      info('The daemon will execute it automatically. Start daemon: nha ops start');
+    } else {
+      fail(result.error);
+    }
+    return;
+  }
+
+  if (sub === 'remove' || sub === 'rm' || sub === 'delete') {
+    const id = args[1];
+    if (!id) { fail('Usage: nha cron remove <number>'); return; }
+    const result = removeCronJob(id);
+    if (result.ok) {
+      ok(`Removed: ${result.removed.schedule} → ${result.removed.prompt}`);
+    } else {
+      fail(result.error);
+    }
+    return;
+  }
+
+  fail(`Unknown subcommand: ${sub}`);
+  info('Usage: nha cron [list|add|remove]');
+}
+
+// ── nha heartbeat ─────────────────────────────────────────────────────────
+
+async function cmdHeartbeat(args) {
+  const { addHeartbeat } = await import('./services/ops-daemon.mjs');
+  const interval = args[0];
+  const prompt = args.slice(1).join(' ');
+
+  if (!interval || !prompt) {
+    info('Create a recurring background task:');
+    console.log(`\n  ${C}nha heartbeat "2h" "summarize new emails"${NC}`);
+    console.log(`  ${C}nha heartbeat "30m" "check GitHub notifications"${NC}`);
+    console.log(`  ${C}nha heartbeat "1h" "monitor server health"${NC}\n`);
+    info('List all scheduled tasks: nha cron list');
+    info('Remove a task: nha cron remove <number>');
+    return;
+  }
+
+  const result = addHeartbeat(interval, prompt);
+  if (result.ok) {
+    ok(`Heartbeat created: every ${interval} → ${prompt}`);
+    info('The daemon will execute it automatically. Start daemon: nha ops start');
+  } else {
+    fail(result.error);
+  }
+}
+
 // ── nha doctor ─────────────────────────────────────────────────────────────
 async function cmdDoctor() {
   console.log(`\n  ${BOLD}NHA Health Check${NC}\n`);
@@ -550,10 +662,23 @@ function cmdHelp() {
   console.log(`    ops start             Start background daemon (auto-alerts + WebSocket)`);
   console.log(`    ops stop              Stop daemon`);
   console.log(`    ops status            Daemon status`);
+  console.log(`    daemon                Alias for ops start\n`);
+  console.log(`  ${C}Scheduled Tasks${NC}`);
+  console.log(`    cron list             List all scheduled jobs`);
+  console.log(`    cron add "schedule" "prompt"   Add a recurring task`);
+  console.log(`    cron remove 1         Remove a scheduled job`);
+  console.log(`    heartbeat "2h" "prompt"        Quick recurring task\n`);
+  console.log(`  ${C}Autostart${NC}`);
   console.log(`    autostart enable      Auto-start daemon on login (launchd/systemd)`);
   console.log(`    autostart disable     Remove OS autostart`);
   console.log(`    autostart status      Check autostart configuration\n`);
 
+  console.log(`  ${C}Alexandria${NC}  ${D}(E2E Encrypted Communication)${NC}`);
+  console.log(`    collab create "name"   Create encrypted channel`);
+  console.log(`    collab join <code>     Join with invite code`);
+  console.log(`    collab send "msg"      Encrypt and send message`);
+  console.log(`    collab read            Decrypt and show messages`);
+  console.log(`    collab list            Your channels\n`);
   console.log(`  ${C}Message Responder${NC}  ${D}(Telegram + Discord auto-reply)${NC}`);
   console.log(`    responder status      Show responder configuration`);
   console.log(`    config set telegram-bot-token TOKEN`);

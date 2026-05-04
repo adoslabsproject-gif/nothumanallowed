@@ -37,7 +37,10 @@ async function calFetch(config, urlPath, options = {}) {
     throw new Error(`Calendar API ${res.status}: ${err}`);
   }
 
-  return res.json();
+  if (res.status === 204 || res.headers.get('content-length') === '0') return {};
+  const text = await res.text();
+  if (!text) return {};
+  try { return JSON.parse(text); } catch { return {}; }
 }
 
 /**
@@ -72,7 +75,11 @@ export async function listEvents(config, calendarId = 'primary', timeMin, timeMa
   });
 
   const data = await calFetch(config, `/calendars/${encodeURIComponent(calendarId)}/events?${params}`);
-  const events = (data.items || []).map(parseEvent);
+  const events = (data.items || []).map(raw => {
+    const e = parseEvent(raw);
+    e.calendarId = calendarId; // propagate real calendarId
+    return e;
+  });
 
   // Cache events
   cacheEvents(timeMin, events);
@@ -91,29 +98,75 @@ export async function getTodayEvents(config) {
   const allEvents = [];
 
   for (const cal of calendars) {
-    if (cal.accessRole === 'freeBusyReader') continue; // skip minimal access
+    if (cal.accessRole === 'freeBusyReader') continue;
+    const isHolidayFeed = cal.id.includes('#holiday@group');
     try {
       const events = await listEvents(config, cal.id, startOfDay, endOfDay);
       for (const e of events) {
         e.calendarName = cal.summary;
+        e.calendarId = cal.id;
+        e.readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
+        e._isHoliday = isHolidayFeed;
         allEvents.push(e);
       }
     } catch { /* skip failed calendars */ }
   }
 
-  // Sort by start time
   allEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  return allEvents;
+  const holidayDates = new Set();
+  return allEvents.filter(e => {
+    if (!e._isHoliday) return true;
+    const dateKey = (e.start || '').slice(0, 10);
+    if (holidayDates.has(dateKey)) return false;
+    holidayDates.add(dateKey);
+    return true;
+  });
 }
 
 /**
  * Get events for a specific date.
  */
 export async function getEventsForDate(config, date) {
-  const d = new Date(date);
-  const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  // Parse date string as LOCAL time to avoid UTC-midnight timezone shift
+  let startOfDay;
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [y, m, d] = date.split('-').map(Number);
+    startOfDay = new Date(y, m - 1, d);
+  } else {
+    const d = new Date(date);
+    startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
   const endOfDay = new Date(startOfDay.getTime() + 86400000);
-  return listEvents(config, 'primary', startOfDay, endOfDay);
+
+  // Load from all calendars so calendarId is always accurate
+  const calendars = await listCalendars(config);
+  const allEvents = [];
+  for (const cal of calendars) {
+    if (cal.accessRole === 'freeBusyReader') continue;
+    const isHolidayFeed = cal.id.includes('#holiday@group');
+    try {
+      const events = await listEvents(config, cal.id, startOfDay, endOfDay);
+      for (const e of events) {
+        e.calendarName = cal.summary;
+        e.calendarId = cal.id;
+        e.readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
+        e._isHoliday = isHolidayFeed;
+        allEvents.push(e);
+      }
+    } catch { /* skip */ }
+  }
+  allEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+  // Deduplicate: for holiday feeds, keep only ONE holiday per date
+  // (IT + EN feeds have same day, different language titles — keep first)
+  const holidayDates = new Set();
+  return allEvents.filter(e => {
+    if (!e._isHoliday) return true;
+    const dateKey = (e.start || '').slice(0, 10);
+    if (holidayDates.has(dateKey)) return false;
+    holidayDates.add(dateKey);
+    return true;
+  });
 }
 
 /**
@@ -171,6 +224,12 @@ export async function updateEvent(config, calendarId, eventId, patch) {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteEvent(config, calendarId, eventId) {
+  await calFetch(config, `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`, {
+    method: 'DELETE',
   });
 }
 

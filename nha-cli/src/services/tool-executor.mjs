@@ -7,6 +7,9 @@
  * Zero external dependencies — pure Node.js 22.
  */
 
+import os from 'os';
+import path from 'path';
+
 import {
   listMessages,
   getMessage,
@@ -44,6 +47,17 @@ import {
 
 import { notify } from './notification.mjs';
 
+// ── execute_code: module-level tsx path cache ─────────────────────────────────
+// Resolved once lazily (first TypeScript execution) — avoids shell spawn on every call.
+import { execSync as _execSyncTsx } from 'child_process';
+let _tsxPath = undefined; // undefined = not yet resolved; null = not found; string = path
+function getTsxPath() {
+  if (_tsxPath !== undefined) return _tsxPath;
+  try { _tsxPath = _execSyncTsx('which tsx 2>/dev/null', { timeout: 3000 }).toString().trim() || null; }
+  catch { _tsxPath = null; }
+  return _tsxPath;
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** Actions that mutate external state and require user confirmation. */
@@ -62,6 +76,10 @@ export const DESTRUCTIVE_ACTIONS = new Set([
   'notify_remind',
   'slack_send',
   'github_create_issue',
+  'file_write',
+  'drive_upload',
+  'drive_update',
+  'drive_delete',
 ]);
 
 // ── Tool Definitions (for system prompt) ─────────────────────────────────────
@@ -72,14 +90,16 @@ export const DESTRUCTIVE_ACTIONS = new Set([
  */
 export const TOOL_DEFINITIONS = `
 You have access to the following tools. When the user's message requires an action,
-output EXACTLY ONE fenced JSON block per action:
+output one or more fenced JSON blocks:
 
 \`\`\`json
 {"action": "<tool_name>", "params": { ... }}
 \`\`\`
 
-You may include conversational text BEFORE or AFTER the JSON block. If no action
-is needed, respond normally without any JSON block.
+You can include multiple JSON blocks in one response for sequential actions.
+You may include conversational text BEFORE, BETWEEN, or AFTER JSON blocks.
+If no action is needed, respond normally without any JSON block.
+CRITICAL: Never output a JSON block as a "suggestion" or "let me try" — every JSON block WILL be executed immediately. Only output a JSON block when you are certain the action should be performed.
 
 TOOLS:
 
@@ -263,9 +283,211 @@ TOOLS:
 46. birthday_add(name: string, date: string)
     Add or update a birthday for a contact. Name is the contact name (must exist in Google Contacts — creates one if not found). Date is MM-DD (e.g. "04-06" for April 6) or YYYY-MM-DD.
 
+--- WEB SEARCH & FETCH ---
+
+47. web_search(query: string, deep?: boolean, screenshot?: boolean)
+    Search the web using DuckDuckGo. Returns titles, URLs, and snippets.
+    Set deep=true to also fetch and extract the top 3 pages' full content (slower but more detailed).
+    Set screenshot=true when the user asks for a screenshot/image of the results — this renders results as a visual page and captures a screenshot. ALWAYS set screenshot=true if the user mentions "screenshot", "screen", "immagine", "foto", "mostra", or "vedi" in relation to search results.
+    ALWAYS use this for ANY web search request ("search for X", "find X", "look up X", "cerca X").
+    Do NOT open Google/Bing in the browser for searches — use this tool instead. It's faster and never gets blocked.
+
+48. fetch_url(url: string)
+    Fetch a web page and extract its text content. SSRF-protected (blocks private IPs, localhost).
+    Returns: title, excerpt, and body text (max 8000 chars). Only fetches text/html/json/xml.
+    Use this when the user provides a specific URL to read, summarize, or analyze.
+
+--- BROWSER AUTOMATION ---
+
+49. browser_open(url: string, waitForLoad?: boolean)
+    Open a URL in a headless Chrome browser. Launches Chrome automatically on first use.
+    SSRF-protected (blocks private IPs, localhost). Renders JavaScript, SPAs, and dynamic pages.
+    Use this when you need to interact with a page (click, type, screenshot) or when fetch_url fails on JS-rendered content.
+    WARNING: Do NOT use this to search the web — use web_search instead. Google/Bing block automated browsers with CAPTCHAs.
+
+50. browser_screenshot(saveTo?: string)
+    Capture a screenshot of the current browser viewport (what's visible on screen).
+    saveTo saves to a file path (e.g. "~/screenshot.png"). Returns base64-encoded image.
+    ALWAYS use viewport screenshots (the default). Do NOT pass fullPage=true — it produces oversized images.
+    Screenshots are automatically compressed as JPEG for efficiency.
+
+51. browser_click(text?: string, selector?: string, x?: number, y?: number)
+    Click an element on the page by visible text, CSS selector, or x/y coordinates.
+    PREFERRED: use text="Rifiuta tutto" or text="Submit" to click buttons/links by their visible label (case-insensitive partial match).
+    CSS selector: selector="#submit-btn", selector="a.nav-link"
+    Coordinates: x=500, y=300 for precise clicking.
+    Always try text first — it works for buttons, links, and any clickable element regardless of CSS structure.
+
+52. browser_type(text: string, selector?: string, clear?: boolean, delay?: number)
+    Type text into an input field. If selector is provided, clicks the element first to focus it.
+    clear=true clears existing content before typing. delay=50 types with 50ms delay between keys.
+
+53. browser_extract(selector?: string, mode?: "text"|"html"|"value"|"attribute", attribute?: string, all?: boolean)
+    Extract content from the page. Default: extract all text from body.
+    selector="h1" extracts the first h1 text. all=true extracts from ALL matching elements.
+    mode="value" gets input values. mode="attribute" with attribute="href" gets link URLs.
+    mode="html" gets raw HTML of the element.
+
+54. browser_js(code: string)
+    Execute arbitrary JavaScript in the browser page context and return the result.
+    The code runs inside the page — you have access to document, window, fetch, etc.
+    Example: "document.querySelectorAll('.item').length" returns the count of items.
+    Use for complex interactions, form filling, or data extraction that other tools can't handle.
+
+55. browser_wait(selector: string, timeout?: number, visible?: boolean)
+    Wait for an element to appear on the page. Default timeout: 10 seconds.
+    visible=true (default) waits for the element to be visible, not just in DOM.
+    Use after clicking or navigating to wait for dynamic content to load.
+
+56. browser_scroll(direction?: "up"|"down"|"top"|"bottom", amount?: number)
+    Scroll the page. direction="down" (default) scrolls down 500px. "top"/"bottom" go to extremes.
+    amount=1000 scrolls 1000px instead of default 500.
+
+57. browser_key(key: string, ctrl?: boolean, shift?: boolean, alt?: boolean)
+    Press a keyboard key. Keys: Enter, Tab, Escape, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Space.
+    ctrl=true holds Ctrl (or Cmd on Mac). Example: key="Enter" to submit a form.
+
+58. browser_close()
+    Close the browser. Frees resources. Browser auto-closes when NHA exits.
+
+--- SCHEDULED TASKS ---
+
+59. cron_add(schedule: string, prompt: string, agent?: string)
+    Create a recurring background task. The daemon executes it automatically.
+    Schedule formats: "every 5m", "every 2h", "every monday 9am", "daily 8:30", "at 14:00", "hourly".
+
+60. cron_list()
+    List all scheduled background tasks with their status, run count, and last result.
+
+61. cron_remove(index: number)
+    Remove a scheduled task by its number (1-based, from cron_list).
+
+--- SCREEN & VISION ---
+
+62. screen_capture(monitor?: number)
+    Capture a screenshot of the user's desktop screen. Returns the image for visual analysis.
+    Use when the user asks to look at their screen or analyze something visible.
+
+63. screen_analyze(question: string)
+    Capture the screen AND analyze it with vision. Combines capture + question.
+
+--- CANVAS ---
+
+64. canvas_render(html: string, title?: string)
+    Render HTML in the web UI canvas panel. Show charts, tables, diagrams, reports.
+    ALWAYS use Chart.js from CDN for charts and graphs — never build charts with raw HTML/CSS.
+    Template for charts:
+    <html><head><script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script></head>
+    <body style="background:#0a0a0a;padding:20px;margin:0">
+    <canvas id="c" style="max-height:400px"></canvas>
+    <script>new Chart(document.getElementById('c'),{type:'bar',data:{labels:['A','B'],datasets:[{label:'Data',data:[10,20],backgroundColor:['#00ff41','#00e5ff']}]},options:{plugins:{legend:{labels:{color:'#ccc'}}},scales:{x:{ticks:{color:'#888'}},y:{ticks:{color:'#888'}}}}});</script>
+    </body></html>
+    Supported chart types: bar, line, pie, doughnut, radar, polarArea, scatter, bubble.
+    Use dark theme: background #0a0a0a, text #ccc, grid #333, accent colors #00ff41 #00e5ff #ffaa00 #ff4444 #a78bfa.
+    For tables: use proper HTML tables with dark styling. For Mermaid diagrams: load from CDN.
+
+65. canvas_clear()
+    Clear the canvas panel.
+
+--- AGENT MESSENGER ---
+
+66. collab_send(message: string, channel?: string)
+    Send an E2E encrypted message to the active Alexandria channel (AgentMessenger).
+    Use this when the user asks to notify collaborators, share progress, or send a message to other agents/team members.
+    If channel is not specified, sends to the active channel.
+
+67. collab_read(channel?: string, limit?: number)
+    Read and decrypt messages from an Alexandria channel. Returns the latest messages (default 20).
+    Use this when the user asks to check messages, read a conversation, or see what others wrote.
+    If channel is not specified, reads from the active channel. Channel can be an ID or a name.
+
+--- FILE MANAGER ---
+
+68. file_list(path?: string, pattern?: string)
+    List files and folders in a directory. Default path is the current working directory.
+    pattern filters by glob (e.g. "*.js", "*.csv"). Shows: name, size, type (file/dir), modified date.
+    Use when the user asks "show files", "what's in this folder", "list files in ~/Downloads".
+
+69. file_read(path: string, lines?: number)
+    Read the content of a text file. Returns up to 500 lines by default (adjustable with lines parameter).
+    Supports: .txt, .md, .json, .csv, .js, .ts, .py, .html, .css, .xml, .yaml, .toml, .env, .log, .sh, and similar text formats.
+    Use when the user asks "read this file", "show me the contents of", "open file X".
+    For binary files (images, PDFs, etc.), returns file info instead of content.
+
+70. file_write(path: string, content: string, append?: boolean)
+    Write content to a file. Creates the file if it doesn't exist. Creates parent directories if needed.
+    append=true adds to the end instead of overwriting.
+    ALWAYS confirm with the user before writing. NEVER overwrite without permission.
+    Use when the user asks "create a file", "save this to", "write to".
+
+71. file_info(path: string)
+    Get detailed info about a file or folder: size, created date, modified date, permissions, type, extension.
+    For directories: also shows total items count and total size.
+    Use when the user asks "how big is this file", "when was this modified", "file details".
+
+72. file_search(query: string, path?: string, content?: boolean)
+    Search for files by name. Default path is current directory, searches recursively.
+    content=true also searches inside file contents (like grep). Max depth: 5 levels. Max results: 50.
+    Use when the user asks "find files named", "search for", "where is the file".
+
+--- GOOGLE DRIVE ---
+
+73. drive_list(filter?: "recent"|"starred"|"shared", query?: string, maxResults?: number)
+    List files from Google Drive. filter="recent" shows last 7 days, "starred" shows starred, "shared" shows shared with me.
+    query is a search term to find files by name. Default: all files, 20 results.
+
+74. drive_read(fileId: string)
+    Read the text content of a Drive file. Works with Google Docs (exported as plain text), Sheets (as CSV), and any text/code file.
+    Returns the content as text. For binary files (images, PDFs), use drive_download instead.
+
+75. drive_upload(name: string, content: string, mimeType?: string, folderId?: string)
+    Upload a new file to Google Drive. content is the file text content.
+    mimeType defaults to "text/plain". folderId defaults to root.
+    ALWAYS confirm before uploading. Use for creating new files on Drive.
+
+76. drive_update(fileId: string, content: string)
+    Update (overwrite) the content of an existing Drive file.
+    ALWAYS confirm before updating. Use for saving edits to existing files.
+
+77. drive_delete(fileId: string)
+    Move a Drive file to trash. ALWAYS confirm before deleting.
+
+78. drive_info(fileId: string)
+    Get detailed metadata of a Drive file: size, type, owner, dates, sharing status, link.
+
+79. drive_folder(folderId?: string)
+    List files inside a specific Drive folder. Default: root folder.
+    Returns files with their IDs, names, types, sizes.
+
+80. drive_download(fileId: string)
+    Download a file from Drive. For Google Docs/Sheets/Slides, exports as PDF.
+    Returns the file as base64-encoded content. Use for binary files, PDFs, images.
+
+--- CODE EXECUTION ---
+
+81. execute_code(language: "python"|"javascript"|"typescript", code: string, files?: [{path: string, content: string}], packages?: string[], stdin?: string, timeout?: number)
+    Execute code in an isolated sandbox and return the full output.
+    - language: "python", "javascript", or "typescript"
+    - code: the main script to run
+    - files (optional): extra files to create in the sandbox before running (e.g. input CSVs, helper modules). Paths are relative to sandbox.
+    - packages (optional): pip or npm packages to install before execution (e.g. ["pandas","numpy"] for python, ["lodash"] for js)
+    - stdin (optional): text piped to the process stdin
+    - timeout (optional): seconds before SIGKILL, default 30, max 120
+    Returns: exit_code (0=success ✓, non-zero=failure ✗), stdout, stderr, list of files written in sandbox.
+    Sandbox: isolated temp dir, stripped env (no NHA API keys visible to subprocess), SIGKILL on timeout, sandbox deleted after run.
+    Use for: data analysis, algorithm verification, running Python scripts, CSV/JSON processing, math computations, generating files (charts, reports), testing TypeScript/JS logic.
+    Do NOT use for: network requests (use fetch_url), permanent file I/O (use file_write/file_read).
+
 RULES:
+- ABSOLUTE RULE: NEVER LIE. NEVER fabricate, invent, or guess information. If you do not know, say "I don't know." If a tool fails, say it failed. If you cannot see something, say so. Honesty is MORE important than being helpful.
+- CRITICAL ROUTING RULE — browser_open vs web_search:
+  * "visita X.com", "vai su X", "apri X.com", "open X", "go to X" → ALWAYS use browser_open("https://X.com"). The user wants to SEE a specific website.
+  * "cerca X", "search for X", "find X", "look up X" → ALWAYS use web_search. The user wants search results.
+  * If the user mentions a SPECIFIC domain name (corriere.it, github.com, youtube.com, etc.) → browser_open, NEVER web_search.
+  * NEVER open Google/Bing/DuckDuckGo in the browser — use web_search for searching.
+  * web_search is for QUERIES. browser_open is for URLS. If it looks like a website name, it's a URL.
 - For search/read operations, execute immediately and present results conversationally.
-- For write/send/delete operations (gmail_send, gmail_reply, gmail_delete, calendar_create, calendar_move, calendar_update, contact_delete, task_done, notify_remind), DESCRIBE what you're about to do and include the JSON block so the system can ask the user for confirmation.
+- For write/send/delete operations (gmail_send, gmail_reply, gmail_delete, calendar_create, calendar_move, calendar_update, contact_delete, task_done, notify_remind, file_write), DESCRIBE what you're about to do and include the JSON block so the system can ask the user for confirmation.
 - For schedule_meeting and schedule_draft_email, execute immediately — these are read operations that suggest slots.
 - When presenting email results, show From, Subject, Date, and a brief snippet. Never dump raw JSON.
 - When presenting calendar events, show Time, Title, Location/Link. Format times in a human-readable way.
@@ -275,6 +497,10 @@ RULES:
 - Dates: today is {{TODAY}}. Infer relative dates from this.
 - The user's timezone is {{TIMEZONE}}.
 - CRITICAL: when creating calendar events, always use LOCAL time in format "YYYY-MM-DDTHH:MM:SS" WITHOUT any Z suffix or timezone offset.
+- LANGUAGE: Respond in {{LANGUAGE}}. All conversational text, explanations, and descriptions must be in {{LANGUAGE}}. Tool names and JSON blocks remain in English.
+- BROWSER TIP: Cookie/consent banners are auto-dismissed when a page loads. Do NOT waste time clicking cookie buttons — the browser handles it automatically.
+- BROWSER TIP: When extracting data from a page, prefer browser_js with code "document.body.innerText.slice(0, 3000)" to get all visible text. This is more reliable than guessing CSS selectors.
+- API TIP: For npm package info, use fetch_url with the registry API: fetch_url("https://registry.npmjs.org/PACKAGE/latest") for version/description, and fetch_url("https://api.npmjs.org/downloads/point/last-week/PACKAGE") for weekly downloads. These are JSON APIs, much more reliable than scraping the npm website.
 `.trim();
 
 // ── Action Parser ────────────────────────────────────────────────────────────
@@ -409,9 +635,22 @@ export function describeAction(action, params) {
       return `Send Slack message to #${params.channel}`;
     case 'github_create_issue':
       return `Create GitHub issue on ${params.repo}: "${params.title}"`;
+    case 'file_write':
+      return `${params.append ? 'Append to' : 'Write'} file: ${params.path} (${params.content?.length || 0} chars)`;
+    case 'drive_upload':
+      return `Upload to Drive: ${params.name}`;
+    case 'drive_update':
+      return `Update Drive file: ${params.fileId}`;
+    case 'drive_delete':
+      return `Delete from Drive: ${params.fileId}`;
     default:
       return `Execute ${action}`;
   }
+}
+
+function driveIcon(type) {
+  const icons = { folder: '📁', doc: '📄', sheet: '📊', slides: '🎬', pdf: '📕', image: '🖼️', video: '🎥', audio: '🎵', archive: '📦', text: '📝', file: '📄' };
+  return icons[type] || icons.file;
 }
 
 /**
@@ -426,9 +665,23 @@ export function buildSystemPrompt(persona, personaDescription, config, initialCo
   const today = new Date().toISOString().split('T')[0];
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  // Detect system language from locale
+  const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en';
+  const langCode = locale.split('-')[0];
+  const LANG_MAP = {
+    en: 'English', it: 'Italian', es: 'Spanish', fr: 'French', de: 'German',
+    pt: 'Portuguese', nl: 'Dutch', pl: 'Polish', ru: 'Russian', ja: 'Japanese',
+    ko: 'Korean', zh: 'Chinese', ar: 'Arabic', hi: 'Hindi', tr: 'Turkish',
+    sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish', cs: 'Czech',
+    ro: 'Romanian', hu: 'Hungarian', el: 'Greek', th: 'Thai', vi: 'Vietnamese',
+    uk: 'Ukrainian', he: 'Hebrew', id: 'Indonesian', ms: 'Malay',
+  };
+  const language = config?.language || LANG_MAP[langCode] || 'English';
+
   let prompt = TOOL_DEFINITIONS
     .replace('{{TODAY}}', today)
-    .replace('{{TIMEZONE}}', tz);
+    .replace('{{TIMEZONE}}', tz)
+    .replace(/\{\{LANGUAGE\}\}/g, language);
 
   prompt += `\n\n${personaDescription}`;
 
@@ -1020,6 +1273,899 @@ export async function executeTool(action, params, config) {
       const monthName = new Date(2000, month - 1, 1).toLocaleDateString('en-US', { month: 'long' });
 
       return `Birthday set for ${contact.name}: ${monthName} ${day}. It will appear in the Birthdays tab.`;
+    }
+
+    // ── Browser Automation ────────────────────────────────────────────
+    case 'browser_open': {
+      const url = params.url;
+      if (!url) return 'A URL is required.';
+
+      // Intercept search engine URLs — redirect to web_search tool
+      const searchEngines = /^https?:\/\/(www\.)?(google|bing|duckduckgo|yahoo|baidu|yandex)\.(com|it|co\.uk|de|fr|es|org|net)/i;
+      if (searchEngines.test(url)) {
+        // Extract search query if present in URL
+        try {
+          const u = new URL(url);
+          const q = u.searchParams.get('q') || u.searchParams.get('query') || u.searchParams.get('p');
+          if (q) {
+            return `REDIRECT: Use web_search instead. Search engines block automated browsers. Executing web_search for "${q}"...\n\n` +
+              await executeTool('web_search', { query: q }, config);
+          }
+        } catch {}
+        return 'Do NOT open search engines in the browser — they block automated access with CAPTCHAs. Use the web_search tool instead: {"action": "web_search", "params": {"query": "your search terms"}}';
+      }
+
+      const be = await import('./browser-engine.mjs');
+      const result = await be.browserOpen(url, {
+        waitForLoad: params.waitForLoad !== false,
+      });
+      if (result.error) {
+        // Navigate to blank to prevent stale screenshots from previous page
+        try { await be.browserOpen('about:blank', { waitForLoad: false }); } catch {}
+        return `Browser error: ${result.message}`;
+      }
+
+      return `Page loaded: "${result.title}"\nURL: ${result.url}`;
+    }
+
+    case 'browser_screenshot': {
+      const be = await import('./browser-engine.mjs');
+      if (!be.isBrowserRunning()) return 'No browser open. Use browser_open first.';
+
+      // Check current URL — don't screenshot blank or error pages
+      const currentInfo = await be.browserInfo();
+      if (currentInfo.url === 'about:blank' || !currentInfo.url || currentInfo.url === '') {
+        return 'No page loaded in browser. Use browser_open to navigate to a page first.';
+      }
+
+      // Scroll to top before screenshot so user sees the most important content
+      await be.browserScroll({ direction: 'top' });
+      await new Promise(r => setTimeout(r, 300));
+
+      const saveTo = params.saveTo
+        ? params.saveTo.replace(/^~/, os.homedir())
+        : null;
+
+      // Always use JPEG for efficiency (smaller base64, faster rendering in web UI)
+      const result = await be.browserScreenshot({
+        fullPage: false, // Always viewport — fullPage produces oversized images
+        format: 'jpeg',
+        quality: 75,
+        saveTo,
+      });
+      if (result.error) return `Screenshot error: ${result.message}`;
+
+      if (result.savedTo) {
+        return `Screenshot saved to: ${result.savedTo} (${Math.round(result.size / 1024)}KB base64)`;
+      }
+
+      // Return base64 for LLM vision analysis
+      return `Screenshot captured (${Math.round(result.size / 1024)}KB base64 PNG).\n[Base64 data available — use browser_js or browser_extract to analyze page content instead]`;
+    }
+
+    case 'browser_click': {
+      const be = await import('./browser-engine.mjs');
+      if (!be.isBrowserRunning()) return 'No browser open. Use browser_open first.';
+
+      const result = await be.browserClick({
+        text: params.text,
+        selector: params.selector,
+        x: params.x,
+        y: params.y,
+      });
+      if (result.error) return `Click error: ${result.message}`;
+
+      return `Clicked: ${result.selector} at (${result.x}, ${result.y})`;
+    }
+
+    case 'browser_type': {
+      const be = await import('./browser-engine.mjs');
+      if (!be.isBrowserRunning()) return 'No browser open. Use browser_open first.';
+
+      if (!params.text) return 'Text is required.';
+
+      const result = await be.browserType({
+        text: params.text,
+        selector: params.selector,
+        clear: params.clear || false,
+        delay: params.delay || 0,
+      });
+      if (result.error) return `Type error: ${result.message}`;
+
+      return `Typed ${result.length} chars into ${result.selector}`;
+    }
+
+    case 'browser_extract': {
+      const be = await import('./browser-engine.mjs');
+      if (!be.isBrowserRunning()) return 'No browser open. Use browser_open first.';
+
+      const result = await be.browserExtract({
+        selector: params.selector || 'body',
+        mode: params.mode || 'text',
+        attribute: params.attribute,
+        all: params.all || false,
+      });
+      if (result.error) return `Extract error: ${result.message}`;
+
+      return `[${result.selector}] (${result.length} chars):\n${result.content}`;
+    }
+
+    case 'browser_js': {
+      const be = await import('./browser-engine.mjs');
+      if (!be.isBrowserRunning()) return 'No browser open. Use browser_open first.';
+
+      if (!params.code) return 'JavaScript code is required.';
+
+      const result = await be.browserEval(params.code);
+      if (result.error) return `JS error: ${result.message}`;
+
+      return `[${result.type}] ${result.result}`;
+    }
+
+    case 'browser_wait': {
+      const be = await import('./browser-engine.mjs');
+      if (!be.isBrowserRunning()) return 'No browser open. Use browser_open first.';
+
+      if (!params.selector) return 'A CSS selector is required.';
+
+      const result = await be.browserWaitFor(params.selector, {
+        timeout: params.timeout || 10000,
+        visible: params.visible !== false,
+      });
+      if (result.error) return `Wait failed: ${result.message}`;
+
+      return `Element found: ${result.selector} (${result.elapsed}ms)`;
+    }
+
+    case 'browser_scroll': {
+      const be = await import('./browser-engine.mjs');
+      if (!be.isBrowserRunning()) return 'No browser open. Use browser_open first.';
+
+      const result = await be.browserScroll({
+        direction: params.direction || 'down',
+        amount: params.amount || 500,
+      });
+      if (result.error) return `Scroll error: ${result.message}`;
+
+      return `Scrolled ${result.direction}`;
+    }
+
+    case 'browser_key': {
+      const be = await import('./browser-engine.mjs');
+      if (!be.isBrowserRunning()) return 'No browser open. Use browser_open first.';
+
+      if (!params.key) return 'A key name is required (e.g. Enter, Tab, Escape).';
+
+      const result = await be.browserKeyPress(params.key, {
+        ctrl: params.ctrl,
+        shift: params.shift,
+        alt: params.alt,
+      });
+      if (result.error) return `Key error: ${result.message}`;
+
+      return `Pressed: ${result.key}`;
+    }
+
+    case 'browser_close': {
+      const be = await import('./browser-engine.mjs');
+      const result = await be.browserClose();
+      return result.message;
+    }
+
+    // ── Web Search & Fetch ──────────────────────────────────────────────
+    case 'web_search': {
+      const wt = await import('./web-tools.mjs');
+      const query = params.query;
+      if (!query) return 'A search query is required.';
+
+      if (params.deep) {
+        const result = await wt.webSearchDeep(query, 3);
+        if (result.error) return `Search error: ${result.message}`;
+        if (result.results.length === 0) return `No results found for "${query}".`;
+
+        const lines = [`Web search: "${query}" — ${result.resultCount} results, ${result.deepFetched} pages fetched\n`];
+
+        // Deep results first (with content)
+        for (const dr of result.deepResults) {
+          lines.push(`--- ${dr.title} ---`);
+          lines.push(`URL: ${dr.url}`);
+          lines.push(dr.content.slice(0, 2000));
+          lines.push('');
+        }
+
+        // Remaining results (snippets only)
+        const deepUrls = new Set(result.deepResults.map(d => d.url));
+        for (const r of result.results.filter(r => !deepUrls.has(r.url))) {
+          lines.push(`${r.title}`);
+          lines.push(`  ${r.url}`);
+          if (r.snippet) lines.push(`  ${r.snippet}`);
+        }
+
+        return lines.join('\n');
+      }
+
+      const result = await wt.webSearch(query);
+      if (result.error) return `Search error: ${result.message}`;
+      if (result.results.length === 0) return `No results found for "${query}".`;
+
+      const textResult = `Web search: "${query}" — ${result.resultCount} results\n\n` +
+        result.results.map((r, i) =>
+          `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`
+        ).join('\n\n');
+
+      // If screenshot requested, render results as HTML in browser and capture
+      if (params.screenshot) {
+        try {
+          const be = await import('./browser-engine.mjs');
+          // Ensure browser is running
+          if (!be.isBrowserRunning()) {
+            await be.browserOpen('https://example.com', { waitForLoad: true });
+          }
+          // Build search results HTML
+          const esc = (s) => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          const htmlItems = result.results.map((r, i) =>
+            `<div style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #3c4043"><div style="font-size:18px;color:#8ab4f8;margin-bottom:4px;font-weight:600">${i + 1}. ${esc(r.title)}</div><div style="font-size:13px;color:#bdc1c6;margin-bottom:6px">${esc(r.url)}</div><div style="font-size:14px;color:#969ba1;line-height:1.5">${esc(r.snippet)}</div></div>`
+          ).join('');
+          const fullHtml = `<html><head><style>body{background:#202124;color:#e8eaed;font-family:Arial,Helvetica,sans-serif;padding:24px 40px;max-width:800px;margin:0 auto}h1{font-size:22px;color:#8ab4f8;margin-bottom:24px;border-bottom:2px solid #3c4043;padding-bottom:12px}</style></head><body><h1>Search results: "${esc(query)}"</h1>${htmlItems}<div style="color:#5f6368;font-size:12px;margin-top:16px">Powered by NHA web_search — ${result.resultCount} results via DuckDuckGo</div></body></html>`;
+          // Render by injecting HTML into current page via JS
+          await be.browserEval(`document.open();document.write(${JSON.stringify(fullHtml)});document.close();`);
+          await new Promise(r => setTimeout(r, 300));
+          const ss = await be.browserScreenshot({ fullPage: false, format: 'jpeg', quality: 75 });
+          if (!ss.error) {
+            // Save to disk for persistence
+            const ssDir = path.join(os.homedir(), '.nha', 'screenshots');
+            const fsMod = await import('fs');
+            fsMod.mkdirSync(ssDir, { recursive: true });
+            const ssFilename = `ss-${Date.now()}.jpg`;
+            fsMod.writeFileSync(path.join(ssDir, ssFilename), Buffer.from(ss.base64, 'base64'));
+            return textResult + `\n\n[Screenshot of results captured (${Math.round(ss.size / 1024)}KB) file:${ssFilename}]`;
+          }
+        } catch { /* screenshot failed */ }
+      }
+
+      return textResult;
+    }
+
+    case 'fetch_url': {
+      const wt = await import('./web-tools.mjs');
+      const url = params.url;
+      if (!url) return 'A URL is required.';
+
+      const result = await wt.fetchUrl(url);
+      if (result.error) return `Fetch error: ${result.message}`;
+
+      const lines = [];
+      if (result.title) lines.push(`Title: ${result.title}`);
+      lines.push(`URL: ${result.url || url}`);
+      lines.push(`Status: ${result.status}`);
+      if (result.truncated) lines.push('[Content was truncated due to size limits]');
+      lines.push('');
+      lines.push(result.body);
+
+      return lines.join('\n');
+    }
+
+    // ── Cron / Heartbeat ───────────────────────────────────────────────
+    case 'cron_add': {
+      const { addCronJob } = await import('./ops-daemon.mjs');
+      const result = addCronJob(params.schedule, params.prompt, { agent: params.agent || null });
+      if (result.ok) return `Scheduled task created: "${params.schedule}" → "${params.prompt}". Start daemon with \`nha ops start\` if not running.`;
+      return `Failed: ${result.error}`;
+    }
+    case 'cron_list': {
+      const { listCronJobs } = await import('./ops-daemon.mjs');
+      const jobs = listCronJobs();
+      if (jobs.length === 0) return 'No scheduled tasks configured.';
+      return jobs.map((j, i) => `${i + 1}. [${j.enabled ? 'active' : 'paused'}] ${j.schedule} → ${j.prompt} (runs: ${j.runCount}, last: ${j.lastRun ? new Date(j.lastRun).toLocaleString() : 'never'})`).join('\n');
+    }
+    case 'cron_remove': {
+      const { removeCronJob } = await import('./ops-daemon.mjs');
+      const result = removeCronJob(params.index || params.id);
+      if (result.ok) return `Removed: "${result.removed.schedule}" → "${result.removed.prompt}"`;
+      return `Failed: ${result.error}`;
+    }
+
+    // ── Screen Capture + Vision ──────────────────────────────────────────
+    case 'screen_capture':
+    case 'screen_analyze': {
+      const { captureScreen } = await import('./screen-capture.mjs');
+      const result = captureScreen({ monitor: params.monitor || 1 });
+      if (!result.ok) return `Screen capture failed: ${result.error}`;
+      const question = params.question || 'Describe EXACTLY and ONLY what you see in this screenshot.';
+      return { __screenshot: true, path: result.path, base64: result.base64, question };
+    }
+
+    // ── Canvas ───────────────────────────────────────────────────────────
+    case 'canvas_render': {
+      if (!params.html) return 'Error: html parameter is required.';
+      return `[CANVAS_RENDER]${JSON.stringify({ html: params.html, title: params.title || 'Canvas' })}[/CANVAS_RENDER]\nRendered in canvas panel.`;
+    }
+    case 'canvas_clear': {
+      return '[CANVAS_CLEAR]Canvas cleared.[/CANVAS_CLEAR]';
+    }
+
+    // ── Agent Messenger ──────────────────────────────────────────────────
+    case 'collab_send': {
+      const { addCronJob, listCronJobs, loadChannels, getActiveChannel } = await import('./ops-daemon.mjs').catch(() => ({}));
+      const collabMod = await import('../commands/collab.mjs').catch(() => null);
+      if (!collabMod) return 'AgentMessenger not available.';
+
+      const msg = params.message;
+      if (!msg) return 'Message is required.';
+
+      // Use collab CLI to send
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const crypto = await import('crypto');
+        const os = await import('os');
+        const NHA_DIR = path.default.join(os.default.homedir(), '.nha');
+        const chFile = path.default.join(NHA_DIR, 'collab', 'channels.json');
+        const idFile = path.default.join(NHA_DIR, 'collab', 'identity.json');
+
+        if (!fs.default.existsSync(chFile) || !fs.default.existsSync(idFile)) {
+          return 'No Alexandria channels configured. Create one first: nha collab create "name"';
+        }
+
+        const channels = JSON.parse(fs.default.readFileSync(chFile, 'utf-8'));
+        const identity = JSON.parse(fs.default.readFileSync(idFile, 'utf-8'));
+        const channel = params.channel
+          ? channels.find(c => c.name?.toLowerCase().includes(params.channel.toLowerCase()) || c.id === params.channel)
+          : channels.find(c => c.active) || channels[0];
+
+        if (!channel) return 'No active channel found.';
+
+        const API = 'https://nothumanallowed.com/api/v1/alexandria';
+        const channelKey = crypto.default.createHash('sha256').update('alexandria-e2e-key-v2').update(channel.id).update(channel.secret || '').digest();
+        const nonce = crypto.default.randomBytes(12);
+        const cipher = crypto.default.createCipheriv('aes-256-gcm', channelKey, nonce);
+        const encrypted = Buffer.concat([cipher.update(msg, 'utf-8'), cipher.final()]);
+        const tag = cipher.getAuthTag();
+        const ciphertext = Buffer.concat([encrypted, tag]).toString('base64');
+
+        const r = await fetch(API + '/channels/' + channel.id + '/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ senderFingerprint: identity.fingerprint, nonce: nonce.toString('base64'), ciphertext, type: 'text' }),
+        });
+
+        if (!r.ok) return `Failed to send: ${r.status}`;
+        return `Message sent to "${channel.name}" (encrypted). Other members will see it in real-time.`;
+      } catch (e) {
+        return `Failed to send: ${e.message}`;
+      }
+    }
+
+    case 'collab_read': {
+      try {
+        const fs2 = await import('fs');
+        const path2 = await import('path');
+        const crypto2 = await import('crypto');
+        const os2 = await import('os');
+        const NHA2 = path2.default.join(os2.default.homedir(), '.nha');
+        const chFile2 = path2.default.join(NHA2, 'collab', 'channels.json');
+        const idFile2 = path2.default.join(NHA2, 'collab', 'identity.json');
+
+        if (!fs2.default.existsSync(chFile2) || !fs2.default.existsSync(idFile2)) {
+          return 'No Alexandria channels configured.';
+        }
+
+        const channels2 = JSON.parse(fs2.default.readFileSync(chFile2, 'utf-8'));
+        const identity2 = JSON.parse(fs2.default.readFileSync(idFile2, 'utf-8'));
+        const channel2 = params.channel
+          ? channels2.find(c => c.name?.toLowerCase().includes(params.channel.toLowerCase()) || c.id === params.channel || c.id.startsWith(params.channel))
+          : channels2.find(c => c.active) || channels2[0];
+
+        if (!channel2) return 'No matching channel found.';
+
+        const AAPI = 'https://nothumanallowed.com/api/v1/alexandria';
+        const r2 = await fetch(AAPI + '/channels/' + channel2.id + '/messages?fp=' + identity2.fingerprint);
+        if (!r2.ok) return 'Channel not found or expired.';
+        const data2 = await r2.json();
+        if (!data2.messages || data2.messages.length === 0) return `No messages in "${channel2.name}".`;
+
+        const cKey = crypto2.default.createHash('sha256').update('alexandria-e2e-key-v2').update(channel2.id).update(channel2.secret || '').digest();
+        const lim = params.limit || 20;
+        const msgs2 = data2.messages.slice(-lim);
+        const lines = [`Channel: ${channel2.name} (${data2.messages.length} total)\n`];
+
+        for (const msg of msgs2) {
+          if (msg.type === 'system') { lines.push('[system] member joined'); continue; }
+          let content = '[encrypted]';
+          if (msg.ciphertext && msg.nonce) {
+            try {
+              const nonce = Buffer.from(msg.nonce, 'base64');
+              const raw = Buffer.from(msg.ciphertext, 'base64');
+              const tag = raw.subarray(raw.length - 16);
+              const enc = raw.subarray(0, raw.length - 16);
+              const dec = crypto2.default.createDecipheriv('aes-256-gcm', cKey, nonce);
+              dec.setAuthTag(tag);
+              content = dec.update(enc) + dec.final('utf-8');
+            } catch {}
+          }
+          const sender = data2.members?.find(m => m.fingerprint === msg.senderFingerprint);
+          const time = new Date(msg.timestamp).toLocaleTimeString();
+          lines.push(`[${time}] ${sender?.displayName || '?'}: ${content}`);
+        }
+
+        return lines.join('\n');
+      } catch (e) {
+        return `Failed to read: ${e.message}`;
+      }
+    }
+
+    // ── Google Drive ──────────────────────────────────────────────────────
+    case 'drive_list': {
+      const drv = await import('./google-drive.mjs');
+      let files;
+      if (params.query) {
+        files = await drv.searchFiles(config, params.query, params.maxResults || 20);
+      } else if (params.filter === 'recent') {
+        files = await drv.getRecentFiles(config, params.maxResults || 20);
+      } else if (params.filter === 'starred') {
+        files = await drv.getStarredFiles(config, params.maxResults || 20);
+      } else if (params.filter === 'shared') {
+        files = await drv.getSharedFiles(config, params.maxResults || 20);
+      } else {
+        files = await drv.listFiles(config, params.maxResults || 20);
+      }
+      if (files.length === 0) return 'No files found on Drive.';
+      return files.map((f, i) =>
+        `${i + 1}. [${f.id}] ${driveIcon(f.type)} ${f.name}${f.size ? ' (' + f.size + ')' : ''} — ${f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : ''}${f.shared ? ' [shared]' : ''}${f.starred ? ' ★' : ''}`
+      ).join('\n');
+    }
+
+    case 'drive_read': {
+      if (!params.fileId) return 'Error: fileId required. Use drive_list first to get file IDs.';
+      const drv = await import('./google-drive.mjs');
+      const text = await drv.readFileAsText(config, params.fileId);
+      if (text.length > 10000) return text.slice(0, 10000) + '\n\n[... truncated at 10000 chars]';
+      return text;
+    }
+
+    case 'drive_upload': {
+      if (!params.name || !params.content) return 'Error: name and content required.';
+      const drv = await import('./google-drive.mjs');
+      const uploaded = await drv.uploadFile(config, params.name, params.content, params.mimeType || 'text/plain', params.folderId || 'root');
+      return `Uploaded: ${uploaded.name} (${uploaded.size || ''}) — ${uploaded.webViewLink || uploaded.id}`;
+    }
+
+    case 'drive_update': {
+      if (!params.fileId || !params.content) return 'Error: fileId and content required.';
+      const drv = await import('./google-drive.mjs');
+      const updated = await drv.updateFileContent(config, params.fileId, params.content);
+      return `Updated: ${updated.name} — ${updated.webViewLink || updated.id}`;
+    }
+
+    case 'drive_delete': {
+      if (!params.fileId) return 'Error: fileId required.';
+      const drv = await import('./google-drive.mjs');
+      await drv.trashFile(config, params.fileId);
+      return `File ${params.fileId} moved to trash.`;
+    }
+
+    case 'drive_info': {
+      if (!params.fileId) return 'Error: fileId required.';
+      const drv = await import('./google-drive.mjs');
+      const f = await drv.getFile(config, params.fileId);
+      return [
+        `Name: ${f.name}`,
+        `Type: ${f.type} (${f.mimeType})`,
+        `Size: ${f.size || 'unknown'}`,
+        `Modified: ${f.modifiedTime}`,
+        `Created: ${f.createdTime || 'unknown'}`,
+        `Owner: ${f.owner}`,
+        `Shared: ${f.shared ? 'yes' : 'no'}`,
+        `Starred: ${f.starred ? 'yes' : 'no'}`,
+        `Link: ${f.webViewLink}`,
+        f.description ? `Description: ${f.description}` : '',
+      ].filter(Boolean).join('\n');
+    }
+
+    case 'drive_folder': {
+      const drv = await import('./google-drive.mjs');
+      const files = await drv.listFolder(config, params.folderId || 'root', 30);
+      if (files.length === 0) return 'Empty folder.';
+      return files.map((f, i) =>
+        `${i + 1}. [${f.id}] ${driveIcon(f.type)} ${f.name}${f.size ? ' (' + f.size + ')' : ''}`
+      ).join('\n');
+    }
+
+    case 'drive_download': {
+      if (!params.fileId) return 'Error: fileId required.';
+      const drv = await import('./google-drive.mjs');
+      const dl = await drv.downloadFileContent(config, params.fileId);
+      return `Downloaded: ${dl.name} (${formatFileSize(dl.size)}, ${dl.mimeType})\n[File content available as base64 — ${dl.base64.length} chars]`;
+    }
+
+    // ── File Manager (Local) ────────────────────────────────────────────
+    case 'file_list': {
+      const fsM = await import('fs');
+      const pathM = await import('path');
+      const osM = await import('os');
+      let dir = params.path || process.cwd();
+      dir = dir.replace(/^~/, osM.default.homedir());
+      dir = pathM.default.resolve(dir);
+
+      if (!fsM.default.existsSync(dir)) return `Directory not found: ${dir}`;
+      if (!fsM.default.statSync(dir).isDirectory()) return `Not a directory: ${dir}`;
+
+      // Security: block sensitive paths
+      const blocked = ['/etc/shadow', '/etc/passwd', '.ssh/id_', '.gnupg/', 'Keychain'];
+      if (blocked.some(b => dir.includes(b))) return 'Access denied — sensitive path.';
+
+      let entries = fsM.default.readdirSync(dir, { withFileTypes: true });
+
+      // Pattern filter
+      if (params.pattern) {
+        const pat = params.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*').replace(/\?/g, '.');
+        const re = new RegExp(`^${pat}$`, 'i');
+        entries = entries.filter(e => re.test(e.name));
+      }
+
+      if (entries.length === 0) return `Empty directory: ${dir}`;
+
+      const lines = entries.slice(0, 100).map(e => {
+        const full = pathM.default.join(dir, e.name);
+        try {
+          const st = fsM.default.statSync(full);
+          const size = e.isDirectory() ? '<DIR>' : formatFileSize(st.size);
+          const mod = st.mtime.toISOString().split('T')[0];
+          return `${e.isDirectory() ? 'd' : '-'} ${size.padStart(10)}  ${mod}  ${e.name}`;
+        } catch {
+          return `?          ?           ${e.name}`;
+        }
+      });
+
+      return `${dir}/ (${entries.length} items${entries.length > 100 ? ', showing first 100' : ''})\n\n${lines.join('\n')}`;
+    }
+
+    case 'file_read': {
+      const fsR = await import('fs');
+      const pathR = await import('path');
+      const osR = await import('os');
+      let filePath = params.path;
+      filePath = filePath.replace(/^~/, osR.default.homedir());
+      filePath = pathR.default.resolve(filePath);
+
+      if (!fsR.default.existsSync(filePath)) return `File not found: ${filePath}`;
+      const stat = fsR.default.statSync(filePath);
+
+      if (stat.isDirectory()) return `"${filePath}" is a directory. Use file_list to browse it.`;
+
+      // Block sensitive files
+      const sensitivePatterns = ['.ssh/id_', '.gnupg/', 'Keychain', '.env', 'credentials', 'secret', '.npmrc', '.pypirc'];
+      if (sensitivePatterns.some(p => filePath.includes(p))) return 'Access denied — sensitive file.';
+
+      // Binary check
+      const ext = pathR.default.extname(filePath).toLowerCase();
+      const binaryExts = new Set(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.mp3', '.mp4', '.avi', '.mov', '.zip', '.tar', '.gz', '.rar', '.7z', '.exe', '.dll', '.so', '.dylib', '.bin', '.dat', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.woff', '.woff2', '.ttf', '.otf', '.eot']);
+      if (binaryExts.has(ext)) {
+        return `Binary file: ${pathR.default.basename(filePath)} (${formatFileSize(stat.size)}, ${ext} format). Cannot display content.`;
+      }
+
+      // Size check
+      if (stat.size > 1024 * 1024) return `File too large to display: ${formatFileSize(stat.size)}. Use file_info for details.`;
+
+      const maxLines = params.lines || 500;
+      const content = fsR.default.readFileSync(filePath, 'utf-8');
+      const lines = content.split('\n');
+      const truncated = lines.length > maxLines;
+      const display = lines.slice(0, maxLines).join('\n');
+
+      return `${pathR.default.basename(filePath)} (${formatFileSize(stat.size)}, ${lines.length} lines)${truncated ? ` [showing first ${maxLines}]` : ''}\n\n${display}`;
+    }
+
+    case 'file_write': {
+      const fsW = await import('fs');
+      const pathW = await import('path');
+      const osW = await import('os');
+      let writePath = params.path;
+      writePath = writePath.replace(/^~/, osW.default.homedir());
+      writePath = pathW.default.resolve(writePath);
+
+      // Block writing to sensitive locations
+      const blockedWrite = ['/etc/', '/usr/', '/bin/', '/sbin/', '/System/', '/Library/', '.ssh/', '.gnupg/', 'node_modules/'];
+      if (blockedWrite.some(b => writePath.includes(b))) return 'Access denied — cannot write to system/sensitive paths.';
+
+      // Create parent directories
+      const dir = pathW.default.dirname(writePath);
+      if (!fsW.default.existsSync(dir)) {
+        fsW.default.mkdirSync(dir, { recursive: true });
+      }
+
+      if (params.append) {
+        fsW.default.appendFileSync(writePath, params.content, 'utf-8');
+        return `Appended ${params.content.length} chars to ${writePath}`;
+      } else {
+        fsW.default.writeFileSync(writePath, params.content, 'utf-8');
+        return `Written ${params.content.length} chars to ${writePath}`;
+      }
+    }
+
+    case 'file_info': {
+      const fsI = await import('fs');
+      const pathI = await import('path');
+      const osI = await import('os');
+      let infoPath = params.path;
+      infoPath = infoPath.replace(/^~/, osI.default.homedir());
+      infoPath = pathI.default.resolve(infoPath);
+
+      if (!fsI.default.existsSync(infoPath)) return `Not found: ${infoPath}`;
+      const st = fsI.default.statSync(infoPath);
+
+      const info = [
+        `Path: ${infoPath}`,
+        `Type: ${st.isDirectory() ? 'directory' : 'file'}`,
+        `Size: ${formatFileSize(st.size)}`,
+        `Created: ${st.birthtime.toISOString()}`,
+        `Modified: ${st.mtime.toISOString()}`,
+        `Permissions: ${(st.mode & 0o777).toString(8)}`,
+      ];
+
+      if (!st.isDirectory()) {
+        info.push(`Extension: ${pathI.default.extname(infoPath) || '(none)'}`);
+      } else {
+        try {
+          const items = fsI.default.readdirSync(infoPath);
+          info.push(`Items: ${items.length}`);
+        } catch { /* permission denied */ }
+      }
+
+      return info.join('\n');
+    }
+
+    case 'file_search': {
+      const fsS = await import('fs');
+      const pathS = await import('path');
+      const osS = await import('os');
+      let searchDir = params.path || process.cwd();
+      searchDir = searchDir.replace(/^~/, osS.default.homedir());
+      searchDir = pathS.default.resolve(searchDir);
+
+      if (!fsS.default.existsSync(searchDir)) return `Directory not found: ${searchDir}`;
+
+      const query = params.query.toLowerCase();
+      const searchContent = params.content || false;
+      const results = [];
+      const maxDepth = 5;
+      const maxResults = 50;
+
+      function searchRecursive(dir, depth) {
+        if (depth > maxDepth || results.length >= maxResults) return;
+        try {
+          const entries = fsS.default.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (results.length >= maxResults) break;
+            if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+
+            const full = pathS.default.join(dir, entry.name);
+
+            // Name match
+            if (entry.name.toLowerCase().includes(query)) {
+              const st = fsS.default.statSync(full);
+              results.push(`${entry.isDirectory() ? 'd' : '-'} ${formatFileSize(st.size).padStart(10)}  ${full}`);
+            }
+
+            // Content search
+            if (searchContent && entry.isFile() && !entry.name.match(/\.(png|jpg|gif|mp4|zip|tar|gz|exe|bin|pdf|woff|ttf)$/i)) {
+              try {
+                const st = fsS.default.statSync(full);
+                if (st.size < 512 * 1024) { // Max 512KB per file
+                  const content = fsS.default.readFileSync(full, 'utf-8');
+                  if (content.toLowerCase().includes(query)) {
+                    const lineNum = content.split('\n').findIndex(l => l.toLowerCase().includes(query)) + 1;
+                    if (!results.some(r => r.includes(full))) {
+                      results.push(`- ${formatFileSize(st.size).padStart(10)}  ${full}:${lineNum} (content match)`);
+                    }
+                  }
+                }
+              } catch { /* skip unreadable */ }
+            }
+
+            if (entry.isDirectory()) searchRecursive(full, depth + 1);
+          }
+        } catch { /* permission denied */ }
+      }
+
+      searchRecursive(searchDir, 0);
+
+      if (results.length === 0) return `No files matching "${params.query}" in ${searchDir}`;
+      return `Found ${results.length} match${results.length > 1 ? 'es' : ''} for "${params.query}":\n\n${results.join('\n')}`;
+    }
+
+    case 'execute_code': {
+      const {
+        language = 'python',
+        code,
+        files = [],    // [{path: string, content: string}] — extra files to write in sandbox
+        packages = [], // string[] — pip/npm packages to install before running
+        stdin = '',    // string — piped to process stdin
+        timeout = 30,  // seconds (max 120)
+      } = params;
+
+      if (!code || typeof code !== 'string') return 'execute_code: missing required param "code"';
+
+      // bash removed: unrestricted shell has full filesystem access and can exfiltrate data.
+      const SUPPORTED = ['python', 'javascript', 'typescript'];
+      if (!SUPPORTED.includes(language)) {
+        return `execute_code: unsupported language "${language}" — use: ${SUPPORTED.join(', ')}`;
+      }
+
+      const { spawn } = await import('child_process');
+      const os = await import('os');
+      const fs = await import('fs');
+      const path = await import('path');
+      const crypto = await import('crypto');
+
+      const MAX_OUTPUT_BYTES = 128 * 1024;   // 128 KB per stream
+      const TIMEOUT_MS = Math.min(Math.max(timeout, 5), 120) * 1000;
+
+      // ── Isolated sandbox directory ─────────────────────────────────────────
+      // Each execution gets its own temp dir — cleaned up after run.
+      // Subprocess never sees NHA's cwd or env vars (API keys etc.).
+      const sandboxId = crypto.default.randomBytes(8).toString('hex');
+      const sandboxDir = path.default.join(os.default.tmpdir(), `nha_sandbox_${sandboxId}`);
+      fs.default.mkdirSync(sandboxDir, { recursive: true });
+
+      // Stripped env — only safe POSIX vars, zero NHA secrets.
+      // NOTE: packages install runs with network access (pip/npm fetch from registries).
+      // This is an accepted risk for a local CLI tool — not suitable for server deployment.
+      const safeEnv = {
+        PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+        HOME: sandboxDir,
+        TMPDIR: sandboxDir,
+        LANG: 'en_US.UTF-8',
+        PYTHONDONTWRITEBYTECODE: '1',
+        PYTHONUNBUFFERED: '1',
+        NODE_NO_WARNINGS: '1',
+      };
+
+      const cleanup = () => {
+        try { fs.default.rmSync(sandboxDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      };
+
+      try {
+        // ── Write extra files first ──────────────────────────────────────────
+        for (const f of (files || [])) {
+          if (!f.path || typeof f.content !== 'string') continue;
+          // Prevent path traversal — only allow relative paths inside sandbox
+          const safePath = path.default.join(sandboxDir, path.default.normalize(f.path).replace(/^(\.\.[/\\])+/, ''));
+          fs.default.mkdirSync(path.default.dirname(safePath), { recursive: true });
+          fs.default.writeFileSync(safePath, f.content, 'utf-8');
+        }
+
+        // ── Install packages ─────────────────────────────────────────────────
+        if (packages && packages.length > 0) {
+          const validPkgName = /^[a-zA-Z0-9@._/-]+$/;
+          const safePkgs = packages.filter(p => typeof p === 'string' && validPkgName.test(p) && p.length < 80);
+          if (safePkgs.length > 0) {
+            let installCmd, installArgs;
+            if (language === 'python') {
+              installCmd = 'pip3';
+              // --only-binary=:all: forces pre-built wheels — no setup.py/build hook execution,
+              // eliminating arbitrary code execution during install.
+              // Network access is still live (accepted risk for local CLI; use --no-index for server).
+              installArgs = ['install', '--quiet', '--only-binary=:all:', '--target', path.default.join(sandboxDir, 'site-packages'), ...safePkgs];
+            } else {
+              // javascript / typescript
+              fs.default.writeFileSync(path.default.join(sandboxDir, 'package.json'), JSON.stringify({ type: 'module' }));
+              installCmd = 'npm';
+              installArgs = ['install', '--prefix', sandboxDir, '--no-save', '--quiet', ...safePkgs];
+            }
+            await new Promise((resolve) => {
+              const inst = spawn(installCmd, installArgs, { cwd: sandboxDir, env: safeEnv, timeout: 60_000 });
+              inst.on('close', resolve);
+              inst.on('error', resolve);
+            });
+          }
+        }
+
+        // ── Resolve runtime + write main entrypoint ──────────────────────────
+        let cmd, cmdArgs, mainFile;
+        if (language === 'python') {
+          mainFile = path.default.join(sandboxDir, 'main.py');
+          // Prepend sys.path so installed packages are found
+          const sitePkgs = path.default.join(sandboxDir, 'site-packages');
+          const preamble = `import sys; sys.path.insert(0, ${JSON.stringify(sitePkgs)})\n`;
+          fs.default.writeFileSync(mainFile, preamble + code, 'utf-8');
+          cmd = 'python3'; cmdArgs = [mainFile];
+        } else if (language === 'javascript') {
+          mainFile = path.default.join(sandboxDir, 'main.mjs');
+          fs.default.writeFileSync(mainFile, code, 'utf-8');
+          cmd = 'node'; cmdArgs = [mainFile];
+        } else if (language === 'typescript') {
+          // Prefer tsx (faster, more compatible), fallback to node --experimental-strip-types (Node 22+)
+          mainFile = path.default.join(sandboxDir, 'main.ts');
+          fs.default.writeFileSync(mainFile, code, 'utf-8');
+          const tsxPath = getTsxPath();
+          if (tsxPath) { cmd = tsxPath; cmdArgs = [mainFile]; }
+          else { cmd = 'node'; cmdArgs = ['--experimental-strip-types', mainFile]; }
+        }
+
+        // ── Execute ──────────────────────────────────────────────────────────
+        const result = await new Promise((resolve) => {
+          const child = spawn(cmd, cmdArgs, {
+            cwd: sandboxDir,
+            env: safeEnv,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+
+          // Feed stdin if provided
+          if (stdin) {
+            child.stdin.write(stdin);
+            child.stdin.end();
+          } else {
+            child.stdin.end();
+          }
+
+          let stdoutBuf = '';
+          let stderrBuf = '';
+          let stdoutTrunc = false;
+          let stderrTrunc = false;
+
+          child.stdout.on('data', (d) => {
+            if (stdoutBuf.length < MAX_OUTPUT_BYTES) stdoutBuf += d.toString();
+            else stdoutTrunc = true;
+          });
+          child.stderr.on('data', (d) => {
+            if (stderrBuf.length < MAX_OUTPUT_BYTES) stderrBuf += d.toString();
+            else stderrTrunc = true;
+          });
+
+          // Hard kill after timeout
+          const killer = setTimeout(() => {
+            try { child.kill('SIGKILL'); } catch {}
+            resolve({ exit_code: 124, stdout: stdoutBuf, stderr: stderrBuf, timed_out: true });
+          }, TIMEOUT_MS);
+
+          child.on('close', (exitCode) => {
+            clearTimeout(killer);
+            resolve({
+              exit_code: exitCode ?? 1,
+              stdout: stdoutBuf + (stdoutTrunc ? '\n[stdout truncated at 128 KB]' : ''),
+              stderr: stderrBuf + (stderrTrunc ? '\n[stderr truncated at 128 KB]' : ''),
+              timed_out: false,
+            });
+          });
+
+          child.on('error', (err) => {
+            clearTimeout(killer);
+            resolve({ exit_code: 1, stdout: '', stderr: `[spawn error] ${err.message}`, timed_out: false });
+          });
+        });
+
+        // ── Collect created/modified files ───────────────────────────────────
+        // List files written inside sandbox (excluding the main entrypoint and site-packages)
+        let createdFiles = [];
+        try {
+          const walk = (dir, base) => {
+            for (const entry of fs.default.readdirSync(dir, { withFileTypes: true })) {
+              const rel = base ? `${base}/${entry.name}` : entry.name;
+              if (entry.isDirectory()) {
+                if (!['site-packages', 'node_modules', '__pycache__'].includes(entry.name)) walk(path.default.join(dir, entry.name), rel);
+              } else if (!['main.py','main.mjs','main.ts','main.sh','package.json'].includes(entry.name)) {
+                const size = fs.default.statSync(path.default.join(dir, entry.name)).size;
+                createdFiles.push(`  ${rel} (${size} bytes)`);
+              }
+            }
+          };
+          walk(sandboxDir, '');
+        } catch {}
+
+        // ── Format response ──────────────────────────────────────────────────
+        const lines = [];
+        if (result.timed_out) lines.push(`⏱ TIMEOUT — execution exceeded ${timeout}s (exit 124)`);
+        lines.push(`exit_code: ${result.exit_code}${result.exit_code === 0 ? ' ✓' : ' ✗'}`);
+        if (result.stdout.trim()) lines.push(`\nstdout:\n${result.stdout.trimEnd()}`);
+        if (result.stderr.trim()) lines.push(`\nstderr:\n${result.stderr.trimEnd()}`);
+        if (!result.stdout.trim() && !result.stderr.trim()) lines.push('\n(no output)');
+        if (createdFiles.length > 0) lines.push(`\nfiles written in sandbox:\n${createdFiles.join('\n')}`);
+
+        return lines.join('\n');
+      } finally {
+        cleanup();
+      }
     }
 
     default:
