@@ -7,20 +7,27 @@
 
 // ── Providers ──────────────────────────────────────────────────────────────
 
-export async function callAnthropic(apiKey, model, systemPrompt, userMessage, stream = false) {
+export async function callAnthropic(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
+  // Use Anthropic prompt caching: system prompt as array with cache_control
+  // so the same system prompt is served from cache on repeated calls (~90% saving on input tokens).
+  const systemBlocks = systemPrompt
+    ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+    : [];
   const body = {
     model: model || 'claude-sonnet-4-20250514',
-    max_tokens: 8192,
-    system: systemPrompt,
+    max_tokens: opts.max_tokens || 8192,
+    system: systemBlocks,
     messages: [{ role: 'user', content: userMessage }],
     stream,
   };
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
     },
     body: JSON.stringify(body),
   });
@@ -33,16 +40,17 @@ export async function callAnthropic(apiKey, model, systemPrompt, userMessage, st
   return data.content?.[0]?.text || '';
 }
 
-export async function callOpenAI(apiKey, model, systemPrompt, userMessage, stream = false) {
+export async function callOpenAI(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
   const body = {
     model: model || 'gpt-4o',
-    max_tokens: 8192,
+    max_tokens: opts.max_tokens || 8192,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
     ],
     stream,
   };
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -60,13 +68,15 @@ export async function callOpenAI(apiKey, model, systemPrompt, userMessage, strea
   return data.choices?.[0]?.message?.content || '';
 }
 
-export async function callGemini(apiKey, model, systemPrompt, userMessage, _stream = false) {
+export async function callGemini(apiKey, model, systemPrompt, userMessage, _stream = false, opts = {}) {
   const m = model || 'gemini-2.5-pro-preview-05-06';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+  const generationConfig = { maxOutputTokens: opts.max_tokens || 8192 };
+  if (opts.temperature !== undefined) generationConfig.temperature = opts.temperature;
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: [{ parts: [{ text: userMessage }] }],
-    generationConfig: { maxOutputTokens: 8192 },
+    generationConfig,
   };
   const res = await fetch(url, {
     method: 'POST',
@@ -81,16 +91,17 @@ export async function callGemini(apiKey, model, systemPrompt, userMessage, _stre
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
-export async function callDeepSeek(apiKey, model, systemPrompt, userMessage, stream = false) {
+export async function callDeepSeek(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
   const body = {
     model: model || 'deepseek-chat',
-    max_tokens: 8192,
+    max_tokens: opts.max_tokens || 8192,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
     ],
     stream,
   };
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
   const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -108,16 +119,17 @@ export async function callDeepSeek(apiKey, model, systemPrompt, userMessage, str
   return data.choices?.[0]?.message?.content || '';
 }
 
-export async function callGrok(apiKey, model, systemPrompt, userMessage, stream = false) {
+export async function callGrok(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
   const body = {
     model: model || 'grok-3-latest',
-    max_tokens: 8192,
+    max_tokens: opts.max_tokens || 8192,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
     ],
     stream,
   };
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
   const res = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -135,16 +147,17 @@ export async function callGrok(apiKey, model, systemPrompt, userMessage, stream 
   return data.choices?.[0]?.message?.content || '';
 }
 
-export async function callMistral(apiKey, model, systemPrompt, userMessage, stream = false) {
+export async function callMistral(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
   const body = {
     model: model || 'mistral-large-latest',
-    max_tokens: 8192,
+    max_tokens: opts.max_tokens || 8192,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
     ],
     stream,
   };
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
   const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -162,13 +175,14 @@ export async function callMistral(apiKey, model, systemPrompt, userMessage, stre
   return data.choices?.[0]?.message?.content || '';
 }
 
-export async function callCohere(apiKey, model, systemPrompt, userMessage, _stream = false) {
+export async function callCohere(apiKey, model, systemPrompt, userMessage, _stream = false, opts = {}) {
   const body = {
     model: model || 'command-r-plus',
-    max_tokens: 8192,
+    max_tokens: opts.max_tokens || 8192,
     preamble: systemPrompt,
     message: userMessage,
   };
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
   const res = await fetch('https://api.cohere.ai/v1/chat', {
     method: 'POST',
     headers: {
@@ -236,7 +250,7 @@ export async function streamSSE(res, format) {
  * NHA Free (Liara) — free LLM tier, no API key required.
  * Qwen3 32B on Hetzner RTX 6000 Pro 96GB. Supports thinking mode.
  */
-export async function callNHA(apiKey, model, systemPrompt, userMessage, stream = false) {
+export async function callNHA(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
   // Read thinking preference from config
   let thinkingEnabled = false; // OFF by default for speed
   try {
@@ -266,7 +280,7 @@ export async function callNHA(apiKey, model, systemPrompt, userMessage, stream =
 
   const body = {
     model: model || '/opt/models/qwen3-32b',
-    max_tokens: thinkingEnabled ? 8192 : 4096,
+    max_tokens: opts.max_tokens || (thinkingEnabled ? 16384 : 8192),
     messages: [
       { role: 'system', content: sanitizeForSentinel(systemPrompt) },
       { role: 'user', content: sanitizeForSentinel(userMessage) },
@@ -274,11 +288,13 @@ export async function callNHA(apiKey, model, systemPrompt, userMessage, stream =
     stream,
     chat_template_kwargs: { enable_thinking: thinkingEnabled },
   };
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
   // Route through NHA server proxy (SENTINEL protection) instead of direct to Hetzner
   const res = await fetch('https://nothumanallowed.com/api/v1/liara/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-nha-client': 'cli',
     },
     body: JSON.stringify(body),
   });
@@ -338,7 +354,7 @@ export async function callLLM(config, systemPrompt, userMessage, opts = {}) {
   const callFn = getProviderCall(provider);
   if (!callFn) throw new Error(`Unknown provider: ${provider}`);
 
-  return callFn(apiKey, model, systemPrompt, userMessage, false);
+  return callFn(apiKey, model, systemPrompt, userMessage, false, opts);
 }
 
 /**
@@ -360,7 +376,7 @@ export async function callLLMVision(config, systemPrompt, userMessage, media) {
     if (!base64) throw new Error('media.base64 required for vision');
     const res = await fetch('https://nothumanallowed.com/api/v1/liara/vision', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-nha-client': 'cli' },
       body: JSON.stringify({ image_base64: base64, prompt: userMessage || 'Describe this image in detail.' }),
     });
     if (!res.ok) {
@@ -538,7 +554,7 @@ export async function callLLMStream(config, systemPrompt, userMessage, onToken, 
     };
     const nhaRes = await fetch('https://nothumanallowed.com/api/v1/liara/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-nha-client': 'cli' },
       body: JSON.stringify(nhaBody),
     });
     if (!nhaRes.ok) {

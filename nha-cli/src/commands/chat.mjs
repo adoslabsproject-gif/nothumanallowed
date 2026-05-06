@@ -613,7 +613,7 @@ export async function cmdChat(args) {
     terminal: true,
   });
 
-  const systemPrompt = buildSystemPrompt('NHA Chat', CHAT_PERSONA, config, initialContext);
+  const systemPrompt = await buildSystemPrompt('NHA Chat', CHAT_PERSONA, config, initialContext);
 
   rl.on('close', () => {
     console.log(`\n  ${D}Session ended. Goodbye.${NC}\n`);
