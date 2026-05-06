@@ -44,7 +44,7 @@ export async function checkForUpdates() {
       updates.push({ name: 'PIF', from: local['pif']?.latest ?? '?', to: remote['pif'].latest });
     }
 
-    return { updates: updates.length > 0 ? updates : null, remote };
+    return updates.length > 0 ? updates : null;
   } catch {
     return null;
   }
@@ -52,21 +52,10 @@ export async function checkForUpdates() {
 
 /**
  * Check if a newer version of the npm package is available.
- * Reads from our own versions.json (already fetched at startup) — no extra network call.
- * Falls back to registry.npmjs.org if not present in remote manifest.
+ * Non-blocking, returns { current, latest, updateAvailable } or null.
  */
-export async function checkNpmVersion(remoteVersions) {
+export async function checkNpmVersion() {
   try {
-    const current = VERSION;
-
-    // Primary: use the npm field from our versions.json (passed in from checkForUpdates)
-    if (remoteVersions?.npm?.latest) {
-      const latest = remoteVersions.npm.latest;
-      const updateAvailable = compareSemver(latest, current) > 0;
-      return { current, latest, updateAvailable };
-    }
-
-    // Fallback: query npmjs.org directly
     const res = await fetch('https://registry.npmjs.org/nothumanallowed/latest', {
       signal: AbortSignal.timeout(5000),
       headers: { 'Accept': 'application/json' },
@@ -76,6 +65,7 @@ export async function checkNpmVersion(remoteVersions) {
     const latest = data.version;
     if (!latest) return null;
 
+    const current = VERSION;
     const updateAvailable = compareSemver(latest, current) > 0;
     return { current, latest, updateAvailable };
   } catch {

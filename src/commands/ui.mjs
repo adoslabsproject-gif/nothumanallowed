@@ -257,7 +257,23 @@ export async function cmdUI(args) {
     `You help the user manage their emails, calendar, tasks, GitHub issues, Notion pages, and Slack channels through natural conversation. ` +
     `Be concise, helpful, and proactive. When presenting data, format it clearly. ` +
     `Never output raw JSON to the user.`;
-  const chatSystemPrompt = buildSystemPrompt('NHA UI', UI_PERSONA, config);
+  const chatSystemPrompt = await buildSystemPrompt('NHA UI', UI_PERSONA, config);
+
+  // Returns a live IMAP accounts block to append to any system prompt
+  async function getImapAccountsContext() {
+    try {
+      const { listAccounts } = await import('../services/email-db.mjs');
+      const accs = listAccounts();
+      if (!accs.length) return '';
+      let ctx = '\n\n--- IMAP EMAIL ACCOUNTS (custom, already configured) ---\n';
+      ctx += 'Use these accountIds directly in imap_* tools — do NOT call imap_accounts() first.\n';
+      for (const a of accs) {
+        ctx += `accountId: "${a.id}" | email: ${a.email_address} | name: "${a.display_name}" | status: ${a.sync_status}\n`;
+      }
+      ctx += 'When the user mentions their company name, email domain, or display name, map it to the correct accountId above.';
+      return ctx;
+    } catch { return ''; }
+  }
 
   // ── Route Handlers ──────────────────────────────────────────────────────
 
@@ -577,6 +593,28 @@ export async function cmdUI(args) {
         return;
       }
 
+      // GET /api/version/check — check npm registry for latest version
+      if (method === 'GET' && pathname === '/api/version/check') {
+        try {
+          const npmRes = await fetch('https://registry.npmjs.org/nothumanallowed/latest', {
+            signal: AbortSignal.timeout(5000),
+            headers: { 'Accept': 'application/json' },
+          });
+          if (!npmRes.ok) { sendJSON(res, 200, { current: VERSION, latest: VERSION, updateAvailable: false }); }
+          else {
+            const data = await npmRes.json();
+            const latest = data.version || VERSION;
+            const pa = VERSION.split('.').map(Number);
+            const pb = latest.split('.').map(Number);
+            let cmp = 0;
+            for (let i = 0; i < 3; i++) { if ((pa[i]||0) > (pb[i]||0)) { cmp = -1; break; } if ((pa[i]||0) < (pb[i]||0)) { cmp = 1; break; } }
+            sendJSON(res, 200, { current: VERSION, latest, updateAvailable: cmp > 0 });
+          }
+        } catch(_) { sendJSON(res, 200, { current: VERSION, latest: VERSION, updateAvailable: false }); }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
       // GET /api/status
       if (method === 'GET' && pathname === '/api/status') {
         sendJSON(res, 200, {
@@ -684,6 +722,433 @@ export async function cmdUI(args) {
         logRequest(method, pathname, 200, Date.now() - start);
         return;
       }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // IMAP EMAIL CLIENT ROUTES — READ-ONLY IMAP, local SQLite DB
+      // ═══════════════════════════════════════════════════════════════════
+
+      // GET /api/imap/accounts
+      if (method === 'GET' && pathname === '/api/imap/accounts') {
+        try {
+          const { listAccounts } = await import('../services/email-db.mjs');
+          sendJSON(res, 200, { accounts: listAccounts() });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/accounts — create account
+      if (method === 'POST' && pathname === '/api/imap/accounts') {
+        try {
+          const body = await parseBody(req);
+          const { createAccount, listAccounts } = await import('../services/email-db.mjs');
+          if (!body.email_address || !body.imap_host || !body.smtp_host || !body.password) {
+            sendJSON(res, 400, { error: 'email_address, imap_host, smtp_host, password required' }); return;
+          }
+          const id = createAccount(body);
+          sendJSON(res, 200, { ok: true, id });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/accounts/update
+      if (method === 'POST' && pathname === '/api/imap/accounts/update') {
+        try {
+          const body = await parseBody(req);
+          const { updateAccount } = await import('../services/email-db.mjs');
+          if (!body.id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          updateAccount(body.id, body);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/accounts/delete
+      if (method === 'POST' && pathname === '/api/imap/accounts/delete') {
+        try {
+          const body = await parseBody(req);
+          const { deleteAccount } = await import('../services/email-db.mjs');
+          if (!body.id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          deleteAccount(body.id);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/sync — trigger incremental sync for an account
+      if (method === 'POST' && pathname === '/api/imap/sync') {
+        try {
+          const body = await parseBody(req);
+          if (!body.accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const { syncAccount } = await import('../services/email-imap.mjs');
+          // Run async — respond immediately
+          sendJSON(res, 200, { ok: true, status: 'syncing' });
+          syncAccount(body.accountId).catch(e => console.error('[email:sync]', e.message));
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/messages?accountId=&labelId=&limit=&offset=&search=
+      if (method === 'GET' && pathname === '/api/imap/messages') {
+        try {
+          const accountId = url.searchParams.get('accountId');
+          const labelId   = url.searchParams.get('labelId') || null;
+          const limit     = parseInt(url.searchParams.get('limit') || '50', 10);
+          const offset    = parseInt(url.searchParams.get('offset') || '0', 10);
+          const search    = url.searchParams.get('search') || null;
+          if (!accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const { listMessages } = await import('../services/email-db.mjs');
+          const result = listMessages(accountId, labelId, limit, offset, search);
+          sendJSON(res, 200, result);
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/message?id=
+      if (method === 'GET' && pathname === '/api/imap/message') {
+        try {
+          const id = url.searchParams.get('id');
+          if (!id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          const { getMessage, markRead } = await import('../services/email-db.mjs');
+          const msg = getMessage(id);
+          if (!msg) { sendJSON(res, 404, { error: 'not found' }); return; }
+          markRead(id, true);
+          sendJSON(res, 200, { message: msg });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/thread?threadId=&accountId=
+      if (method === 'GET' && pathname === '/api/imap/thread') {
+        try {
+          const threadId = url.searchParams.get('threadId');
+          const accountId = url.searchParams.get('accountId');
+          if (!threadId || !accountId) { sendJSON(res, 400, { error: 'threadId and accountId required' }); return; }
+          const { getThread } = await import('../services/email-db.mjs');
+          sendJSON(res, 200, { messages: getThread(threadId, accountId) });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/labels?accountId=
+      if (method === 'GET' && pathname === '/api/imap/labels') {
+        try {
+          const accountId = url.searchParams.get('accountId');
+          if (!accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const { listLabels } = await import('../services/email-db.mjs');
+          sendJSON(res, 200, { labels: listLabels(accountId) });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/labels/create
+      if (method === 'POST' && pathname === '/api/imap/labels/create') {
+        try {
+          const body = await parseBody(req);
+          const { createLabel } = await import('../services/email-db.mjs');
+          if (!body.accountId || !body.name) { sendJSON(res, 400, { error: 'accountId, name required' }); return; }
+          const id = createLabel(body.accountId, body.name, body.color, body.parentId);
+          sendJSON(res, 200, { ok: true, id });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/labels/update
+      if (method === 'POST' && pathname === '/api/imap/labels/update') {
+        try {
+          const body = await parseBody(req);
+          const { updateLabel } = await import('../services/email-db.mjs');
+          if (!body.id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          updateLabel(body.id, body);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/labels/delete
+      if (method === 'POST' && pathname === '/api/imap/labels/delete') {
+        try {
+          const body = await parseBody(req);
+          const { deleteLabel } = await import('../services/email-db.mjs');
+          if (!body.id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          deleteLabel(body.id);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/labels/assign — add label to message
+      if (method === 'POST' && pathname === '/api/imap/labels/assign') {
+        try {
+          const body = await parseBody(req);
+          const { addMessageToLabel, removeMessageFromLabel } = await import('../services/email-db.mjs');
+          if (!body.messageId || !body.labelId) { sendJSON(res, 400, { error: 'messageId, labelId required' }); return; }
+          if (body.remove) removeMessageFromLabel(body.messageId, body.labelId);
+          else addMessageToLabel(body.messageId, body.labelId);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/unread-count — total unread across all active IMAP accounts
+      if (method === 'GET' && pathname === '/api/imap/unread-count') {
+        try {
+          const { listAccounts, getDb } = await import('../services/email-db.mjs');
+          const accounts = listAccounts();
+          const db = getDb();
+          let total = 0;
+          for (const acc of accounts) {
+            const row = db.prepare(`
+              SELECT COUNT(*) as n FROM email_messages m
+              JOIN email_message_labels eml ON eml.message_id = m.id
+              JOIN email_labels l ON l.id = eml.label_id
+              LEFT JOIN email_message_state s ON s.message_id = m.id
+              WHERE m.account_id = ? AND l.system_type = 'inbox'
+                AND COALESCE(s.is_read, 0) = 0
+                AND m.permanently_deleted = 0
+            `).get(acc.id);
+            total += row?.n || 0;
+          }
+          sendJSON(res, 200, { unread: total });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/mark-read
+      if (method === 'POST' && pathname === '/api/imap/mark-read') {
+        try {
+          const body = await parseBody(req);
+          const { markRead } = await import('../services/email-db.mjs');
+          if (!body.messageId) { sendJSON(res, 400, { error: 'messageId required' }); return; }
+          markRead(body.messageId, body.isRead !== false);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/mark-starred
+      if (method === 'POST' && pathname === '/api/imap/mark-starred') {
+        try {
+          const body = await parseBody(req);
+          const { markStarred } = await import('../services/email-db.mjs');
+          if (!body.messageId) { sendJSON(res, 400, { error: 'messageId required' }); return; }
+          markStarred(body.messageId, body.isStarred !== false);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/mark-all-read
+      if (method === 'POST' && pathname === '/api/imap/mark-all-read') {
+        try {
+          const body = await parseBody(req);
+          const { markAllRead } = await import('../services/email-db.mjs');
+          if (!body.accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const count = markAllRead(body.accountId, body.labelId || null);
+          sendJSON(res, 200, { ok: true, count });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/trash — soft delete (moves to trash label, NEVER touches IMAP)
+      if (method === 'POST' && pathname === '/api/imap/trash') {
+        try {
+          const body = await parseBody(req);
+          const { softDelete } = await import('../services/email-db.mjs');
+          if (!body.messageId) { sendJSON(res, 400, { error: 'messageId required' }); return; }
+          softDelete(body.messageId);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/send — send email via SMTP
+      if (method === 'POST' && pathname === '/api/imap/send') {
+        try {
+          const body = await parseBody(req);
+          const { sendEmail } = await import('../services/email-smtp.mjs');
+          if (!body.accountId || !body.to || !body.subject) {
+            sendJSON(res, 400, { error: 'accountId, to, subject required' }); return;
+          }
+          const result = await sendEmail(body.accountId, body);
+          sendJSON(res, 200, { ok: true, messageId: result.messageId });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/drafts/save
+      if (method === 'POST' && pathname === '/api/imap/drafts/save') {
+        try {
+          const body = await parseBody(req);
+          const { saveDraft } = await import('../services/email-db.mjs');
+          if (!body.accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const id = saveDraft(body.accountId, body);
+          sendJSON(res, 200, { ok: true, id });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/drafts?accountId=
+      if (method === 'GET' && pathname === '/api/imap/drafts') {
+        try {
+          const accountId = url.searchParams.get('accountId');
+          if (!accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const { listDrafts } = await import('../services/email-db.mjs');
+          sendJSON(res, 200, { drafts: listDrafts(accountId) });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/drafts/delete
+      if (method === 'POST' && pathname === '/api/imap/drafts/delete') {
+        try {
+          const body = await parseBody(req);
+          const { deleteDraft } = await import('../services/email-db.mjs');
+          if (!body.id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          deleteDraft(body.id);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/blocked?accountId=
+      if (method === 'GET' && pathname === '/api/imap/blocked') {
+        try {
+          const accountId = url.searchParams.get('accountId');
+          if (!accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const { listBlockedSenders } = await import('../services/email-db.mjs');
+          sendJSON(res, 200, { blocked: listBlockedSenders(accountId) });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/blocked/add
+      if (method === 'POST' && pathname === '/api/imap/blocked/add') {
+        try {
+          const body = await parseBody(req);
+          const { blockSender } = await import('../services/email-db.mjs');
+          if (!body.accountId || !body.email) { sendJSON(res, 400, { error: 'accountId, email required' }); return; }
+          blockSender(body.accountId, body.email);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/blocked/remove
+      if (method === 'POST' && pathname === '/api/imap/blocked/remove') {
+        try {
+          const body = await parseBody(req);
+          const { unblockSender } = await import('../services/email-db.mjs');
+          if (!body.id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          unblockSender(body.id);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/rules?accountId=
+      if (method === 'GET' && pathname === '/api/imap/rules') {
+        try {
+          const accountId = url.searchParams.get('accountId');
+          if (!accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const { listArchivingRules } = await import('../services/email-db.mjs');
+          sendJSON(res, 200, { rules: listArchivingRules(accountId) });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/rules/create
+      if (method === 'POST' && pathname === '/api/imap/rules/create') {
+        try {
+          const body = await parseBody(req);
+          const { createArchivingRule } = await import('../services/email-db.mjs');
+          if (!body.accountId || !body.matchType || !body.matchValue) {
+            sendJSON(res, 400, { error: 'accountId, matchType, matchValue required' }); return;
+          }
+          const id = createArchivingRule(body.accountId, body.matchType, body.matchValue, body.targetLabelId);
+          sendJSON(res, 200, { ok: true, id });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/rules/delete
+      if (method === 'POST' && pathname === '/api/imap/rules/delete') {
+        try {
+          const body = await parseBody(req);
+          const { deleteArchivingRule } = await import('../services/email-db.mjs');
+          if (!body.id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          deleteArchivingRule(body.id);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/signatures?accountId=
+      if (method === 'GET' && pathname === '/api/imap/signatures') {
+        try {
+          const accountId = url.searchParams.get('accountId');
+          if (!accountId) { sendJSON(res, 400, { error: 'accountId required' }); return; }
+          const { listSignatures } = await import('../services/email-db.mjs');
+          sendJSON(res, 200, { signatures: listSignatures(accountId) });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/signatures/create
+      if (method === 'POST' && pathname === '/api/imap/signatures/create') {
+        try {
+          const body = await parseBody(req);
+          const { createSignature } = await import('../services/email-db.mjs');
+          if (!body.accountId || !body.name || !body.content) {
+            sendJSON(res, 400, { error: 'accountId, name, content required' }); return;
+          }
+          const id = createSignature(body.accountId, body.name, body.content, body.isDefault || false);
+          sendJSON(res, 200, { ok: true, id });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // POST /api/imap/signatures/delete
+      if (method === 'POST' && pathname === '/api/imap/signatures/delete') {
+        try {
+          const body = await parseBody(req);
+          const { deleteSignature } = await import('../services/email-db.mjs');
+          if (!body.id) { sendJSON(res, 400, { error: 'id required' }); return; }
+          deleteSignature(body.id);
+          sendJSON(res, 200, { ok: true });
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // GET /api/imap/attachment?messageId=&partId=&accountId=
+      if (method === 'GET' && pathname === '/api/imap/attachment') {
+        try {
+          const messageId = url.searchParams.get('messageId');
+          const partId    = url.searchParams.get('partId');
+          const accountId = url.searchParams.get('accountId');
+          if (!messageId || !accountId) { sendJSON(res, 400, { error: 'messageId, accountId required' }); return; }
+          const { getMessage } = await import('../services/email-db.mjs');
+          const { fetchAttachmentContent } = await import('../services/email-imap.mjs');
+          const msg = getMessage(messageId);
+          if (!msg) { sendJSON(res, 404, { error: 'message not found' }); return; }
+          const att = msg.attachments?.find(a => a.part_id === partId);
+          if (!att) { sendJSON(res, 404, { error: 'attachment not found' }); return; }
+          // Check local cache first
+          const db = (await import('../services/email-db.mjs')).getDb();
+          const cached = db.prepare('SELECT content_blob, content_type FROM email_attachments WHERE id = ?').get(att.id);
+          if (cached?.content_blob) {
+            res.writeHead(200, { 'Content-Type': cached.content_type || 'application/octet-stream', 'Content-Disposition': `attachment; filename="${att.filename || 'attachment'}"` });
+            res.end(cached.content_blob);
+          } else {
+            const result = await fetchAttachmentContent(accountId, msg.imap_folder_path, msg.uid, partId);
+            if (!result) { sendJSON(res, 404, { error: 'could not fetch attachment' }); return; }
+            res.writeHead(200, { 'Content-Type': result.contentType || att.content_type || 'application/octet-stream', 'Content-Disposition': `attachment; filename="${att.filename || 'attachment'}"` });
+            res.end(result.buffer);
+          }
+        } catch (e) { sendJSON(res, 500, { error: e.message }); }
+        logRequest(method, pathname, 200, Date.now() - start); return;
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
 
       // POST /api/contacts — create contact
       if (method === 'POST' && pathname === '/api/contacts') {
@@ -1368,13 +1833,17 @@ export async function cmdUI(args) {
         parts.push(`[User] ${body.message}`);
         let userMessage = parts.join('\n\n');
 
-        // Inject episodic memory context into the system prompt
+        // Inject episodic memory + live IMAP accounts into the system prompt
         const basePrompt = effectiveSystemPrompt || chatSystemPrompt;
         let enrichedSystemPrompt = basePrompt;
         try {
           const memCtx = buildMemoryContext('chat', body.message);
           if (memCtx) enrichedSystemPrompt = basePrompt + memCtx;
         } catch { /* memory unavailable */ }
+        try {
+          const imapCtx = await getImapAccountsContext();
+          if (imapCtx) enrichedSystemPrompt += imapCtx;
+        } catch { /* imap context unavailable */ }
 
         // Handle image attachment — vision API
         if (body.imageBase64 && body.imageMimeType) {
@@ -1389,7 +1858,7 @@ export async function cmdUI(args) {
               // NHA Free tier — Liara Vision (zero API key)
               const r = await fetch('https://nothumanallowed.com/api/v1/liara/vision', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'x-nha-client': 'studio' },
                 body: JSON.stringify({ image_base64: body.imageBase64, prompt: imagePrompt }),
               });
               if (!r.ok) throw new Error(`Liara Vision ${r.status}`);
@@ -1398,9 +1867,10 @@ export async function cmdUI(args) {
             } else if (provider === 'anthropic') {
               const r = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
                 body: JSON.stringify({
-                  model: model || 'claude-sonnet-4-20250514', max_tokens: 4096, system: enrichedSystemPrompt,
+                  model: model || 'claude-sonnet-4-20250514', max_tokens: 4096,
+                  system: enrichedSystemPrompt ? [{ type: 'text', text: enrichedSystemPrompt, cache_control: { type: 'ephemeral' } }] : [],
                   messages: [{ role: 'user', content: [
                     { type: 'image', source: { type: 'base64', media_type: body.imageMimeType, data: body.imageBase64 } },
                     { type: 'text', text: imagePrompt },
@@ -1477,7 +1947,7 @@ export async function cmdUI(args) {
                 // Fallback: send first page as image to vision model
                 const r = await fetch('https://nothumanallowed.com/api/v1/liara/vision', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 'Content-Type': 'application/json', 'x-nha-client': 'studio' },
                   body: JSON.stringify({ image_base64: body.pdfBase64, prompt: pdfPrompt }),
                 });
                 if (r.ok) {
@@ -1491,7 +1961,7 @@ export async function cmdUI(args) {
                 const truncatedText = pdfText.slice(0, 12000);
                 const r = await fetch('https://nothumanallowed.com/api/v1/liara/chat', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 'Content-Type': 'application/json', 'x-nha-client': 'studio' },
                   body: JSON.stringify({
                     model: 'nha-v1',
                     messages: [
@@ -1512,9 +1982,10 @@ export async function cmdUI(args) {
             } else if (provider === 'anthropic') {
               const r = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
                 body: JSON.stringify({
-                  model: model || 'claude-sonnet-4-20250514', max_tokens: 8192, system: enrichedSystemPrompt,
+                  model: model || 'claude-sonnet-4-20250514', max_tokens: 8192,
+                  system: enrichedSystemPrompt ? [{ type: 'text', text: enrichedSystemPrompt, cache_control: { type: 'ephemeral' } }] : [],
                   messages: [{ role: 'user', content: [
                     { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: body.pdfBase64 } },
                     { type: 'text', text: pdfPrompt },
@@ -1640,9 +2111,33 @@ export async function cmdUI(args) {
               clean = clean.replace(/\[Screenshot[^\]]*\]/g, '').replace(/!\[.*?\]\(data:image[^)]+\)/g, '').slice(0, 3000);
               return `[${t.action} result]: ${clean.trim() || 'Done.'}`;
             }).join('\n\n');
-            const followUp = `The user asked: "${body.message}"\n\nI executed these tools and got REAL results:\n\n${toolContext}\n\nNow respond conversationally based ONLY on the REAL data above. Do NOT output any JSON blocks, base64, or image markdown — just natural text.`;
+            const followUp = `The user asked: "${body.message}"\n\nI executed these tools and got REAL results:\n\n${toolContext}\n\nNow respond to the user conversationally based ONLY on the REAL data above. If the user's request has multiple steps and the first step is done, execute the next step using a JSON tool block. Do NOT embed base64 data or image markdown — just natural text.`;
             try {
               fullResponse = await callLLM(config, enrichedSystemPrompt, followUp);
+
+              // Round 2: execute any tool calls emitted in the synthesis response
+              const { textParts: synthText2, actions: synthActions2 } = parseActions(fullResponse);
+              if (synthActions2.length > 0) {
+                const round2Results = [];
+                for (const { action: a2, params: p2 } of synthActions2) {
+                  try {
+                    const r2 = await executeTool(a2, p2, config);
+                    round2Results.push({ action: a2, result: typeof r2 === 'object' ? JSON.stringify(r2) : String(r2) });
+                  } catch (e2) {
+                    round2Results.push({ action: a2, result: `Error: ${e2.message}` });
+                  }
+                }
+                const round2Context = round2Results.map(t => `[${t.action} result]: ${t.result.slice(0, 2000)}`).join('\n\n');
+                try {
+                  const r2Summary = await callLLM(config, enrichedSystemPrompt, `The user asked: "${body.message}"\n\n${toolContext}\n\nRound 2 tool results:\n\n${round2Context}\n\nGive the user a final natural-language summary of everything. Do NOT output JSON blocks.`);
+                  fullResponse = synthText2.join('\n').replace(/```json[\s\S]*?```/g, '').trim() + (synthText2.join('').trim() ? '\n\n' : '') + r2Summary.trim();
+                } catch {
+                  fullResponse = synthText2.join('\n').replace(/```json[\s\S]*?```/g, '').trim() + '\n\n' + round2Results.map(t => `${t.action}: ${t.result}`).join('\n');
+                }
+              } else {
+                fullResponse = fullResponse.replace(/```json[\s\S]*?```/g, '').trim();
+              }
+
               // Prepend preserved markers so the UI can render canvas/screenshots
               if (preservedMarkers) fullResponse = preservedMarkers + fullResponse;
             } catch {
@@ -1826,6 +2321,7 @@ export async function cmdUI(args) {
         const basePrompt = effectiveSystemPrompt || chatSystemPrompt;
         let enrichedPrompt = basePrompt;
         try { const m = buildMemoryContext('chat', effectiveMsg); if (m) enrichedPrompt = basePrompt + m; } catch {}
+        try { const ic = await getImapAccountsContext(); if (ic) enrichedPrompt += ic; } catch {}
 
         // Build message with rolling context window:
         // - Recent messages (last 6): full content up to 2000 chars
@@ -2143,17 +2639,50 @@ export async function cmdUI(args) {
               sendSSE('canvas', { markers: preservedMarkers });
             }
 
-            const followUp = `The user asked: "${msg}"\n\nI executed these tools and got REAL results:\n\n${toolContext}\n\nNow respond to the user conversationally based ONLY on the REAL data above. Present the results clearly. Do NOT output any JSON blocks, any base64 data, or any image markdown — just natural text. If a screenshot was taken, just mention "Screenshot captured" without embedding it.`;
+            const followUp = `The user asked: "${msg}"\n\nI executed these tools and got REAL results:\n\n${toolContext}\n\nNow respond to the user conversationally based ONLY on the REAL data above. Present the results clearly. If the user's request has multiple steps and the first step is done, execute the next step using a JSON tool block. Do NOT embed base64 data or image markdown — just natural text. If a screenshot was taken, just mention "Screenshot captured" without embedding it.`;
             sendSSE('tool_synthesis', {});
             try {
               finalResponse = await callLLMStream(config, enrichedPrompt, followUp, (chunk) => {
                 sendSSE('token', { content: chunk });
               });
               finalResponse = finalResponse
-                .replace(/```json[\s\S]*?```/g, '')
                 .replace(/!\[.*?\]\(data:image\/[^)]+\)/g, '')
                 .replace(/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]{100,}/g, '[image]')
                 .trim();
+
+              // Round 2: execute any tool calls emitted in the synthesis response
+              const { textParts: synthText, actions: synthActions } = parseActions(finalResponse);
+              if (synthActions.length > 0) {
+                const round2Results = [];
+                for (const { action: a2, params: p2 } of synthActions) {
+                  sendSSE('tool', { action: a2, status: 'executing' });
+                  try {
+                    const r2 = await executeTool(a2, p2, config);
+                    const r2str = typeof r2 === 'object' ? JSON.stringify(r2) : String(r2);
+                    round2Results.push({ action: a2, result: r2str });
+                    sendSSE('tool', { action: a2, status: 'done', result: r2str.slice(0, 200) });
+                  } catch (e2) {
+                    round2Results.push({ action: a2, result: `Error: ${e2.message}` });
+                    sendSSE('tool', { action: a2, status: 'error', error: e2.message });
+                  }
+                }
+                const round2Context = round2Results.map(t => `[${t.action} result]: ${t.result.slice(0, 2000)}`).join('\n\n');
+                const round2Prompt = `${toolContext}\n\nRound 2 tool results:\n\n${round2Context}\n\nNow give the user a final natural-language summary of everything that was done. Do NOT output JSON blocks.`;
+                sendSSE('tool_synthesis', {});
+                try {
+                  finalResponse = synthText.join('\n').replace(/```json[\s\S]*?```/g, '').trim();
+                  const r2Summary = await callLLMStream(config, enrichedPrompt, `The user asked: "${msg}"\n\n${round2Prompt}`, (chunk) => {
+                    sendSSE('token', { content: chunk });
+                  });
+                  finalResponse = (finalResponse ? finalResponse + '\n\n' : '') + r2Summary.trim();
+                } catch {
+                  finalResponse = synthText.join('\n').replace(/```json[\s\S]*?```/g, '').trim() + '\n\n' + round2Results.map(t => `${t.action}: ${t.result}`).join('\n');
+                }
+              } else {
+                // No new tool calls — strip any leftover JSON blocks from display text
+                finalResponse = finalResponse.replace(/```json[\s\S]*?```/g, '').trim();
+              }
+
               // Prepend preserved markers for persistence
               if (preservedMarkers) finalResponse = preservedMarkers + finalResponse;
             } catch {
@@ -2709,6 +3238,7 @@ export async function cmdUI(args) {
         const hasWriting    = /scrivi|write|articolo|article|blog|testo|text|documento|document/i.test(taskLow);
         const hasData       = /dati|data|dataset|csv|json|analizza i dati|pattern|statistich/i.test(taskLow);
         const hasTranslate  = /traduci|translate|traduzione|translation/i.test(taskLow);
+        const hasTravel     = /ristorante|restaurant|b&b|hotel|albergo|agriturismo|locanda|osteria|prenotaz|vacanz|romantico|sushi|giapponese|cinese|pizza|cena|dinner|pranzo|lunch|soggiorno|weekend|pernottament|posto\s+dove\s+mangiare|posto\s+dove\s+dormire|dove\s+mangiare|dove\s+dormire|posto\s+romantico|gita|escursione/i.test(taskLow);
 
         const it = plannerLang === 'Italian';
 
@@ -2732,6 +3262,7 @@ export async function cmdUI(args) {
             const pdfName = body.pdfName || 'documento allegato';
             steps.push({icon:'\u{1F4C4}',agent:'DocumentReaderAgent',label:it?'Leggi documento':'Read document',reason:it?'Allegato PDF rilevato \u2014 estraggo dati tecnici prima di ogni altra operazione':'PDF attachment detected \u2014 extracting technical data first',prompt:`Extract all technical specifications, model numbers, part codes, product names, manufacturer, dimensions, ratings, and any other key data from the attached document "${pdfName}". List every technical detail precisely.`});
           }
+          if (hasTravel)   steps.push({icon:'\u{1F374}',agent:'TravelAgent',  label:it?'Ricerca ristoranti & hotel':'Search restaurants & hotels', reason:it?'Task di viaggio/prenotazione: cerco disponibilità reale su TheFork, Booking, TripAdvisor con browser automation':'Travel/booking task: searching real availability on TheFork, Booking, TripAdvisor with browser automation', prompt:task});
           if (hasEmail)    steps.push({icon:'\u{1F4E7}',agent:'EmailAgent',   label:it?'Controlla email':'Check emails',       reason:it?'Parola chiave email/mail/posta rilevata nel task':'Keyword email/mail detected in task',       prompt:'Read the latest unread emails and identify urgent items, deadlines, and required actions'});
           if (hasCalendar) steps.push({icon:'\u{1F4C5}',agent:'CalendarAgent', label:it?'Rivedi calendario':'Review calendar',  reason:it?'Parola chiave calendario/agenda/eventi rilevata nel task':'Keyword calendar/agenda/events detected in task',   prompt:'Check today\'s events and identify any scheduling conflicts or important meetings'});
           if (hasGitHub)   steps.push({icon:'\u{1F4BB}',agent:'GitHubAgent',   label:'GitHub',                                 reason:it?'Parola chiave GitHub/git/issue/PR rilevata nel task':'Keyword GitHub/git/issue/PR detected in task',  prompt:'Read open issues and pull requests, identify what needs attention'});
@@ -2739,7 +3270,7 @@ export async function cmdUI(args) {
           if (hasNotion)   steps.push({icon:'\u{1F4DD}',agent:'NotionAgent',   label:'Notion',                                 reason:it?'Parola chiave Notion/note rilevata nel task':'Keyword Notion/note detected in task',                  prompt:'Search Notion for relevant pages and notes'});
           // When PDF is present: always search web (to find where to buy, similar products etc.)
           // The search query will be refined at runtime using the extracted PDF specs as context
-          if (hasPdf || hasSearch || hasReputation || (!hasEmail && !hasCalendar && !hasGitHub && !hasSlack)) {
+          if (!hasTravel && (hasPdf || hasSearch || hasReputation || (!hasEmail && !hasCalendar && !hasGitHub && !hasSlack))) {
             const searchPrompt = hasPdf
               ? (it ? 'Usando le specifiche tecniche estratte dal documento (codice prodotto, modello, costruttore, caratteristiche), cerca online dove acquistare il prodotto o articoli equivalenti. Usa i codici esatti dal documento come query di ricerca.' : 'Using the technical specifications extracted from the document (product code, model, manufacturer, specs), search online for where to buy this product or equivalent alternatives. Use exact codes from the document as search queries.')
               : searchQuery;
@@ -2829,7 +3360,7 @@ Review the plan above. You may:
 - ADJUST the "prompt" field of any step to better match the task
 - KEEP steps that are correct as-is
 
-Available agents: WebSearchAgent, DocumentReaderAgent, EmailAgent, CalendarAgent, GitHubAgent, SlackAgent, NotionAgent, HERALD, ORACLE, ATHENA, CASSANDRA, MERCURY, QUILL, DataAnalystAgent, polyglot, CanvasAgent (last, only if visual output needed).
+Available agents: TravelAgent (restaurants/hotels/bookings with real browser automation on TheFork/Booking/TripAdvisor), WebSearchAgent, DocumentReaderAgent, EmailAgent, CalendarAgent, GitHubAgent, SlackAgent, NotionAgent, HERALD, ORACLE, ATHENA, CASSANDRA, MERCURY, QUILL, DataAnalystAgent, polyglot, CanvasAgent (last, only if visual output needed).
 
 Output ONLY:
 {"steps":[{"icon":"EMOJI","agent":"AGENT_NAME","label":"LABEL","reason":"WHY THIS AGENT","prompt":"INSTRUCTION"}]}
@@ -2847,7 +3378,7 @@ Language for labels: ${plannerLang}.
 
 Build a workflow plan for this task.
 
-Available agents: WebSearchAgent, DocumentReaderAgent, EmailAgent, CalendarAgent, GitHubAgent, SlackAgent, NotionAgent, HERALD, ORACLE, ATHENA, CASSANDRA, MERCURY, QUILL, DataAnalystAgent, polyglot, CanvasAgent.
+Available agents: TravelAgent (restaurants/hotels/bookings with real browser automation on TheFork/Booking/TripAdvisor), WebSearchAgent, DocumentReaderAgent, EmailAgent, CalendarAgent, GitHubAgent, SlackAgent, NotionAgent, HERALD, ORACLE, ATHENA, CASSANDRA, MERCURY, QUILL, DataAnalystAgent, polyglot, CanvasAgent.
 
 Output ONLY:
 {"steps":[{"icon":"EMOJI","agent":"AGENT_NAME","label":"LABEL","reason":"WHY THIS AGENT","prompt":"INSTRUCTION"}]}
@@ -3123,7 +3654,250 @@ ${rawText.slice(0, 18000)}`;
                   }
                 } catch (e) { toolData += (toolData ? '\n\n' : '') + `## Search "${q}" failed: ${e.message}`; }
               }
+
+              // After all searches: extract URLs from results and fetch booking/info portals directly
+              // This is critical for travel/restaurant/accommodation tasks where portals have internal search
+              const isBookingTask = /(ristorante|restaurant|b&b|hotel|albergo|prenotaz|booking|vacanz|romantico|sushi|menu|disponib|soggiorno|weekend|cena|dinner|accommodation)/i.test(task + ' ' + stepPrompt);
+              if (isBookingTask && toolData.length > 100) {
+                // Extract URLs found in search results
+                const foundUrls = [...new Set((toolData.match(/https?:\/\/[^\s"'\n<>)]+/g) || []))];
+                // Prioritize booking/info portals
+                const portalDomains = ['thefork', 'theforkmanger', 'booking.com', 'tripadvisor', 'yelp', 'zomato', 'airbnb', 'agriturismo', 'expedia', 'hotel', 'b-b.it', 'bed-and-breakfast', 'locanda', 'osteria', 'ristorante', 'viaggi'];
+                const portalUrls = foundUrls.filter(u => portalDomains.some(d => u.toLowerCase().includes(d))).slice(0, 3);
+                if (portalUrls.length > 0) {
+                  sendToken(`[Reading ${portalUrls.length} portal page(s)...] `);
+                  for (const pu of portalUrls) {
+                    try {
+                      const pfetch = await withTimeout(executeTool('fetch_url', { url: pu }, config), 20000);
+                      const pfetchStr = typeof pfetch === 'string' ? pfetch : JSON.stringify(pfetch);
+                      if (pfetchStr && pfetchStr.length > 200) {
+                        toolData += '\n\n## Portal page: ' + pu + '\n' + pfetchStr.slice(0, 5000);
+                      }
+                    } catch {}
+                  }
+                }
+              }
             } catch (e) { toolData = toolData || `Web search failed: ${e.message}`; }
+
+          } else if (agent === 'TravelAgent') {
+            sendToken('[TravelAgent: analyzing your request...] ');
+            try {
+              const be = await import('../services/browser-engine.mjs');
+              const travelTask = stepPrompt || task;
+
+              // ── Extract parameters from task ──
+              // Date: "16 maggio", "16/05", "16-05-2026", "sabato 16", etc.
+              // ── PARAMETER EXTRACTION ──
+              const monthNames = {gennaio:1,febbraio:2,marzo:3,aprile:4,maggio:5,giugno:6,luglio:7,agosto:8,settembre:9,ottobre:10,novembre:11,dicembre:12};
+              const dateMatch = travelTask.match(/(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)/i)
+                || travelTask.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?/);
+              let targetDate = null;
+              let targetDateStr = null;
+              if (dateMatch) {
+                if (dateMatch[2] && isNaN(Number(dateMatch[2]))) {
+                  const day = parseInt(dateMatch[1]);
+                  const month = monthNames[(dateMatch[2] || '').toLowerCase()];
+                  if (day && month) {
+                    const year = new Date().getFullYear();
+                    targetDate = new Date(year, month - 1, day);
+                    targetDateStr = String(day).padStart(2, '0') + '/' + String(month).padStart(2, '0') + '/' + year;
+                  }
+                } else if (dateMatch[1] && dateMatch[2]) {
+                  const day = parseInt(dateMatch[1]);
+                  const month = parseInt(dateMatch[2]);
+                  const year = dateMatch[3] ? parseInt(dateMatch[3]) : new Date().getFullYear();
+                  if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+                    targetDate = new Date(year, month - 1, day);
+                    targetDateStr = String(day).padStart(2, '0') + '/' + String(month).padStart(2, '0') + '/' + year;
+                  }
+                }
+              }
+
+              // City extraction — multi-attempt, most specific first
+              let city = null;
+              const _stopRx = /\s+(il|la|lo|i|le|gli|per|con|un|una|del|della|dei|delle|e|o|\d).*$/i;
+              // P1: "vicino a/near/around <City>"
+              const _cp1 = travelTask.match(/\b(?:vicino\s+a|near|around)\s+([A-Z][a-zA-Z\u00C0-\u017E]{1,}(?:\s+[A-Z][a-zA-Z\u00C0-\u017E]+)?)/);
+              // P2: "a/in <Capitalized City>"
+              const _cp2 = travelTask.match(/\b(?:a|in)\s+([A-Z][a-zA-Z\u00C0-\u017E]{2,}(?:\s+[A-Z][a-zA-Z\u00C0-\u017E]+)?)/);
+              // P3: "a/in <lowercase city>" (case insensitive)
+              const _cp3 = travelTask.match(/\b(?:a|in|at|near)\s+([a-zA-Z\u00C0-\u017E]{3,}(?:\s+[a-zA-Z\u00C0-\u017E]+)?)/i);
+              // P4: known cities via word-split — also checks adjectival forms (mantovana→mantova, milanese→milano)
+              const _knownCitiesArr = ['Milano','Roma','Napoli','Torino','Firenze','Bologna','Venezia','Genova','Palermo','Bari','Catania','Verona','Padova','Trieste','Brescia','Bergamo','Modena','Parma','Reggio','Mantova','Ferrara','Vicenza','Treviso','Udine','Trento','Bolzano','Perugia','Ancona','Pescara','Foggia','Salerno','Taranto','Cagliari','Sassari','Siena','Pisa','Lucca','Arezzo','Rimini','Ravenna','Prato','Livorno','Messina','Paris','Lyon','Marseille','Nice','Bordeaux','Toulouse','Strasbourg','Nantes','Madrid','Barcelona','Sevilla','Valencia','Bilbao','Malaga','Lisbon','Porto','Berlin','Munich','Hamburg','Frankfurt','Stuttgart','Cologne','Amsterdam','Rotterdam','Brussels','Vienna','Zurich','Geneva','Prague','Warsaw','Budapest','Bucharest','Athens','Istanbul','London','Manchester','Edinburgh','Dublin','Copenhagen','Stockholm','Oslo','Helsinki','Tokyo','Osaka','Seoul','Beijing','Shanghai','Singapore','Sydney','Melbourne','Toronto','Montreal','Vancouver','Dubai','Bangkok','Mumbai','Delhi','Cairo','Nairobi'];
+              const _taskWords = travelTask.toLowerCase().split(/[\s,;:.!?]+/);
+              // Exact match, then prefix match (with and without final vowel) for demonyms
+              // e.g. mantovana→mantova, veneziano→venezia, milanese→milano (milan+ese)
+              const _cp4found = _knownCitiesArr.find(c => _taskWords.includes(c.toLowerCase()))
+                || _knownCitiesArr.find(c => {
+                  const cl = c.toLowerCase();
+                  const cl0 = cl.slice(0, -1); // without final vowel (milan from milano)
+                  return c.length >= 4 && _taskWords.some(w => w.length > cl.length - 1 && (w.toLowerCase().startsWith(cl) || (cl0.length >= 4 && w.toLowerCase().startsWith(cl0))));
+                });
+              // P5: "zona <city>" or "zona di <city>" — only if P4 didn't find anything
+              const _cp5 = !_cp4found && travelTask.match(/zona\s+(?:di\s+)?([a-zA-Z\u00C0-\u017E]{3,})/i);
+              const _cityRaw = (_cp1 && _cp1[1]) || (_cp2 && _cp2[1]) || (_cp3 && _cp3[1]) || _cp4found || (_cp5 && _cp5[1]) || null;
+              if (_cityRaw) {
+                city = _cityRaw.replace(_stopRx, '').trim();
+                if (city.length < 2) city = null;
+              }
+
+              // Cuisine type → OSM cuisine tag
+              const cuisineMap = {sushi:'sushi',pizza:'pizza',giapponese:'japanese',japanese:'japanese',italiano:'italian',italian:'italian',cinese:'chinese',chinese:'chinese',indiano:'indian',indian:'indian',steakhouse:'steak_house',trattoria:'italian',osteria:'italian'};
+              const cuisineMatch = travelTask.match(/\b(sushi|pizza|giapponese|japanese|italiano|italian|cinese|chinese|indiano|indian|steakhouse|trattoria|osteria)\b/i);
+              const cuisineRaw = cuisineMatch ? cuisineMatch[1].toLowerCase() : null;
+              const cuisineOSM = cuisineRaw ? (cuisineMap[cuisineRaw] || cuisineRaw) : null;
+
+              const hasAccommodation = /b&b|bed\s*(?:&|and)\s*breakfast|hotel|albergo|agriturismo|locanda|ostello|hostel|pernottament|soggiorno/i.test(travelTask);
+              const hasRestaurant = /ristorante|restaurant|sushi|cena|dinner|pranzo|lunch|mangiare|eat/i.test(travelTask);
+
+              const summaryParts = [];
+              if (city) summaryParts.push('city: ' + city);
+              if (targetDateStr) summaryParts.push('date: ' + targetDateStr);
+              if (cuisineRaw) summaryParts.push('cuisine: ' + cuisineRaw);
+              if (hasAccommodation) summaryParts.push('accommodation: yes');
+              if (hasRestaurant) summaryParts.push('restaurant: yes');
+              sendToken('[Extracted — ' + (summaryParts.join(', ') || 'general search') + '] ');
+
+              const UA = 'NHA-TravelAgent/1.0 (nothumanallowed.com)';
+              const portalResults = [];
+
+              // ── TIER 1: Nominatim geocoding → get lat/lon for city ──
+              let lat = null, lon = null;
+              if (city) {
+                sendToken('[Geocoding ' + city + '...] ');
+                try {
+                  const geoUrl = 'https://nominatim.openstreetmap.org/search?' + new URLSearchParams({ q: city, format: 'json', limit: '1', addressdetails: '0' }).toString();
+                  const geoRes = await withTimeout(fetch(geoUrl, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } }), 8000);
+                  if (geoRes.ok) {
+                    const geoData = await geoRes.json();
+                    if (geoData && geoData[0]) {
+                      lat = parseFloat(geoData[0].lat);
+                      lon = parseFloat(geoData[0].lon);
+                      sendToken('[Found: ' + lat.toFixed(4) + ', ' + lon.toFixed(4) + '] ');
+                    }
+                  }
+                } catch {}
+              }
+
+              // ── TIER 1: Overpass API — real OSM data ──
+              if (lat !== null && lon !== null) {
+                const radius = 5000; // 5km radius
+                const formatPlace = (el) => {
+                  const t = el.tags || {};
+                  const parts = [];
+                  if (t.name) parts.push('**' + t.name + '**');
+                  if (t['addr:street']) parts.push(t['addr:street'] + (t['addr:housenumber'] ? ' ' + t['addr:housenumber'] : ''));
+                  if (t['addr:city']) parts.push(t['addr:city']);
+                  if (t.phone || t['contact:phone']) parts.push('Tel: ' + (t.phone || t['contact:phone']));
+                  if (t.website || t['contact:website']) parts.push('Web: ' + (t.website || t['contact:website']));
+                  if (t.opening_hours) parts.push('Orari: ' + t.opening_hours);
+                  if (t.email || t['contact:email']) parts.push('Email: ' + (t.email || t['contact:email']));
+                  if (t.cuisine) parts.push('Cucina: ' + t.cuisine);
+                  if (t.stars) parts.push('Stelle: ' + t.stars);
+                  const coordLat = el.lat || (el.center && el.center.lat);
+                  const coordLon = el.lon || (el.center && el.center.lon);
+                  if (coordLat && coordLon) parts.push('Maps: https://www.openstreetmap.org/?mlat=' + coordLat + '&mlon=' + coordLon + '&zoom=17');
+                  return parts.join(' | ');
+                };
+
+                // Restaurants query
+                if (hasRestaurant) {
+                  sendToken('[Overpass: searching restaurants' + (cuisineOSM ? ' (' + cuisineOSM + ')' : '') + '...] ');
+                  try {
+                    const cuisineFilter = cuisineOSM ? '["cuisine"="' + cuisineOSM + '"]' : '';
+                    const restQuery = '[out:json][timeout:20];(node["amenity"="restaurant"]' + cuisineFilter + '(around:' + radius + ',' + lat + ',' + lon + ');way["amenity"="restaurant"]' + cuisineFilter + '(around:' + radius + ',' + lat + ',' + lon + '););out center tags;';
+                    const restRes = await withTimeout(fetch('https://overpass.kumi.systems/api/interpreter', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+                      body: 'data=' + encodeURIComponent(restQuery)
+                    }), 25000);
+                    if (restRes.ok) {
+                      const restData = await restRes.json();
+                      const elements = (restData.elements || []).filter(el => el.tags && el.tags.name);
+                      if (elements.length > 0) {
+                        const lines = ['## Ristoranti trovati via OpenStreetMap (' + elements.length + ' risultati, raggio ' + (radius/1000) + 'km da ' + city + ')'];
+                        elements.slice(0, 15).forEach((el, i) => { lines.push((i+1) + '. ' + formatPlace(el)); });
+                        portalResults.push(lines.join('\n'));
+                        sendToken('[Found ' + elements.length + ' restaurants] ');
+                      } else if (cuisineOSM) {
+                        // Retry without cuisine filter — broader search
+                        sendToken('[No ' + cuisineOSM + ' found, retrying broader...] ');
+                        const broadQuery = '[out:json][timeout:20];(node["amenity"="restaurant"](around:' + radius + ',' + lat + ',' + lon + ');way["amenity"="restaurant"](around:' + radius + ',' + lat + ',' + lon + '););out center tags;';
+                        const broadRes = await withTimeout(fetch('https://overpass.kumi.systems/api/interpreter', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+                          body: 'data=' + encodeURIComponent(broadQuery)
+                        }), 25000);
+                        if (broadRes.ok) {
+                          const broadData = await broadRes.json();
+                          const broadEl = (broadData.elements || []).filter(el => el.tags && el.tags.name);
+                          if (broadEl.length > 0) {
+                            const lines = ['## Ristoranti a ' + city + ' (tutti i tipi, ' + broadEl.length + ' trovati — nessun ristorante ' + cuisineRaw + ' su OpenStreetMap in questa zona)'];
+                            broadEl.slice(0, 10).forEach((el, i) => { lines.push((i+1) + '. ' + formatPlace(el)); });
+                            portalResults.push(lines.join('\n'));
+                          }
+                        }
+                      }
+                    }
+                  } catch (e) { sendToken('[Overpass restaurants error: ' + e.message.slice(0,50) + '] '); }
+                }
+
+                // Accommodation query
+                if (hasAccommodation) {
+                  sendToken('[Overpass: searching accommodation...] ');
+                  try {
+                    const accQuery = '[out:json][timeout:20];(node["tourism"~"hotel|guest_house|bed_and_breakfast|hostel|motel"](around:' + radius + ',' + lat + ',' + lon + ');way["tourism"~"hotel|guest_house|bed_and_breakfast|hostel|motel"](around:' + radius + ',' + lat + ',' + lon + ');node["amenity"="hotel"](around:' + radius + ',' + lat + ',' + lon + '););out center tags;';
+                    const accRes = await withTimeout(fetch('https://overpass.kumi.systems/api/interpreter', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+                      body: 'data=' + encodeURIComponent(accQuery)
+                    }), 25000);
+                    if (accRes.ok) {
+                      const accData = await accRes.json();
+                      const elements = (accData.elements || []).filter(el => el.tags && el.tags.name);
+                      if (elements.length > 0) {
+                        const lines = ['## Alloggi trovati via OpenStreetMap (' + elements.length + ' risultati, raggio ' + (radius/1000) + 'km da ' + city + ')'];
+                        elements.slice(0, 15).forEach((el, i) => {
+                          const t = el.tags || {};
+                          const type = t.tourism === 'guest_house' ? 'B&B/Guest house' : t.tourism === 'hotel' ? 'Hotel' : t.tourism === 'bed_and_breakfast' ? 'B&B' : (t.tourism || 'Alloggio');
+                          lines.push((i+1) + '. [' + type + '] ' + formatPlace(el));
+                        });
+                        portalResults.push(lines.join('\n'));
+                        sendToken('[Found ' + elements.length + ' accommodations] ');
+                      }
+                    }
+                  } catch (e) { sendToken('[Overpass accommodation error: ' + e.message.slice(0,50) + '] '); }
+                }
+              } else if (city) {
+                sendToken('[Geocoding failed, skipping Overpass] ');
+              }
+
+              // ── TIER 2: Web search fallback — only if Overpass found nothing ──
+              const dataFound = portalResults.length > 0;
+              if (!dataFound) {
+                sendToken('[Web search fallback...] ');
+                try {
+                  const cityStr = city || '';
+                  const queries = [];
+                  if (hasRestaurant && cityStr) queries.push((cuisineRaw ? cuisineRaw + ' ' : '') + 'ristorante ' + cityStr + ' prenotazione');
+                  else if (hasRestaurant) queries.push((cuisineRaw ? cuisineRaw + ' ' : '') + 'ristorante prenotazione online');
+                  if (hasAccommodation && cityStr) queries.push('b&b hotel ' + cityStr + (targetDateStr ? ' ' + targetDateStr.slice(0,5) : ''));
+                  if (queries.length === 0) queries.push(travelTask.slice(0, 80));
+                  for (const q of queries) {
+                    const sr = await withTimeout(executeTool('web_search', { query: q, deep: true }, config), 30000);
+                    if (sr && sr.length > 100) portalResults.push('## Web search: "' + q + '"\n' + (typeof sr === 'string' ? sr : JSON.stringify(sr)));
+                  }
+                } catch {}
+              }
+
+              // ── Build final output ──
+              if (portalResults.length > 0) {
+                const header = '# TravelAgent — Risultati per: ' + (city || 'zona non specificata') + (targetDateStr ? ' | Data: ' + targetDateStr : '') + (cuisineRaw ? ' | Cucina: ' + cuisineRaw : '') + '\n\n';
+                toolData = header + portalResults.join('\n\n');
+              } else {
+                toolData = '# TravelAgent — Nessun risultato trovato\n\nNon sono stati trovati ristoranti o alloggi per i parametri specificati.\n\n**Parametri cercati:**\n- Città: ' + (city || 'non specificata') + '\n- Data: ' + (targetDateStr || 'non specificata') + '\n- Tipo cucina: ' + (cuisineRaw || 'qualsiasi') + '\n\n**Suggerimento:** Specifica la città esatta (es. "a Mantova") e il tipo di cucina per ottenere risultati migliori.';
+              }
+            } catch (e) { toolData = toolData || 'TravelAgent failed: ' + e.message; }
 
           } else if (agent === 'BrowserAgent') {
             // Collect all URLs from stepPrompt + task, plus infer subpaths mentioned (e.g. /about, /docs)
@@ -3333,7 +4107,7 @@ ${rawText.slice(0, 18000)}`;
           const today = new Date().toISOString().split('T')[0];
           const isCanvasAgent = agent === 'CanvasAgent';
           // Tool-data agents: fetch real live data and use buildSystemPrompt (tool calls allowed)
-          const isLiveDataAgent = ['CalendarAgent','EmailAgent','GitHubAgent','NotionAgent','SlackAgent','DriveAgent','BrowserAgent','WebSearchAgent','ResearchAgent','FileReaderAgent','CodeExecutorAgent'].includes(agent);
+          const isLiveDataAgent = ['CalendarAgent','EmailAgent','GitHubAgent','NotionAgent','SlackAgent','DriveAgent','BrowserAgent','WebSearchAgent','ResearchAgent','FileReaderAgent','CodeExecutorAgent','TravelAgent'].includes(agent);
 
           // ── Canvas HTML template — built server-side, guaranteed CSS ─────
           // The LLM outputs ONLY the <body> inner HTML (no <html>, no <style>)
@@ -3468,13 +4242,26 @@ ${task}
 CRITICAL: Do NOT invent, hallucinate, or add any data not present in the DATA sections below. ONLY use the exact data provided.
 Do NOT output JSON, tool calls, or code blocks. Write in plain text with markdown headers.
 Always apply your analysis specifically to the subject mentioned in the WORKFLOW GOAL.
+FILTER: If the DATA sections contain content from web pages that is NOT relevant to the WORKFLOW GOAL (e.g. ads, unrelated articles, off-topic blog posts), IGNORE that content entirely. Only extract and present information that directly answers the WORKFLOW GOAL.
 
 ${attachmentText ? `## ATTACHED FILE CONTENT:\n${attachmentText}\n` : ''}${toolData ? `## DATA FROM TOOLS:\n${toolData}\n` : '## DATA: No data was retrieved by this agent.\n'}
 ${contextBlock}
 Your task: ${stepPrompt}`;
             sysPrompt = agentInstruction;
+            // TravelAgent: give specific guidance so HERALD presents alternatives + booking links
+            const isTravelStep = agent === 'TravelAgent';
+            // Extract city/cuisine from toolData header (format: "# TravelAgent — Risultati per: Mantova | Cucina: sushi")
+            const _travelCityM = toolData && toolData.match(/Risultati per:\s*([^|#\n]+)/);
+            const _travelCuisineM = toolData && toolData.match(/Cucina:\s*([^|#\n]+)/);
+            const _travelCity = _travelCityM ? _travelCityM[1].trim() : '';
+            const _travelCuisine = _travelCuisineM ? _travelCuisineM[1].trim() : '';
+            const _theforkUrl = 'https://www.thefork.it/ristoranti/' + (_travelCity ? encodeURIComponent(_travelCity.toLowerCase()) : 'italia') + (_travelCuisine ? '?q=' + encodeURIComponent(_travelCuisine) : '');
+            const _bookingUrl = 'https://www.booking.com/searchresults.html?ss=' + encodeURIComponent(_travelCity || 'Italia') + '&group_adults=2&no_rooms=1';
+            const _tripadUrl = 'https://www.tripadvisor.it/Search?q=' + encodeURIComponent((_travelCuisine ? _travelCuisine + ' ' : '') + _travelCity);
             userMsg = toolData
-              ? `Summarize and analyze the REAL data above. Do not add anything not present in the data.`
+              ? (isTravelStep
+                ? `Present the travel results in Italian with these sections:\n\n## Ristoranti\nList every restaurant from the data with name, address, phone, website, OSM map link. If the requested cuisine (${_travelCuisine || 'richiesta'}) was NOT found, say "Nessun ristorante [cucina] trovato su OpenStreetMap nella zona" then list the alternative restaurants found.\n\n## Alloggi\nList every accommodation from the data with type (Hotel/B&B/Ostello/Agriturismo), name, address, website, OSM map link.\n\n## Prenota online\nAdd these direct booking links:\n- **Ristoranti su TheFork**: ${_theforkUrl}\n- **Hotel/B&B su Booking.com**: ${_bookingUrl}\n- **Recensioni su TripAdvisor**: ${_tripadUrl}\n\nDo NOT invent any data not in the sections above.`
+                : `Summarize and analyze the REAL data above. Do not add anything not present in the data.`)
               : context
               ? `Based ONLY on the previous agent outputs above, complete: ${stepPrompt}`
               : stepPrompt;
@@ -3841,6 +4628,1403 @@ ${completedHeadings ? `## SECTIONS ALREADY WRITTEN (headings only):\n${completed
           sendEvent({ error: e.message });
           res.end();
         }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── Studio: WebCraft — single non-streaming LLM call ────────────────
+      // Used by the WebCraft tab to generate each file without SSE complexity.
+      // POST /api/studio/webcraft  { system, user, max_tokens }  → { text }
+      if (pathname === '/api/studio/webcraft' && method === 'POST') {
+        const body = await parseBody(req, 131072); // 128KB max
+        if (!body.system || !body.user) {
+          sendJSON(res, 400, { error: 'system and user required' });
+          logRequest(method, pathname, 400, Date.now() - start);
+          return;
+        }
+        try {
+          const result = await callLLM(config, body.system, body.user, { max_tokens: body.max_tokens || 8192, temperature: 0.3 });
+          sendJSON(res, 200, { text: result });
+        } catch (e) {
+          sendJSON(res, 500, { error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── WebCraft Projects — list and delete saved projects ──────────────────
+      // GET  /api/studio/webcraft/projects         → { projects: [{name, description, fileCount, createdAt, dir}] }
+      // DELETE /api/studio/webcraft/projects/:name → { ok }
+      // POST /api/studio/webcraft/projects/save    → saves meta+files, { ok, dir }
+      if (pathname === '/api/studio/webcraft/projects' && method === 'GET') {
+        const wcBaseDir = path.join(os.homedir(), '.nha', 'webcraft');
+        const projects = [];
+        if (fs.existsSync(wcBaseDir)) {
+          for (const entry of fs.readdirSync(wcBaseDir, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            const metaPath = path.join(wcBaseDir, entry.name, 'webcraft-meta.json');
+            if (!fs.existsSync(metaPath)) continue;
+            try {
+              const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+              projects.push({ name: entry.name, description: meta.description || '', fileCount: (meta.files || []).length, createdAt: meta.createdAt || '', dir: path.join(wcBaseDir, entry.name) });
+            } catch(_) {}
+          }
+        }
+        projects.sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+        sendJSON(res, 200, { projects });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      if (pathname.startsWith('/api/studio/webcraft/projects/') && method === 'DELETE') {
+        const projName = decodeURIComponent(pathname.replace('/api/studio/webcraft/projects/', '')).replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!projName) { sendJSON(res, 400, { error: 'invalid name' }); return; }
+        // Kill sandbox process if it belongs to this project
+        if (global._wcSandboxProc && global._wcSandboxDir && global._wcSandboxDir.includes(projName)) {
+          try { global._wcSandboxProc.kill('SIGTERM'); } catch(_) {}
+          global._wcSandboxProc = null;
+          global._wcSandboxPort = null;
+          global._wcSandboxDir = null;
+        }
+        const projDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+        if (fs.existsSync(projDir)) fs.rmSync(projDir, { recursive: true, force: true });
+        sendJSON(res, 200, { ok: true });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      if (pathname === '/api/studio/webcraft/projects/save' && method === 'POST') {
+        const body = await parseBody(req, 16 * 1024 * 1024); // 16MB
+        const projName = (body.projectName || 'webcraft').replace(/[^a-zA-Z0-9_-]/g, '-');
+        const projDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+        fs.mkdirSync(projDir, { recursive: true });
+        // Write each file with full folder structure
+        for (const f of (body.files || [])) {
+          const fp = path.join(projDir, f.name);
+          fs.mkdirSync(path.dirname(fp), { recursive: true });
+          fs.writeFileSync(fp, f.content, 'utf8');
+        }
+        // Write meta
+        const meta = { projectName: projName, description: body.description || '', files: (body.files || []).map(f => f.name), createdAt: new Date().toISOString() };
+        fs.writeFileSync(path.join(projDir, 'webcraft-meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+        // Write agent memory file — always included as first context for WebCraft Agent
+        const agentMd = [
+          '# WebCraft Agent Memory — ' + projName,
+          '> Auto-generated. Edit to give the agent persistent context about this project.',
+          '',
+          '## Progetto',
+          '- **Nome**: ' + projName,
+          '- **Descrizione**: ' + (body.description || ''),
+          '- **Creato**: ' + new Date().toISOString(),
+          '',
+          '## Stack',
+          '- Server: Express.js (Node.js)',
+          '- Auth: JWT (access 15min, refresh 7d httpOnly cookie) + bcryptjs cost 12',
+          '- DB: PostgreSQL (sandbox: in-memory shim in server/db.js)',
+          '- CSS: BEM methodology',
+          '- Security: helmet, express-rate-limit, custom sentinel WAF middleware',
+          '',
+          '## File principali',
+          (body.files || []).map(f => '- ' + f.name).join('\n'),
+          '',
+          '## Note agente',
+          '(aggiungi qui note per sessioni future — es. "usa Tailwind invece di BEM", "API key in .env.local")',
+        ].join('\n');
+        fs.writeFileSync(path.join(projDir, 'webcraft-agent.md'), agentMd, 'utf8');
+        // Create default context files (skills, memory, provider) if not present
+        const ctxDir = path.join(projDir, 'skills');
+        if (!fs.existsSync(ctxDir)) fs.mkdirSync(ctxDir, { recursive: true });
+        for (const def of ['memory.md', 'liara.md', 'skills.md']) {
+          const fp = path.join(ctxDir, def);
+          if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', 'utf8');
+        }
+        sendJSON(res, 200, { ok: true, dir: projDir });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/studio/webcraft/projects/chat/save  { projectName, chat[] }
+      if (pathname === '/api/studio/webcraft/projects/chat/save' && method === 'POST') {
+        const body = await parseBody(req, 2 * 1024 * 1024);
+        const projName = (body.projectName || '').replace(/[^a-zA-Z0-9_-]/g, '-');
+        if (!projName) { sendJSON(res, 400, { error: 'projectName required' }); return; }
+        const projDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+        fs.mkdirSync(projDir, { recursive: true });
+        fs.writeFileSync(path.join(projDir, 'webcraft-chat.json'), JSON.stringify(body.chat || [], null, 2), 'utf8');
+        sendJSON(res, 200, { ok: true });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // GET /api/studio/webcraft/projects/chat/load/:name
+      if (pathname.startsWith('/api/studio/webcraft/projects/chat/load/') && method === 'GET') {
+        const projName = decodeURIComponent(pathname.replace('/api/studio/webcraft/projects/chat/load/', '')).replace(/[^a-zA-Z0-9_-]/g, '');
+        const chatPath = path.join(os.homedir(), '.nha', 'webcraft', projName, 'webcraft-chat.json');
+        if (!fs.existsSync(chatPath)) { sendJSON(res, 200, { chat: [] }); return; }
+        const chat = JSON.parse(fs.readFileSync(chatPath, 'utf8'));
+        sendJSON(res, 200, { chat });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // GET /api/studio/webcraft/skills/:name → { skills: [{name, content, type}] }
+      if (pathname.startsWith('/api/studio/webcraft/skills/') && method === 'GET') {
+        const projName = decodeURIComponent(pathname.replace('/api/studio/webcraft/skills/', '')).replace(/[^a-zA-Z0-9_-]/g, '');
+        const skillsDir = path.join(os.homedir(), '.nha', 'webcraft', projName, 'skills');
+        // Ensure the 3 default files always exist on disk
+        const WC_DEFAULTS = [
+          { name: 'memory.md', type: 'memory' },
+          { name: 'liara.md',  type: 'provider' },
+          { name: 'skills.md', type: 'skill' },
+        ];
+        if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true });
+        for (const def of WC_DEFAULTS) {
+          const fp = path.join(skillsDir, def.name);
+          if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', 'utf8');
+        }
+        // Load type index
+        const indexPath = path.join(skillsDir, '_index.json');
+        let typeIndex = {};
+        if (fs.existsSync(indexPath)) {
+          try { typeIndex = JSON.parse(fs.readFileSync(indexPath, 'utf8')); } catch(_) {}
+        }
+        // Default types for well-known filenames
+        const defaultType = (n) => n === 'memory.md' ? 'memory' : n === 'liara.md' ? 'provider' : 'skill';
+        const skills = [];
+        // .md first (sorted), then .log files (sorted newest-first by filename)
+        const allFiles = fs.readdirSync(skillsDir);
+        const mdFiles  = allFiles.filter(f => f.endsWith('.md')).sort();
+        const logFiles = allFiles.filter(f => f.endsWith('.log')).sort().reverse();
+        for (const fname of [...mdFiles, ...logFiles]) {
+          try {
+            const content = fs.readFileSync(path.join(skillsDir, fname), 'utf8');
+            const type = typeIndex[fname] || defaultType(fname);
+            skills.push({ name: fname, content, type: fname.endsWith('.log') ? 'log' : type });
+          } catch(_) {}
+        }
+        sendJSON(res, 200, { skills });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/studio/webcraft/skills/:name  { skills: [{name, content, type}] }
+      if (pathname.startsWith('/api/studio/webcraft/skills/') && method === 'POST') {
+        const projName = decodeURIComponent(pathname.replace('/api/studio/webcraft/skills/', '')).replace(/[^a-zA-Z0-9_-]/g, '');
+        const body = await parseBody(req);
+        const skills = body.skills || [];
+        const skillsDir = path.join(os.homedir(), '.nha', 'webcraft', projName, 'skills');
+        if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true });
+        // Build set of incoming names (normalised)
+        const incoming = new Set(skills.map(s => {
+          let n = (s.name || '').replace(/[^a-zA-Z0-9_.-]/g, '_');
+          if (!n.endsWith('.md')) n += '.md';
+          return n;
+        }));
+        // Remove .md files not in incoming set (but never remove the 3 defaults — only clear them)
+        const WC_KEEP = new Set(['memory.md', 'liara.md', 'skills.md']);
+        for (const fname of fs.readdirSync(skillsDir)) {
+          if (!fname.endsWith('.md')) continue;
+          if (!incoming.has(fname) && !WC_KEEP.has(fname)) fs.unlinkSync(path.join(skillsDir, fname));
+        }
+        // Write/update all skills; always keep defaults even if not in incoming (write empty)
+        const typeIndex = {};
+        for (const skill of skills) {
+          if (!skill.name) continue;
+          let safeName = skill.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+          if (!safeName.endsWith('.md')) safeName += '.md';
+          fs.writeFileSync(path.join(skillsDir, safeName), skill.content || '', 'utf8');
+          typeIndex[safeName] = skill.type || 'skill';
+        }
+        // Ensure defaults exist
+        for (const def of ['memory.md', 'liara.md', 'skills.md']) {
+          if (!fs.existsSync(path.join(skillsDir, def))) fs.writeFileSync(path.join(skillsDir, def), '', 'utf8');
+        }
+        fs.writeFileSync(path.join(skillsDir, '_index.json'), JSON.stringify(typeIndex), 'utf8');
+        sendJSON(res, 200, { ok: true });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/studio/webcraft/skills/:name/delete { name } → delete a single skill/log file
+      if (pathname.match(/^\/api\/studio\/webcraft\/skills\/[^/]+\/delete$/) && method === 'POST') {
+        const projName = decodeURIComponent(pathname.replace('/api/studio/webcraft/skills/', '').replace('/delete', '')).replace(/[^a-zA-Z0-9_-]/g, '');
+        const body = await parseBody(req);
+        const fname = (body.name || '').replace(/[^a-zA-Z0-9_. -]/g, '_');
+        if (!fname || !projName) { sendJSON(res, 400, { error: 'invalid' }); return; }
+        // Protect the 3 default .md files from deletion
+        const PROTECTED = new Set(['memory.md', 'liara.md', 'skills.md']);
+        if (PROTECTED.has(fname)) { sendJSON(res, 400, { error: 'protected file' }); return; }
+        const skillsDir = path.join(os.homedir(), '.nha', 'webcraft', projName, 'skills');
+        const filePath = path.join(skillsDir, fname);
+        try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(_) {}
+        // Remove from _index.json too
+        const idxPath = path.join(skillsDir, '_index.json');
+        try {
+          let idx = JSON.parse(fs.readFileSync(idxPath, 'utf8'));
+          delete idx[fname];
+          fs.writeFileSync(idxPath, JSON.stringify(idx), 'utf8');
+        } catch(_) {}
+        sendJSON(res, 200, { ok: true });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // GET /api/studio/webcraft/projects/load/:name → { projectName, description, files[] }
+      if (pathname.startsWith('/api/studio/webcraft/projects/load/') && method === 'GET') {
+        const projName = decodeURIComponent(pathname.replace('/api/studio/webcraft/projects/load/', '')).replace(/[^a-zA-Z0-9_-]/g, '');
+        const projDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+        const metaPath = path.join(projDir, 'webcraft-meta.json');
+        if (!fs.existsSync(metaPath)) { sendJSON(res, 404, { error: 'not found' }); return; }
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        const files = [];
+        for (const fname of (meta.files || [])) {
+          const fp = path.join(projDir, fname);
+          if (fs.existsSync(fp)) {
+            const content = fs.readFileSync(fp, 'utf8');
+            const ext = fname.split('.').pop();
+            const langMap = { js:'javascript', mjs:'javascript', ts:'typescript', json:'json', html:'html', css:'css', sql:'sql', md:'markdown', sh:'bash', env:'bash', conf:'nginx' };
+            files.push({ name: fname, content, lang: langMap[ext] || 'text' });
+          }
+        }
+        sendJSON(res, 200, { projectName: meta.projectName, description: meta.description, files });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── WebCraft Sandbox — fullstack preview in ~/.nha/webcraft/<project> ──
+      // POST /api/studio/webcraft/sandbox/start  { projectName, files[] }
+      //   → SSE stream with log lines, ends with { type:'ready', port, dir }
+      // DELETE /api/studio/webcraft/sandbox  → kill running sandbox process
+      if (pathname === '/api/studio/webcraft/sandbox/start' && method === 'POST') {
+        const body = await parseBody(req, 8 * 1024 * 1024); // 8MB max
+        const projName = (body.projectName || 'webcraft-sandbox').replace(/[^a-zA-Z0-9_-]/g, '-');
+        const files = body.files || [];
+        if (!files.length) { sendJSON(res, 400, { error: 'no files' }); return; }
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        });
+        const _sbLogLines = [];
+        const sendLog = (msg) => {
+          _sbLogLines.push(msg);
+          res.write(`data: ${JSON.stringify({ type: 'log', msg })}\n\n`);
+        };
+        const sendReady = (port, dir) => res.write(`data: ${JSON.stringify({ type: 'ready', port, dir })}\n\n`);
+        const sendError = (msg) => res.write(`data: ${JSON.stringify({ type: 'error', msg })}\n\n`);
+
+        // Helper: write sandbox log to skills/ dir — defined before try so catch can use it
+        const writeSandboxLog = (sandboxDirArg, freePortArg, extraLines, isError) => {
+          try {
+            const _nl = '\n';
+            const _now = new Date();
+            const _pad = n => String(n).padStart(2,'0');
+            const logTs = _now.getFullYear()+'-'+_pad(_now.getMonth()+1)+'-'+_pad(_now.getDate())+' '+_pad(_now.getHours())+':'+_pad(_now.getMinutes())+':'+_pad(_now.getSeconds());
+            const logName = projName + '-latest.log';
+            const logsDir = path.join(sandboxDirArg, 'skills');
+            fs.mkdirSync(logsDir, { recursive: true });
+            const oldLogs = fs.readdirSync(logsDir).filter(f => f.endsWith('.log') && f.startsWith(projName + '-') && f !== logName);
+            oldLogs.forEach(f => { try { fs.unlinkSync(path.join(logsDir, f)); } catch(_) {} });
+            const title = isError ? '# Sandbox Log — ' + projName + ' [ERRORE]' : '# Sandbox Log — ' + projName;
+            const logContent = title + _nl + 'Avviato: ' + logTs + _nl + 'Porta: ' + (freePortArg || '?') + _nl + _nl + _sbLogLines.join(_nl) + (extraLines ? _nl + _nl + extraLines : '');
+            fs.writeFileSync(path.join(logsDir, logName), logContent, 'utf8');
+            const idxPath = path.join(logsDir, '_index.json');
+            let idx = {};
+            try { idx = JSON.parse(fs.readFileSync(idxPath, 'utf8')); } catch(_) {}
+            idx[logName] = 'log';
+            fs.writeFileSync(idxPath, JSON.stringify(idx), 'utf8');
+          } catch(_) {}
+        };
+
+        let _sandboxDir = null;
+        let _freePort = null;
+
+        try {
+          // Kill previous sandbox if running
+          if (global._wcSandboxProc) {
+            try { global._wcSandboxProc.kill('SIGTERM'); } catch(_) {}
+            global._wcSandboxProc = null;
+          }
+
+          const sandboxDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+          _sandboxDir = sandboxDir;
+          sendLog(`📁 Percorso sandbox: ${sandboxDir}`);
+          fs.mkdirSync(sandboxDir, { recursive: true });
+
+          // Write all generated files
+          sendLog(`📝 Scrittura di ${files.length} file...`);
+          for (const f of files) {
+            const filePath = path.join(sandboxDir, f.name);
+            fs.mkdirSync(path.dirname(filePath), { recursive: true });
+            fs.writeFileSync(filePath, f.content, 'utf8');
+            sendLog(`   ✓ ${f.name}`);
+          }
+
+          // Post-process HTML files: remove meta tags that break HTTP iframe sandbox
+          // (Strict-Transport-Security, X-Frame-Options, frame-ancestors CSP meta)
+          // This is system-level sanitization — the generated project code is NOT modified
+          // by hand; the sandbox shim layer strips incompatible production-only headers.
+          const htmlFiles = files.filter(function(f) { return f.name.endsWith('.html'); });
+          if (htmlFiles.length > 0) {
+            sendLog('🔧 Sanitizzazione meta tag sandbox...');
+            for (const f of htmlFiles) {
+              const fp = path.join(sandboxDir, f.name);
+              let html = fs.readFileSync(fp, 'utf8');
+              const before = html.length;
+              // Remove Strict-Transport-Security meta (forces HTTPS, breaks HTTP sandbox)
+              html = html.replace(/<meta[^>]+Strict-Transport-Security[^>]*>/gi, '');
+              // Remove X-Frame-Options meta (blocks iframe embedding)
+              html = html.replace(/<meta[^>]+X-Frame-Options[^>]*>/gi, '');
+              // Remove Content-Security-Policy meta http-equiv (server sets it via helmet with sandbox-safe values)
+              html = html.replace(/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
+              // Remove frame-ancestors none/self directives from any remaining CSP meta
+              html = html.replace(/<meta[^>]+content=["'][^"']*frame-ancestors[^"']*["'][^>]*>/gi, '');
+              if (html.length !== before) {
+                fs.writeFileSync(fp, html, 'utf8');
+                sendLog('   ✓ ' + f.name + ' (meta tag produzione rimossi)');
+              }
+            }
+          }
+
+          // Inject sandbox db shim — replaces pg with in-memory SQLite-like store
+          const dbShim = `
+// NHA WebCraft Sandbox DB Shim
+// Replaces pg.Pool with a simple in-memory store so the sandbox runs without PostgreSQL.
+// For production, delete this file and restore server/db.js to use pg.Pool.
+const crypto = require('crypto');
+const tables = {};
+function ensureTable(t) { if (!tables[t]) tables[t] = []; }
+function matchesWhere(row, where) {
+  if (!where) return true;
+  return Object.keys(where).every(k => row[k] == where[k]);
+}
+const pool = {
+  query: async function(text, params) {
+    // Parse very simple SQL patterns for auth routes
+    const t = text.trim();
+    const ins = t.match(/^INSERT INTO (\\w+)\\s*\\(([^)]+)\\)/i);
+    if (ins) {
+      const tbl = ins[1]; ensureTable(tbl);
+      const cols = ins[2].split(',').map(c=>c.trim());
+      const row = { id: crypto.randomUUID() };
+      cols.forEach((c,i)=>{ row[c] = params?params[i]:null; });
+      row.created_at = new Date().toISOString();
+      row.updated_at = new Date().toISOString();
+      tables[tbl].push(row);
+      return { rows: [row], rowCount: 1 };
+    }
+    const sel = t.match(/^SELECT (.+) FROM (\\w+)/i);
+    if (sel) {
+      const tbl = sel[2]; ensureTable(tbl);
+      const whereM = t.match(/WHERE (.+?)(?:LIMIT|ORDER|$)/i);
+      let rows = tables[tbl];
+      if (whereM && params) {
+        // Simple $1 = value matching
+        let idx = 0;
+        const conds = whereM[1].split(/AND/i).map(c=>c.trim());
+        const where = {};
+        conds.forEach(c=>{
+          const m = c.match(/(\\w+)\\s*=\\s*\\$\\d+/i);
+          if (m) { where[m[1]] = params[idx++]; }
+        });
+        rows = rows.filter(r=>matchesWhere(r,where));
+      }
+      const lim = t.match(/LIMIT (\\d+)/i);
+      if (lim) rows = rows.slice(0, parseInt(lim[1]));
+      return { rows, rowCount: rows.length };
+    }
+    const upd = t.match(/^UPDATE (\\w+) SET (.+?) WHERE/i);
+    if (upd) {
+      const tbl = upd[1]; ensureTable(tbl);
+      const whereM = t.match(/WHERE (.+?)(?:RETURNING|$)/i);
+      let updated = [];
+      tables[tbl] = tables[tbl].map(row=>{
+        let match = true;
+        if (whereM && params) {
+          const conds = whereM[1].split(/AND/i).map(c=>c.trim());
+          let idx = params.length - conds.length;
+          conds.forEach(c=>{
+            const m = c.match(/(\\w+)\\s*=\\s*\\$\\d+/i);
+            if (m && params[idx] !== undefined) match = match && (row[m[1]] == params[idx++]);
+          });
+        }
+        if (match) { row.updated_at = new Date().toISOString(); updated.push(row); }
+        return row;
+      });
+      return { rows: updated, rowCount: updated.length };
+    }
+    const del = t.match(/^DELETE FROM (\\w+)/i);
+    if (del) {
+      const tbl = del[1]; ensureTable(tbl);
+      tables[tbl] = [];
+      return { rows: [], rowCount: 0 };
+    }
+    return { rows: [], rowCount: 0 };
+  },
+  connect: async function() { return { query: pool.query, release: ()=>{} }; }
+};
+pool.query.bind(pool);
+async function query(text, params) { return pool.query(text, params); }
+async function transaction(cb) {
+  const client = await pool.connect();
+  try { const r = await cb(client); client.release(); return r; }
+  catch(e) { client.release(); throw e; }
+}
+module.exports = { pool, query, transaction };
+`;
+          fs.writeFileSync(path.join(sandboxDir, 'server', 'db.js'), dbShim, 'utf8');
+
+          // Sentinel shim — zero external dependencies (no 'ip', 'net', etc.)
+          const sentinelShim = `
+// NHA WebCraft Sandbox — Sentinel WAF shim (zero dependencies)
+const _ipWindows = {};
+function getIP(req) {
+  return (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+}
+const SQL_RE = new RegExp('(union[\\\\s\\\\S]+select|drop[\\\\s]+table|insert[\\\\s]+into|delete[\\\\s]+from|update[\\\\s]+set|exec[\\\\s]*\\\\(|xp_cmdshell)', 'i');
+const XSS_RE = new RegExp('(<script|javascript:|onerror=|onload=|eval\\\\()', 'i');
+const PATH_RE = new RegExp('\\\\.\\\\./');
+function sentinelMiddleware(req, res, next) {
+  var ip = getIP(req);
+  var now = Date.now();
+  if (!_ipWindows[ip]) _ipWindows[ip] = [];
+  _ipWindows[ip] = _ipWindows[ip].filter(function(t){ return now - t < 60000; });
+  _ipWindows[ip].push(now);
+  if (_ipWindows[ip].length > 120) {
+    process.stderr.write('[sentinel] rate-limit ' + ip + '\\n');
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+  var check = req.url + JSON.stringify(req.body || '');
+  if (SQL_RE.test(check) || XSS_RE.test(check) || PATH_RE.test(check)) {
+    process.stderr.write('[sentinel] blocked ' + ip + ' ' + req.method + ' ' + req.url + '\\n');
+    return res.status(400).json({ error: 'Request blocked' });
+  }
+  next();
+}
+// Export both ways: default function (for require('./middleware/sentinel'))
+// and named export (for require('./middleware/sentinel').sentinelMiddleware)
+module.exports = sentinelMiddleware;
+module.exports.sentinelMiddleware = sentinelMiddleware;
+`;
+          fs.mkdirSync(path.join(sandboxDir, 'server', 'middleware'), { recursive: true });
+          fs.writeFileSync(path.join(sandboxDir, 'server', 'middleware', 'sentinel.js'), sentinelShim, 'utf8');
+
+          // Cache shim — zero dependencies (no ioredis), pure in-memory LRU
+          const cacheShim = `
+// NHA WebCraft Sandbox — Cache shim (in-memory, no Redis required)
+const _store = new Map();
+const _MAX = 1000;
+function evict() { if (_store.size > _MAX) { _store.delete(_store.keys().next().value); } }
+async function get(key) { var e = _store.get(key); if (!e) return null; if (e.exp && Date.now() > e.exp) { _store.delete(key); return null; } return e.val; }
+async function set(key, value, ttlSeconds) { evict(); _store.set(key, { val: value, exp: ttlSeconds ? Date.now() + ttlSeconds * 1000 : null }); }
+async function del(key) { _store.delete(key); }
+async function exists(key) { return (await get(key)) !== null; }
+module.exports = { get, set, del, exists };
+`;
+          fs.mkdirSync(path.join(sandboxDir, 'server', 'services'), { recursive: true });
+          fs.writeFileSync(path.join(sandboxDir, 'server', 'services', 'cache.js'), cacheShim, 'utf8');
+
+          // Errors middleware shim — always overwrite to ensure complete exports
+          const errorsShim = `
+// NHA WebCraft Sandbox — middleware/errors shim
+class AppError extends Error { constructor(message, statusCode) { super(message); this.statusCode = statusCode || 500; this.isOperational = true; } }
+function notFoundHandler(req, res, next) { res.status(404).json({ error: 'Not found: ' + req.originalUrl }); }
+function errorHandler(err, req, res, next) {
+  var code = err.statusCode || err.status || 500;
+  var msg = (process.env.NODE_ENV !== 'production' || err.isOperational) ? err.message : 'Internal Server Error';
+  res.status(code).json({ error: msg });
+}
+module.exports = errorHandler;
+module.exports.AppError = AppError;
+module.exports.errorHandler = errorHandler;
+module.exports.notFoundHandler = notFoundHandler;
+`;
+          fs.mkdirSync(path.join(sandboxDir, 'server', 'middleware'), { recursive: true });
+          // Always overwrite — older shim versions may be missing exports like notFoundHandler
+          fs.writeFileSync(path.join(sandboxDir, 'server', 'middleware', 'errors.js'), errorsShim, 'utf8');
+
+          // Models shim — LLM often generates require('../models/User') etc. that don't exist
+          // Create a generic User model shim backed by the in-memory DB shim
+          const userModelShim = `
+// NHA WebCraft Sandbox — models/User shim (in-memory, no PostgreSQL)
+const db = require('../db');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const User = {
+  findById: async function(id) { var r = await db.query('SELECT * FROM users WHERE id=$1',[id]); return (r.rows||[])[0]||null; },
+  findByEmail: async function(email) { var r = await db.query('SELECT * FROM users WHERE email=$1',[email]); return (r.rows||[])[0]||null; },
+  create: async function(data) {
+    var hash = data.password ? await bcrypt.hash(data.password,12) : data.password_hash||'';
+    var token = crypto.randomBytes(32).toString('hex');
+    var r = await db.query('INSERT INTO users (name,email,password_hash,verification_token) VALUES ($1,$2,$3,$4) RETURNING *',[data.name||data.username||'',data.email,hash,token]);
+    return (r.rows||[])[0]||null;
+  },
+  update: async function(id, data) { var r = await db.query('UPDATE users SET verified=true WHERE id=$1 RETURNING *',[id]); return (r.rows||[])[0]||null; },
+  findByVerificationToken: async function(token) { var r = await db.query('SELECT * FROM users WHERE verification_token=$1',[token]); return (r.rows||[])[0]||null; },
+};
+module.exports = User;
+`;
+          fs.mkdirSync(path.join(sandboxDir, 'server', 'models'), { recursive: true });
+          if (!fs.existsSync(path.join(sandboxDir, 'server', 'models', 'User.js'))) {
+            fs.writeFileSync(path.join(sandboxDir, 'server', 'models', 'User.js'), userModelShim, 'utf8');
+          }
+
+          // Validators shim — LLM often generates require('../utils/validators') with helpers that don't exist
+          const validatorsShim = `
+// NHA WebCraft Sandbox — utils/validators shim
+function validateEmail(email) { return typeof email === 'string' && /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email.trim()); }
+function sanitizeText(str) { return typeof str === 'string' ? str.replace(/<[^>]*>/g, '').trim() : ''; }
+function validatePassword(pwd) { return typeof pwd === 'string' && pwd.length >= 8; }
+function validateUsername(u) { return typeof u === 'string' && u.length >= 2 && u.length <= 50; }
+function validatePhone(p) { return typeof p === 'string' && /^[+]?[\\d\\s\\-().]{7,20}$/.test(p.trim()); }
+module.exports = { validateEmail, sanitizeText, validatePassword, validateUsername, validatePhone };
+`;
+          fs.mkdirSync(path.join(sandboxDir, 'server', 'utils'), { recursive: true });
+          if (!fs.existsSync(path.join(sandboxDir, 'server', 'utils', 'validators.js'))) {
+            fs.writeFileSync(path.join(sandboxDir, 'server', 'utils', 'validators.js'), validatorsShim, 'utf8');
+          }
+
+          // Patch all generated JS files: fix known wrong require() names
+          // The LLM often uses 'bcrypt' instead of 'bcryptjs', 'pg' instead of nothing, etc.
+          const requireFixes = [
+            [/require\(['"]bcrypt['"]\)/g,                 "require('bcryptjs')"],
+            [/require\(['"]node-postgres['"]\)/g,          "require('./db')"],
+            [/require\(['"]pg['"]\)/g,                     "require('./db')"],
+            [/require\(['"]ioredis['"]\)/g,                "require('../services/cache')"],
+            [/require\(['"]redis['"]\)/g,                  "require('../services/cache')"],
+            [/require\(['"]ip['"]\)/g,                     "({address:()=>'127.0.0.1',toLong:()=>0})"],
+            [/require\(['"]express-async-errors['"]\)/g,   "{}"],
+            [/require\(['"]multer['"]\)/g,                 "({single:()=>(r,s,n)=>n(),array:()=>(r,s,n)=>n(),memoryStorage:()=>({})})"],
+            [/require\(['"]sharp['"]\)/g,                  "({})"],
+            [/require\(['"]uuid['"]\)/g,                   "{v4:()=>Math.random().toString(36).slice(2)}"],
+            [/require\(['"]nanoid['"]\)/g,                 "{nanoid:()=>Math.random().toString(36).slice(2)}"],
+            [/require\(['"]joi['"]\)/g,                    "{object:()=>({keys:()=>({validate:()=>({error:null})})})}"],
+            [/require\(['"]zod['"]\)/g,                    "{z:{object:()=>({parse:(x)=>x}),string:()=>({min:()=>({max:()=>({email:()=>({optional:()=>({})})})})})}"],
+            [/require\(['"]winston['"]\)/g,                "{createLogger:()=>({info:()=>{},error:()=>{},warn:()=>{}}),transports:{Console:function(){}},format:{combine:()=>{},timestamp:()=>{},json:()=>{}}}"],
+            [/require\(['"]morgan['"]\)/g,                 "(()=>(r,s,n)=>n())"],
+            [/require\(['"]compression['"]\)/g,            "(()=>(r,s,n)=>n())"],
+            [/require\(['"]express-validator['"]\)/g,      "(()=>{function chain(){var p=new Proxy(function(){return p},{get:function(_,k){if(k==='run')return async function(){};if(k==='withMessage'||k==='bail'||k==='optional')return function(){return p};return function(){return p};}});return p;}return {body:chain,param:chain,query:chain,header:chain,cookie:chain,check:chain,validationResult:function(req){return {isEmpty:function(){return true},array:function(){return []},throw:function(){}};},matchedData:function(){return {};},oneOf:function(){return chain();}};})()"],
+            [/require\(['"]validator['"]\)/g,              "{isEmail:(s)=>/^[^@\\s]+@[^@\\s]+[.][^@\\s]+$/.test(s),escape:(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),trim:(s)=>String(s).trim(),isEmpty:(s)=>!s||!String(s).trim(),isLength:(s,o)=>{ var l=String(s).length; return (!o.min||l>=o.min)&&(!o.max||l<=o.max); }}"],
+            [/require\(['"]handlebars['"]\)/g,             "{compile:(t)=>(d)=>t.replace(/\\{\\{([^}]+)\\}\\}/g,(_,k)=>d[k.trim()]||''),registerHelper:()=>{},registerPartial:()=>{}}"],
+            [/require\(['"]express-handlebars['"]\)/g,     "{engine:()=>(p,o,cb)=>cb(null,'<html>'+JSON.stringify(o)+'</html>')}"],
+            [/require\(['"]hbs['"]\)/g,                    "{registerHelper:()=>{},registerPartial:()=>{}}"],
+            [/require\(['"]ejs['"]\)/g,                    "{render:(t,d)=>t.replace(/<%=([^%]+)%>/g,(_,k)=>d[k.trim()]||''),renderFile:(f,d,o,cb)=>{ if(typeof o==='function'){o(null,'');}else if(cb){cb(null,'');} }}"],
+            [/require\(['"]pug['"]\)/g,                    "{compile:()=>(d)=>'',renderFile:(f,d,cb)=>cb&&cb(null,'')}"],
+            [/require\(['"]nunjucks['"]\)/g,               "{configure:()=>({}),render:(t,d)=>JSON.stringify(d),renderString:(t,d)=>JSON.stringify(d)}"],
+            [/require\(['"]mustache['"]\)/g,               "{render:(t,d)=>t.replace(/\\{\\{([^}]+)\\}\\}/g,(_,k)=>d[k.trim()]||'')}"],
+            [/require\(['"]marked['"]\)/g,                 "{marked:(s)=>s,parse:(s)=>s}"],
+            [/require\(['"]highlight\.js['"]\)/g,          "{highlight:(c)=>({value:c}),highlightAuto:(c)=>({value:c})}"],
+            [/require\(['"]nodemailer['"]\)/g,             "{createTransport:()=>({sendMail:(o,cb)=>{ if(cb)cb(null,{messageId:'sandbox-'+Date.now()}); return Promise.resolve({messageId:'sandbox'}); }})}"],
+            [/require\(['"]stripe['"]\)/g,                 "(()=>({customers:{create:async()=>({id:'cus_sandbox'})},paymentIntents:{create:async()=>({id:'pi_sandbox',client_secret:'sandbox_secret'})}}))()"],
+            [/require\(['"]@sendgrid\/mail['"]\)/g,        "{setApiKey:()=>{},send:async()=>({statusCode:202})}"],
+            [/require\(['"]twilio['"]\)/g,                 "(()=>({messages:{create:async()=>({sid:'SM_sandbox'})}}))()"],
+            [/require\(['"]cookie-parser['"]\)/g,          "(()=>(r,s,n)=>{r.cookies=r.cookies||{};n()})"],
+            [/require\(['"]passport['"]\)/g,               "{initialize:()=>(r,s,n)=>n(),session:()=>(r,s,n)=>n(),authenticate:()=>(r,s,n)=>n&&n()}"],
+            [/require\(['"]express-session['"]\)/g,        "(()=>(r,s,n)=>{r.session=r.session||{};n()})"],
+            [/require\(['"]connect-redis['"]\)/g,          "(()=>{function RedisStore(){}; RedisStore.prototype.get=function(k,cb){cb&&cb(null,null);}; RedisStore.prototype.set=function(k,v,cb){cb&&cb();}; RedisStore.prototype.destroy=function(k,cb){cb&&cb();}; return RedisStore;})()"],
+            [/require\(['"]connect-flash['"]\)/g,          "(()=>(r,s,n)=>n())"],
+            // Fix wrong relative paths the LLM generates
+            [/require\(['"]\.\.\/middleware\/securityMiddleware['"]\)/g, "require('../middleware/security')"],
+            [/require\(['"]\.\/middleware\/securityMiddleware['"]\)/g,   "require('./middleware/security')"],
+            [/require\(['"]\.\.\/middleware\/authMiddleware['"]\)/g,     "require('../middleware/validate')"],
+            [/require\(['"]\.\/middleware\/authMiddleware['"]\)/g,       "require('./middleware/validate')"],
+            [/require\(['"]\.\.\/config\/database['"]\)/g,              "require('../db')"],
+            [/require\(['"]\.\/config\/database['"]\)/g,               "require('./db')"],
+            [/require\(['"]\.\.\/config\/db['"]\)/g,                   "require('../db')"],
+            [/require\(['"]\.\/config\/db['"]\)/g,                     "require('./db')"],
+            // redis utils — LLM generates custom utils/redis or config/redis wrappers
+            [/require\(['"]\.\.\/utils\/redis['"]\)/g,                 "require('../services/cache')"],
+            [/require\(['"]\.\/utils\/redis['"]\)/g,                   "require('../services/cache')"],
+            [/require\(['"]\.\.\/config\/redis['"]\)/g,               "require('../services/cache')"],
+            [/require\(['"]\.\/config\/redis['"]\)/g,                  "require('../services/cache')"],
+            [/require\(['"]\.\.\/services\/redis['"]\)/g,             "require('../services/cache')"],
+            [/require\(['"]\.\/services\/redis['"]\)/g,               "require('../services/cache')"],
+            // email utils: LLM puts utils/email but file is in services/email
+            [/require\(['"]\.\.\/utils\/email['"]\)/g,                 "require('../services/email')"],
+            [/require\(['"]\.\/utils\/email['"]\)/g,                   "require('./services/email')"],
+            // config module: LLM generates require('../../config') or require('../config')
+            [/require\(['"]\.\.\/\.\.\/config['"]\)/g,                 "{env:process.env}"],
+            [/require\(['"]\.\.\/config['"]\)/g,                       "{env:process.env}"],
+            [/require\(['"]\.\/config['"]\)/g,                         "{env:process.env}"],
+            // middleware/errors — LLM generates a custom error handler that doesn't exist
+            [/require\(['"]\.\.\/middleware\/errors['"]\)/g,   "require('../middleware/errors')"],
+            [/require\(['"]\.\/middleware\/errors['"]\)/g,     "require('./middleware/errors')"],
+            [/require\(['"]\.\.\/middleware\/errorHandler['"]\)/g, "require('../middleware/errors')"],
+            [/require\(['"]\.\.\/middleware\/error['"]\)/g,    "require('../middleware/errors')"],
+            // models/* — redirect to shims in server/models/
+            [/require\(['"]\.\.\/models\/User['"]\)/g,     "require('../models/User')"],
+            [/require\(['"]\.\/models\/User['"]\)/g,       "require('./models/User')"],
+            [/require\(['"]\.\.\/models\/user['"]\)/g,     "require('../models/User')"],
+            // utils/* — LLM generates helpers that don't exist; redirect to shim
+            [/require\(['"]\.\.\/utils\/validators['"]\)/g,   "require('../utils/validators')"],
+            [/require\(['"]\.\/utils\/validators['"]\)/g,     "require('./utils/validators')"],
+            [/require\(['"]\.\.\/utils\/validation['"]\)/g,   "require('../utils/validators')"],
+            [/require\(['"]\.\.\/helpers\/validators['"]\)/g, "require('../utils/validators')"],
+            [/require\(['"]\.\.\/utils\/helpers['"]\)/g,      "{sanitize:(s)=>String(s).trim(),escape:(s)=>String(s).replace(/</g,'&lt;')}"],
+            [/require\(['"]\.\.\/utils\/logger['"]\)/g,       "{info:()=>{},error:()=>{},warn:()=>{},debug:()=>{}}"],
+            [/require\(['"]\.\.\/utils\/errors['"]\)/g,       "{AppError:class AppError extends Error{constructor(m,s){super(m);this.statusCode=s||500;}}}"],
+            // rateLimiter: LLM sometimes creates a separate file instead of importing from security.js
+            [/require\(['"]\.\.\/middleware\/rateLimiter['"]\)/g,      "require('../middleware/security')"],
+            [/require\(['"]\.\/middleware\/rateLimiter['"]\)/g,        "require('./middleware/security')"],
+            [/require\(['"]\.\.\/middleware\/rateLimit['"]\)/g,        "require('../middleware/security')"],
+            [/require\(['"]\.\/middleware\/rateLimit['"]\)/g,          "require('./middleware/security')"],
+            [/require\(['"]\.\.\/middleware\/limiter['"]\)/g,          "require('../middleware/security')"],
+            [/require\(['"]\.\/middleware\/limiter['"]\)/g,            "require('./middleware/security')"],
+          ];
+          function patchJsFiles(dir, rootDir) {
+            if (!fs.existsSync(dir)) return;
+            const _rootDir = rootDir || dir;
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) { patchJsFiles(full, _rootDir); continue; }
+              if (!entry.name.endsWith('.js')) continue;
+              let src = fs.readFileSync(full, 'utf8');
+              let changed = false;
+              for (const [pat, rep] of requireFixes) {
+                const next = src.replace(pat, rep);
+                if (next !== src) { src = next; changed = true; }
+              }
+              // Context-aware db path fix: if file is in a subdirectory of server/
+              // (e.g. routes/, middleware/, services/) and does require('./db'),
+              // correct to require('../db') since db.js lives in server/
+              const depth = path.relative(_rootDir, dir).split(path.sep).filter(Boolean).length;
+              if (depth > 0) {
+                const prefix = '../'.repeat(depth);
+                const next2 = src.replace(/require\(['"]\.\/db['"]\)/g, "require('" + prefix + "db')");
+                if (next2 !== src) { src = next2; changed = true; }
+                // Also fix ./models/* → ../models/*
+                const next3 = src.replace(/require\(['"]\.\/(models\/[^'"]+)['"]\)/g, "require('../$1')");
+                if (next3 !== src) { src = next3; changed = true; }
+              }
+              if (changed) fs.writeFileSync(full, src, 'utf8');
+            }
+          }
+          patchJsFiles(path.join(sandboxDir, 'server'), path.join(sandboxDir, 'server'));
+          sendLog('🔧 Shim iniettati: DB (in-memory), Sentinel WAF, Cache — require() patchati');
+
+          // Patch package.json to remove pg, add only what's needed
+          const pkgPath = path.join(sandboxDir, 'package.json');
+          let pkg = {};
+          try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')); } catch(_) {}
+          if (!pkg.dependencies) pkg.dependencies = {};
+          // Remove server-side deps that can't run in sandbox
+          delete pkg.dependencies.pg;
+          delete pkg.dependencies.ioredis;
+          delete pkg.dependencies['pg-pool'];
+          delete pkg.dependencies.redis;
+          delete pkg.dependencies.mongoose;
+          delete pkg.dependencies.mysql2;
+          delete pkg.dependencies.sequelize;
+          // Force known-good versions — LLM often generates non-existent patch versions
+          pkg.dependencies.express = '^4.19.0';
+          pkg.dependencies.bcryptjs = '^2.4.3';
+          pkg.dependencies.jsonwebtoken = '^9.0.0';
+          pkg.dependencies.helmet = '^7.1.0';
+          pkg.dependencies['express-rate-limit'] = '^7.2.0';
+          pkg.dependencies.cors = '^2.8.5';
+          pkg.dependencies.dotenv = '^16.4.0';
+          pkg.dependencies.nodemailer = '^6.9.0';
+          pkg.dependencies['express-validator'] = '^7.0.1';
+          // Auto-detect any require('pkg') in server JS files and add missing deps
+          const KNOWN_VERSIONS = {
+            'xss-clean': '^0.1.4', 'morgan': '^1.10.0', 'compression': '^1.7.4',
+            'multer': '^1.4.5-lts.1', 'uuid': '^9.0.0', 'axios': '^1.6.0',
+            'lodash': '^4.17.21', 'moment': '^2.30.1', 'dayjs': '^1.11.10',
+            'joi': '^17.12.0', 'zod': '^3.22.4', 'yup': '^1.3.3',
+            'stripe': '^14.21.0', 'passport': '^0.7.0', 'passport-local': '^1.0.0',
+            'passport-jwt': '^4.0.1', 'cookie-parser': '^1.4.6', 'body-parser': '^1.20.2',
+            'express-session': '^1.18.0', 'connect-flash': '^0.1.1', 'method-override': '^3.0.0',
+            'serve-static': '^1.15.0', 'path': '0.12.7', 'crypto': '^1.0.1',
+            'sanitize-html': '^2.12.0', 'dompurify': '^3.0.9', 'validator': '^13.11.0',
+            'express-mongo-sanitize': '^2.2.0', 'hpp': '^0.2.3', 'xss': '^1.0.14',
+            'winston': '^3.12.0', 'pino': '^8.19.0', 'chalk': '^5.3.0',
+            'socket.io': '^4.7.4', 'ws': '^8.16.0', 'ejs': '^3.1.9', 'pug': '^3.0.2',
+            'handlebars': '^4.7.8', 'nunjucks': '^3.2.4', 'sharp': '^0.33.3',
+            'qrcode': '^1.5.3', 'pdf-lib': '^1.17.1',
+          };
+          const NODE_BUILTINS = new Set(['fs','path','os','crypto','http','https','net','url','util',
+            'events','stream','buffer','child_process','process','querystring','readline','assert',
+            'zlib','dns','tls','cluster','worker_threads','perf_hooks','vm','v8','module',
+            'string_decoder','timers','punycode','domain','console','sys']);
+          function scanRequires(dir) {
+            const found = new Set();
+            const walk = (d) => {
+              let entries;
+              try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+              for (const e of entries) {
+                if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+                const full = path.join(d, e.name);
+                if (e.isDirectory()) { walk(full); continue; }
+                if (!e.name.endsWith('.js') && !e.name.endsWith('.mjs') && !e.name.endsWith('.cjs')) continue;
+                let src;
+                try { src = fs.readFileSync(full, 'utf8'); } catch { continue; }
+                const re = /require\s*\(\s*['"]([^'"./][^'"]*)['"]\s*\)/g;
+                let m;
+                while ((m = re.exec(src)) !== null) {
+                  const pkg2 = m[1].startsWith('@') ? m[1].split('/').slice(0,2).join('/') : m[1].split('/')[0];
+                  if (!NODE_BUILTINS.has(pkg2)) found.add(pkg2);
+                }
+              }
+            };
+            walk(dir);
+            return found;
+          }
+          const detected = scanRequires(sandboxDir);
+          const missing = [];
+          for (const mod of detected) {
+            if (!pkg.dependencies[mod] && !pkg.devDependencies?.[mod]) {
+              pkg.dependencies[mod] = KNOWN_VERSIONS[mod] || 'latest';
+              missing.push(mod);
+            }
+          }
+          if (missing.length > 0) sendLog('🔍 Dipendenze auto-rilevate e aggiunte: ' + missing.join(', '));
+          pkg.scripts = pkg.scripts || {};
+          pkg.scripts.start = 'node server/index.js';
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf8');
+          sendLog('📦 package.json ottimizzato per sandbox (rimosso pg/redis, auto-scan require)');
+
+          // Create minimal .env for sandbox
+          const envContent = [
+            'PORT=0',
+            'NODE_ENV=development',
+            `JWT_SECRET=nha-sandbox-${crypto.randomBytes(16).toString('hex')}`,
+            `JWT_REFRESH_SECRET=nha-sandbox-ref-${crypto.randomBytes(16).toString('hex')}`,
+            'CORS_ORIGIN=*',
+            `BASE_URL=http://localhost`,
+            'SMTP_HOST=localhost',
+            'SMTP_PORT=25',
+            'SMTP_USER=sandbox',
+            'SMTP_PASS=sandbox',
+            'SMTP_FROM=sandbox@localhost',
+          ].join('\n');
+          fs.writeFileSync(path.join(sandboxDir, '.env'), envContent, 'utf8');
+          sendLog('⚙️  .env sandbox creato');
+
+          sendLog('');
+          sendLog('📦 Dipendenze che verranno installate:');
+          const deps = Object.keys(pkg.dependencies);
+          deps.forEach(d => sendLog(`   • ${d}@${pkg.dependencies[d]}`));
+          sendLog(`   Percorso: ${sandboxDir}/node_modules`);
+          sendLog('');
+          sendLog('⏳ npm install in corso...');
+
+          // npm install
+          await new Promise((resolve, reject) => {
+            const npm = exec(`npm install --prefer-offline 2>&1`, { cwd: sandboxDir, timeout: 120000 }, (err, stdout) => {
+              if (err) { sendLog('❌ npm install fallito: ' + err.message); reject(err); }
+              else { resolve(); }
+            });
+            npm.stdout && npm.stdout.on('data', d => { const line = d.toString().trim(); if (line) sendLog('  ' + line); });
+          });
+          sendLog('✅ npm install completato');
+
+          // Find free port
+          const { default: netMod } = await import('net');
+          const freePort = await new Promise(resolve => {
+            const srv = netMod.createServer();
+            srv.listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => resolve(p)); });
+          });
+          _freePort = freePort;
+
+          // Patch PORT in .env
+          fs.writeFileSync(path.join(sandboxDir, '.env'), envContent.replace('PORT=0', `PORT=${freePort}`), 'utf8');
+
+          sendLog(`🚀 Avvio server sandbox su porta ${freePort}...`);
+
+          // Spawn sandbox server
+          const { spawn } = await import('child_process');
+          const proc = spawn('node', ['server/index.js'], {
+            cwd: sandboxDir,
+            env: { ...process.env, PORT: String(freePort), NODE_ENV: 'development' },
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          global._wcSandboxProc = proc;
+          global._wcSandboxPort = freePort;
+          global._wcSandboxDir = sandboxDir;
+
+          let _lastMissingModule = null;
+          let _lastCrashError = null;
+          let _stderrBuffer = '';  // accumulate full stderr for rich error context
+          proc.stdout.on('data', d => { const l = d.toString().trim(); if (l) sendLog('  [server] ' + l); });
+          proc.stderr.on('data', d => {
+            const raw = d.toString();
+            _stderrBuffer += raw;
+            // MODULE_NOT_FOUND
+            const modMatch = raw.match(/Cannot find module '([^']+)'/);
+            if (modMatch) {
+              const missingMod = modMatch[1];
+              _lastMissingModule = missingMod;
+              _lastCrashError = "Cannot find module '" + missingMod + "'\n" + _stderrBuffer.slice(0, 1500);
+              sendLog('  ❌ Modulo mancante: ' + missingMod);
+              if (!global._wcAutoFixQueue) global._wcAutoFixQueue = [];
+              global._wcAutoFixQueue.push({ type: 'module_not_found', module: missingMod, dir: sandboxDir, ts: Date.now() });
+              sendLog('  🤖 Avvio auto-fix...');
+              return;
+            }
+            // TypeError / SyntaxError / ReferenceError / Error — capture with full stack
+            const crashMatch = raw.match(/^(TypeError|SyntaxError|ReferenceError|Error):\s+(.+)/m);
+            if (crashMatch) {
+              _lastCrashError = crashMatch[1] + ': ' + crashMatch[2].trim() + '\n' + _stderrBuffer.slice(0, 1500);
+              sendLog('  ❌ ' + crashMatch[1] + ': ' + crashMatch[2].trim());
+              if (!global._wcAutoFixQueue) global._wcAutoFixQueue = [];
+              global._wcAutoFixQueue.push({ type: 'crash_error', error: _lastCrashError, dir: sandboxDir, ts: Date.now() });
+              sendLog('  🤖 Avvio auto-fix...');
+              return;
+            }
+            // Log everything else (including at-lines during crash) for visibility
+            const l = raw.trim();
+            if (!l || l.startsWith('(node:') || l === '^') return;
+            sendLog('  [server] ' + l);
+          });
+
+          // Wait for server to be ready (max 30s).
+          // If process exits early (crash), report the error immediately so the client
+          // can trigger auto-fix while the SSE connection is still open.
+          await new Promise((resolve, reject) => {
+            let attempts = 0;
+            const MAX_ATTEMPTS = 60; // 30s at 500ms intervals
+            let crashed = false;
+
+            proc.on('exit', (code) => {
+              if (crashed || code === 0) return;
+              crashed = true;
+              // Give stderr a moment to flush
+              setTimeout(() => {
+                const errMsg = _lastCrashError || (_lastMissingModule ? "Cannot find module '" + _lastMissingModule + "'" : 'Server crashed (exit code ' + code + ')');
+                reject(new Error(errMsg));
+              }, 300);
+            });
+
+            const tryConnect = () => {
+              if (crashed) return;
+              const s = netMod.createConnection(freePort, '127.0.0.1');
+              s.on('connect', () => { s.destroy(); resolve(); });
+              s.on('error', () => {
+                s.destroy();
+                if (crashed) return;
+                if (++attempts > MAX_ATTEMPTS) {
+                  reject(new Error(_lastCrashError || (_lastMissingModule ? "Cannot find module '" + _lastMissingModule + "'" : 'Server non risponde dopo 30s')));
+                } else {
+                  setTimeout(tryConnect, 500);
+                }
+              });
+            };
+            setTimeout(tryConnect, 1000);
+          });
+
+          sendLog(`✅ Sandbox pronta!`);
+          writeSandboxLog(sandboxDir, freePort, null, false);
+
+          sendReady(freePort, sandboxDir);
+        } catch (e) {
+          if (_sandboxDir) writeSandboxLog(_sandboxDir, _freePort, '❌ ERRORE: ' + e.message, true);
+          sendError(e.message);
+        }
+        res.end();
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      if (pathname === '/api/studio/webcraft/sandbox' && method === 'DELETE') {
+        if (global._wcSandboxProc) {
+          try { global._wcSandboxProc.kill('SIGTERM'); } catch(_) {}
+          global._wcSandboxProc = null;
+        }
+        sendJSON(res, 200, { ok: true });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      if (pathname === '/api/studio/webcraft/sandbox/status' && method === 'GET') {
+        sendJSON(res, 200, {
+          running: !!global._wcSandboxProc,
+          port: global._wcSandboxPort || null,
+          dir: global._wcSandboxDir || null,
+        });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // ── WebCraft Agent — chat + tool-use + auto-fix ────────────────────────
+      // POST /api/studio/webcraft/agent  { projectName, message, attachments[]?, autofix? }
+      //   → SSE: { type:'text', token } | { type:'tool', tool, path, result } | { type:'done' } | { type:'error', msg }
+      // The agent reads files, applies old_string→new_string edits, writes new files.
+      // Rate-limit for Liara: 3 calls per 5 minutes (unlimited for own API key).
+      if (pathname === '/api/studio/webcraft/agent' && method === 'POST') {
+        const body = await parseBody(req, 32 * 1024 * 1024); // 32MB for attachments
+        const { projectName, message, attachments, autofix } = body;
+        if (!projectName || !message) {
+          sendJSON(res, 400, { error: 'projectName and message required' });
+          logRequest(method, pathname, 400, Date.now() - start);
+          return;
+        }
+
+        // Rate-limit Liara: 6 per 5 minutes (autofix needs headroom for multi-crash startup sequences)
+        const isLiara = !config.llm || !config.llm.apiKey || config.llm.provider === 'nha';
+        if (isLiara) {
+          if (!global._wcAgentCallLog) global._wcAgentCallLog = [];
+          const fiveMinAgo = Date.now() - 5 * 60 * 1000;
+          global._wcAgentCallLog = global._wcAgentCallLog.filter(t => t > fiveMinAgo);
+          if (global._wcAgentCallLog.length >= 6) {
+            sendJSON(res, 429, { error: 'Auto-fix rate limit: massimo 6 correzioni ogni 5 minuti con Liara. Usa una tua API key per correzioni illimitate.' });
+            logRequest(method, pathname, 429, Date.now() - start);
+            return;
+          }
+          global._wcAgentCallLog.push(Date.now());
+        }
+
+        const sandboxDir = path.join(os.homedir(), '.nha', 'webcraft', projectName.replace(/[^a-zA-Z0-9_-]/g, '-'));
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        });
+        const sendEv = (data) => { try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {} };
+
+        try {
+          // Always read agent memory file first if present
+          const agentMemoryPath = path.join(sandboxDir, 'webcraft-agent.md');
+          const agentMemory = fs.existsSync(agentMemoryPath) ? fs.readFileSync(agentMemoryPath, 'utf8') : '';
+
+          // Load context files from skills/ subfolder (skills, memory, provider)
+          const skillsDir = path.join(sandboxDir, 'skills');
+          let skillsContext = '';
+          if (fs.existsSync(skillsDir)) {
+            const indexPath = path.join(skillsDir, '_index.json');
+            let typeIndex = {};
+            if (fs.existsSync(indexPath)) { try { typeIndex = JSON.parse(fs.readFileSync(indexPath, 'utf8')); } catch(_) {} }
+            const defaultType = (n) => n === 'memory.md' ? 'memory' : n === 'liara.md' ? 'provider' : 'skill';
+            const sections = { memory: [], provider: [], skill: [], log: [] };
+            for (const fname of fs.readdirSync(skillsDir)) {
+              if (!fname.endsWith('.md')) continue;
+              try {
+                const content = fs.readFileSync(path.join(skillsDir, fname), 'utf8');
+                if (!content.trim()) continue; // skip empty files
+                const type = typeIndex[fname] || defaultType(fname);
+                sections[type] = sections[type] || [];
+                sections[type].push(`### ${fname}\n${content}`);
+              } catch(_) {}
+            }
+            const parts = [];
+            if (sections.memory.length) parts.push('MEMORIA PROGETTO:\n' + sections.memory.join('\n\n'));
+            if (sections.provider.length) parts.push('ISTRUZIONI MODELLO AI:\n' + sections.provider.join('\n\n'));
+            if (sections.skill.length) parts.push('SKILLS & PATTERN:\n' + sections.skill.join('\n\n'));
+            if (sections.log && sections.log.length) parts.push('LOG AVVIO SANDBOX (ultimo):\n' + sections.log[sections.log.length - 1]);
+            if (parts.length) skillsContext = '\n' + parts.join('\n\n') + '\n';
+          }
+
+          // Read all project files to give agent full context
+          const allFiles = [];
+          if (fs.existsSync(sandboxDir)) {
+            const walkDir = (dir, base) => {
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+                const rel = base ? base + '/' + entry.name : entry.name;
+                if (entry.isDirectory()) { walkDir(path.join(dir, entry.name), rel); }
+                else {
+                  try {
+                    const content = fs.readFileSync(path.join(dir, entry.name), 'utf8');
+                    if (content.length < 64 * 1024) allFiles.push({ name: rel, content }); // skip >64KB
+                  } catch(_) {}
+                }
+              }
+            };
+            walkDir(sandboxDir, '');
+          }
+
+          const fileList = allFiles.map(f => f.name).join('\n');
+
+          // Smart file selection: include only relevant files to avoid overflowing context window.
+          // Always include: package.json, server/index.js, .env.example (structure/deps context).
+          // Also include: any file whose name appears in the user message, plus error-related files.
+          const msgLower = (message || '').toLowerCase();
+          const alwaysInclude = ['package.json', 'server/index.js', '.env.example'];
+          const relevantFiles = allFiles.filter(f => {
+            const nameLower = f.name.toLowerCase();
+            if (alwaysInclude.some(a => nameLower.endsWith(a))) return true;
+            // Include if file name or path fragment mentioned in message
+            const parts = f.name.split('/');
+            if (parts.some(p => msgLower.includes(p.replace(/\.[^.]+$/, '').toLowerCase()))) return true;
+            // Include server JS files if message mentions "error", "errore", "fix", "crash", "module"
+            if (/errore|error|fix|crash|module|require|import/i.test(message) && f.name.startsWith('server/') && f.name.endsWith('.js')) return true;
+            return false;
+          });
+          // Cap total context at ~24KB to stay within 7B model limits
+          let contextBudget = 24 * 1024;
+          const selectedFiles = [];
+          for (const f of relevantFiles) {
+            if (contextBudget <= 0) break;
+            selectedFiles.push(f);
+            contextBudget -= f.content.length;
+          }
+          const fileContext = selectedFiles.map(f => `### FILE: ${f.name}\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n');
+          const includedNote = selectedFiles.length < allFiles.length
+            ? `\n(Showing ${selectedFiles.length}/${allFiles.length} files most relevant to the request. Ask to read others explicitly.)`
+            : '';
+
+          // Build attachment context (images/PDF)
+          const attachCtx = (attachments || []).map((a, i) => `[Allegato ${i+1}: ${a.name || 'file'}, type=${a.mimeType}]`).join('\n');
+
+          const systemPrompt = `Sei WebCraft Agent, un assistente AI esperto di sviluppo web fullstack embedded in NotHumanAllowed.
+Il tuo lavoro e di correggere, migliorare ed espandere il codice del progetto sandbox dell utente.
+
+PROGETTO ATTIVO: ${projectName}
+PERCORSO: ${sandboxDir}
+${agentMemory ? '\nMEMORIA PROGETTO:\n' + agentMemory + '\n' : ''}${skillsContext}FILE DISPONIBILI:
+${fileList}
+
+STRUMENTI A TUA DISPOSIZIONE (rispondi SOLO con JSON valido per le operazioni):
+Quando devi modificare o creare file, includi nel testo della risposta blocchi JSON tra i tag <tool> e </tool>:
+
+Per modificare parte di un file (chirurgico, preferito):
+<tool>{"op":"edit","path":"server/routes/contact.js","old":"const email = require('../utils/email')","new":"const nodemailer = require('nodemailer')"}</tool>
+
+Per creare/sovrascrivere un file intero:
+<tool>{"op":"write","path":"server/utils/mailer.js","content":"// codice completo..."}</tool>
+
+Per leggere un file (se hai bisogno di piu contesto):
+<tool>{"op":"read","path":"server/index.js"}</tool>
+
+REGOLE CRITICHE:
+- Spiega SEMPRE in linguaggio naturale cosa stai facendo PRIMA dei blocchi tool
+- Usa "edit" (old/new) quando possibile, "write" solo per file nuovi o riscritture complete
+- old_string deve essere ESATTO come appare nel file (copy-paste)
+- Non inventare moduli npm: usa solo quelli in package.json o standard Node.js
+- Dopo ogni fix spiega brevemente cosa hai cambiato e perche
+- Se usi immagini allegate, descrivile e usale come contesto per il fix`;
+
+          const userMsg = message + (attachCtx ? '\n\nAllegati:\n' + attachCtx : '') +
+            '\n\n--- CONTENUTO FILE ---' + includedNote + '\n' + fileContext;
+
+          // Call LLM - stream tokens
+          let fullResponse = '';
+          const visionAttachments = (attachments || []).filter(a => a.base64 && (a.mimeType || '').startsWith('image/'));
+
+          try {
+            if (visionAttachments.length > 0) {
+              const { callLLMVision } = await import('../services/llm.mjs');
+              const va = visionAttachments[0];
+              fullResponse = await callLLMVision(config, systemPrompt, userMsg, { base64: va.base64, mimeType: va.mimeType });
+              // Strip <tool>...</tool> blocks before sending text to client
+              const visibleText = fullResponse.replace(/<tool>[\s\S]*?<\/tool>/g, '').trim();
+              if (visibleText) sendEv({ type: 'text', token: visibleText });
+            } else {
+              // Stream tokens but suppress <tool>...</tool> blocks from the visible text
+              let _toolBuf = '';     // accumulates content inside a <tool> block
+              let _inTool = false;   // are we inside a <tool>...</tool>?
+              await callLLMStream(config, systemPrompt, userMsg, (token) => {
+                fullResponse += token;
+                // Feed token through tool-suppression filter
+                let remaining = (_inTool ? '' : '') + token; // process token char by char via buffer
+                // Simpler approach: buffer until we can decide
+                _toolBuf += token;
+                // Flush visible text up to next <tool> opening
+                while (true) {
+                  if (!_inTool) {
+                    const toolStart = _toolBuf.indexOf('<tool>');
+                    if (toolStart === -1) {
+                      // No tool block opening — safe to send everything except possible partial '<tool' at end
+                      const safeEnd = _toolBuf.length - 6; // keep last 6 chars in case '<tool>' spans tokens
+                      if (safeEnd > 0) {
+                        sendEv({ type: 'text', token: _toolBuf.slice(0, safeEnd) });
+                        _toolBuf = _toolBuf.slice(safeEnd);
+                      }
+                      break;
+                    } else {
+                      // Flush text before the <tool>
+                      if (toolStart > 0) {
+                        sendEv({ type: 'text', token: _toolBuf.slice(0, toolStart) });
+                      }
+                      _toolBuf = _toolBuf.slice(toolStart);
+                      _inTool = true;
+                    }
+                  } else {
+                    const toolEnd = _toolBuf.indexOf('</tool>');
+                    if (toolEnd === -1) break; // still accumulating tool block
+                    _toolBuf = _toolBuf.slice(toolEnd + 7); // discard the </tool> and move on
+                    _inTool = false;
+                  }
+                }
+              }, { max_tokens: 4096 });
+              // Flush any remaining visible text after stream ends
+              if (!_inTool && _toolBuf.trim()) sendEv({ type: 'text', token: _toolBuf });
+            }
+          } catch (llmErr) {
+            const errMsg = llmErr.message || String(llmErr);
+            // Surface a clean message instead of raw HTML
+            if (errMsg.includes('502') || errMsg.includes('Bad Gateway')) {
+              sendEv({ type: 'text', token: 'Liara non disponibile al momento (502). Riprova tra qualche secondo, oppure configura una tua API key con: nha config set provider anthropic && nha config set key sk-...' });
+            } else if (errMsg.includes('429') || errMsg.includes('rate limit')) {
+              sendEv({ type: 'text', token: 'Rate limit raggiunto su Liara (max 3 auto-fix per 5 minuti con il piano free). Attendi qualche minuto o usa una tua API key.' });
+            } else {
+              sendEv({ type: 'text', token: 'Errore LLM: ' + errMsg.slice(0, 200) });
+            }
+            sendEv({ type: 'done', changed: false, toolCount: 0 });
+            res.end();
+            return;
+          }
+
+          // Parse and execute tool calls from response
+          // Sanitize JSON from LLM: replace literal newlines inside JSON strings with \n
+          // Models often write multiline strings without escaping, which breaks JSON.parse
+          const sanitizeToolJson = (raw) => {
+            // Replace literal CR/LF inside JSON string values with escaped versions
+            // Strategy: walk char by char, track if we're inside a JSON string
+            let out = '';
+            let inStr = false;
+            let escaped = false;
+            for (let ci = 0; ci < raw.length; ci++) {
+              const ch = raw[ci];
+              if (escaped) { out += ch; escaped = false; continue; }
+              if (ch === '\\') { out += ch; escaped = true; continue; }
+              if (ch === '"') { inStr = !inStr; out += ch; continue; }
+              if (inStr && (ch === '\n' || ch === '\r')) {
+                out += ch === '\n' ? '\\n' : '\\r';
+                continue;
+              }
+              out += ch;
+            }
+            return out;
+          };
+
+          // Second-pass JSON repair: fix missing commas between object properties
+          // e.g. {"a":1\n"b":2} → {"a":1,"b":2}
+          const repairJson = (raw) => {
+            // Add missing commas between } or ] or "..." or number/bool/null and the next " or { or [
+            return raw
+              .replace(/([}\]"'0-9truefalsNullnull])\s*\n\s*(")/g, '$1,\n"')   // after value, before next key
+              .replace(/([}\]"'0-9truefalsNullnull])\s*\n\s*([{[])/g, '$1,\n$2') // after value, before { or [
+              // Remove trailing commas before } or ]
+              .replace(/,(\s*[}\]])/g, '$1');
+          };
+
+          const toolRegex = /<tool>([\s\S]*?)<\/tool>/g;
+          let toolMatch;
+          const toolResults = [];
+          while ((toolMatch = toolRegex.exec(fullResponse)) !== null) {
+            let toolCall;
+            try {
+              const raw = toolMatch[1].trim();
+              const sanitized = sanitizeToolJson(raw);
+              try {
+                toolCall = JSON.parse(sanitized);
+              } catch(_) {
+                // Second attempt: repair missing commas
+                toolCall = JSON.parse(repairJson(sanitized));
+              }
+            } catch(e) {
+              sendEv({ type: 'tool', op: 'parse_error', path: '?', result: 'JSON malformato: ' + e.message.slice(0, 80) });
+              continue;
+            }
+
+            if (toolCall.op === 'read') {
+              const fp = path.join(sandboxDir, toolCall.path.replace(/^\/+/, ''));
+              if (fs.existsSync(fp)) {
+                const content = fs.readFileSync(fp, 'utf8');
+                toolResults.push({ op: 'read', path: toolCall.path, ok: true });
+                sendEv({ type: 'tool', op: 'read', path: toolCall.path, result: 'ok' });
+              } else {
+                sendEv({ type: 'tool', op: 'read', path: toolCall.path, result: 'file non trovato' });
+              }
+            } else if (toolCall.op === 'edit') {
+              const fp = path.join(sandboxDir, toolCall.path.replace(/^\/+/, ''));
+              if (!fs.existsSync(fp)) {
+                sendEv({ type: 'tool', op: 'edit', path: toolCall.path, result: 'file non trovato' });
+                continue;
+              }
+              let content = fs.readFileSync(fp, 'utf8');
+              if (content.includes(toolCall.old)) {
+                content = content.replace(toolCall.old, toolCall.new);
+                fs.writeFileSync(fp, content, 'utf8');
+                toolResults.push({ op: 'edit', path: toolCall.path, ok: true });
+                sendEv({ type: 'tool', op: 'edit', path: toolCall.path, result: 'ok',
+                  oldSnippet: (toolCall.old || '').slice(0, 300),
+                  newSnippet: (toolCall.new || '').slice(0, 300) });
+              } else {
+                sendEv({ type: 'tool', op: 'edit', path: toolCall.path, result: 'old_string non trovato — patch fallita' });
+              }
+            } else if (toolCall.op === 'write') {
+              const fp = path.join(sandboxDir, toolCall.path.replace(/^\/+/, ''));
+              fs.mkdirSync(path.dirname(fp), { recursive: true });
+              fs.writeFileSync(fp, toolCall.content || '', 'utf8');
+              toolResults.push({ op: 'write', path: toolCall.path, ok: true });
+              sendEv({ type: 'tool', op: 'write', path: toolCall.path, result: 'ok' });
+            }
+          }
+
+          const anyChange = toolResults.some(r => r.ok);
+          sendEv({ type: 'done', changed: anyChange, toolCount: toolResults.length });
+
+          // If auto-fix and changes made → signal client to restart sandbox
+          if (autofix && anyChange) {
+            sendEv({ type: 'restart_sandbox' });
+          }
+
+        } catch(e) {
+          sendEv({ type: 'error', msg: e.message });
+        }
+        res.end();
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // GET /api/studio/webcraft/agent/autofix-queue → { items[] } and clears queue
+      if (pathname === '/api/studio/webcraft/agent/autofix-queue' && method === 'GET') {
+        const items = global._wcAutoFixQueue || [];
+        global._wcAutoFixQueue = [];
+        sendJSON(res, 200, { items });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/studio/webcraft/snapshot  { projectName } → { ok, snapshot }
+      // Creates a timestamped snapshot of all project files (excludes node_modules)
+      if (pathname === '/api/studio/webcraft/snapshot' && method === 'POST') {
+        const body = await parseBody(req);
+        const projName = (body.projectName || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!projName) { sendJSON(res, 400, { error: 'projectName required' }); return; }
+        const projDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+        const snapDir = path.join(projDir, '.snapshots');
+        if (!fs.existsSync(snapDir)) fs.mkdirSync(snapDir, { recursive: true });
+        const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const snapPath = path.join(snapDir, ts + '.json');
+        const snapshot = {};
+        const walkSnap = (dir, base) => {
+          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.name === 'node_modules' || entry.name === '.snapshots' || entry.name.startsWith('.')) continue;
+            const rel = base ? base + '/' + entry.name : entry.name;
+            if (entry.isDirectory()) { walkSnap(path.join(dir, entry.name), rel); }
+            else {
+              try { snapshot[rel] = fs.readFileSync(path.join(dir, entry.name), 'utf8'); } catch(_) {}
+            }
+          }
+        };
+        walkSnap(projDir, '');
+        fs.writeFileSync(snapPath, JSON.stringify({ ts, files: snapshot }), 'utf8');
+        // Keep only last 10 snapshots
+        const allSnaps = fs.readdirSync(snapDir).filter(f => f.endsWith('.json')).sort();
+        if (allSnaps.length > 10) {
+          for (const old of allSnaps.slice(0, allSnaps.length - 10)) {
+            try { fs.unlinkSync(path.join(snapDir, old)); } catch(_) {}
+          }
+        }
+        sendJSON(res, 200, { ok: true, snapshot: ts, fileCount: Object.keys(snapshot).length });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // GET /api/studio/webcraft/snapshots/:name → { snapshots: [{ts, fileCount}] }
+      if (pathname.startsWith('/api/studio/webcraft/snapshots/') && method === 'GET') {
+        const projName = decodeURIComponent(pathname.replace('/api/studio/webcraft/snapshots/', '')).replace(/[^a-zA-Z0-9_-]/g, '');
+        const snapDir = path.join(os.homedir(), '.nha', 'webcraft', projName, '.snapshots');
+        if (!fs.existsSync(snapDir)) { sendJSON(res, 200, { snapshots: [] }); return; }
+        const snaps = fs.readdirSync(snapDir).filter(f => f.endsWith('.json')).sort().reverse().map(f => {
+          try {
+            const data = JSON.parse(fs.readFileSync(path.join(snapDir, f), 'utf8'));
+            return { ts: data.ts, fileCount: Object.keys(data.files || {}).length };
+          } catch(_) { return null; }
+        }).filter(Boolean);
+        sendJSON(res, 200, { snapshots: snaps });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/studio/webcraft/restore  { projectName, ts } → { ok, restored }
+      if (pathname === '/api/studio/webcraft/restore' && method === 'POST') {
+        const body = await parseBody(req);
+        const projName = (body.projectName || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        const ts = (body.ts || '').replace(/[^0-9T\-]/g, '');
+        if (!projName || !ts) { sendJSON(res, 400, { error: 'projectName and ts required' }); return; }
+        const snapPath = path.join(os.homedir(), '.nha', 'webcraft', projName, '.snapshots', ts + '.json');
+        if (!fs.existsSync(snapPath)) { sendJSON(res, 404, { error: 'snapshot not found' }); return; }
+        const data = JSON.parse(fs.readFileSync(snapPath, 'utf8'));
+        const projDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+        let restored = 0;
+        for (const [rel, content] of Object.entries(data.files || {})) {
+          const fp = path.join(projDir, rel);
+          fs.mkdirSync(path.dirname(fp), { recursive: true });
+          fs.writeFileSync(fp, content, 'utf8');
+          restored++;
+        }
+        sendJSON(res, 200, { ok: true, restored });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/studio/webcraft/syntax-check  { projectName } → { results: [{file, ok, error}] }
+      if (pathname === '/api/studio/webcraft/syntax-check' && method === 'POST') {
+        const body = await parseBody(req);
+        const projName = (body.projectName || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!projName) { sendJSON(res, 400, { error: 'projectName required' }); return; }
+        const projDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+        const { execFile } = await import('child_process');
+        const { promisify } = await import('util');
+        const execFileAsync = promisify(execFile);
+        const jsFiles = [];
+        const walkJs = (dir, base) => {
+          if (!fs.existsSync(dir)) return;
+          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+            const rel = base ? base + '/' + entry.name : entry.name;
+            if (entry.isDirectory()) { walkJs(path.join(dir, entry.name), rel); }
+            else if (entry.name.endsWith('.js') || entry.name.endsWith('.mjs')) { jsFiles.push(rel); }
+          }
+        };
+        walkJs(projDir, '');
+        const results = [];
+        for (const rel of jsFiles) {
+          const fp = path.join(projDir, rel);
+          try {
+            await execFileAsync(process.execPath, ['--check', fp], { timeout: 5000 });
+            results.push({ file: rel, ok: true });
+          } catch(e) {
+            const errMsg = (e.stderr || e.message || '').split('\n')[0].replace(fp, rel);
+            results.push({ file: rel, ok: false, error: errMsg });
+          }
+        }
+        sendJSON(res, 200, { results });
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/studio/webcraft/grep  { projectName, query } → { matches: [{file, line, lineNum, match}] }
+      if (pathname === '/api/studio/webcraft/grep' && method === 'POST') {
+        const body = await parseBody(req);
+        const projName = (body.projectName || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        const query = (body.query || '').slice(0, 200);
+        if (!projName || !query) { sendJSON(res, 400, { error: 'projectName and query required' }); return; }
+        const projDir = path.join(os.homedir(), '.nha', 'webcraft', projName);
+        const matches = [];
+        let queryRe;
+        try { queryRe = new RegExp(query, 'gi'); } catch(_) { queryRe = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); }
+        const walkGrep = (dir, base) => {
+          if (!fs.existsSync(dir)) return;
+          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+            const rel = base ? base + '/' + entry.name : entry.name;
+            if (entry.isDirectory()) { walkGrep(path.join(dir, entry.name), rel); }
+            else {
+              const ext = entry.name.split('.').pop();
+              if (!['js','mjs','ts','html','css','json','md','sql','env','conf'].includes(ext)) continue;
+              try {
+                const lines = fs.readFileSync(path.join(dir, entry.name), 'utf8').split('\n');
+                lines.forEach((line, idx) => {
+                  queryRe.lastIndex = 0;
+                  if (queryRe.test(line)) {
+                    matches.push({ file: rel, lineNum: idx + 1, line: line.trim().slice(0, 200) });
+                    if (matches.length >= 100) return;
+                  }
+                });
+              } catch(_) {}
+            }
+          }
+        };
+        walkGrep(projDir, '');
+        sendJSON(res, 200, { matches: matches.slice(0, 100) });
         logRequest(method, pathname, 200, Date.now() - start);
         return;
       }

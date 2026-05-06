@@ -44,18 +44,19 @@ export async function main(argv) {
 
   // ── Background update check (non-blocking) ──────────────────────────────
   if (cmd !== 'update' && cmd !== 'help' && cmd !== 'version') {
-    checkForUpdates().then(result => {
-      if (result?.updates) {
+    checkForUpdates().then(updates => {
+      if (updates) {
         console.log('');
-        warn(`Updates available: ${result.updates.map(u => `${u.name} ${u.from} → ${u.to}`).join(', ')}`);
+        warn(`Updates available: ${updates.map(u => `${u.name} ${u.from} → ${u.to}`).join(', ')}`);
         info('Run "nha update" to install.');
       }
-      // npm version check — uses remote manifest already fetched above (no extra network call)
-      return checkNpmVersion(result?.remote);
-    }).then(npm => {
-      if (npm?.updateAvailable) {
+    }).catch(() => {});
+
+    // npm version check (non-blocking)
+    checkNpmVersion().then(result => {
+      if (result?.updateAvailable) {
         console.log('');
-        warn(`New NHA version available: v${npm.current} → v${npm.latest}`);
+        warn(`New NHA version available: ${result.current} → ${result.latest}`);
         info('Run "npm update -g nothumanallowed" to upgrade.');
       }
     }).catch(() => {});

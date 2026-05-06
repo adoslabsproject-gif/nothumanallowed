@@ -248,7 +248,10 @@ function switchView(v) {
   if(spt)spt.textContent=t('nav_'+v)||v;
   // Toggle content--chat class for proper chat layout (no overflow, flex column)
   var ct=document.getElementById('content');
-  if(ct){if(v==='chat'){ct.classList.add('content--chat')}else{ct.classList.remove('content--chat')}}
+  if(ct){
+    if(v==='chat'){ct.classList.add('content--chat')}else{ct.classList.remove('content--chat')}
+    if(v==='webcraft'){ct.classList.add('content--webcraft')}else{ct.classList.remove('content--webcraft')}
+  }
   closeSidebar();
   // Auto-close floating panels when leaving chat/studio
   if(v!=='chat'&&v!=='studio'){closeBrowserViewer();closeCanvas();}
@@ -292,11 +295,27 @@ function loadDash(){
 }
 function loadAgents(){return apiGet('/api/agents').then(function(r){agentsList=(r&&r.agents)||[]})}
 function updateBadges(){
-  var eb=document.getElementById('emailBadge'),tb=document.getElementById('taskBadge'),cb=document.getElementById('calBadge');
-  var ue=dash.emails.filter(function(e){return e.isUnread}).length,ut=dash.tasks.filter(function(t){return t.status!=='done'}).length,uc=dash.events.length;
-  if(eb){eb.textContent=ue;eb.style.display=ue>0?'':'none'}
+  var tb=document.getElementById('taskBadge'),cb=document.getElementById('calBadge');
+  var ut=dash.tasks.filter(function(t){return t.status!=='done'}).length,uc=dash.events.length;
   if(tb){tb.textContent=ut;tb.style.display=ut>0?'':'none'}
   if(cb){cb.textContent=uc;cb.style.display=uc>0?'':'none'}
+  updateEmailBadge();
+}
+function updateEmailBadge(){
+  var eb=document.getElementById('emailBadge');
+  if(!eb)return;
+  // Try IMAP unread first; fall back to Google dash count
+  apiGet('/api/imap/unread-count').then(function(r){
+    var imapUnread=r.unread||0;
+    var googleUnread=dash.emails?dash.emails.filter(function(e){return e.isUnread}).length:0;
+    var total=imapUnread+googleUnread;
+    eb.textContent=total;
+    eb.style.display=total>0?'':'none';
+  }).catch(function(){
+    var ue=dash.emails?dash.emails.filter(function(e){return e.isUnread}).length:0;
+    eb.textContent=ue;
+    eb.style.display=ue>0?'':'none';
+  });
 }
 
 // ---- HELPERS ----
@@ -326,6 +345,7 @@ function render(){
     case 'birthdays':renderBirthdays(el);break;
     case 'agents':renderAgents(el);break;
     case 'studio':renderStudio(el);break;
+    case 'webcraft':renderWebCraft(el);break;
     case 'collab':renderCollab(el);break;
     case 'settings':renderSettings(el);break;
   }
@@ -925,7 +945,7 @@ function sendChat(){
     }
     if(chatAttachedImage){payload.imageBase64=chatAttachedImage.base64;payload.imageMimeType=chatAttachedImage.mimeType;}
     clearChatAttach();
-    apiPost('/api/chat',payload).then(function(r){
+    fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json','x-nha-client':'web-ui'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(r){
       chatHistory.pop();
       if(r&&r.response){chatHistory.push({role:'assistant',content:r.response})}
       else if(r&&r.error){chatHistory.push({role:'assistant',content:'Error: '+r.error})}
@@ -948,7 +968,7 @@ function sendChat(){
   var allHistory=chatHistory.slice(0,-1).map(function(m){return{role:m.role,content:(m.content||'').replace(/!\\[Screenshot\\]\\(data:image\\/[^)]+\\)/g,'[Screenshot taken]')};});
   var payload={message:msg,history:allHistory,conversationId:activeConvId,isRetry:isRetry};
 
-  fetch(API+'/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:chatAbortController.signal}).then(function(response){
+  fetch(API+'/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json','x-nha-client':'web-ui'},body:JSON.stringify(payload),signal:chatAbortController.signal}).then(function(response){
     if(!response.ok||!response.body||typeof response.body.getReader!=='function'){
       // Fallback for browsers without ReadableStream support  -  use non-streaming endpoint
       chatHistory[streamIdx].content='Thinking...';renderMessages();
@@ -1094,101 +1114,652 @@ function refreshPlan(){
 }
 
 // ---- EMAILS ----
-function renderEmails(el){
-  if(!dashLoaded.emails){el.innerHTML=loadingHTML('emails');return}
-  var e=dash.emails;
-  if(e.length===0){el.innerHTML='<div class="card" style="text-align:center;color:var(--dim);padding:30px">Inbox zero  -  no emails</div>';return}
-  var unreadCount=e.filter(function(x){return x.isUnread}).length;
-  var h='<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">';
-  h+='<span style="font-size:12px;color:var(--dim)">'+e.length+' emails'+(unreadCount>0?' ('+unreadCount+' unread)':'')+'</span>';
-  if(unreadCount>0)h+='<button class="btn btn--secondary" style="font-size:10px;padding:4px 10px" onclick="markAllEmailsRead()">Mark all read</button>';
-  h+='</div>';
-  e.forEach(function(x){
-    var unreadStyle=x.isUnread?'border-left:3px solid var(--green);font-weight:700':'border-left:3px solid transparent;opacity:0.7';
-    h+='<div class="card email" style="cursor:pointer;'+unreadStyle+'" onclick="openEmail(\\x27'+esc(x.id)+'\\x27)"><div class="email__header"><span class="email__from">'+esc(x.from)+'</span><span class="email__date">'+esc(x.date)+(x.isUnread?' <span style="color:var(--green);font-size:9px">NEW</span>':'')+'</span></div><div class="email__subject">'+esc(x.subject)+'</div><div class="email__snippet" style="font-weight:400">'+esc((x.snippet||'').slice(0,150))+'</div></div>';
-  });
-  // Load More button
-  if(dash._emailHasMore!==false){
-    h+='<button id="loadMoreEmails" onclick="loadMoreEmails()" style="width:100%;padding:12px;margin-top:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);color:var(--cyan);font-family:var(--font);font-size:12px;cursor:pointer;font-weight:700">Load More Emails</button>';
-  }
-  el.innerHTML=h;
+// ═══════════════════════════════════════════════════════════════════════════
+// EMAIL CLIENT — full 3-pane client (folders / message list / reading pane)
+// Supports Google (existing) + IMAP custom accounts via dropdown
+// ═══════════════════════════════════════════════════════════════════════════
+
+var emailState = {
+  accountId: null,      // 'google' | imap account id
+  accountType: 'google',
+  labelId: null,
+  labelName: 'Inbox',
+  search: '',
+  offset: 0,
+  limit: 50,
+  messages: [],
+  total: 0,
+  activeMessageId: null,
+  labels: [],
+  accounts: [],
+  composing: false,
+  composeData: null,   // {to, subject, inReplyTo, references, replyType}
+  quillEditor: null,
+};
+
+function renderEmails(el) {
+  el.innerHTML =
+    // Load Quill CSS once
+    '<link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css">' +
+    '<div id="emailClientRoot" style="display:flex;height:calc(100vh - 120px);min-height:500px;gap:0;background:var(--bg2);border-radius:10px;border:1px solid var(--border);overflow:hidden">' +
+      // Col 1: sidebar
+      '<div id="emailSidebar" style="width:200px;min-width:160px;background:var(--bg3);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto"></div>' +
+      // Col 2: message list
+      '<div id="emailList" style="width:280px;min-width:220px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">' +
+        '<div id="emailListHeader" style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+          '<input id="emailSearch" type="text" placeholder="Search..." onkeydown="if(event.key===String.fromCharCode(13)){emailSearch()}" style="flex:1;padding:5px 10px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:5px">' +
+          '<button onclick="emailSearch()" style="padding:5px 8px;font-size:10px;background:var(--bg);color:var(--dim);border:1px solid var(--border);border-radius:4px;cursor:pointer">Go</button>' +
+        '</div>' +
+        '<div id="emailListBody" style="flex:1;overflow-y:auto"></div>' +
+        '<div id="emailListFooter" style="padding:6px 10px;border-top:1px solid var(--border);font-size:10px;color:var(--dim);display:flex;gap:8px;align-items:center;flex-shrink:0">' +
+          '<span id="emailListCount"></span>' +
+          '<button id="emailLoadMore" onclick="emailLoadMore()" style="display:none;padding:3px 10px;font-size:10px;background:var(--bg);color:var(--cyan);border:1px solid var(--cyan);border-radius:4px;cursor:pointer">Load more</button>' +
+        '</div>' +
+      '</div>' +
+      // Col 3: reading pane / compose
+      '<div id="emailPane" style="flex:1;display:flex;flex-direction:column;overflow:hidden"><div style="padding:40px;text-align:center;color:var(--dim);font-size:12px">Select a message</div></div>' +
+    '</div>';
+
+  // Load accounts then render sidebar
+  emailLoadAccounts();
 }
-var emailPage=0;
-function loadMoreEmails(){
-  var btn=document.getElementById('loadMoreEmails');
-  if(btn){btn.textContent='Loading...';btn.disabled=true;}
-  emailPage++;
-  apiGet('/api/emails?page='+emailPage+'&pageSize=25').then(function(r){
-    if(r&&r.emails){
-      for(var i=0;i<r.emails.length;i++){
-        if(!dash.emails.find(function(e){return e.id===r.emails[i].id})){
-          dash.emails.push(r.emails[i]);
-        }
+
+function emailLoadAccounts() {
+  apiGet('/api/imap/accounts').then(function(r) {
+    emailState.accounts = r.accounts || [];
+    emailRenderSidebar();
+    // Auto-select: prefer first IMAP account if no Google
+    if (emailState.accountId === null) {
+      if (emailState.accounts.length > 0) {
+        emailSelectAccount(emailState.accounts[0].id, 'imap');
+      } else if (dashLoaded.emails) {
+        emailSelectAccount('google', 'google');
       }
-      dash._emailHasMore=r.hasMore;
-      updateBadges();
-      render();
+    } else {
+      emailRenderSidebar();
     }
+  }).catch(function() {
+    if (dashLoaded.emails) emailSelectAccount('google', 'google');
+    else emailRenderSidebar();
   });
 }
-function markAllEmailsRead(){
-  apiPost('/api/email/mark-all-read',{}).then(function(r){
-    if(r&&r.ok){
-      dash.emails.forEach(function(e){e.isUnread=false});
-      updateBadges();
-      renderEmails(document.getElementById('content'));
-      showToast('success','All Read','Marked '+( r.count||0)+' emails as read');
-    }else{
-      showToast('error','Error',r&&r.error||'Failed');
-    }
-  });
-}
-var openEmailId=null;
-function openEmail(id){
-  openEmailId=id;
-  // Mark as read locally + on server
-  var emailObj=dash.emails.find(function(e){return e.id===id});
-  if(emailObj&&emailObj.isUnread){
-    emailObj.isUnread=false;
-    updateBadges();
-    apiPost('/api/email/mark-read',{messageId:id}).catch(function(){});
+
+function emailRenderSidebar() {
+  var sb = document.getElementById('emailSidebar');
+  if (!sb) return;
+  var h = '';
+
+  // Account dropdown
+  h += '<div style="padding:10px 10px 6px;border-bottom:1px solid var(--border)">';
+  h += '<div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Account</div>';
+  h += '<select id="emailAccountSelect" onchange="emailOnAccountChange(this.value)" style="width:100%;padding:5px 8px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:4px">';
+  if (dashLoaded.emails) {
+    h += '<option value="google"' + (emailState.accountType === 'google' ? ' selected' : '') + '>Google (Gmail)</option>';
   }
-  var el=document.getElementById('content');
-  el.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="color:var(--dim)">Loading email...</div></div>';
-  apiPost('/api/email/read',{messageId:id}).then(function(r){
-    if(!r||r.error){el.innerHTML='<div class="card" style="color:var(--red);padding:20px">Error: '+(r&&r.error||'Failed to load email')+'</div>';return}
-    var m=r.message||r;
-    var h='<div style="margin-bottom:12px"><button class="btn btn--secondary" onclick="switchView(\\x27emails\\x27)" style="font-size:11px">&larr; Back to inbox</button></div>';
-    h+='<div class="card" style="padding:20px">';
-    h+='<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">';
-    h+='<div style="font-size:16px;font-weight:700;color:var(--bright);margin-bottom:8px">'+esc(m.subject||'(no subject)')+'</div>';
-    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:4px"><strong style="color:var(--text)">From:</strong> '+esc(m.from||'')+'</div>';
-    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:4px"><strong style="color:var(--text)">To:</strong> '+esc(m.to||'')+'</div>';
-    h+='<div style="font-size:12px;color:var(--dim)"><strong style="color:var(--text)">Date:</strong> '+esc(m.date||'')+'</div>';
-    h+='</div>';
-    h+='<div style="font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;word-wrap:break-word">'+esc(m.body||m.snippet||'(no content)')+'</div>';
-    h+='</div>';
-    // Action buttons
-    h+='<div style="display:flex;gap:8px;margin-top:12px">';
-    h+='<button class="btn btn--primary" onclick="replyToEmail(\\x27'+esc(id)+'\\x27)" style="font-size:12px">Reply</button>';
-    h+='<button class="btn btn--secondary" onclick="askAgentAboutEmail(\\x27'+esc(id)+'\\x27)" style="font-size:12px">Ask SABER to scan</button>';
-    h+='</div>';
-    el.innerHTML=h;
+  for (var i = 0; i < emailState.accounts.length; i++) {
+    var a = emailState.accounts[i];
+    h += '<option value="imap:' + esc(a.id) + '"' + (emailState.accountId === a.id ? ' selected' : '') + '>' + esc(a.display_name || a.email_address) + '</option>';
+  }
+  if (!dashLoaded.emails && emailState.accounts.length === 0) {
+    h += '<option value="">No accounts — add in Settings</option>';
+  }
+  h += '</select></div>';
+
+  // Compose button
+  h += '<div style="padding:8px 10px;border-bottom:1px solid var(--border)">';
+  h += '<button onclick="emailOpenCompose(null)" style="width:100%;padding:7px;background:var(--green3);color:var(--bg);border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">+ Compose</button>';
+  h += '</div>';
+
+  // Labels / folders
+  h += '<div style="flex:1;overflow-y:auto;padding:6px 0">';
+  if (emailState.accountType === 'google') {
+    var googleFolders = [{id:'INBOX',name:'Inbox',icon:'&#9993;'},{id:'SENT',name:'Sent',icon:'&#8594;'},{id:'DRAFTS',name:'Drafts',icon:'&#128196;'},{id:'SPAM',name:'Spam',icon:'&#128737;'},{id:'TRASH',name:'Trash',icon:'&#128465;'}];
+    for (var gi = 0; gi < googleFolders.length; gi++) {
+      var gf = googleFolders[gi];
+      var sel = emailState.labelId === gf.id;
+      h += '<div onclick="emailSelectGoogleFolder(\\x27' + gf.id + '\\x27,\\x27' + gf.name + '\\x27)" style="padding:7px 14px;cursor:pointer;font-size:12px;' + (sel ? 'background:var(--green3);color:var(--bg);font-weight:700' : 'color:var(--fg)') + '">' + gf.icon + ' ' + esc(gf.name) + '</div>';
+    }
+  } else {
+    // IMAP labels
+    h += '<div style="padding:4px 10px;display:flex;align-items:center;justify-content:space-between">';
+    h += '<span style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Labels</span>';
+    h += '<button onclick="emailShowNewLabel()" style="font-size:10px;background:none;border:none;color:var(--cyan);cursor:pointer">+</button>';
+    h += '</div>';
+    for (var li = 0; li < emailState.labels.length; li++) {
+      var lbl = emailState.labels[li];
+      var lsel = emailState.labelId === lbl.id;
+      var lcolor = lbl.color || 'var(--dim)';
+      var unread = lbl.unread_count > 0 ? '<span style="margin-left:auto;background:var(--green3);color:var(--bg);border-radius:10px;padding:0 5px;font-size:9px;font-weight:700">' + lbl.unread_count + '</span>' : '';
+      h += '<div onclick="emailSelectLabel(\\x27' + lbl.id + '\\x27,\\x27' + esc(lbl.name) + '\\x27)" style="padding:6px 14px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;' + (lsel ? 'background:var(--green3);color:var(--bg);font-weight:700;border-radius:4px;margin:0 4px' : 'color:var(--fg)') + '">';
+      h += '<span style="width:8px;height:8px;border-radius:50%;background:' + lcolor + ';flex-shrink:0;display:inline-block"></span>';
+      h += esc(lbl.name);
+      if (!lbl.is_system) h += '<span onclick="event.stopPropagation();emailEditLabel(\\x27' + lbl.id + '\\x27,\\x27' + esc(lbl.name) + '\\x27,\\x27' + (lbl.color||'') + '\\x27)" style="margin-left:auto;font-size:9px;color:var(--dim);cursor:pointer">&#9998;</span>';
+      else h += unread;
+      h += '</div>';
+    }
+  }
+  h += '</div>';
+
+  // Sync / settings shortcuts
+  if (emailState.accountType === 'imap' && emailState.accountId) {
+    h += '<div style="padding:8px 10px;border-top:1px solid var(--border)">';
+    h += '<button onclick="emailSyncCurrent()" style="width:100%;padding:5px;background:var(--bg);color:var(--cyan);border:1px solid var(--cyan);border-radius:4px;font-size:10px;cursor:pointer">Sync now</button>';
+    h += '</div>';
+  }
+
+  sb.innerHTML = h;
+}
+
+function emailOnAccountChange(val) {
+  if (val === 'google') {
+    emailSelectAccount('google', 'google');
+  } else if (val.startsWith('imap:')) {
+    emailSelectAccount(val.slice(5), 'imap');
+  }
+}
+
+function emailSelectAccount(accountId, type) {
+  emailState.accountId = accountId;
+  emailState.accountType = type;
+  emailState.labelId = null;
+  emailState.labelName = 'Inbox';
+  emailState.offset = 0;
+  emailState.messages = [];
+  emailState.activeMessageId = null;
+  if (type === 'imap') {
+    apiGet('/api/imap/labels?accountId=' + accountId).then(function(r) {
+      emailState.labels = r.labels || [];
+      // Default to inbox system label
+      var inbox = emailState.labels.find(function(l) { return l.system_type === 'inbox'; });
+      if (inbox) { emailState.labelId = inbox.id; emailState.labelName = 'Inbox'; }
+      emailRenderSidebar();
+      emailLoadMessages();
+    });
+  } else {
+    emailState.labels = [];
+    emailState.labelId = 'INBOX';
+    emailRenderSidebar();
+    emailLoadGoogleMessages();
+  }
+}
+
+function emailSelectLabel(labelId, labelName) {
+  emailState.labelId = labelId;
+  emailState.labelName = labelName;
+  emailState.offset = 0;
+  emailState.messages = [];
+  emailState.activeMessageId = null;
+  emailRenderSidebar();
+  emailLoadMessages();
+}
+
+function emailSelectGoogleFolder(folderId, folderName) {
+  emailState.labelId = folderId;
+  emailState.labelName = folderName;
+  emailState.offset = 0;
+  emailState.messages = [];
+  emailRenderSidebar();
+  emailLoadGoogleMessages();
+}
+
+function emailSearch() {
+  var inp = document.getElementById('emailSearch');
+  emailState.search = inp ? inp.value.trim() : '';
+  emailState.offset = 0;
+  emailState.messages = [];
+  if (emailState.accountType === 'imap') emailLoadMessages();
+  else emailLoadGoogleMessages();
+}
+
+function emailLoadMessages() {
+  var listBody = document.getElementById('emailListBody');
+  if (listBody) listBody.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
+  var qs = '/api/imap/messages?accountId=' + encodeURIComponent(emailState.accountId) +
+    '&limit=' + emailState.limit + '&offset=' + emailState.offset;
+  if (emailState.labelId) qs += '&labelId=' + encodeURIComponent(emailState.labelId);
+  if (emailState.search) qs += '&search=' + encodeURIComponent(emailState.search);
+  apiGet(qs).then(function(r) {
+    if (emailState.offset === 0) emailState.messages = r.messages || [];
+    else emailState.messages = emailState.messages.concat(r.messages || []);
+    emailState.total = r.total || 0;
+    emailRenderMessageList();
+  }).catch(function(e) {
+    if (listBody) listBody.innerHTML = '<div style="padding:20px;color:var(--red);font-size:12px">' + esc(e.message) + '</div>';
   });
 }
-function replyToEmail(id){
-  switchView('chat');
-  setTimeout(function(){
-    var inp=document.getElementById('chatInput');
-    if(inp){inp.value='Reply to email '+id+': ';inp.focus()}
-  },200);
+
+function emailLoadGoogleMessages() {
+  var listBody = document.getElementById('emailListBody');
+  if (listBody) listBody.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
+  var q = emailState.labelId === 'INBOX' ? 'in:inbox' : 'in:' + emailState.labelId.toLowerCase();
+  if (emailState.search) q = emailState.search;
+  import('../services/google-gmail.mjs').then(function(gm) {
+    gm.listMessages(config, q, 50).then(function(refs) {
+      if (!refs || !refs.length) { emailState.messages = []; emailRenderMessageList(); return; }
+      var page = refs.slice(0, 50);
+      return Promise.all(page.slice(0, 20).map(function(r) { return gm.getMessage(config, r.id); }));
+    }).then(function(msgs) {
+      emailState.messages = (msgs || []).map(function(m) {
+        return { id: m.id, subject: m.subject, from_name: m.from, from_address: m.from, internal_date: m.date, body_preview: m.snippet, is_read: !m.isUnread, is_starred: false, has_attachments: false, _google: true };
+      });
+      emailRenderMessageList();
+    });
+  }).catch(function() {
+    // Fallback to dash emails
+    emailState.messages = (dash.emails || []).map(function(m) {
+      return { id: m.id, subject: m.subject, from_name: m.from, from_address: m.from, internal_date: m.date, body_preview: m.snippet, is_read: !m.isUnread, is_starred: false, has_attachments: false, _google: true };
+    });
+    emailRenderMessageList();
+  });
 }
-function askAgentAboutEmail(id){
+
+function emailRenderMessageList() {
+  var listBody = document.getElementById('emailListBody');
+  var listCount = document.getElementById('emailListCount');
+  var loadMoreBtn = document.getElementById('emailLoadMore');
+  if (!listBody) return;
+  if (listCount) listCount.textContent = emailState.total + ' messages';
+  if (loadMoreBtn) loadMoreBtn.style.display = (emailState.messages.length < emailState.total && emailState.accountType === 'imap') ? 'inline-block' : 'none';
+  if (!emailState.messages.length) {
+    listBody.innerHTML = '<div style="padding:24px;text-align:center;color:var(--dim);font-size:12px">No messages</div>';
+    return;
+  }
+  var h = '';
+  for (var i = 0; i < emailState.messages.length; i++) {
+    var m = emailState.messages[i];
+    var active = m.id === emailState.activeMessageId;
+    var unread = !m.is_read;
+    var date = m.internal_date ? m.internal_date.slice(0, 10) : '';
+    var from = esc(m.from_name || m.from_address || '');
+    h += '<div onclick="emailOpenMessage(\\x27' + esc(m.id) + '\\x27)" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border);' +
+      (active ? 'background:var(--green3);' : 'background:' + (unread ? 'var(--bg2)' : 'var(--bg3)') + ';') +
+      (unread ? 'border-left:3px solid var(--green);' : 'border-left:3px solid transparent;') + '">' +
+      '<div style="display:flex;justify-content:space-between;margin-bottom:2px">' +
+      '<span style="font-size:12px;font-weight:' + (unread ? '700' : '500') + ';color:' + (active ? 'var(--bg)' : 'var(--bright)') + ';max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + from + '</span>' +
+      '<span style="font-size:10px;color:' + (active ? 'var(--bg)' : 'var(--dim)') + '">' + esc(date) + '</span>' +
+      '</div>' +
+      '<div style="font-size:11px;font-weight:' + (unread ? '600' : '400') + ';color:' + (active ? 'var(--bg)' : 'var(--text)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(m.subject || '(no subject)') + '</div>' +
+      '<div style="font-size:10px;color:' + (active ? 'rgba(0,0,0,0.6)' : 'var(--dim)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">' + esc((m.body_preview || '').slice(0, 80)) + '</div>' +
+      '</div>';
+  }
+  listBody.innerHTML = h;
+}
+
+function emailLoadMore() {
+  emailState.offset += emailState.limit;
+  emailLoadMessages();
+}
+
+function emailOpenMessage(id) {
+  emailState.activeMessageId = id;
+  emailRenderMessageList();
+  var pane = document.getElementById('emailPane');
+  if (!pane) return;
+  pane.innerHTML = '<div style="padding:30px;text-align:center"><div class="spinner"></div></div>';
+
+  if (emailState.accountType === 'google') {
+    apiPost('/api/email/read', { messageId: id }).then(function(r) {
+      var m = r.message || r;
+      emailRenderReadingPane(pane, {
+        id: id, subject: m.subject, from_address: m.from, from_name: m.from,
+        to_addresses: m.to, internal_date: m.date,
+        body_html: m.bodyHtml || null, body_text: m.body || m.snippet || '',
+        attachments: [], labels: [], is_read: true, is_starred: false, _google: true,
+      });
+      apiPost('/api/email/mark-read', { messageId: id }).catch(function() {});
+    });
+  } else {
+    apiGet('/api/imap/message?id=' + encodeURIComponent(id)).then(function(r) {
+      emailRenderReadingPane(pane, r.message);
+      // Update read state in local list
+      var msg = emailState.messages.find(function(m) { return m.id === id; });
+      if (msg && !msg.is_read) { msg.is_read = true; updateEmailBadge(); }
+      emailRenderMessageList();
+    }).catch(function(e) {
+      pane.innerHTML = '<div style="padding:20px;color:var(--red);font-size:12px">' + esc(e.message) + '</div>';
+    });
+  }
+}
+
+function emailRenderReadingPane(pane, m) {
+  if (!m) { pane.innerHTML = '<div style="padding:20px;color:var(--red);font-size:12px">Could not load message</div>'; return; }
+
+  var toStr = '';
+  try {
+    var toArr = typeof m.to_addresses === 'string' ? JSON.parse(m.to_addresses) : (m.to_addresses || []);
+    toStr = toArr.map(function(a) { return a.name ? a.name + ' <' + a.address + '>' : (a.address || a); }).join(', ');
+  } catch(e) { toStr = m.to_addresses || ''; }
+
+  var h = '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg3)">';
+  h += '<div style="display:flex;gap:6px">';
+  h += '<button onclick="emailOpenCompose({replyTo:\\x27' + esc(m.id) + '\\x27,type:\\x27reply\\x27,subject:\\x27Re: ' + esc(m.subject||'') + '\\x27,to:\\x27' + esc(m.from_address||'') + '\\x27,inReplyTo:\\x27' + esc(m.message_id||m.id) + '\\x27})" style="padding:5px 12px;font-size:11px;background:var(--green3);color:var(--bg);border:none;border-radius:4px;cursor:pointer;font-weight:700">Reply</button>';
+  h += '<button onclick="emailOpenCompose({replyTo:\\x27' + esc(m.id) + '\\x27,type:\\x27forward\\x27,subject:\\x27Fwd: ' + esc(m.subject||'') + '\\x27})" style="padding:5px 12px;font-size:11px;background:var(--bg);color:var(--dim);border:1px solid var(--border);border-radius:4px;cursor:pointer">Forward</button>';
+  if (!m._google) {
+    h += '<button onclick="emailTrash(\\x27' + esc(m.id) + '\\x27)" style="padding:5px 10px;font-size:11px;background:var(--bg);color:var(--red);border:1px solid var(--border);border-radius:4px;cursor:pointer">&#128465;</button>';
+    h += '<button onclick="emailToggleStar(\\x27' + esc(m.id) + '\\x27,' + (m.is_starred ? 'false' : 'true') + ')" style="padding:5px 10px;font-size:11px;background:var(--bg);color:var(--amber,#F59E0B);border:1px solid var(--border);border-radius:4px;cursor:pointer">' + (m.is_starred ? '&#9733;' : '&#9734;') + '</button>';
+    // Label assign
+    h += '<select onchange="emailAssignLabel(\\x27' + esc(m.id) + '\\x27,this.value);this.value=\\x27\\x27" style="font-size:10px;padding:4px;background:var(--bg);color:var(--dim);border:1px solid var(--border);border-radius:4px"><option value="">+ Label</option>';
+    for (var li = 0; li < emailState.labels.length; li++) {
+      var lbl = emailState.labels[li];
+      h += '<option value="' + esc(lbl.id) + '">' + esc(lbl.name) + '</option>';
+    }
+    h += '</select>';
+  }
+  h += '<button onclick="emailAskAgent(\\x27' + esc(m.id) + '\\x27)" style="padding:5px 10px;font-size:11px;background:var(--bg);color:var(--cyan);border:1px solid var(--cyan);border-radius:4px;cursor:pointer">Ask AI</button>';
+  h += '</div></div>';
+
+  // Header
+  h += '<div style="padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0">';
+  h += '<div style="font-size:15px;font-weight:700;color:var(--bright);margin-bottom:8px">' + esc(m.subject || '(no subject)') + '</div>';
+  h += '<div style="font-size:11px;color:var(--dim)"><strong style="color:var(--text)">From:</strong> ' + esc((m.from_name && m.from_name !== m.from_address ? m.from_name + ' <' + m.from_address + '>' : m.from_address) || '') + '</div>';
+  h += '<div style="font-size:11px;color:var(--dim)"><strong style="color:var(--text)">To:</strong> ' + esc(toStr) + '</div>';
+  h += '<div style="font-size:11px;color:var(--dim)"><strong style="color:var(--text)">Date:</strong> ' + esc(m.internal_date || '') + '</div>';
+
+  // Attachments
+  if (m.attachments && m.attachments.length) {
+    h += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">';
+    for (var ai = 0; ai < m.attachments.length; ai++) {
+      var att = m.attachments[ai];
+      var attUrl = '/api/imap/attachment?messageId=' + encodeURIComponent(m.id) + '&partId=' + encodeURIComponent(att.part_id || '') + '&accountId=' + encodeURIComponent(emailState.accountId);
+      h += '<a href="' + attUrl + '" download="' + esc(att.filename || 'attachment') + '" style="font-size:10px;padding:4px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--cyan);text-decoration:none">&#128206; ' + esc(att.filename || 'attachment') + ' (' + Math.round((att.size_bytes||0)/1024) + 'KB)</a>';
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // Body
+  h += '<div style="flex:1;overflow-y:auto;padding:16px">';
+  if (m.body_html) {
+    h += '<iframe id="emailBodyFrame" sandbox="allow-same-origin" style="width:100%;min-height:400px;border:none;background:#fff" srcdoc="' + m.body_html.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '"></iframe>';
+  } else {
+    h += '<pre style="white-space:pre-wrap;word-wrap:break-word;font-size:13px;line-height:1.7;color:var(--text);font-family:inherit">' + esc(m.body_text || m.body_preview || '(empty)') + '</pre>';
+  }
+  h += '</div>';
+
+  pane.innerHTML = '<div style="display:flex;flex-direction:column;height:100%">' + h + '</div>';
+}
+
+var EMAIL_TEMPLATES = [
+  {
+    id: 'promo_product',
+    name: 'Promozione prodotto',
+    subject: 'Scopri la nostra offerta su [PRODOTTO]',
+    html: '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#1a1a2e;padding:32px 40px;text-align:center"><h1 style="color:#00ff9d;margin:0;font-size:26px;letter-spacing:-0.5px">[AZIENDA]</h1></td></tr><tr><td style="padding:40px;background:#ffffff"><h2 style="color:#1a1a2e;font-size:22px;margin:0 0 16px">[TITOLO OFFERTA]</h2><p style="color:#444;font-size:15px;line-height:1.7;margin:0 0 24px">[DESCRIZIONE PRODOTTO/SERVIZIO]</p><p style="color:#444;font-size:15px;line-height:1.7;margin:0 0 32px">[DETTAGLIO BENEFICI O SPECIFICHE]</p><table cellpadding="0" cellspacing="0"><tr><td style="background:#00ff9d;border-radius:6px;padding:14px 32px"><a href="[LINK_CTA]" style="color:#1a1a2e;font-weight:700;font-size:15px;text-decoration:none">[TESTO CTA]</a></td></tr></table></td></tr><tr><td style="padding:24px 40px;background:#f5f5f5;text-align:center"><p style="color:#888;font-size:12px;margin:0">[AZIENDA] &bull; [INDIRIZZO] &bull; <a href="mailto:[EMAIL]" style="color:#888">[EMAIL]</a></p><p style="color:#bbb;font-size:11px;margin:8px 0 0"><a href="[UNSUBSCRIBE_LINK]" style="color:#bbb">Disiscriviti</a></p></td></tr></table>',
+  },
+  {
+    id: 'newsletter',
+    name: 'Newsletter mensile',
+    subject: '[AZIENDA] Newsletter — [MESE] [ANNO]',
+    html: '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#0f0f1a;padding:28px 40px;border-bottom:3px solid #00ff9d"><h1 style="color:#ffffff;margin:0;font-size:22px">[AZIENDA]</h1><p style="color:#00ff9d;margin:6px 0 0;font-size:13px">Newsletter [MESE] [ANNO]</p></td></tr><tr><td style="padding:36px 40px;background:#ffffff"><h2 style="color:#1a1a2e;font-size:20px;margin:0 0 12px">[TITOLO PRINCIPALE]</h2><p style="color:#555;font-size:14px;line-height:1.8;margin:0 0 28px">[TESTO PRINCIPALE — racconta la novità principale del mese]</p><hr style="border:none;border-top:1px solid #eee;margin:0 0 28px"><h3 style="color:#1a1a2e;font-size:16px;margin:0 0 10px">[TITOLO SEZIONE 2]</h3><p style="color:#555;font-size:14px;line-height:1.8;margin:0 0 28px">[TESTO SEZIONE 2]</p><hr style="border:none;border-top:1px solid #eee;margin:0 0 28px"><h3 style="color:#1a1a2e;font-size:16px;margin:0 0 10px">[TITOLO SEZIONE 3]</h3><p style="color:#555;font-size:14px;line-height:1.8;margin:0 0 28px">[TESTO SEZIONE 3]</p><table cellpadding="0" cellspacing="0"><tr><td style="background:#1a1a2e;border-radius:6px;padding:12px 28px"><a href="[LINK]" style="color:#00ff9d;font-weight:700;font-size:14px;text-decoration:none">Leggi di più &rarr;</a></td></tr></table></td></tr><tr><td style="padding:20px 40px;background:#f9f9f9;text-align:center"><p style="color:#999;font-size:12px;margin:0">&copy; [ANNO] [AZIENDA] &bull; <a href="[UNSUBSCRIBE_LINK]" style="color:#999">Disiscriviti</a></p></td></tr></table>',
+  },
+  {
+    id: 'follow_up',
+    name: 'Follow-up commerciale',
+    subject: 'Seguito alla nostra conversazione — [ARGOMENTO]',
+    html: '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="padding:40px"><p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px">Gentile [NOME],</p><p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px">la contatto in seguito a [CONTESTO: fiera / chiamata / incontro del GIORNO].</p><p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px">[CORPO PRINCIPALE: riassumi la proposta, il valore offerto, eventuali prossimi passi]</p><p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 32px">[CHIUSURA: proposta di call / richiesta feedback / disponibilit&agrave; a incontro]</p><p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 4px">Cordiali saluti,</p><p style="color:#1a1a2e;font-size:15px;font-weight:700;margin:0">[NOME MITTENTE]</p><p style="color:#888;font-size:13px;margin:4px 0 0">[RUOLO] &bull; [AZIENDA] &bull; [TELEFONO]</p></td></tr></table>',
+  },
+  {
+    id: 'offerta',
+    name: 'Invio offerta / preventivo',
+    subject: 'Offerta [NUMERO] — [OGGETTO FORNITURA]',
+    html: '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#1a1a2e;padding:24px 40px"><h1 style="color:#00ff9d;margin:0;font-size:20px">[AZIENDA]</h1><p style="color:#aaa;margin:4px 0 0;font-size:12px">Offerta n. [NUMERO] del [DATA]</p></td></tr><tr><td style="padding:36px 40px;background:#ffffff"><p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px">Gentile [NOME],</p><p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 24px">in risposta alla Vostra richiesta, siamo lieti di sottoporre la seguente offerta:</p><table width="100%" cellpadding="10" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px"><tr style="background:#f0f0f0"><th style="text-align:left;font-size:13px;color:#333;border-bottom:2px solid #ddd">Descrizione</th><th style="text-align:right;font-size:13px;color:#333;border-bottom:2px solid #ddd">Qt&agrave;</th><th style="text-align:right;font-size:13px;color:#333;border-bottom:2px solid #ddd">Prezzo unit.</th><th style="text-align:right;font-size:13px;color:#333;border-bottom:2px solid #ddd">Totale</th></tr><tr><td style="font-size:13px;color:#444;border-bottom:1px solid #eee">[ARTICOLO 1]</td><td style="text-align:right;font-size:13px;color:#444;border-bottom:1px solid #eee">[QT]</td><td style="text-align:right;font-size:13px;color:#444;border-bottom:1px solid #eee">&euro; [PREZZO]</td><td style="text-align:right;font-size:13px;color:#444;border-bottom:1px solid #eee">&euro; [TOT]</td></tr><tr><td style="font-size:13px;color:#444;border-bottom:1px solid #eee">[ARTICOLO 2]</td><td style="text-align:right;font-size:13px;color:#444;border-bottom:1px solid #eee">[QT]</td><td style="text-align:right;font-size:13px;color:#444;border-bottom:1px solid #eee">&euro; [PREZZO]</td><td style="text-align:right;font-size:13px;color:#444;border-bottom:1px solid #eee">&euro; [TOT]</td></tr><tr style="background:#f9f9f9"><td colspan="3" style="text-align:right;font-weight:700;font-size:14px;color:#1a1a2e;padding-top:12px">Totale IVA esclusa</td><td style="text-align:right;font-weight:700;font-size:14px;color:#1a1a2e;padding-top:12px">&euro; [TOTALE]</td></tr></table><p style="color:#555;font-size:13px;line-height:1.7;margin:0 0 8px"><strong>Condizioni di pagamento:</strong> [PAGAMENTO]</p><p style="color:#555;font-size:13px;line-height:1.7;margin:0 0 8px"><strong>Tempi di consegna:</strong> [CONSEGNA]</p><p style="color:#555;font-size:13px;line-height:1.7;margin:0 0 24px"><strong>Validit&agrave; offerta:</strong> [VALIDITA]</p><p style="color:#333;font-size:14px;line-height:1.7;margin:0 0 4px">Resto a disposizione per qualsiasi chiarimento.</p><p style="color:#333;font-size:14px;line-height:1.7;margin:0 0 4px">Cordiali saluti,</p><p style="color:#1a1a2e;font-size:14px;font-weight:700;margin:0">[NOME MITTENTE]</p><p style="color:#888;font-size:12px;margin:4px 0 0">[AZIENDA] &bull; [EMAIL] &bull; [TELEFONO]</p></td></tr></table>',
+  },
+  {
+    id: 'evento',
+    name: 'Invito evento / webinar',
+    subject: 'Sei invitato: [NOME EVENTO] — [DATA]',
+    html: '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:linear-gradient(135deg,#0f0f1a,#1a2a1a);padding:48px 40px;text-align:center"><h1 style="color:#00ff9d;margin:0 0 8px;font-size:28px;letter-spacing:-0.5px">[NOME EVENTO]</h1><p style="color:#aaffcc;margin:0;font-size:16px">[DATA] &bull; [ORA] &bull; [LUOGO / Online]</p></td></tr><tr><td style="padding:40px;background:#ffffff;text-align:center"><p style="color:#444;font-size:15px;line-height:1.8;max-width:460px;margin:0 auto 28px">[DESCRIZIONE EVENTO: di cosa si tratta, a chi &egrave; rivolto, perch&eacute; non perderselo]</p><p style="color:#555;font-size:14px;line-height:1.8;max-width:460px;margin:0 auto 32px">[AGENDA O PUNTI CHIAVE]</p><table cellpadding="0" cellspacing="0" style="margin:0 auto 32px"><tr><td style="background:#00ff9d;border-radius:8px;padding:14px 40px"><a href="[LINK_REGISTRAZIONE]" style="color:#0f0f1a;font-weight:700;font-size:15px;text-decoration:none">Registrati ora &rarr;</a></td></tr></table><p style="color:#999;font-size:12px;margin:0">Posti limitati &bull; Registrazione gratuita</p></td></tr><tr><td style="padding:20px 40px;background:#f5f5f5;text-align:center"><p style="color:#bbb;font-size:11px;margin:0">[AZIENDA] &bull; <a href="[UNSUBSCRIBE_LINK]" style="color:#bbb">Disiscriviti</a></p></td></tr></table>',
+  },
+  {
+    id: 'ringraziamento',
+    name: 'Ringraziamento cliente',
+    subject: 'Grazie per la fiducia, [NOME]',
+    html: '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#0f0f1a;padding:32px 40px;text-align:center"><p style="color:#00ff9d;font-size:36px;margin:0">&#128591;</p><h1 style="color:#ffffff;font-size:22px;margin:8px 0 0">Grazie, [NOME]!</h1></td></tr><tr><td style="padding:40px;background:#ffffff"><p style="color:#333;font-size:15px;line-height:1.8;margin:0 0 16px">Volevamo ringraziarti personalmente per [MOTIVO: il tuo acquisto / la tua fiducia / anni di collaborazione].</p><p style="color:#333;font-size:15px;line-height:1.8;margin:0 0 16px">[MESSAGGIO PERSONALE: cosa significa per noi, cosa ci impegniamo a fare, cosa offriamo come segno di riconoscimento]</p><p style="color:#333;font-size:15px;line-height:1.8;margin:0 0 32px">[CHIUSURA: invito a restare in contatto, disponibilit&agrave;]</p><p style="color:#333;font-size:15px;margin:0 0 4px">Con stima,</p><p style="color:#1a1a2e;font-size:15px;font-weight:700;margin:0">[NOME MITTENTE]</p><p style="color:#888;font-size:13px;margin:4px 0 0">[RUOLO] &bull; [AZIENDA]</p></td></tr></table>',
+  },
+];
+
+function emailLoadTemplate(idx) {
+  var t = EMAIL_TEMPLATES[idx];
+  if (!t) return;
+  var subj = document.getElementById('compSubject');
+  if (subj && !subj.value) subj.value = t.subject;
+  if (emailState.quillEditor) {
+    emailState.quillEditor.clipboard.dangerouslyPasteHTML(t.html);
+  }
+  var dd = document.getElementById('compTemplateDrop');
+  if (dd) dd.style.display = 'none';
+}
+
+function emailToggleTemplates() {
+  var dd = document.getElementById('compTemplateDrop');
+  if (!dd) return;
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+
+function emailOpenCompose(opts) {
+  var pane = document.getElementById('emailPane');
+  if (!pane) return;
+  opts = opts || {};
+
+  var h = '<div style="display:flex;flex-direction:column;height:100%;padding:14px;gap:8px">';
+  h += '<div style="font-size:13px;font-weight:700;color:var(--bright);border-bottom:1px solid var(--border);padding-bottom:8px">Compose</div>';
+  h += '<input id="compTo" type="text" placeholder="To" value="' + esc(opts.to || '') + '" style="padding:7px 10px;font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:5px">';
+  h += '<input id="compCc" type="text" placeholder="Cc" style="padding:7px 10px;font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:5px">';
+  h += '<input id="compSubject" type="text" placeholder="Subject" value="' + esc(opts.subject || '') + '" style="padding:7px 10px;font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:5px">';
+  h += '<input type="hidden" id="compInReplyTo" value="' + esc(opts.inReplyTo || '') + '">';
+  h += '<input type="hidden" id="compReplyToId" value="' + esc(opts.replyTo || '') + '">';
+  // Template picker
+  h += '<div style="position:relative">';
+  h += '<button onclick="emailToggleTemplates()" style="padding:5px 12px;font-size:11px;background:var(--bg);color:var(--cyan);border:1px solid var(--cyan);border-radius:5px;cursor:pointer">&#128196; Template marketing</button>';
+  h += '<div id="compTemplateDrop" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:var(--bg2);border:1px solid var(--border);border-radius:6px;min-width:240px;padding:4px 0;margin-top:4px;box-shadow:0 4px 16px rgba(0,0,0,0.3)">';
+  for (var ti = 0; ti < EMAIL_TEMPLATES.length; ti++) {
+    h += '<div class="tpl-item" onclick="emailLoadTemplate(' + ti + ')" style="padding:9px 16px;font-size:12px;cursor:pointer;color:var(--fg);border-bottom:1px solid var(--border)"><strong>' + esc(EMAIL_TEMPLATES[ti].name) + '</strong><div style="font-size:10px;color:var(--dim);margin-top:2px">' + esc(EMAIL_TEMPLATES[ti].subject.slice(0, 50)) + '</div></div>';
+  }
+  h += '</div></div>';
+  // Quill editor container
+  h += '<style>.ql-editor{color:#111!important;font-size:14px!important;line-height:1.6!important}.ql-editor p,.ql-editor li,.ql-editor h1,.ql-editor h2,.ql-editor h3{color:inherit}.ql-toolbar{background:#f5f5f5!important;border-radius:5px 5px 0 0!important}</style>';
+  h += '<div id="quillContainer" style="flex:1;min-height:200px;background:#ffffff;border-radius:0 0 5px 5px;overflow:auto;display:flex;flex-direction:column"></div>';
+  // Toolbar
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  h += '<button onclick="emailSend()" style="padding:7px 18px;background:var(--green3);color:var(--bg);border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Send</button>';
+  h += '<button onclick="emailSaveDraft()" style="padding:7px 14px;background:var(--bg);color:var(--dim);border:1px solid var(--border);border-radius:5px;font-size:12px;cursor:pointer">Save Draft</button>';
+  h += '<button onclick="emailCloseCompose()" style="padding:7px 14px;background:var(--bg);color:var(--dim);border:1px solid var(--border);border-radius:5px;font-size:12px;cursor:pointer">Discard</button>';
+  h += '<div id="composeStatus" style="font-size:11px;color:var(--dim);align-self:center"></div>';
+  h += '</div></div>';
+
+  pane.innerHTML = h;
+  emailState.composeData = opts;
+
+  // Init Quill
+  if (typeof Quill === 'undefined') {
+    var script = document.createElement('script');
+    script.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
+    script.onload = function() { emailInitQuill(opts); };
+    document.head.appendChild(script);
+  } else {
+    emailInitQuill(opts);
+  }
+}
+
+function emailInitQuill(opts) {
+  emailState.quillEditor = new Quill('#quillContainer', {
+    theme: 'snow',
+    modules: { toolbar: [
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      ['link', 'blockquote', 'code-block'],
+      [{ color: [] }, { background: [] }],
+      ['clean'],
+    ]},
+    placeholder: 'Write your message...',
+  });
+  // Force default text color to black (editor bg is white, NHA theme vars would make text grey)
+  emailState.quillEditor.format('color', '#111111');
+  // Pre-fill for forward
+  if (opts && opts.type === 'forward' && opts.body) {
+    emailState.quillEditor.clipboard.dangerouslyPasteHTML('<br><br><hr><p>---------- Forwarded message ----------</p>' + (opts.body || ''));
+  }
+}
+
+function emailSend() {
+  var status = document.getElementById('composeStatus');
+  var to = document.getElementById('compTo');
+  var cc = document.getElementById('compCc');
+  var subject = document.getElementById('compSubject');
+  var inReplyTo = document.getElementById('compInReplyTo');
+  if (!to || !to.value.trim()) { if (status) { status.textContent = 'Recipient required'; status.style.color = 'var(--red)'; } return; }
+
+  var bodyHtml = '';
+  var bodyText = '';
+  if (emailState.quillEditor) {
+    bodyHtml = emailState.quillEditor.root.innerHTML;
+    bodyText = emailState.quillEditor.getText();
+  }
+
+  var accountId = emailState.accountType === 'imap' ? emailState.accountId : null;
+  if (!accountId) {
+    // Google send via existing tool
+    if (status) { status.textContent = 'Sending via Google...'; status.style.color = 'var(--dim)'; }
+    apiPost('/api/email/send', { to: to.value.trim(), subject: subject.value.trim(), body: bodyText }).then(function(r) {
+      if (r.ok || r.id) { if (status) { status.textContent = 'Sent!'; status.style.color = 'var(--green)'; } setTimeout(emailCloseCompose, 800); }
+      else { if (status) { status.textContent = r.error || 'Error'; status.style.color = 'var(--red)'; } }
+    }).catch(function(e) { if (status) { status.textContent = e.message; status.style.color = 'var(--red)'; } });
+    return;
+  }
+
+  if (status) { status.textContent = 'Sending...'; status.style.color = 'var(--dim)'; }
+  apiPost('/api/imap/send', {
+    accountId: accountId,
+    to: to.value.trim(),
+    cc: cc && cc.value.trim() ? cc.value.trim() : undefined,
+    subject: subject.value.trim(),
+    bodyHtml: bodyHtml,
+    bodyText: bodyText,
+    inReplyTo: inReplyTo && inReplyTo.value ? inReplyTo.value : undefined,
+  }).then(function(r) {
+    if (r.ok) {
+      if (status) { status.textContent = 'Sent!'; status.style.color = 'var(--green)'; }
+      setTimeout(function() {
+        emailCloseCompose();
+        // Reload current label to show the sent message if we are on Sent
+        emailLoadMessages();
+      }, 800);
+    } else {
+      if (status) { status.textContent = r.error || 'Error'; status.style.color = 'var(--red)'; }
+    }
+  }).catch(function(e) {
+    if (status) { status.textContent = e.message; status.style.color = 'var(--red)'; }
+  });
+}
+
+function emailSaveDraft() {
+  var accountId = emailState.accountType === 'imap' ? emailState.accountId : null;
+  if (!accountId) return;
+  var to = document.getElementById('compTo');
+  var subject = document.getElementById('compSubject');
+  var bodyHtml = emailState.quillEditor ? emailState.quillEditor.root.innerHTML : '';
+  apiPost('/api/imap/drafts/save', {
+    accountId: accountId,
+    to: to ? [{ address: to.value.trim() }] : [],
+    subject: subject ? subject.value.trim() : '',
+    body_html: bodyHtml,
+  }).then(function() {
+    var s = document.getElementById('composeStatus');
+    if (s) { s.textContent = 'Draft saved'; s.style.color = 'var(--green)'; }
+  });
+}
+
+function emailCloseCompose() {
+  emailState.quillEditor = null;
+  var pane = document.getElementById('emailPane');
+  if (pane) pane.innerHTML = '<div style="padding:40px;text-align:center;color:var(--dim);font-size:12px">Select a message</div>';
+}
+
+function emailTrash(id) {
+  if (!confirm('Move to trash? Email stays on the server — only removed from local view.')) return;
+  apiPost('/api/imap/trash', { messageId: id }).then(function() {
+    emailState.messages = emailState.messages.filter(function(m) { return m.id !== id; });
+    emailRenderMessageList();
+    var pane = document.getElementById('emailPane');
+    if (pane) pane.innerHTML = '<div style="padding:40px;text-align:center;color:var(--dim);font-size:12px">Message moved to trash</div>';
+    showToast('success', 'Trash', 'Moved to trash (server untouched)');
+  });
+}
+
+function emailToggleStar(id, isStarred) {
+  apiPost('/api/imap/mark-starred', { messageId: id, isStarred: isStarred }).then(function() {
+    showToast('success', isStarred ? 'Starred' : 'Unstarred', '');
+    emailOpenMessage(id);
+  });
+}
+
+function emailAssignLabel(messageId, labelId) {
+  if (!labelId) return;
+  apiPost('/api/imap/labels/assign', { messageId: messageId, labelId: labelId }).then(function() {
+    showToast('success', 'Label', 'Label assigned');
+  });
+}
+
+function emailAskAgent(id) {
   switchView('chat');
-  setTimeout(function(){
-    var inp=document.getElementById('chatInput');
-    if(inp){inp.value='Scan email '+id+' for phishing or security threats';inp.focus()}
-  },200);
+  setTimeout(function() {
+    var inp = document.getElementById('chatInput');
+    if (inp) { inp.value = 'Analyze email ' + id + ' — extract key information, action items, and summarize.'; inp.focus(); }
+  }, 200);
+}
+
+function emailSyncCurrent() {
+  if (!emailState.accountId || emailState.accountType !== 'imap') return;
+  apiPost('/api/imap/sync', { accountId: emailState.accountId }).then(function() {
+    showToast('success', 'Sync', 'Sync started — messages will appear shortly');
+    setTimeout(function() { emailLoadMessages(); updateEmailBadge(); }, 5000);
+    setTimeout(function() { emailLoadMessages(); updateEmailBadge(); }, 15000);
+  });
+}
+
+function emailShowNewLabel() {
+  var name = prompt('New label name:');
+  if (!name) return;
+  var color = prompt('Color (hex, e.g. #3B82F6) or leave empty:', '');
+  apiPost('/api/imap/labels/create', { accountId: emailState.accountId, name: name, color: color || null }).then(function(r) {
+    if (r.ok) {
+      apiGet('/api/imap/labels?accountId=' + emailState.accountId).then(function(r2) {
+        emailState.labels = r2.labels || [];
+        emailRenderSidebar();
+      });
+    }
+  });
+}
+
+function emailEditLabel(id, name, color) {
+  var newName = prompt('Label name:', name);
+  if (newName === null) return;
+  var newColor = prompt('Color (hex):', color);
+  apiPost('/api/imap/labels/update', { id: id, name: newName, color: newColor || null }).then(function() {
+    apiGet('/api/imap/labels?accountId=' + emailState.accountId).then(function(r) {
+      emailState.labels = r.labels || [];
+      emailRenderSidebar();
+    });
+  });
+}
+
+// Legacy compat for Google (existing code paths)
+var openEmailId = null;
+function openEmail(id) { emailOpenMessage(id); }
+function replyToEmail(id) { emailOpenCompose({ replyTo: id }); }
+function askAgentAboutEmail(id) { emailAskAgent(id); }
+function markAllEmailsRead() {
+  if (emailState.accountType === 'imap' && emailState.accountId) {
+    apiPost('/api/imap/mark-all-read', { accountId: emailState.accountId, labelId: emailState.labelId || null }).then(function(r) {
+      emailState.messages.forEach(function(m) { m.is_read = true; });
+      emailRenderMessageList();
+      showToast('success', 'All Read', 'Marked ' + (r.count || 0) + ' emails as read');
+    });
+  } else {
+    apiPost('/api/email/mark-all-read', {}).then(function(r) {
+      if (r && r.ok) { dash.emails.forEach(function(e) { e.isUnread = false; }); updateBadges(); showToast('success', 'All Read', 'Marked ' + (r.count || 0) + ' emails as read'); }
+    });
+  }
 }
 
 // ---- CALENDAR (monthly grid + day detail modal) ----
@@ -2601,7 +3172,7 @@ function renderSettings(el) {
     return;
   }
 
-  el.innerHTML = '<div style="max-width:600px;margin:0 auto">' +
+  el.innerHTML = '<div style="max-width:620px;margin:0 auto">' +
     settingsSection('profile', 'User Profile', 'Agents use this when you say "my home", "my city", etc.', [
       ['name', 'Name', 'e.g. John Smith'],
       ['email', 'Email', 'e.g. john@example.com'],
@@ -2642,7 +3213,194 @@ function renderSettings(el) {
     '</div>' +
     '<div id="googleStatus" style="margin-top:8px;font-size:10px;color:var(--dim)"></div>' +
     '</div>' +
+    renderImapAccountsSettings() +
   '</div>';
+  setTimeout(loadImapAccounts, 100);
+}
+
+function renderImapAccountsSettings() {
+  return '<div class="card" id="imapAccountsCard" style="margin-top:16px">' +
+    '<div class="card__title" style="display:flex;align-items:center;justify-content:space-between">' +
+    '<span>Email Accounts (IMAP/SMTP)</span>' +
+    '<button onclick="showAddImapAccount()" style="background:var(--green3);color:var(--bg);padding:5px 14px;border-radius:var(--r);font-weight:700;font-size:11px;cursor:pointer;border:none">+ Add Account</button>' +
+    '</div>' +
+    '<div style="font-size:11px;color:var(--dim);margin-bottom:10px">IMAP is read-only — no emails are ever deleted or moved on the server.</div>' +
+    '<div id="imapAccountsList">Loading...</div>' +
+    '<div id="imapAccountForm" style="display:none;margin-top:14px;padding:14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">' +
+    '<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:10px" id="imapFormTitle">Add IMAP Account</div>' +
+    '<input type="hidden" id="imapEditId" value="">' +
+    imapField('imapDisplayName','Display Name','e.g. Work Email') +
+    imapField('imapEmail','Email Address','user@example.com') +
+    imapField('imapFromName','From Name','e.g. John Smith') +
+    imapField('imapImapHost','IMAP Server','e.g. imap.gmail.com') +
+    imapField('imapImapPort','IMAP Port','993 (TLS) or 143') +
+    imapField('imapSmtpHost','SMTP Server','e.g. smtp.gmail.com') +
+    imapField('imapSmtpPort','SMTP Port','587 (STARTTLS) or 465 (SSL)') +
+    imapField('imapUsername','Username','e.g. user@example.com') +
+    imapFieldPassword() +
+    '<div style="display:flex;gap:8px;margin-top:12px">' +
+    '<button onclick="saveImapAccount()" style="background:var(--green3);color:var(--bg);padding:7px 18px;border-radius:var(--r);font-weight:700;font-size:12px;cursor:pointer;border:none">Save</button>' +
+    '<button onclick="document.getElementById(\\x27imapAccountForm\\x27).style.display=\\x27none\\x27" style="background:var(--bg);color:var(--dim);padding:7px 14px;border-radius:var(--r);font-size:12px;cursor:pointer;border:1px solid var(--border)">Cancel</button>' +
+    '</div>' +
+    '<div id="imapFormStatus" style="margin-top:8px;font-size:11px;color:var(--dim)"></div>' +
+    '</div>' +
+    '</div>';
+}
+
+function imapField(id, label, placeholder) {
+  return '<div style="margin-bottom:8px">' +
+    '<label style="display:block;font-size:10px;color:var(--dim);margin-bottom:3px">' + label + '</label>' +
+    '<input id="' + id + '" type="text" placeholder="' + placeholder + '" style="width:100%;padding:7px 10px;font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:6px;box-sizing:border-box">' +
+    '</div>';
+}
+
+function imapFieldPassword() {
+  return '<div style="margin-bottom:8px">' +
+    '<label style="display:block;font-size:10px;color:var(--dim);margin-bottom:3px">Password <span id="imapPwdPlaceholderNote" style="color:var(--amber,#F59E0B)">(leave empty to keep existing)</span></label>' +
+    '<div style="display:flex;gap:6px;align-items:center">' +
+    '<input id="imapPassword" type="password" placeholder="App password or IMAP password" style="flex:1;padding:7px 10px;font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--border2);border-radius:6px">' +
+    '<button type="button" onclick="imapTogglePwd()" style="padding:6px 10px;font-size:11px;background:var(--bg);color:var(--dim);border:1px solid var(--border);border-radius:6px;cursor:pointer;white-space:nowrap" id="imapPwdToggle">Show</button>' +
+    '</div>' +
+    '</div>';
+}
+
+function imapTogglePwd() {
+  var inp = document.getElementById('imapPassword');
+  var btn = document.getElementById('imapPwdToggle');
+  if (!inp) return;
+  if (inp.type === 'password') { inp.type = 'text'; if (btn) btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; if (btn) btn.textContent = 'Show'; }
+}
+
+function loadImapAccounts() {
+  apiGet('/api/imap/accounts').then(function(r) {
+    var el = document.getElementById('imapAccountsList');
+    if (!el) return;
+    var accounts = r.accounts || [];
+    if (!accounts.length) { el.innerHTML = '<div style="color:var(--dim);font-size:11px">No IMAP accounts configured yet.</div>'; return; }
+    var h = '';
+    for (var i = 0; i < accounts.length; i++) {
+      var a = accounts[i];
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)">' +
+        '<div>' +
+        '<div style="font-size:12px;font-weight:700;color:var(--bright)">' + esc(a.display_name) + '</div>' +
+        '<div style="font-size:10px;color:var(--dim)">' + esc(a.email_address) + ' &middot; ' + esc(a.imap_host || '') + '</div>' +
+        '<div style="font-size:10px;color:' + (a.sync_status === 'idle' ? 'var(--green)' : a.sync_status === 'syncing' ? 'var(--cyan)' : 'var(--red)') + '">' + esc(a.sync_status) + (a.last_sync_at ? ' &middot; last: ' + esc(a.last_sync_at.slice(0,16)) : '') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+        '<button onclick="imapSync(\\x27' + a.id + '\\x27)" style="padding:4px 10px;font-size:10px;background:var(--cyan3,#0e4f5e);color:var(--cyan);border:1px solid var(--cyan);border-radius:4px;cursor:pointer">Sync</button>' +
+        '<button onclick="editImapAccount(\\x27' + a.id + '\\x27)" style="padding:4px 10px;font-size:10px;background:var(--bg);color:var(--dim);border:1px solid var(--border);border-radius:4px;cursor:pointer">Edit</button>' +
+        '<button onclick="deleteImapAccount(\\x27' + a.id + '\\x27)" style="padding:4px 10px;font-size:10px;background:var(--red3,#7f1d1d);color:#fca5a5;border:1px solid var(--red,#ef4444);border-radius:4px;cursor:pointer">Delete</button>' +
+        '</div></div>';
+    }
+    el.innerHTML = h;
+  }).catch(function() {
+    var el = document.getElementById('imapAccountsList');
+    if (el) el.innerHTML = '<div style="color:var(--dim);font-size:11px">Could not load accounts.</div>';
+  });
+}
+
+function showAddImapAccount() {
+  var form = document.getElementById('imapAccountForm');
+  if (!form) return;
+  var editId = document.getElementById('imapEditId');
+  if (editId) editId.value = '';
+  var title = document.getElementById('imapFormTitle');
+  if (title) title.textContent = 'Add IMAP Account';
+  var fieldDefaults = {
+    imapDisplayName: '', imapEmail: '', imapFromName: '',
+    imapImapHost: '', imapImapPort: '993',
+    imapSmtpHost: '', imapSmtpPort: '587',
+    imapUsername: '', imapPassword: ''
+  };
+  for (var key in fieldDefaults) {
+    var el = document.getElementById(key);
+    if (el) el.value = fieldDefaults[key];
+  }
+  var status = document.getElementById('imapFormStatus');
+  if (status) status.textContent = '';
+  // New account: hide "leave empty" note, require password
+  var note = document.getElementById('imapPwdPlaceholderNote');
+  if (note) note.style.display = 'none';
+  // Reset show/hide toggle
+  var pwdInp = document.getElementById('imapPassword');
+  var pwdBtn = document.getElementById('imapPwdToggle');
+  if (pwdInp) { pwdInp.type = 'password'; pwdInp.placeholder = 'App password or IMAP password'; }
+  if (pwdBtn) pwdBtn.textContent = 'Show';
+  form.style.display = 'block';
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function editImapAccount(id) {
+  apiGet('/api/imap/accounts').then(function(r) {
+    var a = (r.accounts || []).find(function(x) { return x.id === id; });
+    if (!a) return;
+    document.getElementById('imapEditId').value = id;
+    document.getElementById('imapFormTitle').textContent = 'Edit Account';
+    document.getElementById('imapDisplayName').value = a.display_name || '';
+    document.getElementById('imapEmail').value = a.email_address || '';
+    document.getElementById('imapFromName').value = a.from_name || '';
+    document.getElementById('imapImapHost').value = a.imap_host || '';
+    document.getElementById('imapImapPort').value = a.imap_port || 993;
+    document.getElementById('imapSmtpHost').value = a.smtp_host || '';
+    document.getElementById('imapSmtpPort').value = a.smtp_port || 587;
+    document.getElementById('imapUsername').value = a.username || '';
+    document.getElementById('imapPassword').value = '';
+    // Show "leave empty to keep" note and reset toggle
+    var note = document.getElementById('imapPwdPlaceholderNote');
+    if (note) note.style.display = 'inline';
+    var pwdInp = document.getElementById('imapPassword');
+    var pwdBtn = document.getElementById('imapPwdToggle');
+    if (pwdInp) { pwdInp.type = 'password'; pwdInp.placeholder = 'Leave empty to keep existing'; }
+    if (pwdBtn) pwdBtn.textContent = 'Show';
+    var form2 = document.getElementById('imapAccountForm');
+    var status2 = document.getElementById('imapFormStatus');
+    if (status2) status2.textContent = '';
+    if (form2) { form2.style.display = 'block'; form2.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  });
+}
+
+function saveImapAccount() {
+  var id = document.getElementById('imapEditId').value;
+  var data = {
+    display_name:  document.getElementById('imapDisplayName').value.trim(),
+    email_address: document.getElementById('imapEmail').value.trim(),
+    from_name:     document.getElementById('imapFromName').value.trim(),
+    imap_host:     document.getElementById('imapImapHost').value.trim(),
+    imap_port:     parseInt(document.getElementById('imapImapPort').value || '993', 10),
+    smtp_host:     document.getElementById('imapSmtpHost').value.trim(),
+    smtp_port:     parseInt(document.getElementById('imapSmtpPort').value || '587', 10),
+    username:      document.getElementById('imapUsername').value.trim(),
+  };
+  var pwd = document.getElementById('imapPassword').value;
+  if (pwd) data.password = pwd;
+  var status = document.getElementById('imapFormStatus');
+  if (status) { status.textContent = 'Saving...'; status.style.color = 'var(--dim)'; }
+  var url2 = id ? '/api/imap/accounts/update' : '/api/imap/accounts';
+  if (id) data.id = id;
+  apiPost(url2, data).then(function(r) {
+    if (r.ok || r.id) {
+      if (status) { status.textContent = 'Saved.'; status.style.color = 'var(--green)'; }
+      document.getElementById('imapAccountForm').style.display = 'none';
+      loadImapAccounts();
+    } else {
+      if (status) { status.textContent = r.error || 'Error'; status.style.color = 'var(--red)'; }
+    }
+  }).catch(function(e) {
+    if (status) { status.textContent = e.message; status.style.color = 'var(--red)'; }
+  });
+}
+
+function deleteImapAccount(id) {
+  if (!confirm('Delete this email account? All synced emails will be removed locally.')) return;
+  apiPost('/api/imap/accounts/delete', { id: id }).then(function() { loadImapAccounts(); });
+}
+
+function imapSync(accountId) {
+  apiPost('/api/imap/sync', { accountId: accountId }).then(function() {
+    showToast('success', 'Sync', 'Sync started in background');
+    setTimeout(loadImapAccounts, 3000);
+  }).catch(function(e) { showToast('error', 'Sync', e.message); });
 }
 
 function connectGoogle() {
@@ -3135,6 +3893,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Birthdays', nav_agents:'Agents',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Settings',
     nav_docs:'Documentation', nav_agents_guide:'Agents Guide', nav_mobile:'Mobile App',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'Generate enterprise-grade web projects — security headers A+, BEM CSS, PostgreSQL pool, Auth, GDPR cookie banner.',
+    wc_project:'Project', wc_project_name:'Project name (e.g. MySaaS)', wc_desc:'Describe your project...',
+    wc_blocks:'Included Blocks', wc_auth_fields:'Auth Fields', wc_add_field:'+ Add field',
+    wc_required_hint:'Checked = Required | Edit label & type inline',
+    wc_generate:'Generate Project', wc_generating:'Generating',
+    wc_download:'Download Archive', wc_describe_first:'Please describe your project first.',
+    wc_no_files:'Describe your project and click Generate',
+    wc_examples_label:'Examples',
+    wc_sandbox_start:'Launch Sandbox',
+    wc_projects:'Projects',
+    wc_no_projects:'No saved projects yet',
+    wc_no_projects_hint:'Generate a project and it will be saved automatically',
   },
   it: {
     chat:'Chat', studio:'Studio', settings:'Impostazioni', agents:'Agenti',
@@ -3162,6 +3933,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Compleanni', nav_agents:'Agenti',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Impostazioni',
     nav_docs:'Documentazione', nav_agents_guide:'Guida Agenti', nav_mobile:'App Mobile',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'Genera progetti web enterprise — security headers A+, CSS BEM, PostgreSQL pool, Auth, cookie banner GDPR.',
+    wc_project:'Progetto', wc_project_name:'Nome progetto (es. MioSaaS)', wc_desc:'Descrivi il tuo progetto...',
+    wc_blocks:'Blocchi inclusi', wc_auth_fields:'Campi registrazione', wc_add_field:'+ Aggiungi campo',
+    wc_required_hint:'Spuntato = Obbligatorio | Modifica etichetta e tipo inline',
+    wc_generate:'Genera progetto', wc_generating:'Generazione in corso',
+    wc_download:'Scarica archivio', wc_describe_first:'Descrivi prima il tuo progetto.',
+    wc_no_files:'Descrivi il progetto e clicca Genera',
+    wc_examples_label:'Esempi',
+    wc_sandbox_start:'Avvia Sandbox',
+    wc_projects:'Progetti',
+    wc_no_projects:'Nessun progetto salvato',
+    wc_no_projects_hint:'Genera un progetto e verr\u00e0 salvato automaticamente',
   },
   es: {
     chat:'Chat', studio:'Studio', settings:'Configuración', agents:'Agentes',
@@ -3188,6 +3972,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Cumplea\u00f1os', nav_agents:'Agentes',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Configuraci\u00f3n',
     nav_docs:'Documentaci\u00f3n', nav_agents_guide:'Gu\u00eda Agentes', nav_mobile:'App M\u00f3vil',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'Genera proyectos web empresariales — headers A+, CSS BEM, PostgreSQL pool, Auth, banner de cookies GDPR.',
+    wc_project:'Proyecto', wc_project_name:'Nombre del proyecto (ej. MiSaaS)', wc_desc:'Describe tu proyecto...',
+    wc_blocks:'Bloques incluidos', wc_auth_fields:'Campos de registro', wc_add_field:'+ A\u00f1adir campo',
+    wc_required_hint:'Marcado = Obligatorio | Edita etiqueta y tipo inline',
+    wc_generate:'Generar proyecto', wc_generating:'Generando',
+    wc_download:'Descargar archivo', wc_describe_first:'Por favor describe tu proyecto primero.',
+    wc_no_files:'Describe el proyecto y haz clic en Generar',
+    wc_examples_label:'Ejemplos',
+    wc_sandbox_start:'Iniciar Sandbox',
+    wc_projects:'Proyectos',
+    wc_no_projects:'No hay proyectos guardados',
+    wc_no_projects_hint:'Genera un proyecto y se guardar\u00e1 autom\u00e1ticamente',
   },
   fr: {
     chat:'Chat', studio:'Studio', settings:'Paramètres', agents:'Agents',
@@ -3214,6 +4011,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Anniversaires', nav_agents:'Agents',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Param\u00e8tres',
     nav_docs:'Documentation', nav_agents_guide:'Guide Agents', nav_mobile:'App Mobile',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'G\u00e9n\u00e9rez des projets web entreprise — headers A+, CSS BEM, pool PostgreSQL, Auth, bandeau cookies RGPD.',
+    wc_project:'Projet', wc_project_name:'Nom du projet (ex. MonSaaS)', wc_desc:'D\u00e9crivez votre projet...',
+    wc_blocks:'Blocs inclus', wc_auth_fields:'Champs inscription', wc_add_field:'+ Ajouter un champ',
+    wc_required_hint:'Coch\u00e9 = Obligatoire | Modifier \u00e9tiquette et type inline',
+    wc_generate:'G\u00e9n\u00e9rer le projet', wc_generating:'G\u00e9n\u00e9ration en cours',
+    wc_download:'T\u00e9l\u00e9charger archive', wc_describe_first:'Veuillez d\u00e9crire votre projet.',
+    wc_no_files:'D\u00e9crivez le projet et cliquez sur G\u00e9n\u00e9rer',
+    wc_examples_label:'Exemples',
+    wc_sandbox_start:'Lancer Sandbox',
+    wc_projects:'Projets',
+    wc_no_projects:'Aucun projet sauvegard\u00e9',
+    wc_no_projects_hint:'G\u00e9n\u00e9rez un projet et il sera sauvegard\u00e9 automatiquement',
   },
   de: {
     chat:'Chat', studio:'Studio', settings:'Einstellungen', agents:'Agenten',
@@ -3240,6 +4050,19 @@ var I18N = {
     nav_slack:'Slack', nav_birthdays:'Geburtstage', nav_agents:'Agenten',
     nav_studio:'Studio', nav_collab:'AgentMessenger', nav_settings:'Einstellungen',
     nav_docs:'Dokumentation', nav_agents_guide:'Agenten-Leitfaden', nav_mobile:'Mobile App',
+    nav_webcraft:'WebCraft',
+    wc_title:'WebCraft', wc_subtitle:'Enterprise-Web-Projekte generieren — Security-Headers A+, BEM CSS, PostgreSQL Pool, Auth, DSGVO Cookie-Banner.',
+    wc_project:'Projekt', wc_project_name:'Projektname (z.B. MeinSaaS)', wc_desc:'Beschreibe dein Projekt...',
+    wc_blocks:'Enthaltene Bl\u00f6cke', wc_auth_fields:'Registrierungsfelder', wc_add_field:'+ Feld hinzuf\u00fcgen',
+    wc_required_hint:'Aktiviert = Pflichtfeld | Beschriftung und Typ inline bearbeiten',
+    wc_generate:'Projekt generieren', wc_generating:'Generierung',
+    wc_download:'Archiv herunterladen', wc_describe_first:'Bitte beschreibe zuerst dein Projekt.',
+    wc_no_files:'Beschreibe das Projekt und klicke auf Generieren',
+    wc_examples_label:'Beispiele',
+    wc_sandbox_start:'Sandbox starten',
+    wc_projects:'Projekte',
+    wc_no_projects:'Keine gespeicherten Projekte',
+    wc_no_projects_hint:'Generiere ein Projekt und es wird automatisch gespeichert',
   },
 };
 // Fallback to 'en' for unmapped languages
@@ -3307,6 +4130,10 @@ function renderSidebar() {
         \x27<span class="nav-item__icon">&#9881;</span> \x27+t(\x27nav_studio\x27)+
         \x27<span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(99,102,241,.25);color:var(--green);margin-left:4px;font-weight:700">NEW</span>\x27+
       \x27</div>\x27+
+      \x27<div class="nav-item\x27+(activeView===\x27webcraft\x27?\x27 nav-item--active\x27:\x27\x27)+\x27" data-view="webcraft" onclick="switchView(\\\x27webcraft\\\x27)">\x27+
+        \x27<span class="nav-item__icon">&#128736;</span> \x27+t(\x27nav_webcraft\x27)+
+        \x27<span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(99,102,241,.25);color:var(--green);margin-left:4px;font-weight:700">NEW</span>\x27+
+      \x27</div>\x27+
       \x27<div class="nav-item\x27+(activeView===\x27collab\x27?\x27 nav-item--active\x27:\x27\x27)+\x27" data-view="collab" onclick="switchView(\\\x27collab\\\x27)">\x27+
         \x27<span class="nav-item__icon">&#128274;</span> \x27+t(\x27nav_collab\x27)+
         \x27<span id="collabBadge" style="display:none;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px;font-family:var(--mono)">0</span>\x27+
@@ -3322,7 +4149,9 @@ function renderSidebar() {
       \x27<a href="https://nothumanallowed.com/docs/agents" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#129302;</span> \x27+t(\x27nav_agents_guide\x27)+\x27</a>\x27+
       \x27<a href="https://nothumanallowed.com/docs/mobile" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#128241;</span> \x27+t(\x27nav_mobile\x27)+\x27</a>\x27+
     \x27</div>\x27+
-    \x27<div style="padding:12px 16px;margin-top:auto;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">nothumanallowed.com<span style="margin-left:6px;opacity:.5">v${VERSION}</span></div>\x27;
+    \x27<div style="padding:12px 16px;margin-top:auto;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">nothumanallowed.com<span style="margin-left:6px;opacity:.5">v${VERSION}</span>\x27+
+    (_updateInfo&&_updateInfo.updateAvailable?\x27<span style="margin-left:8px;background:#f59e0b;color:#000;border-radius:4px;padding:1px 6px;font-weight:700;cursor:pointer" title="Run: npm i -g nothumanallowed to update to v\x27+(_updateInfo.latest||\x27\x27)+\x27">&#8593; Update v\x27+(_updateInfo.latest||\x27\x27)+\x27</span>\x27:\x27\x27)+
+    \x27</div>\x27;
 }
 
 var studioState = {
@@ -3340,7 +4169,7 @@ var studioAbortController = null;
 var parlActiveAgent = null;   // active agent label during parliament streaming
 var parlDoneAgents = {};      // set of completed agent labels during parliament
 var _parlPersistHtml = null;  // persists parliament block HTML across tab navigations
-var _PARL_STAMP = '<!--nha-parl-v13.5.35-->';
+var _PARL_STAMP = '<!--nha-parl-v13.5.39-->';
 
 function stopStudio() {
   if (!studioState.running) return;
@@ -4513,10 +5342,296 @@ function downloadStudioPDF() {
   doGeneratePdf();
 }
 
+// ── Studio Export: CSV ────────────────────────────────────────────────────────
+function extractMarkdownTables(md) {
+  var NL = String.fromCharCode(10);
+  var lines = md.split(NL);
+  var tables = [];
+  var current = null;
+  for (var i = 0; i < lines.length; i++) {
+    var l = lines[i].trim();
+    if (l.charAt(0) === '|' && l.lastIndexOf('|') > 0) {
+      if (/^\|[\s\-|:]+\|$/.test(l)) { continue; } // separator
+      var cells = l.split('|').slice(1,-1).map(function(c){ return c.trim(); });
+      if (!current) { current = { headers: cells, rows: [] }; }
+      else { current.rows.push(cells); }
+    } else {
+      if (current && current.rows.length > 0) { tables.push(current); }
+      current = null;
+    }
+  }
+  if (current && current.rows.length > 0) tables.push(current);
+  return tables;
+}
+
+function tableToCsvString(table) {
+  var NL = String.fromCharCode(10);
+  function escCell(v) {
+    if (v === undefined || v === null) return '';
+    var s = String(v).replace(new RegExp('"', 'g'), '""');
+    if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf(NL) >= 0) return '"' + s + '"';
+    return s;
+  }
+  var rows = [table.headers].concat(table.rows);
+  return rows.map(function(r){ return r.map(escCell).join(','); }).join(NL);
+}
+
+function downloadStudioCSV() {
+  var nodes = (studioState.nodes || []).filter(function(n){ return n.output && n.output !== '(no output)'; });
+  var allTables = [];
+  nodes.forEach(function(n) {
+    var tbls = extractMarkdownTables(n.output || '');
+    tbls.forEach(function(t, i){ allTables.push({ agent: (n.label||n.agent), idx: i+1, table: t }); });
+  });
+  // Also check synthesis result
+  if (studioState.result) {
+    var tbls2 = extractMarkdownTables(studioState.result);
+    tbls2.forEach(function(t, i){ allTables.push({ agent: 'Synthesis', idx: i+1, table: t }); });
+  }
+  if (allTables.length === 0) { alert('Nessuna tabella trovata nel report. Chiedi agli agenti di produrre dati in formato tabella Markdown.'); return; }
+  var NL = String.fromCharCode(10);
+  var csvParts = allTables.map(function(entry) {
+    return '# ' + entry.agent + (allTables.length > 1 ? ' — Tabella ' + entry.idx : '') + NL + tableToCsvString(entry.table);
+  });
+  var csv = csvParts.join(NL + NL);
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var fname = (studioState.task || 'NHA-Studio').slice(0,50).replace(/[^a-z0-9\s]/gi,'').trim().replace(/\s+/g,'-') + '.csv';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  a.click();
+}
+
+// ── Studio Export: Excel (XLSX via SheetJS) ───────────────────────────────────
+var _xlsxLoaded = false;
+var _xlsxLoading = false;
+
+function loadXLSX(cb) {
+  if (_xlsxLoaded && window.XLSX) { cb(); return; }
+  if (_xlsxLoading) { setTimeout(function(){ loadXLSX(cb); }, 200); return; }
+  _xlsxLoading = true;
+  var s = document.createElement('script');
+  s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  s.onload = function() { _xlsxLoaded = true; _xlsxLoading = false; cb(); };
+  s.onerror = function() { _xlsxLoading = false; alert('Errore caricamento SheetJS. Controlla la connessione.'); };
+  document.head.appendChild(s);
+}
+
+function downloadStudioXLSX() {
+  loadXLSX(function() { _doGenerateXLSX(); });
+}
+
+function _doGenerateXLSX() {
+  var XLSX = window.XLSX;
+  if (!XLSX) { alert('SheetJS non disponibile.'); return; }
+
+  var nodes = (studioState.nodes || []).filter(function(n){ return n.output && n.output !== '(no output)' && n.agent !== 'CanvasAgent'; });
+  var task = studioState.task || 'NHA Studio Report';
+  var today = new Date();
+  var dateStr = today.toLocaleDateString('it-IT');
+  var wb = XLSX.utils.book_new();
+
+  // ── ACCENT COLORS per agente ──────────────────────────────────────────────
+  var AGENT_COLORS = ['4F46E5','0891B2','059669','D97706','DC2626','7C3AED','0284C7','BE185D','0D9488','CA8A04'];
+
+  // ── Helper: cell style fabbrica ──────────────────────────────────────────
+  function headerStyle(hexFg) {
+    return {
+      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' },
+      fill: { patternType: 'solid', fgColor: { rgb: hexFg || '4F46E5' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: {
+        top:    { style: 'thin', color: { rgb: 'CCCCCC' } },
+        bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+        left:   { style: 'thin', color: { rgb: 'CCCCCC' } },
+        right:  { style: 'thin', color: { rgb: 'CCCCCC' } }
+      }
+    };
+  }
+  function dataStyle(even) {
+    return {
+      font: { sz: 10, name: 'Calibri' },
+      fill: even ? { patternType: 'solid', fgColor: { rgb: 'F3F4F6' } } : { patternType: 'none' },
+      alignment: { vertical: 'center', wrapText: true },
+      border: {
+        top:    { style: 'hair', color: { rgb: 'E5E7EB' } },
+        bottom: { style: 'hair', color: { rgb: 'E5E7EB' } },
+        left:   { style: 'hair', color: { rgb: 'E5E7EB' } },
+        right:  { style: 'hair', color: { rgb: 'E5E7EB' } }
+      }
+    };
+  }
+  function titleStyle(hex) {
+    return {
+      font: { bold: true, sz: 14, name: 'Calibri', color: { rgb: hex || '4F46E5' } },
+      fill: { patternType: 'solid', fgColor: { rgb: 'F8F9FC' } },
+      alignment: { horizontal: 'left', vertical: 'center' }
+    };
+  }
+  function metaStyle() {
+    return { font: { sz: 10, italic: true, color: { rgb: '6B7280' }, name: 'Calibri' } };
+  }
+
+  // ── Helper: parse numeric value ───────────────────────────────────────────
+  function parseNum(v) {
+    var s = String(v).replace(/[€$£%,\s]/g,'').trim();
+    var n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
+
+  // ── Helper: aggiunge un foglio tabella da markdown ────────────────────────
+  function addTableSheet(sheetName, agentLabel, tables, colorHex) {
+    var ws = {};
+    var maxCol = 0;
+    var rowNum = 0;
+
+    // Title row
+    ws['A' + (rowNum+1)] = { v: agentLabel, t: 's', s: titleStyle(colorHex) };
+    rowNum++;
+    // Meta row
+    ws['A' + (rowNum+1)] = { v: 'Generato da NHA Studio il ' + dateStr, t: 's', s: metaStyle() };
+    ws['B' + (rowNum+1)] = { v: 'Task: ' + task.slice(0,80), t: 's', s: metaStyle() };
+    rowNum++;
+    rowNum++; // blank
+
+    tables.forEach(function(table, ti) {
+      if (tables.length > 1) {
+        ws['A' + (rowNum+1)] = { v: 'Tabella ' + (ti+1), t: 's', s: { font: { bold: true, sz: 11, name: 'Calibri', color: { rgb: colorHex } } } };
+        rowNum++;
+      }
+      // Detect numeric columns
+      var isNumericCol = table.headers.map(function(_, ci) {
+        return table.rows.every(function(r){ return r[ci] === undefined || r[ci] === '' || parseNum(r[ci]) !== null; });
+      });
+      // Header row
+      var colCount = table.headers.length;
+      table.headers.forEach(function(h, ci) {
+        var col = String.fromCharCode(65 + ci);
+        ws[col + (rowNum+1)] = { v: h, t: 's', s: headerStyle(colorHex) };
+        if (ci > maxCol) maxCol = ci;
+      });
+      rowNum++;
+      // Data rows
+      table.rows.forEach(function(row, ri) {
+        row.forEach(function(cell, ci) {
+          var col = String.fromCharCode(65 + ci);
+          var num = isNumericCol[ci] ? parseNum(cell) : null;
+          var addr = col + (rowNum+1);
+          if (num !== null && cell !== '') {
+            ws[addr] = { v: num, t: 'n', z: num % 1 !== 0 ? '#,##0.00' : '#,##0', s: dataStyle(ri % 2 === 0) };
+          } else {
+            ws[addr] = { v: cell || '', t: 's', s: dataStyle(ri % 2 === 0) };
+          }
+        });
+        rowNum++;
+      });
+      rowNum++; // blank between tables
+    });
+
+    // Set sheet range
+    var lastCol = String.fromCharCode(65 + maxCol);
+    ws['!ref'] = 'A1:' + lastCol + (rowNum + 1);
+
+    // Column widths (auto-estimate from content)
+    var colWidths = [];
+    for (var ci = 0; ci <= maxCol; ci++) {
+      var maxW = 12;
+      tables.forEach(function(table) {
+        if (table.headers[ci]) maxW = Math.max(maxW, table.headers[ci].length + 2);
+        table.rows.forEach(function(r){ if (r[ci]) maxW = Math.max(maxW, Math.min(String(r[ci]).length + 2, 50)); });
+      });
+      colWidths.push({ wch: maxW });
+    }
+    ws['!cols'] = colWidths;
+
+    // Row heights
+    var rowH = [];
+    for (var ri2 = 0; ri2 < rowNum; ri2++) rowH.push({ hpt: ri2 < 3 ? 22 : 18 });
+    ws['!rows'] = rowH;
+
+    // Freeze top rows (title + meta + header row of first table)
+    ws['!freeze'] = { xSplit: 0, ySplit: 4, topLeftCell: 'A5' };
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31));
+  }
+
+  // ── Foglio INDICE ─────────────────────────────────────────────────────────
+  var wsIdx = {};
+  wsIdx['A1'] = { v: 'NHA Studio Report', t: 's', s: titleStyle('4F46E5') };
+  wsIdx['A2'] = { v: task, t: 's', s: { font: { sz: 12, name: 'Calibri', bold: true } } };
+  wsIdx['A3'] = { v: 'Generato il ' + dateStr + ' con NHA Studio', t: 's', s: metaStyle() };
+  wsIdx['A5'] = { v: 'Agente', t: 's', s: headerStyle('4F46E5') };
+  wsIdx['B5'] = { v: 'Tabelle', t: 's', s: headerStyle('4F46E5') };
+  wsIdx['C5'] = { v: 'Token In', t: 's', s: headerStyle('4F46E5') };
+  wsIdx['D5'] = { v: 'Token Out', t: 's', s: headerStyle('4F46E5') };
+  var idxRow = 5;
+  var hasAnyTable = false;
+  nodes.forEach(function(n, ni) {
+    var tables = extractMarkdownTables(n.output || '');
+    if (tables.length > 0) hasAnyTable = true;
+    idxRow++;
+    var co = AGENT_COLORS[ni % AGENT_COLORS.length];
+    wsIdx['A' + idxRow] = { v: (n.label||n.agent), t: 's', s: dataStyle(ni % 2 === 0) };
+    wsIdx['B' + idxRow] = { v: tables.length, t: 'n', s: dataStyle(ni % 2 === 0) };
+    wsIdx['C' + idxRow] = { v: n.tokensIn || 0, t: 'n', z: '#,##0', s: dataStyle(ni % 2 === 0) };
+    wsIdx['D' + idxRow] = { v: n.tokensOut || 0, t: 'n', z: '#,##0', s: dataStyle(ni % 2 === 0) };
+  });
+  wsIdx['!ref'] = 'A1:D' + (idxRow + 1);
+  wsIdx['!cols'] = [{ wch: 28 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, wsIdx, 'Indice');
+
+  // ── Un foglio per ogni agente con tabelle ─────────────────────────────────
+  var sheetCount = 0;
+  nodes.forEach(function(n, ni) {
+    var tables = extractMarkdownTables(n.output || '');
+    if (tables.length === 0) return;
+    var colorHex = AGENT_COLORS[ni % AGENT_COLORS.length];
+    var sheetName = (n.label || n.agent).slice(0,28);
+    addTableSheet(sheetName, n.label || n.agent, tables, colorHex);
+    sheetCount++;
+  });
+
+  // ── Foglio Risultato Finale (testo libero come tabella a singola colonna) ──
+  if (studioState.result) {
+    var synTables = extractMarkdownTables(studioState.result);
+    if (synTables.length > 0) {
+      addTableSheet('Sintesi', 'Sintesi Finale', synTables, '059669');
+      sheetCount++;
+    } else {
+      // Export free text as single-column sheet with line-by-line rows
+      var wsText = {};
+      wsText['A1'] = { v: 'Sintesi Finale', t: 's', s: titleStyle('059669') };
+      wsText['A2'] = { v: task.slice(0,80), t: 's', s: metaStyle() };
+      var NL5 = String.fromCharCode(10);
+      var lines = (studioState.result || '').split(NL5);
+      lines.forEach(function(line, li) {
+        wsText['A' + (li+4)] = { v: line.replace(new RegExp('[*_#]','g'), '').replace(new RegExp(String.fromCharCode(96),'g'), ''), t: 's', s: dataStyle(li % 2 === 0) };
+      });
+      wsText['!ref'] = 'A1:A' + (lines.length + 4);
+      wsText['!cols'] = [{ wch: 90 }];
+      XLSX.utils.book_append_sheet(wb, wsText, 'Sintesi');
+    }
+  }
+
+  if (sheetCount === 0 && !studioState.result) {
+    alert('Nessuna tabella trovata. Chiedi agli agenti di produrre dati in formato tabella Markdown per generare Excel.');
+    return;
+  }
+
+  var fname = task.slice(0,50).replace(/[^a-z0-9\s]/gi,'').trim().replace(/\s+/g,'-') + '-NHAStudio.xlsx';
+  XLSX.writeFile(wb, fname, { bookType: 'xlsx', type: 'binary', cellStyles: true });
+}
+
 function renderStudioResult() {
   var el = document.getElementById('studioResult');
   if (!el) return;
-  if (!studioState.result) { el.style.display = 'none'; return; }
+  if (!studioState.result) {
+    el.style.display = 'none';
+    var _xb = document.getElementById('studioInlineXlsxBtn'); if (_xb) _xb.style.display = 'none';
+    var _cb = document.getElementById('studioInlineCsvBtn'); if (_cb) _cb.style.display = 'none';
+    var _pb = document.getElementById('studioInlinePdfBtn'); if (_pb) _pb.style.display = 'none';
+    return;
+  }
   el.style.display = 'block';
   var hasCanvas = !!(studioState.canvas);
   var body = hasCanvas
@@ -4525,14 +5640,19 @@ function renderStudioResult() {
   var tokLine = (studioTokens && (studioTokens.in > 0 || studioTokens.out > 0))
     ? '<div style="margin-top:8px;font-size:11px;color:var(--dim);font-family:var(--mono)">&#x2B06; ' + (studioTokens.in||0).toLocaleString() + ' token in &nbsp;&#x2B07; ' + (studioTokens.out||0).toLocaleString() + ' token out &nbsp;&#x2022;&nbsp; <strong style="color:var(--green)">' + ((studioTokens.in||0)+(studioTokens.out||0)).toLocaleString() + '</strong> totale</div>'
     : '';
-  var dlBtn = '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
-    '<button onclick="downloadStudioPDF()" title="Genera e scarica il report come PDF" style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:linear-gradient(135deg,#4f46e5,#2563eb);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:.3px;box-shadow:0 2px 8px rgba(79,70,229,.35)">&#x2913; Download PDF</button>' +
-    '<span style="font-size:11px;color:var(--dim)">Scarica il report completo come file PDF</span>' +
+  var dlBtn = '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+    '<button onclick="downloadStudioPDF()" title="Report completo come PDF" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#4f46e5,#2563eb);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(79,70,229,.35)">&#x2913; PDF</button>' +
+    '<button onclick="downloadStudioXLSX()" title="Esporta tabelle come Excel professionale (SheetJS)" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#059669,#047857);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(5,150,105,.35)">&#x1f4ca; Excel</button>' +
+    '<button onclick="downloadStudioCSV()" title="Esporta tabelle come CSV" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#0891b2,#0369a1);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(8,145,178,.35)">&#x1f4cb; CSV</button>' +
     '</div>';
   el.innerHTML = '<div class="studio-result__title">&#10003; ' + t('workflow_complete') + '</div>' + body + tokLine + dlBtn;
-  // Show/hide inline PDF button in the prompt bar
+  // Show/hide inline export buttons in the prompt bar
   var inlinePdfBtn = document.getElementById('studioInlinePdfBtn');
   if (inlinePdfBtn) inlinePdfBtn.style.display = 'inline-flex';
+  var inlineXlsxBtn = document.getElementById('studioInlineXlsxBtn');
+  if (inlineXlsxBtn) inlineXlsxBtn.style.display = 'inline-flex';
+  var inlineCsvBtn = document.getElementById('studioInlineCsvBtn');
+  if (inlineCsvBtn) inlineCsvBtn.style.display = 'inline-flex';
   // Update canvas button style: bright green when canvas exists, dimmed otherwise
   var canvasBtn = document.getElementById('studioCanvasBtn');
   if (canvasBtn) {
@@ -5784,6 +6904,7 @@ function renderStudio(el) {
 
   // Agent catalog
   var STUDIO_AGENTS = [
+    {icon:'&#127860;',name:'TravelAgent',desc:'Restaurants, hotels & bookings (browser automation)'},
     {icon:'&#128269;',name:'WebSearchAgent',desc:'Search the web'},
     {icon:'&#127760;',name:'BrowserAgent',desc:'Navigate & screenshot pages'},
     {icon:'&#128140;',name:'EmailAgent',desc:'Read & summarize emails'},
@@ -5889,7 +7010,9 @@ function renderStudio(el) {
               '<button onclick="document.getElementById(\\x27studioFileInput\\x27).click()" title="Attach PDF or image" style="padding:8px 10px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:15px" ' + (studioState.running ? 'disabled' : '') + '>&#128206;</button>' +
               '<button id="studioRunBtn" class="studio-run-btn" onclick="runStudio()" style="flex:1" ' + (studioState.running ? 'disabled' : '') + '>' + t('run') + '</button>' +
               '<button id="studioStopBtn" onclick="stopStudio()" title="' + t('stop') + '" style="padding:8px 14px;background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;color:#ef4444;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;' + (studioState.running ? '' : 'display:none') + '">&#9632; ' + t('stop') + '</button>' +
-              '<button id="studioInlinePdfBtn" onclick="downloadStudioPDF()" title="Genera e scarica il report come PDF" style="display:' + (studioState.result ? 'inline-flex' : 'none') + ';align-items:center;gap:5px;padding:8px 12px;background:linear-gradient(135deg,#4f46e5,#2563eb);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(79,70,229,.35)">&#x2913; PDF</button>' +
+              '<button id="studioInlinePdfBtn" onclick="downloadStudioPDF()" title="Download PDF" style="display:' + (studioState.result ? 'inline-flex' : 'none') + ';align-items:center;gap:5px;padding:8px 12px;background:linear-gradient(135deg,#4f46e5,#2563eb);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(79,70,229,.35)">&#x2913; PDF</button>' +
+              '<button id="studioInlineXlsxBtn" onclick="downloadStudioXLSX()" title="Export Excel" style="display:' + (studioState.result ? 'inline-flex' : 'none') + ';align-items:center;gap:5px;padding:8px 12px;background:linear-gradient(135deg,#059669,#047857);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(5,150,105,.35)">&#x1f4ca; Excel</button>' +
+              '<button id="studioInlineCsvBtn" onclick="downloadStudioCSV()" title="Export CSV" style="display:' + (studioState.result ? 'inline-flex' : 'none') + ';align-items:center;gap:5px;padding:8px 10px;background:linear-gradient(135deg,#0891b2,#0369a1);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(8,145,178,.35)">CSV</button>' +
               '<button onclick="studioReset()" title="' + t('reset') + '" style="padding:8px 12px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;font-size:16px;line-height:1" ' + (studioState.running ? 'disabled' : '') + '>&#8635;</button>' +
             '</div>' +
           '</div>' +
@@ -6148,8 +7271,2238 @@ function init(){
   setTimeout(function(){
     fetch(\x27https://nothumanallowed.com/api/v1/telemetry/ping\x27,{method:\x27POST\x27,headers:{\x27Content-Type\x27:\x27application/json\x27},body:JSON.stringify({platform:\x27web-ui\x27,version:\x27${VERSION}\x27})}).catch(function(){});
   },3000);
+  // Version update check — once at boot, non-blocking
+  setTimeout(function(){
+    fetch(API+\x27/api/version/check\x27).then(function(r){return r.json();}).then(function(d){
+      _updateInfo=d;
+      if(d.updateAvailable){renderSidebar();}
+    }).catch(function(){});
+  },5000);
 }
 init();
+
+// ---- WEBCRAFT ----
+var wcState = {
+  description: '',
+  authFields: [{name:'firstName',label:'First name',type:'text',required:true},{name:'lastName',label:'Last name',type:'text',required:true},{name:'email',label:'Email',type:'email',required:true},{name:'password',label:'Password',type:'password',required:true}],
+  blocks: {auth:true, cookieBanner:true, securityMiddleware:true, emailVerification:true},
+  generatedFiles: [],   // [{name, content, lang}]
+  activeFile: 0,
+  running: false,
+  projectName: '',
+  rightTab: 'files',    // 'files' | 'preview'
+  sandbox: {
+    running: false,
+    port: null,
+    dir: null,
+    logs: [],
+    error: null
+  },
+  lastGenStats: null,
+  repairing: false,
+  repairTotal: 0,
+  repairDone: 0,
+  repairCurrent: ''
+};
+var wcRightTab = 'files';
+var wcMainTab = 'new';     // 'new' | 'projects'
+var wcProjectsList = [];   // cached list from server
+var wcSandboxExpanded = {};  // { phaseKey: true/false }
+// Agent chat state
+var wcChat = [];           // [{role:'user'|'agent', text, tools:[]}]
+var wcChatRunning = false;
+var wcChatAttachments = []; // [{name, mimeType, base64, size}]
+var _wcAutoFixAttempts = 0;
+var _wcAutoFixTimer = null;
+var _wcPlanPending = null;   // null | { plan: string, message: string } — plan mode waiting for approval
+var _wcDiffQueue = [];       // [{file, before, after}] diffs from last agent run
+var _wcGrepOpen = false;     // grep panel visible
+var _wcGrepQuery = '';
+var _updateInfo = null;  // {current, latest, updateAvailable} — fetched once at boot
+var _wcGrepResults = [];
+var _wcOverlayMinimized = false;   // overlay minimized by user click
+var _wcOverlayTimer = null;        // inactivity timer to restore overlay
+var _wcGenAbortCtrl = null;        // AbortController for generation stop
+var _wcSyntaxResults = [];   // [{file, ok, error}]
+var _wcSnapshots = [];       // [{ts, fileCount}]
+var _wcLastFilePlan = [];    // saved for manual repair trigger
+var _wcLastSysPreamble = '';
+var _wcTokIn = 0;            // global token counters (accumulate across generation + repair)
+var _wcTokOut = 0;
+var _wcGenOverlayState = { fi: 0, total: 0, name: '' };
+var _wcGenStartTime = 0;
+var _wcTimerInterval = null;
+
+function wcGenElapsed() {
+  var s = Math.floor((Date.now() - _wcGenStartTime) / 1000);
+  var m = Math.floor(s / 60); s = s % 60;
+  return (m > 0 ? m + 'm ' : '') + s + 's';
+}
+
+function wcStartGenTimer() {
+  if (_wcTimerInterval) clearInterval(_wcTimerInterval);
+  _wcTimerInterval = setInterval(function() {
+    if (!wcState.running) { clearInterval(_wcTimerInterval); _wcTimerInterval = null; return; }
+    if (_wcOverlayMinimized) {
+      var pill = document.getElementById('wcPillLabel');
+      if (pill) pill.textContent = _wcGenOverlayState.name || 'Generando...';
+      var ov = document.getElementById('wcGenOverlay');
+      if (ov) { var spans = ov.querySelectorAll('span'); if (spans[1]) spans[1].textContent = wcGenElapsed(); }
+    } else {
+      wcUpdateGenOverlay(_wcGenOverlayState.fi, _wcGenOverlayState.total, _wcGenOverlayState.name);
+    }
+  }, 1000);
+}
+
+function wcUpdateGenOverlay(fi2, total, name) {
+  _wcGenOverlayState = { fi: fi2, total: total, name: name };
+  if (_wcOverlayMinimized) return;
+  var ov = document.getElementById('wcGenOverlay');
+  if (!ov) return;
+  var pct = Math.round((fi2 / total) * 100);
+  var tokLabel = (_wcTokIn + _wcTokOut) > 0
+    ? '<div style="font-size:10px;color:var(--dim);margin-top:4px;font-family:var(--mono)">&#8679;' + _wcTokIn.toLocaleString() + ' &#8681;' + _wcTokOut.toLocaleString() + ' tok</div>'
+    : '';
+  ov.innerHTML =
+    '<div style="font-size:38px;animation:wcRobotBob 1s ease-in-out infinite">&#129302;</div>' +
+    '<div style="font-size:13px;font-weight:700;color:var(--green);margin-top:12px">' + (name.indexOf('Retry:') === 0 ? 'Retry in corso...' : name.indexOf('Fix:') === 0 ? 'Correzione in corso...' : 'Generazione in corso...') + '</div>' +
+    '<div style="font-size:10px;color:var(--dim);margin-top:2px">Clicca per navigare i file</div>' +
+    '<div style="font-size:11px;color:'+(name.indexOf('Retry:')===0?'#fb923c':name.indexOf('Fix:')===0?'#facc15':'var(--dim)')+';font-family:var(--mono);max-width:300px;text-align:center;word-break:break-all;margin-top:8px">'+wcEsc(name)+'</div>' +
+    '<div style="width:220px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-top:12px">' +
+      '<div style="height:100%;width:'+pct+'%;background:var(--green);border-radius:2px;transition:width .4s ease;animation:wcBarPulse 1.5s ease-in-out infinite"></div>' +
+    '</div>' +
+    '<div style="font-size:10px;color:var(--dim);margin-top:6px">'+fi2+' / '+total+' file &nbsp;&#183;&nbsp; '+wcGenElapsed()+'</div>' +
+    tokLabel +
+    '<div style="display:flex;gap:4px;margin-top:10px">'+[0,1,2,3,4].map(function(_,idx){ return '<div style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:wcDot 1.1s ease-in-out infinite '+(idx*0.14)+'s"></div>'; }).join('')+'</div>';
+}
+
+// Skills state
+var wcSkills = [];          // [{name, content, type}] type: 'skill'|'memory'|'provider'
+var wcSkillModal = null;    // null | {mode:'edit'|'new', idx:number|null, name, content, type, generating}
+var _wcSkillsLoaded = false;
+
+// Default 3 files always present in every project
+var WC_DEFAULT_FILES = [
+  { name: 'memory.md',  type: 'memory',   content: '' },
+  { name: 'liara.md',   type: 'provider', content: '' },
+  { name: 'skills.md',  type: 'skill',    content: '' }
+];
+
+function wcEsc(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
+
+function renderWebCraft(el) {
+  // File sidebar — replaces horizontal tabs
+  var _activeFile = wcState.generatedFiles[wcState.activeFile];
+
+  function wcFileSizeLabel(content) {
+    if (!content) return '0 B';
+    var bytes = new TextEncoder().encode(content).length;
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(2) + ' MB';
+  }
+
+  var fileSidebarHtml = wcState.generatedFiles.length > 0
+    ? '<div style="width:190px;flex-shrink:0;border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column">' +
+        '<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;flex-shrink:0">'+wcState.generatedFiles.length+' file</div>' +
+        wcState.generatedFiles.map(function(f,i){
+          var active = i === wcState.activeFile;
+          var hasErr = !!f._error || !!f._syntaxError;
+          var isPending = !!f._pending;
+          var lines = isPending ? 0 : (f.content || '').split(String.fromCharCode(10)).length;
+          var sizeLabel = isPending ? '...' : wcFileSizeLabel(f.content || '');
+          var nameColor = hasErr ? '#f87171' : isPending ? '#4b5563' : active ? 'var(--text)' : 'var(--dim)';
+          var bg = active ? 'var(--bg3)' : 'transparent';
+          var borderLeft = hasErr ? '2px solid #f87171' : active ? '2px solid var(--green3)' : '2px solid transparent';
+          var icon = isPending ? '&#8987;' : hasErr ? '&#9888;' : wcFileIcon(f.name);
+          return '<button id="wcTab'+i+'" onclick="wcSetFile('+i+')" style="width:100%;text-align:left;padding:7px 10px 7px 10px;background:'+bg+';border:none;border-left:'+borderLeft+';cursor:pointer;display:flex;flex-direction:column;gap:2px;flex-shrink:0">' +
+            '<span style="display:flex;align-items:center;gap:5px">' +
+              '<span style="font-size:12px;flex-shrink:0">'+icon+'</span>' +
+              '<span style="font-size:11px;font-family:var(--mono);color:'+nameColor+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="'+wcEsc(f.name)+'">'+wcEsc(f.name.split('/').pop())+'</span>' +
+            '</span>' +
+            (f.name.includes('/') ? '<span style="font-size:9px;color:#4b5563;font-family:var(--mono);padding-left:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(f.name.split('/').slice(0,-1).join('/'))+'</span>' : '') +
+            (!isPending ? '<span style="font-size:9px;color:#4b5563;font-family:var(--mono);padding-left:17px">'+lines+' righe &nbsp;&#183;&nbsp; '+sizeLabel+'</span>' : '') +
+          '</button>';
+        }).join('') +
+      '</div>'
+    : '';
+
+  var codeHtml = wcState.generatedFiles.length > 0 && _activeFile
+    ? '<div style="flex:1;display:flex;flex-direction:row;min-height:0;overflow:hidden">' +
+        '<div id="wcCodeWrap" style="flex:1;overflow:auto;background:var(--bg3)">' +
+          '<div style="padding:8px 14px;border-bottom:1px solid var(--border2);font-size:10px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:8px;background:var(--bg2)">' +
+            '<span style="font-size:13px">'+wcFileIcon(_activeFile.name)+'</span>' +
+            '<span style="color:var(--text)">'+wcEsc(_activeFile.name)+'</span>' +
+            (!_activeFile._pending && !_activeFile._error ? '<span style="margin-left:auto;color:#4b5563">'+(_activeFile.content||'').split(String.fromCharCode(10)).length+' righe &nbsp;&#183;&nbsp; '+wcFileSizeLabel(_activeFile.content||'')+'</span>' : '') +
+          '</div>' +
+          (_activeFile._error ? '<div style="padding:8px 14px;background:rgba(239,68,68,0.12);border-bottom:1px solid rgba(239,68,68,0.3);font-size:11px;color:#f87171;display:flex;align-items:center;gap:6px">&#9888; Generazione fallita — chiedi al modello di rigenerare questo file</div>' :
+           _activeFile._syntaxError ? '<div style="padding:8px 14px;background:rgba(234,179,8,0.1);border-bottom:1px solid rgba(234,179,8,0.3);font-size:11px;color:#facc15;display:flex;align-items:center;gap:6px">&#9888; Syntax error: '+wcEsc(_activeFile._syntaxError)+'</div>' : '') +
+          (_activeFile._pending ? '<div style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--dim);font-size:12px;gap:8px">&#8987; In generazione...</div>' :
+          '<pre style="margin:0;padding:14px 16px;font-size:11px;line-height:1.6;color:'+(_activeFile._error?'#f87171':_activeFile._syntaxError?'#fde68a':'var(--text)')+';font-family:var(--mono);white-space:pre-wrap;word-break:break-all">'+wcEsc(_activeFile.content)+'</pre>') +
+        '</div>' +
+        fileSidebarHtml +
+      '</div>'
+    : '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:12px;flex-direction:column;gap:8px">' +
+        '<span style="font-size:36px;opacity:.25">&#128736;</span>' +
+        '<span>'+t('wc_no_files')+'</span>' +
+      '</div>';
+
+  function wcFileIcon(name) {
+    var ext = name.split('.').pop().toLowerCase();
+    var icons = { js:'&#128196;', ts:'&#128196;', css:'&#127912;', html:'&#127760;', json:'&#123;', md:'&#128209;', sql:'&#128450;', env:'&#128272;', conf:'&#9881;', lock:'&#128274;' };
+    return icons[ext] || '&#128196;';
+  }
+
+  var authFieldsHtml = wcState.authFields.map(function(f,i){
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg3);border-radius:6px;margin-bottom:4px;overflow:hidden">' +
+      '<input value="'+wcEsc(f.label)+'" onchange="wcUpdateField('+i+',this.value)" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text);font-size:11px;font-family:var(--mono);width:0" />' +
+      '<select onchange="wcUpdateFieldType('+i+',this.value)" style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--dim);font-size:10px;padding:2px 2px;width:68px;flex-shrink:0">' +
+        ['text','email','password','tel','date','number'].map(function(t){return '<option value="'+t+'"'+(f.type===t?' selected':'')+'>'+t+'</option>'}).join('') +
+      '</select>' +
+      '<input type="checkbox"'+(f.required?' checked':'')+' onchange="wcToggleRequired('+i+',this.checked)" title="Required" style="accent-color:var(--green3)">' +
+      '<button onclick="wcRemoveField('+i+')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;line-height:1;padding:0 2px">&times;</button>' +
+    '</div>';
+  }).join('');
+
+  // Example prompts — clicking fills project name + description
+  var wcExamples = [
+    {name:'MySaaS', desc:'SaaS product landing page. Hero: large headline, subheadline, two CTA buttons (Start free trial / Watch demo), animated gradient background. Features section: 3-column grid with icon, title, description for 6 features (real-time sync, team collaboration, analytics dashboard, API access, role-based permissions, 99.9% uptime SLA). Pricing section: 3 cards (Free: 1 user, 5 projects, community support; Pro $29/mo: 10 users, unlimited projects, priority support, API access; Enterprise: custom pricing, SSO, SLA, dedicated support) with highlighted recommended card. Testimonials: 3 customer quotes with avatar placeholder, name, company, star rating. FAQ accordion: 5 questions. Footer: links, social icons, copyright. Nav: logo, links (Features, Pricing, Docs, Blog), Login and Start Free CTA buttons. Sticky nav on scroll. Smooth scroll between sections.'},
+    {name:'MyShop', desc:'E-commerce storefront homepage. Nav: logo, search bar (full-width on mobile), cart icon with item count badge, account icon, hamburger menu on mobile. Hero: full-width banner with promotional message, discount badge, Shop Now CTA. Category strip: 6 category cards with icon and label (Electronics, Clothing, Home, Sports, Books, Beauty). Featured products grid: 8 product cards each with product image placeholder, product name, star rating (1-5), review count, original price with strikethrough, sale price, Add to Cart button, wishlist heart icon. Promo banner: full-width colored banner with coupon code. Newsletter signup: email input with Subscribe button. Footer: 4-column layout (Company, Customer Service, Categories, Contact info). Fully responsive 2-col on tablet, 1-col on mobile.'},
+    {name:'MyBlog', desc:'Blog and content platform homepage. Nav: logo, category links (Tech, Design, Business, Life), search icon, Subscribe CTA. Hero: large featured article card with cover image placeholder, category badge, title, excerpt (2 lines), author avatar, author name, date, read time, Read More link. Article grid: 6 cards in 3-column layout, each with cover image, category tag, title, excerpt, author, date. Sidebar (on desktop): Recent posts list (5 items with thumbnail, title, date), Popular tags cloud (10 tags as pill buttons), Newsletter signup widget (email + Subscribe). Pagination: numbered page links. Author bio section at bottom: avatar, name, bio paragraph, social links. Footer: minimal with links and copyright.'},
+    {name:'MyPortfolio', desc:'Developer portfolio homepage. Nav: name/logo left, links right (Work, Skills, About, Contact), dark/light mode toggle button, nav hides on scroll down and shows on scroll up. Hero: centered layout, large name heading, animated typewriter role subtitle cycling through 3 roles (e.g. Full-Stack Developer / UI Engineer / Open Source Contributor), short bio paragraph, two CTA buttons (View my work / Download CV), animated floating code snippet decoration. Work section: 6 project cards in 2-column masonry-style grid, each with project screenshot placeholder, project name, tech stack tags (3-4 pills), description (2 lines), GitHub icon link and Live Demo link. Skills section: grouped by category (Frontend, Backend, Tools) with skill name and filled bar (percentage). About section: split layout, left photo placeholder, right: bio paragraph, timeline of 3 career milestones (year, title, company, description). Contact section: centered form (name, email, subject, message textarea, Send Message button), response time note. All sections with smooth scroll entrance animations using Intersection Observer.'},
+    {name:'MyRestaurant', desc:'Restaurant website homepage. Nav: logo center, links left (Menu, Story, Reservations, Gallery, Contact), phone number right, fixed transparent becoming solid white on scroll. Hero: full-viewport background image placeholder with dark overlay, restaurant name in serif font, tagline, two buttons (Reserve a Table / View Menu). About strip: 3 horizontal icon+stat items (e.g. Est. 2010 / 50 Tables / 4.9 Stars). Menu preview section: tabbed navigation (Starters, Mains, Desserts, Drinks), each tab shows 6 menu items in 2-column grid with dish name, description (1 line), allergen icons, price. CTA reservation banner: colored background, heading, inline form (date picker, time select, party size select, name, phone, Book Now button). Gallery grid: 9 square image placeholders in 3x3 mosaic layout with hover zoom effect. Chef section: photo placeholder left, name, title, bio paragraph, signature right. Testimonials: horizontal scroll of 5 review cards (stars, quote, reviewer name, date). Footer: address, opening hours table (Mon-Sun), social links, Google Maps embed placeholder.'},
+    {name:'MyJobBoard', desc:'Job board homepage. Nav: logo, links (Browse Jobs, Companies, Salary Guide, Blog), Post a Job CTA button (green), Sign In link. Hero: centered search widget (keyword input + location input + category select + Search Jobs button), popular searches as clickable tags below (e.g. React Developer, Data Analyst, UX Designer). Stats strip: 4 counters (Active Jobs, Companies Hiring, Candidates, Jobs Filled This Month). Featured jobs list: 8 job cards in vertical list, each with company logo placeholder, job title, company name, location (with icon), job type badge (Full-time/Remote/Contract), salary range, posted X days ago, bookmark icon, Quick Apply button. Filter sidebar (desktop): checkboxes for Job Type, Experience Level, Salary Range slider, Location radius, Remote only toggle. Top companies section: 6 company cards in 3-col grid with logo, name, industry, open positions count, View Jobs link. Category cards: 8 icons+labels for job categories. Newsletter: email input with Get Job Alerts button. Footer: 5-column layout (Job Seekers, Employers, Resources, Company, Social).'}
+  ];
+  var wcExHtml = '<div style="margin-bottom:12px;flex-shrink:0"><div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">'+t('wc_examples_label')+'</div><div style="display:flex;gap:6px;flex-wrap:wrap">' +
+    wcExamples.map(function(ex,i){
+      return '<button onclick="wcPickExample('+i+')" style="padding:4px 10px;border-radius:14px;border:1px solid var(--border2);background:var(--bg3);color:var(--dim);font-size:11px;cursor:pointer;white-space:nowrap">'+wcEsc(ex.name)+'</button>';
+    }).join('') +
+  '</div></div>';
+
+  var headerHtml =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">' +
+      '<div>' +
+        '<h2 style="font-size:15px;color:var(--green);margin-bottom:2px">&#128736; '+t('wc_title')+'</h2>' +
+        '<p style="font-size:11px;color:var(--dim);line-height:1.5">'+t('wc_subtitle')+'</p>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;flex-shrink:0">' +
+        '<button onclick="wcMainTabNew()" style="padding:5px 14px;border-radius:6px;border:1px solid var(--border2);background:'+(wcMainTab==='new'?'var(--green3)':'var(--bg3)')+';color:'+(wcMainTab==='new'?'var(--bg)':'var(--dim)')+';font-size:11px;font-weight:600;cursor:pointer">+ Nuovo</button>' +
+        '<button onclick="wcMainTabProjects()" style="padding:5px 14px;border-radius:6px;border:1px solid var(--border2);background:'+(wcMainTab==='projects'?'var(--green3)':'var(--bg3)')+';color:'+(wcMainTab==='projects'?'var(--bg)':'var(--dim)')+';font-size:11px;font-weight:600;cursor:pointer">&#128193; '+t('wc_projects')+'</button>' +
+      '</div>' +
+    '</div>';
+
+  var editorHtml =
+    '<div style="display:flex;flex-direction:column;height:100%">' +
+    wcExHtml +
+    '<div style="display:flex;gap:14px;align-items:flex-start;flex:1;min-height:0">' +
+      '<div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;height:100%">' +
+        '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px">' +
+          '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">'+t('wc_blocks')+'</div>' +
+          ['auth','cookieBanner','securityMiddleware','emailVerification'].map(function(b){
+            var labels = {auth:'Auth (register/login/JWT)',cookieBanner:'GDPR Cookie Banner',securityMiddleware:'Security Middleware',emailVerification:'Email Verification'};
+            var icons  = {auth:'&#128274;',cookieBanner:'&#127850;',securityMiddleware:'&#128737;',emailVerification:'&#9993;'};
+            return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:11px;color:var(--text)">' +
+              '<input type="checkbox"'+(wcState.blocks[b]?' checked':'')+' onchange="wcState.blocks['+JSON.stringify(b)+']=this.checked" style="accent-color:var(--green3);width:14px;height:14px">' +
+              '<span>'+icons[b]+'</span><span>'+labels[b]+'</span>' +
+            '</label>';
+          }).join('') +
+        '</div>' +
+        '<div id="wcAuthFieldsPanel" style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;'+(wcState.blocks.auth?'':'display:none')+'">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px">'+t('wc_auth_fields')+'</div>' +
+            '<button onclick="wcAddField()" style="font-size:10px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:5px;color:var(--green);cursor:pointer">'+t('wc_add_field')+'</button>' +
+          '</div>' +
+          '<div id="wcFieldsList">'+authFieldsHtml+'</div>' +
+          '<div style="font-size:9px;color:var(--dim);margin-top:4px">'+t('wc_required_hint')+'</div>' +
+        '</div>' +
+        wcSkillsPanelHtml() +
+        wcSnapshotsPanelHtml() +
+        (wcState.running ?
+          '<div style="width:100%;padding:11px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--dim);font-size:12px;text-align:center">&#9203; '+t('wc_generating')+'...</div>'
+        : '') +
+        (wcState.repairing ?
+          '<div style="width:100%;padding:10px 12px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.4);border-radius:8px;display:flex;flex-direction:column;gap:4px">' +
+            '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#facc15;font-weight:600">&#128295; Correzione automatica in corso...</div>' +
+            '<div style="font-size:10px;color:var(--dim)">'+wcState.repairDone+' / '+wcState.repairTotal+' file</div>' +
+            (wcState.repairCurrent ? '<div style="font-size:10px;color:#fde68a;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(wcState.repairCurrent)+'</div>' : '') +
+          '</div>'
+        : '') +
+        (wcState.generatedFiles.length > 0 && !wcState.running ?
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            '<button onclick="wcDownloadZip()" style="flex:1;padding:9px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:11px;font-weight:600;cursor:pointer">&#8681; ZIP</button>' +
+            '<button onclick="wcRunSyntaxCheck()" title="Controlla errori sintassi JS" style="padding:9px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--dim);font-size:11px;cursor:pointer" title="Syntax check">&#9989;</button>' +
+            '<button onclick="wcToggleGrep()" title="Cerca nel codice" style="padding:9px 10px;background:'+(_wcGrepOpen?'var(--greendim)':'var(--bg3)')+';border:1px solid '+(_wcGrepOpen?'var(--green3)':'var(--border2)')+';border-radius:8px;color:'+(_wcGrepOpen?'var(--green)':'var(--dim)')+';font-size:11px;cursor:pointer">&#128269;</button>' +
+            '<button onclick="wcManualSnapshot()" title="Salva snapshot" style="padding:9px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--dim);font-size:11px;cursor:pointer">&#128190;</button>' +
+          '</div>' +
+          (wcState.generatedFiles.some(function(f){ return f._error || f._syntaxError; }) && !wcState.repairing ?
+            '<button onclick="wcTriggerRepair()" style="width:100%;padding:9px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.5);border-radius:8px;color:#facc15;font-size:11px;font-weight:600;cursor:pointer">&#128295; Correggi tutti i file rossi</button>'
+          : '') +
+          '<button onclick="wcStartSandbox()" id="wcSandboxBtn" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--green3);border-radius:8px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">&#9654; '+t('wc_sandbox_start')+'</button>' +
+          (wcState.lastGenStats ? '<div style="padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-size:10px;color:var(--dim);font-family:var(--mono);display:flex;flex-wrap:wrap;gap:6px">' +
+            '<span>&#9201; '+(wcState.lastGenStats.seconds >= 60 ? Math.floor(wcState.lastGenStats.seconds/60)+'m '+(wcState.lastGenStats.seconds%60)+'s' : wcState.lastGenStats.seconds+'s')+'</span>' +
+            '<span>&#8679; '+wcState.lastGenStats.tokIn.toLocaleString()+' tok in</span>' +
+            '<span>&#8681; '+wcState.lastGenStats.tokOut.toLocaleString()+' tok out</span>' +
+            '<span>&#128196; '+wcState.lastGenStats.files+' file</span>' +
+          '</div>' : '')
+        : '') +
+      '</div>' +
+      '<div data-wc-files style="position:relative;flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;height:100%;overflow:hidden">' +
+        (wcState.repairing ?
+          (_wcOverlayMinimized
+            ? '<div id="wcRepairOverlay" onclick="wcOverlayRestore()" style="position:absolute;bottom:12px;right:12px;z-index:50;background:rgba(0,0,0,0.85);border:1px solid rgba(234,179,8,0.6);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:7px;cursor:pointer;animation:wcBubbleIn .2s ease;backdrop-filter:blur(4px)">'
+                +'<span style="font-size:16px;animation:wcRobotBob .9s ease-in-out infinite">&#128295;</span>'
+                +'<span style="font-size:10px;color:#facc15;font-weight:700;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(wcState.repairCurrent || 'Correzione...')+'</span>'
+                +'<span style="font-size:9px;color:var(--dim)">'+wcState.repairDone+'/'+wcState.repairTotal+'</span>'
+                +'<span style="display:flex;gap:3px">'+[0,1,2].map(function(_,idx){ return '<span style="width:4px;height:4px;border-radius:50%;background:#facc15;animation:wcDot 1.1s ease-in-out infinite '+(idx*0.18)+'s"></span>'; }).join('')+'</span>'
+              +'</div>'
+            : '<div id="wcRepairOverlay" onclick="wcOverlayMinimize()" title="Clicca per navigare i file" style="position:absolute;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);border-radius:10px;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;animation:wcBubbleIn .3s ease">'
+                +'<div style="font-size:38px;animation:wcRobotBob 1s ease-in-out infinite">&#128295;</div>'
+                +'<div style="font-size:13px;font-weight:700;color:#facc15;margin-top:12px">Correzione automatica in corso...</div>'
+                +'<div style="font-size:10px;color:var(--dim);margin-top:4px">Clicca per navigare i file</div>'
+                +'<div id="wcRepairCounter" style="font-size:11px;color:var(--dim);margin-top:6px">'+wcState.repairDone+' / '+wcState.repairTotal+' file</div>'
+                +'<div id="wcRepairFile" style="font-size:10px;color:#fde68a;font-family:var(--mono);margin-top:4px;max-width:280px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(wcState.repairCurrent)+'</div>'
+                +'<div style="display:flex;gap:4px;margin-top:16px">'+[0,1,2,3,4].map(function(_,idx){ return '<div style="width:6px;height:6px;border-radius:50%;background:#facc15;animation:wcDot 1.1s ease-in-out infinite '+(idx*0.14)+'s"></div>'; }).join('')+'</div>'
+              +'</div>'
+          )
+        : wcState.running ? (
+          _wcOverlayMinimized
+          // Minimized: small pill in bottom-right corner
+          ? '<div id="wcGenOverlay" onclick="wcOverlayRestore()" style="position:absolute;bottom:12px;right:12px;z-index:50;background:rgba(0,0,0,0.85);border:1px solid var(--green3);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:7px;cursor:pointer;animation:wcBubbleIn .2s ease;backdrop-filter:blur(4px)">'
+              +'<span style="font-size:16px;animation:wcRobotBob .9s ease-in-out infinite">&#129302;</span>'
+              +'<span id="wcPillLabel" style="font-size:10px;color:var(--green);font-weight:700;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(_wcGenOverlayState.name || 'Generando...')+'</span>'
+              +'<span style="font-size:9px;color:var(--dim)">'+wcGenElapsed()+'</span>'
+              +'<span style="display:flex;gap:3px">'+[0,1,2].map(function(_,idx){ return '<span style="width:4px;height:4px;border-radius:50%;background:var(--green);animation:wcDot 1.1s ease-in-out infinite '+(idx*0.18)+'s"></span>'; }).join('')+'</span>'
+            +'</div>'
+          // Full overlay
+          : '<div id="wcGenOverlay" onclick="wcOverlayMinimize()" title="Clicca per nascondere e navigare i file" style="position:absolute;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);border-radius:10px;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:wcBubbleIn .3s ease;cursor:pointer">'
+              +'<div style="font-size:38px;animation:wcRobotBob 1s ease-in-out infinite">&#129302;</div>'
+              +'<div style="font-size:13px;font-weight:700;color:var(--green);margin-top:12px">Generazione in corso...</div>'
+              +'<div style="font-size:10px;color:var(--dim);margin-top:4px">Clicca per navigare i file</div>'
+              +'<div style="display:flex;gap:4px;margin-top:16px">'+[0,1,2,3,4].map(function(_,idx){ return '<div style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:wcDot 1.1s ease-in-out infinite '+(idx*0.14)+'s"></div>'; }).join('')+'</div>'
+            +'</div>'
+        ) : '') +
+        '<div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">' +
+          '<button onclick="wcTabFiles()" style="padding:8px 16px;background:'+(wcRightTab==='preview'?'transparent':'var(--bg3)')+';border:none;border-right:1px solid var(--border);color:'+(wcRightTab==='preview'?'var(--dim)':'var(--text)')+';font-size:11px;font-weight:600;cursor:pointer">&#128196; File</button>' +
+          '<button onclick="wcTabPreview()" style="padding:8px 16px;background:'+(wcRightTab==='preview'?'var(--bg3)':'transparent')+';border:none;color:'+(wcRightTab==='preview'?'var(--text)':'var(--dim)')+';font-size:11px;font-weight:600;cursor:pointer">&#127760; Sandbox</button>' +
+        '</div>' +
+        (wcRightTab === 'preview' ? wcSandboxPanelHtml() : codeHtml) +
+      '</div>' +
+    '</div>' +
+    '</div>';
+
+  // Preserve textarea value across re-renders (re-render destroys DOM)
+  var _wcChatInputEl = document.getElementById('wcChatInput');
+  var _wcChatInputVal = _wcChatInputEl ? _wcChatInputEl.value : '';
+
+  el.innerHTML =
+    '<div style="display:flex;flex-direction:column;height:100%;min-height:0;padding:0 4px">' +
+      headerHtml +
+      '<div style="flex:1;min-height:0;overflow:hidden">' +
+        (wcMainTab === 'projects' ? wcProjectsPanelHtml() : editorHtml) +
+      '</div>' +
+      (wcMainTab !== 'projects' ? wcPlanBannerHtml() : '') +
+      (wcMainTab !== 'projects' ? wcGrepPanelHtml() : '') +
+      (wcMainTab !== 'projects' ? wcDiffPanelHtml() : '') +
+      wcChatPanelHtml() +
+    '</div>' +
+    wcSkillModalHtml();
+
+  // Restore textarea value after DOM rebuild
+  if (_wcChatInputVal) {
+    var _wcChatInputNew = document.getElementById('wcChatInput');
+    if (_wcChatInputNew) _wcChatInputNew.value = _wcChatInputVal;
+  }
+}
+
+function wcPickExample(i) {
+  var wcExamplesData = [
+    {name:'MySaaS', desc:'SaaS product landing page. Hero: large headline, subheadline, two CTA buttons (Start free trial / Watch demo), animated gradient background. Features section: 3-column grid with icon, title, description for 6 features (real-time sync, team collaboration, analytics dashboard, API access, role-based permissions, 99.9% uptime SLA). Pricing section: 3 cards (Free: 1 user, 5 projects, community support; Pro $29/mo: 10 users, unlimited projects, priority support, API access; Enterprise: custom pricing, SSO, SLA, dedicated support) with highlighted recommended card. Testimonials: 3 customer quotes with avatar placeholder, name, company, star rating. FAQ accordion: 5 questions. Footer: links, social icons, copyright. Nav: logo, links (Features, Pricing, Docs, Blog), Login and Start Free CTA buttons. Sticky nav on scroll. Smooth scroll between sections.'},
+    {name:'MyShop', desc:'E-commerce storefront homepage. Nav: logo, search bar (full-width on mobile), cart icon with item count badge, account icon, hamburger menu on mobile. Hero: full-width banner with promotional message, discount badge, Shop Now CTA. Category strip: 6 category cards with icon and label (Electronics, Clothing, Home, Sports, Books, Beauty). Featured products grid: 8 product cards each with product image placeholder, product name, star rating (1-5), review count, original price with strikethrough, sale price, Add to Cart button, wishlist heart icon. Promo banner: full-width colored banner with coupon code. Newsletter signup: email input with Subscribe button. Footer: 4-column layout (Company, Customer Service, Categories, Contact info). Fully responsive 2-col on tablet, 1-col on mobile.'},
+    {name:'MyBlog', desc:'Blog and content platform homepage. Nav: logo, category links (Tech, Design, Business, Life), search icon, Subscribe CTA. Hero: large featured article card with cover image placeholder, category badge, title, excerpt (2 lines), author avatar, author name, date, read time, Read More link. Article grid: 6 cards in 3-column layout, each with cover image, category tag, title, excerpt, author, date. Sidebar (on desktop): Recent posts list (5 items with thumbnail, title, date), Popular tags cloud (10 tags as pill buttons), Newsletter signup widget (email + Subscribe). Pagination: numbered page links. Author bio section at bottom: avatar, name, bio paragraph, social links. Footer: minimal with links and copyright.'},
+    {name:'MyPortfolio', desc:'Developer portfolio homepage. Nav: name/logo left, links right (Work, Skills, About, Contact), dark/light mode toggle button, nav hides on scroll down and shows on scroll up. Hero: centered layout, large name heading, animated typewriter role subtitle cycling through 3 roles (e.g. Full-Stack Developer / UI Engineer / Open Source Contributor), short bio paragraph, two CTA buttons (View my work / Download CV), animated floating code snippet decoration. Work section: 6 project cards in 2-column masonry-style grid, each with project screenshot placeholder, project name, tech stack tags (3-4 pills), description (2 lines), GitHub icon link and Live Demo link. Skills section: grouped by category (Frontend, Backend, Tools) with skill name and filled bar (percentage). About section: split layout, left photo placeholder, right: bio paragraph, timeline of 3 career milestones (year, title, company, description). Contact section: centered form (name, email, subject, message textarea, Send Message button), response time note. All sections with smooth scroll entrance animations using Intersection Observer.'},
+    {name:'MyRestaurant', desc:'Restaurant website homepage. Nav: logo center, links left (Menu, Story, Reservations, Gallery, Contact), phone number right, fixed transparent becoming solid white on scroll. Hero: full-viewport background image placeholder with dark overlay, restaurant name in serif font, tagline, two buttons (Reserve a Table / View Menu). About strip: 3 horizontal icon+stat items (e.g. Est. 2010 / 50 Tables / 4.9 Stars). Menu preview section: tabbed navigation (Starters, Mains, Desserts, Drinks), each tab shows 6 menu items in 2-column grid with dish name, description (1 line), allergen icons, price. CTA reservation banner: colored background, heading, inline form (date picker, time select, party size select, name, phone, Book Now button). Gallery grid: 9 square image placeholders in 3x3 mosaic layout with hover zoom effect. Chef section: photo placeholder left, name, title, bio paragraph, signature right. Testimonials: horizontal scroll of 5 review cards (stars, quote, reviewer name, date). Footer: address, opening hours table (Mon-Sun), social links, Google Maps embed placeholder.'},
+    {name:'MyJobBoard', desc:'Job board homepage. Nav: logo, links (Browse Jobs, Companies, Salary Guide, Blog), Post a Job CTA button (green), Sign In link. Hero: centered search widget (keyword input + location input + category select + Search Jobs button), popular searches as clickable tags below (e.g. React Developer, Data Analyst, UX Designer). Stats strip: 4 counters (Active Jobs, Companies Hiring, Candidates, Jobs Filled This Month). Featured jobs list: 8 job cards in vertical list, each with company logo placeholder, job title, company name, location (with icon), job type badge (Full-time/Remote/Contract), salary range, posted X days ago, bookmark icon, Quick Apply button. Filter sidebar (desktop): checkboxes for Job Type, Experience Level, Salary Range slider, Location radius, Remote only toggle. Top companies section: 6 company cards in 3-col grid with logo, name, industry, open positions count, View Jobs link. Category cards: 8 icons+labels for job categories. Newsletter: email input with Get Job Alerts button. Footer: 5-column layout (Job Seekers, Employers, Resources, Company, Social).'}
+  ];
+  var ex = wcExamplesData[i];
+  if (!ex) return;
+  wcState.projectName = ex.name;
+  wcState.description = ex.desc;
+  renderWebCraft(document.getElementById('content'));
+  // After re-render, populate the chat textarea and project name input with example values
+  var chatEl = document.getElementById('wcChatInput');
+  if (chatEl) chatEl.value = ex.desc;
+  var nameEl = document.getElementById('wcProjectName');
+  if (nameEl) nameEl.value = ex.name;
+  if (chatEl) chatEl.focus();
+}
+function wcTabFiles() { wcRightTab = 'files'; renderWebCraft(document.getElementById('content')); }
+function wcTabPreview() { wcRightTab = 'preview'; renderWebCraft(document.getElementById('content')); }
+function wcOpenSandbox() { if (wcState.sandbox.port) window.open('http://127.0.0.1:' + wcState.sandbox.port, '_blank'); }
+
+// ── WebCraft Context Files (Skills / Memory / Provider) ───────────────────────
+
+function wcFileTypeIcon(type) {
+  return type === 'memory' ? '&#129504;' : type === 'provider' ? '&#129302;' : type === 'log' ? '&#128196;' : '&#128203;';
+}
+function wcFileTypeBadge(type) {
+  var colors = { memory: '#7c5cbf', provider: '#2a7fff', skill: '#1a7a4a', log: '#555' };
+  var labels = { memory: 'memory', provider: 'provider', skill: 'skill', log: 'log' };
+  return '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:' + (colors[type]||'#444') + ';color:#fff;margin-left:4px;flex-shrink:0">' + (labels[type]||type) + '</span>';
+}
+
+function wcSkillsPanelHtml() {
+  var hasProj = wcState.projectName && wcState.generatedFiles.length > 0;
+  // Load context files from server on first render if project active
+  if (hasProj && !_wcSkillsLoaded) {
+    _wcSkillsLoaded = true;
+    fetch(API + '/api/studio/webcraft/skills/' + encodeURIComponent(wcState.projectName))
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        wcSkills = d.skills || [];
+        // Ensure the 3 default files always exist client-side
+        WC_DEFAULT_FILES.forEach(function(def) {
+          var exists = wcSkills.some(function(s){ return s.name === def.name; });
+          if (!exists) wcSkills.unshift({ name: def.name, type: def.type, content: def.content });
+        });
+        renderWebCraft(document.getElementById('content'));
+      })
+      .catch(function(){});
+  }
+  // Can add new skill only (memory + provider are singletons already in defaults)
+  var rows = wcSkills.map(function(s, si) {
+    var isSingleton = s.type === 'memory' || s.type === 'provider';
+    var isLog = s.type === 'log';
+    var isEmpty = !s.content || s.content.trim() === '';
+    return '<div style="display:flex;align-items:center;gap:4px;padding:5px 0;border-bottom:1px solid var(--border)">' +
+      '<span style="font-size:13px;flex-shrink:0">' + wcFileTypeIcon(s.type) + '</span>' +
+      '<span style="font-size:11px;color:'+(isLog?'var(--dim)':'var(--text)')+';flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+wcEsc(s.name)+'">' + wcEsc(s.name) + '</span>' +
+      wcFileTypeBadge(s.type) +
+      (!isLog && isEmpty ? '<span title="Vuoto" style="font-size:9px;color:#e09020;flex-shrink:0">&#9888;</span>' : '') +
+      '<button onclick="wcOpenSkill('+si+')" title="'+(isLog?'Visualizza log':'Modifica')+'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;padding:2px 4px;flex-shrink:0">'+(isLog?'&#128065;':'&#9998;')+'</button>' +
+      (!isSingleton && !isLog ? '<button onclick="wcClearSkill('+si+')" title="Svuota" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;padding:2px 4px;flex-shrink:0">&#128465;</button>' : '') +
+      (isLog ? '<button onclick="wcDeleteSkill('+si+')" title="Elimina log" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;padding:2px 4px;flex-shrink:0">&#128465;</button>' : '') +
+    '</div>';
+  }).join('');
+  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px">&#128218; Contesto AI</div>' +
+      (hasProj ? '<button onclick="wcNewSkill()" style="font-size:10px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:5px;color:var(--green);cursor:pointer">+ Skill</button>' : '') +
+    '</div>' +
+    (wcSkills.length > 0
+      ? '<div style="max-height:160px;overflow-y:auto">' + rows + '</div>'
+      : (hasProj
+          ? '<div style="font-size:10px;color:var(--dim);font-style:italic">Caricamento...</div>'
+          : '<div style="font-size:10px;color:var(--dim);font-style:italic">Genera un progetto per attivare i file di contesto.</div>'
+        )
+    ) +
+  '</div>';
+}
+
+function wcSkillModalHtml() {
+  if (!wcSkillModal) return '';
+  var m = wcSkillModal;
+  // Log files: read-only viewer
+  if (m.mode === 'view') {
+    return '<div onclick="wcCloseSkillModal(event)" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center">' +
+      '<div onclick="event.stopPropagation()" style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;width:680px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">' +
+        '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">' +
+          '<span style="font-size:14px">&#128196;</span>' +
+          '<span style="font-size:13px;font-weight:700;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(m.name)+'</span>' +
+          '<span style="font-size:10px;background:#333;color:#aaa;padding:2px 8px;border-radius:10px">log</span>' +
+          '<button onclick="wcCloseSkillModal()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;line-height:1;margin-left:4px">&times;</button>' +
+        '</div>' +
+        '<div style="flex:1;overflow:auto;padding:14px 18px">' +
+          '<pre style="margin:0;font-size:11px;line-height:1.7;color:var(--text);font-family:var(--mono);white-space:pre-wrap;word-break:break-all">'+wcEsc(m.content || '')+'</pre>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+  var isNew = m.mode === 'new';
+  var charCount = (m.content || '').length;
+  // Length guidance per type
+  var maxChars = m.type === 'skill' ? 6000 : 4000;
+  var warnLen = charCount > maxChars;
+  var typeHints = {
+    skill: 'Istruzioni tecniche, snippet, pattern di codice specifici per una funzione (es. Stripe, email, auth). Puoi avere quante skill vuoi. Max consigliato: ~6000 caratteri.',
+    memory: 'Note persistenti sul progetto: decisioni architetturali, preferenze, contesto generale. Solo UN file. Max consigliato: ~4000 caratteri.',
+    provider: 'Istruzioni specifiche per il modello AI usato (Liara/Qwen3, Claude, GPT-4...). Es. tono, formato risposte, vincoli. Solo UN file. Max consigliato: ~4000 caratteri.'
+  };
+  var hint = typeHints[m.type] || '';
+  var typeOptions = ['skill', 'memory', 'provider'].map(function(t) {
+    var hasSingleton = (t === 'memory' || t === 'provider') && wcSkills.some(function(s){ return s.type === t && (m.mode !== 'edit' || wcSkills.indexOf(s) !== m.idx); });
+    return '<option value="'+t+'"'+(m.type===t?' selected':'')+(hasSingleton?' disabled':'')+'>'+t+(hasSingleton?' (esiste già)':'')+'</option>';
+  }).join('');
+  // Suggested name based on type
+  var namePlaceholder = m.type === 'memory' ? 'memory.md' : m.type === 'provider' ? 'liara.md' : 'nome-skill.md';
+  return '<div onclick="wcCloseSkillModal(event)" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center">' +
+    '<div onclick="event.stopPropagation()" style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;width:600px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">' +
+        '<span style="font-size:14px;font-weight:700;color:var(--text);flex:1">' + wcFileTypeIcon(m.type) + ' ' + (isNew ? 'Nuovo file di contesto' : 'Modifica ' + wcEsc(m.name)) + '</span>' +
+        '<button onclick="wcCloseSkillModal()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;line-height:1">&times;</button>' +
+      '</div>' +
+      '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;flex:1;overflow-y:auto">' +
+        (isNew ? (
+          '<div style="display:flex;gap:10px">' +
+            '<div style="flex:1">' +
+              '<div style="font-size:10px;color:var(--dim);margin-bottom:4px">TIPO</div>' +
+              '<select id="wcSkillType" onchange="wcSkillTypeChange(this.value)" style="width:100%;padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text)">' + typeOptions + '</select>' +
+            '</div>' +
+            '<div style="flex:2">' +
+              '<div style="font-size:10px;color:var(--dim);margin-bottom:4px">NOME FILE</div>' +
+              '<input id="wcSkillName" value="'+wcEsc(m.name||'')+'" placeholder="'+namePlaceholder+'" style="width:100%;padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);box-sizing:border-box;font-family:var(--mono)">' +
+            '</div>' +
+          '</div>'
+        ) : (
+          '<div style="font-size:11px;color:var(--dim);background:var(--bg3);padding:7px 10px;border-radius:6px">File: <code style="color:var(--text)">'+wcEsc(m.name)+'</code> '+wcFileTypeBadge(m.type)+'</div>'
+        )) +
+        '<div style="background:var(--bg3);border-radius:8px;padding:9px 11px;font-size:10px;color:var(--dim);line-height:1.5">' +
+          '&#128161; ' + wcEsc(hint) +
+        '</div>' +
+        '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px">' +
+          '<div style="font-size:10px;color:var(--dim);margin-bottom:6px">&#129302; GENERA CON AI</div>' +
+          '<div style="display:flex;gap:8px">' +
+            '<textarea id="wcSkillAiDesc" rows="2" placeholder="Descrivi cosa deve contenere questo file... (es. Istruzioni per integrare Stripe con Express, pattern webhook)" style="flex:1;padding:7px 10px;font-size:11px;border-radius:6px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);resize:none;font-family:inherit"></textarea>' +
+            '<button onclick="wcGenerateSkill()" '+(m.generating?'disabled':'')+' style="padding:8px 12px;background:var(--green3);border:none;border-radius:6px;color:var(--bg);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:flex-end">'+(m.generating?'&#9203; ...':'&#9654; Genera')+'</button>' +
+          '</div>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:10px;color:var(--dim);margin-bottom:4px;display:flex;justify-content:space-between">' +
+            '<span>CONTENUTO (markdown)</span>' +
+            '<span style="color:'+(warnLen?'#e05050':'var(--dim)')+'">'+charCount+' car.'+(warnLen?' &#9888; Troppo lungo, potrebbe ridurre la qualita del contesto':'')+'</span>' +
+          '</div>' +
+          '<textarea id="wcSkillContent" rows="14" oninput="wcSkillContentChange(this.value)" placeholder="# Titolo'+String.fromCharCode(10)+'Scrivi le istruzioni in Markdown..." style="width:100%;padding:8px 10px;font-size:11px;border-radius:6px;border:1px solid '+(warnLen?'#e05050':'var(--border2)')+';background:var(--bg3);color:var(--text);resize:vertical;box-sizing:border-box;font-family:var(--mono);line-height:1.6">'+wcEsc(m.content||'')+'</textarea>' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">' +
+        '<button onclick="wcCloseSkillModal()" style="padding:8px 16px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--dim);font-size:12px;cursor:pointer">Annulla</button>' +
+        '<button onclick="wcSaveSkill()" style="padding:8px 18px;background:var(--green3);border:none;border-radius:7px;color:var(--bg);font-size:12px;font-weight:700;cursor:pointer">&#10003; Salva</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function wcSkillTypeChange(newType) {
+  if (!wcSkillModal) return;
+  wcSkillModal.type = newType;
+  // Auto-fill name for singletons
+  if (newType === 'memory') wcSkillModal.name = 'memory.md';
+  else if (newType === 'provider') wcSkillModal.name = 'liara.md';
+  else wcSkillModal.name = '';
+  renderWebCraft(document.getElementById('content'));
+}
+
+function wcSkillContentChange(val) {
+  if (!wcSkillModal) return;
+  wcSkillModal.content = val;
+  // Re-render only the char counter without full re-render
+  var maxChars = wcSkillModal.type === 'skill' ? 6000 : 4000;
+  var warnLen = val.length > maxChars;
+  var el = document.querySelector('#wcSkillContent');
+  if (el) el.style.borderColor = warnLen ? '#e05050' : 'var(--border2)';
+}
+
+function wcNewSkill() {
+  wcSkillModal = { mode: 'new', idx: null, name: '', content: '', type: 'skill', generating: false };
+  renderWebCraft(document.getElementById('content'));
+}
+
+function wcOpenSkill(si) {
+  var s = wcSkills[si];
+  if (!s) return;
+  var mode = (s.type === 'log') ? 'view' : 'edit';
+  wcSkillModal = { mode: mode, idx: si, name: s.name, content: s.content, type: s.type || 'skill', generating: false };
+  renderWebCraft(document.getElementById('content'));
+}
+
+function wcCloseSkillModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  wcSkillModal = null;
+  renderWebCraft(document.getElementById('content'));
+}
+
+async function wcClearSkill(si) {
+  var s = wcSkills[si];
+  if (!s) return;
+  if (!confirm('Svuotare il file "' + s.name + '"? Il file rimane ma il contenuto viene cancellato.')) return;
+  wcSkills[si].content = '';
+  await wcPersistSkills();
+  renderWebCraft(document.getElementById('content'));
+}
+
+async function wcGenerateSkill() {
+  var descEl = document.getElementById('wcSkillAiDesc');
+  var nameEl = document.getElementById('wcSkillName');
+  var typeEl = document.getElementById('wcSkillType');
+  var desc = (descEl ? descEl.value : '').trim();
+  if (!desc) { alert('Descrivi prima cosa deve contenere il file.'); return; }
+  wcSkillModal.generating = true;
+  if (nameEl) wcSkillModal.name = nameEl.value;
+  if (typeEl) wcSkillModal.type = typeEl.value;
+  renderWebCraft(document.getElementById('content'));
+  var systemByType = {
+    skill: 'Sei un esperto di sviluppo web fullstack. Genera un file Markdown "skill" per il WebCraft Agent di NotHumanAllowed. Deve contenere istruzioni, pattern di codice, best practice e snippet pronti all uso come contesto persistente. Scrivi SOLO il contenuto Markdown, niente altro.',
+    memory: 'Sei un assistente tecnico. Genera un file Markdown "memory" per il WebCraft Agent. Deve riassumere decisioni architetturali, preferenze dello sviluppatore e contesto generale del progetto. Scrivi SOLO il Markdown.',
+    provider: 'Sei un esperto di prompt engineering. Genera un file Markdown con istruzioni specifiche per calibrare il comportamento del modello AI (tono, formato risposte, vincoli, preferenze). Scrivi SOLO il Markdown.'
+  };
+  try {
+    var r = await fetch(API + '/api/studio/webcraft', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        system: systemByType[wcSkillModal.type] || systemByType.skill,
+        user: 'Progetto: ' + wcState.projectName + String.fromCharCode(10) + 'Stack: Express.js, PostgreSQL, JWT auth' + String.fromCharCode(10) + String.fromCharCode(10) + desc,
+        max_tokens: 2048
+      })
+    });
+    if (r.ok) {
+      var d = await r.json();
+      wcSkillModal.content = d.text || '';
+      wcSkillModal.generating = false;
+      // Auto-suggest name if empty
+      if (!wcSkillModal.name && desc.length > 0) {
+        if (wcSkillModal.type === 'memory') wcSkillModal.name = 'memory.md';
+        else if (wcSkillModal.type === 'provider') wcSkillModal.name = 'liara.md';
+        else wcSkillModal.name = desc.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30) + '.md';
+      }
+    }
+  } catch(e) {}
+  wcSkillModal.generating = false;
+  renderWebCraft(document.getElementById('content'));
+}
+
+async function wcSaveSkill() {
+  var nameEl = document.getElementById('wcSkillName');
+  var contentEl = document.getElementById('wcSkillContent');
+  var typeEl = document.getElementById('wcSkillType');
+  var name = (nameEl ? nameEl.value : wcSkillModal.name).trim();
+  var content = contentEl ? contentEl.value : (wcSkillModal.content || '');
+  var type = (typeEl ? typeEl.value : wcSkillModal.type) || 'skill';
+  if (!name) { alert('Inserisci un nome per il file.'); return; }
+  if (!name.endsWith('.md')) name = name + '.md';
+  // Enforce singleton: only one memory, one provider
+  if ((type === 'memory' || type === 'provider') && wcSkillModal.mode === 'new') {
+    var existing = wcSkills.findIndex(function(s){ return s.type === type; });
+    if (existing >= 0) { alert('Esiste gia un file di tipo "' + type + '". Modificalo direttamente.'); return; }
+  }
+  var skill = { name: name, content: content, type: type };
+  if (wcSkillModal.mode === 'edit' && wcSkillModal.idx !== null) {
+    wcSkills[wcSkillModal.idx] = skill;
+  } else {
+    wcSkills.push(skill);
+  }
+  wcSkillModal = null;
+  await wcPersistSkills();
+  renderWebCraft(document.getElementById('content'));
+}
+
+async function wcDeleteSkill(si) {
+  var s = wcSkills[si];
+  if (!s) return;
+  if (!confirm('Eliminare "' + s.name + '"?')) return;
+  // Delete the file on disk via the delete-skill endpoint
+  try {
+    await fetch(API + '/api/studio/webcraft/skills/' + encodeURIComponent(wcState.projectName) + '/delete', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name: s.name })
+    });
+  } catch(_) {}
+  wcSkills.splice(si, 1);
+  renderWebCraft(document.getElementById('content'));
+}
+
+async function wcPersistSkills() {
+  if (!wcState.projectName) return;
+  try {
+    await fetch(API + '/api/studio/webcraft/skills/' + encodeURIComponent(wcState.projectName), {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ skills: wcSkills })
+    });
+  } catch(_) {}
+}
+
+// ── WebCraft Agent Chat Panel ─────────────────────────────────────────────
+function wcChatPanelHtml() {
+  var hasProject = wcState.projectName && wcState.generatedFiles.length > 0;
+  var placeholder = hasProject
+    ? 'Parla con il tuo agente: chiedi correzioni, migliorie, nuove funzionalit\u00e0...'
+    : 'Descrivi il progetto da creare, poi premi Genera...';
+
+  // Chat messages
+  var messagesHtml = '';
+  if (wcChat.length === 0 && hasProject) {
+    messagesHtml = '<div style="font-size:11px;color:var(--dim);padding:8px 12px;font-style:italic">&#129302; Pronto! Dimmi cosa vuoi modificare o migliorare nel progetto.</div>';
+  }
+  for (var mi = 0; mi < wcChat.length; mi++) {
+    var msg = wcChat[mi];
+    if (msg.role === 'user') {
+      messagesHtml += '<div style="display:flex;justify-content:flex-end;margin:4px 12px">' +
+        '<div style="background:var(--green3);color:var(--bg);padding:6px 12px;border-radius:10px 10px 2px 10px;font-size:11px;max-width:70%;line-height:1.5">'+wcEsc(msg.text)+'</div>' +
+      '</div>';
+      if (msg.attachments && msg.attachments.length) {
+        messagesHtml += '<div style="display:flex;justify-content:flex-end;margin:2px 12px;gap:4px">' +
+          msg.attachments.map(function(a){ return '<span style="background:var(--bg3);border:1px solid var(--border2);border-radius:5px;padding:2px 7px;font-size:10px;color:var(--dim)">&#128206; '+wcEsc(a.name)+'</span>'; }).join('') +
+        '</div>';
+      }
+    } else if (msg.role === 'system') {
+      // System messages: compact notices (snapshot, syntax check, error with fix button)
+      var isSandboxErr = (msg.text || '').indexOf('Errore sandbox') !== -1;
+      var borderColor = isSandboxErr ? '#ef4444' : 'var(--border2)';
+      var textColor = isSandboxErr ? '#fca5a5' : 'var(--dim)';
+      messagesHtml += '<div style="margin:4px 12px;padding:6px 10px;background:var(--bg3);border-left:2px solid '+borderColor+';border-radius:4px;font-size:10px;color:'+textColor+';display:flex;align-items:center;gap:8px">' +
+        '<span style="flex:1">' + (msg.text||'') + '</span>' +
+        (isSandboxErr ? '<button onclick="wcFixSandboxError()" style="flex-shrink:0;padding:4px 10px;background:#7f1d1d;border:1px solid #ef4444;border-radius:5px;color:#fca5a5;font-size:10px;font-weight:700;cursor:pointer">&#129302; Correggi</button>' : '') +
+      '</div>';
+      if (msg.syntaxErrors && msg.syntaxErrors.length) {
+        messagesHtml += '<div style="margin:2px 12px">' + msg.syntaxErrors.map(function(e2){
+          return '<div style="font-size:10px;font-family:var(--mono);color:#f87171;padding:2px 0">&#10005; ' + wcEsc(e2.file) + ': ' + wcEsc(e2.error) + '</div>';
+        }).join('') + '</div>';
+      }
+    } else {
+      var diffBlocks = '';
+      var toolBadges = (msg.tools || []).map(function(tool){
+        var isOk = tool.result === 'ok';
+        var isParseErr = tool.op === 'parse_error';
+        var icon = isParseErr ? '&#10067;' : (tool.op === 'edit' ? '&#9998;' : (tool.op === 'write' ? '&#10133;' : '&#128065;'));
+        var color = isOk ? 'var(--green)' : 'var(--red)';
+        var label = isParseErr ? ('JSON err: ' + wcEsc(tool.result)) : wcEsc(tool.path);
+        var title = isOk ? tool.op + ': ' + tool.path : (tool.result || '');
+        // Build inline diff block for successful edits
+        if (isOk && tool.op === 'edit' && tool.oldSnippet) {
+          var oldLines = tool.oldSnippet.split(String.fromCharCode(10)).map(function(l){ return '<div style="background:#3f0f0f;color:#fca5a5;font-family:var(--mono);font-size:9px;padding:0 8px;white-space:pre-wrap;word-break:break-all">- '+wcEsc(l)+'</div>'; }).join('');
+          var newLines = tool.newSnippet.split(String.fromCharCode(10)).map(function(l){ return '<div style="background:#0f2f0f;color:#86efac;font-family:var(--mono);font-size:9px;padding:0 8px;white-space:pre-wrap;word-break:break-all">+ '+wcEsc(l)+'</div>'; }).join('');
+          diffBlocks += '<details style="margin:2px 0;border:1px solid rgba(255,255,255,0.08);border-radius:5px;overflow:hidden">' +
+            '<summary style="padding:3px 8px;font-size:9px;font-family:var(--mono);color:var(--dim);cursor:pointer;list-style:none;display:flex;align-items:center;gap:4px">' +
+              '<span style="color:var(--green)">&#9998;</span> '+wcEsc(tool.path)+' <span style="margin-left:auto;opacity:.5">&#9660;</span>' +
+            '</summary>' +
+            oldLines + newLines +
+          '</details>';
+        }
+        return '<span title="'+wcEsc(title)+'" style="display:inline-flex;align-items:center;gap:3px;background:var(--bg3);border:1px solid '+(isOk?'var(--green3)':'var(--red)')+';border-radius:4px;padding:2px 6px;font-size:9px;font-family:var(--mono);color:'+color+'">' +
+          icon + ' ' + label + '</span>';
+      }).join(' ');
+      var agentText = wcEsc(msg.text.replace(new RegExp('<tool>[\\s\\S]*?<\\/tool>', 'g'), '').trim());
+      messagesHtml += '<div style="margin:6px 12px;border:1px solid rgba(255,255,255,0.12);border-radius:10px;background:var(--bg3);overflow:hidden">' +
+        '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03)">' +
+          '<span style="font-size:13px">&#129302;</span>' +
+          '<span style="font-size:10px;font-weight:700;color:var(--green)">WebCraft Agent</span>' +
+        '</div>' +
+        '<div style="padding:8px 10px;font-size:11px;color:var(--text);line-height:1.6;white-space:pre-wrap">'+agentText+'</div>' +
+        (diffBlocks ? '<div style="padding:4px 8px 6px;border-top:1px solid rgba(255,255,255,0.06)">'+diffBlocks+'</div>' : '') +
+        (toolBadges ? '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-top:1px solid rgba(255,255,255,0.06)">'+toolBadges+'</div>' : '') +
+      '</div>';
+    }
+  }
+  if (wcChatRunning) {
+    messagesHtml +=
+      '<div id="wcAgentLiveBubble" style="margin:6px 12px;border:1px solid rgba(255,255,255,0.12);border-radius:10px;background:var(--bg3);overflow:hidden;animation:wcBubbleIn .25s cubic-bezier(.22,1,.36,1)">' +
+        '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03)">' +
+          '<span style="font-size:13px;animation:wcRobotBob .9s ease-in-out infinite">&#129302;</span>' +
+          '<span style="font-size:10px;font-weight:700;color:var(--green)">WebCraft Agent</span>' +
+          '<span style="margin-left:auto;display:flex;gap:3px;align-items:center">' +
+            '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);opacity:.9;animation:wcDot 1.1s ease-in-out infinite 0s"></span>' +
+            '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);opacity:.9;animation:wcDot 1.1s ease-in-out infinite .18s"></span>' +
+            '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);opacity:.9;animation:wcDot 1.1s ease-in-out infinite .36s"></span>' +
+          '</span>' +
+        '</div>' +
+        '<div id="wcAgentLiveText" style="padding:8px 10px;font-size:11px;color:var(--text);line-height:1.6;white-space:pre-wrap;min-height:24px">' +
+          '<span style="display:inline-block;width:2px;height:11px;background:var(--green);vertical-align:text-bottom;animation:streamBlink .7s step-end infinite;margin-left:1px">&#8203;</span>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Attachments preview
+  var attachPreview = '';
+  if (wcChatAttachments.length > 0) {
+    attachPreview = '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 12px 0">' +
+      wcChatAttachments.map(function(a, ai){
+        return '<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:5px;padding:3px 8px;font-size:10px;color:var(--text)">' +
+          '&#128206; '+wcEsc(a.name)+' <button onclick="wcRemoveAttachment('+ai+')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:11px;line-height:1;padding:0">&times;</button>' +
+        '</span>';
+      }).join('') +
+    '</div>';
+  }
+
+  var sendBtnLabel = wcState.running ? '&#9203;' : (hasProject ? '&#9654;' : '&#9654; Genera');
+  var inputDisabled = wcChatRunning || wcState.running;
+
+  // Project name row — shown only when no project yet
+  var projNameRow = !hasProject
+    ? '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px 0">' +
+        '<span style="font-size:10px;color:var(--dim);white-space:nowrap">Nome progetto:</span>' +
+        '<input id="wcProjectName" placeholder="MioProgetto" value="'+wcEsc(wcState.projectName)+'" oninput="wcState.projectName=this.value" style="flex:1;padding:4px 8px;font-size:11px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text)">' +
+      '</div>'
+    : '<div style="padding:4px 12px 0;font-size:10px;color:var(--dim)">&#128196; <strong style="color:var(--green)">'+wcEsc(wcState.projectName)+'</strong> &mdash; scrivi per modificare o migliorare il progetto</div>';
+
+  return '<div style="border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;display:flex;flex-direction:column;min-height:220px">' +
+    // Messages
+    '<div id="wcChatMessages" style="max-height:240px;overflow-y:auto;padding:6px 0">' +
+      messagesHtml +
+    '</div>' +
+    // Attachments
+    attachPreview +
+    // Project name (only pre-generation)
+    projNameRow +
+    // Input row
+    '<div style="display:flex;align-items:flex-end;gap:8px;padding:8px 12px">' +
+      '<label style="cursor:pointer;color:var(--dim);font-size:16px;flex-shrink:0;padding-bottom:2px" title="Allega immagine o PDF">' +
+        '&#128206;' +
+        '<input type="file" id="wcFileInput" multiple accept="image/*,.pdf" style="display:none" onchange="wcHandleFileAttach(this)">' +
+      '</label>' +
+      '<textarea id="wcChatInput" rows="4" placeholder="'+placeholder+'" '+(inputDisabled?'disabled':'')+' style="flex:1;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);resize:vertical;min-height:80px;line-height:1.5;font-family:inherit" onkeydown="wcChatKeydown(event)"></textarea>' +
+      '<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">' +
+        '<button onclick="wcChatSend()" '+(inputDisabled?'disabled':'')+' style="padding:8px 14px;background:var(--green3);border:none;border-radius:8px;color:var(--bg);font-size:13px;font-weight:700;cursor:pointer;height:38px;white-space:nowrap">'+sendBtnLabel+'</button>' +
+        (inputDisabled ? '<button onclick="wcStopAll()" style="padding:5px 10px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);border-radius:7px;color:#f87171;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">&#9632; Stop</button>' : '') +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function wcChatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); wcChatSend(); }
+}
+
+function wcStopAll() {
+  if (_wcGenAbortCtrl) { _wcGenAbortCtrl.abort(); _wcGenAbortCtrl = null; }
+  wcState.running = false;
+  wcChatRunning = false;
+  _wcOverlayMinimized = false;
+  if (_wcOverlayTimer) { clearTimeout(_wcOverlayTimer); _wcOverlayTimer = null; }
+  wcChat.push({ role: 'system', text: '&#9632; Generazione interrotta.' });
+  renderWebCraft(document.getElementById('content'));
+}
+
+function wcOverlayMinimize() {
+  _wcOverlayMinimized = true;
+  renderWebCraft(document.getElementById('content'));
+  if (_wcOverlayTimer) clearTimeout(_wcOverlayTimer);
+  _wcOverlayTimer = setTimeout(function() {
+    if (wcState.running || wcState.repairing) { _wcOverlayMinimized = false; renderWebCraft(document.getElementById('content')); }
+  }, 10000);
+}
+
+function wcOverlayRestore() {
+  if (_wcOverlayTimer) { clearTimeout(_wcOverlayTimer); _wcOverlayTimer = null; }
+  _wcOverlayMinimized = false;
+  renderWebCraft(document.getElementById('content'));
+}
+
+function wcRemoveAttachment(ai) {
+  wcChatAttachments.splice(ai, 1);
+  renderWebCraft(document.getElementById('content'));
+}
+
+function wcHandleFileAttach(input) {
+  var files = Array.from(input.files || []);
+  files.forEach(function(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var dataUrl = e.target.result;
+      var base64 = dataUrl.split(',')[1];
+      wcChatAttachments.push({ name: file.name, mimeType: file.type, base64: base64, size: file.size });
+      renderWebCraft(document.getElementById('content'));
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+async function wcChatSend() {
+  var inputEl = document.getElementById('wcChatInput');
+  var msg = (inputEl ? inputEl.value : '').trim();
+  var hasProject = wcState.projectName && wcState.generatedFiles.length > 0;
+
+  // If no project yet, use as description and generate
+  if (!hasProject) {
+    if (!msg || msg.length < 5) { alert(t('wc_describe_first')); return; }
+    var projNameEl = document.getElementById('wcProjectName');
+    if (projNameEl && projNameEl.value.trim()) wcState.projectName = projNameEl.value.trim();
+    if (!wcState.projectName) wcState.projectName = 'MyProject';
+    wcState.description = msg;
+    if (inputEl) inputEl.value = '';
+    wcGenerate();
+    return;
+  }
+
+  if (!msg && wcChatAttachments.length === 0) return;
+  if (wcChatRunning || wcState.running) return;
+  if (inputEl) inputEl.value = '';
+
+  // Plan mode: if message starts with "/plan " or contains "plan:" keyword, ask agent for plan first
+  var planMode = msg.toLowerCase().startsWith('/plan ') || msg.toLowerCase().startsWith('piano: ');
+  if (planMode) {
+    var planMsg = msg.replace(new RegExp('^/plan[ ]*', 'i'),'').replace(new RegExp('^piano:[ ]*', 'i'),'');
+    wcChat.push({ role: 'user', text: msg });
+    renderWebCraft(document.getElementById('content'));
+    // Ask agent to produce only a plan, no edits
+    await wcExecuteAgentCall(
+      '[MODALITA PIANO] Descrivi in dettaglio cosa modificheresti per: "' + planMsg + '". ' +
+      'Elenca i file che toccheresti e cosa faresti in ciascuno. NON applicare nessuna modifica ancora. ' +
+      'Rispondi con il piano in bullet list.',
+      false, planMsg
+    );
+    return;
+  }
+
+  var attachCopy = wcChatAttachments.slice();
+  wcChatAttachments = [];
+  wcChat.push({ role: 'user', text: msg, attachments: attachCopy });
+  renderWebCraft(document.getElementById('content'));
+  wcScrollChatToBottom();
+
+  // Auto-snapshot before first agent call in a session
+  if (_wcAutoFixAttempts === 0 && wcChat.filter(function(c){ return c.role==='user'; }).length === 1) {
+    wcTakeSnapshot().then(function(ts) {
+      if (ts) wcChat.push({ role: 'system', text: '&#128190; Snapshot automatico salvato (' + ts.slice(0,16).replace('T',' ') + ')' });
+      renderWebCraft(document.getElementById('content'));
+    });
+  }
+
+  await wcExecuteAgentCall(msg, false, null, attachCopy);
+}
+
+// Core agent call — separated so plan mode and normal mode share the same SSE pipeline
+async function wcExecuteAgentCall(message, isPlanExec, planOrigMsg, attachments) {
+  if (wcChatRunning) return;
+  wcChatRunning = true;
+  renderWebCraft(document.getElementById('content'));
+
+  // Track file state BEFORE edits for diff
+  var filesBefore = {};
+  wcState.generatedFiles.forEach(function(f) { filesBefore[f.name] = f.content; });
+  _wcDiffQueue = [];
+
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectName: wcState.projectName,
+        message: message,
+        attachments: (attachments || []).map(function(a){ return { name: a.name, mimeType: a.mimeType, base64: a.base64 }; })
+      })
+    });
+
+    if (!r.ok) {
+      var errData = await r.json().catch(function(){ return {}; });
+      wcChat.push({ role: 'agent', text: 'Errore: ' + (errData.error || r.status), tools: [] });
+      wcChatRunning = false;
+      renderWebCraft(document.getElementById('content'));
+      return;
+    }
+
+    var agentMsg = { role: 'agent', text: '', tools: [] };
+    wcChat.push(agentMsg);
+
+    var reader2 = r.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '';
+    var anyEdits = false;
+    while (true) {
+      var res = await reader2.read();
+      if (res.done) break;
+      buf += dec.decode(res.value, { stream: true });
+      var parts = buf.split(String.fromCharCode(10)+String.fromCharCode(10));
+      buf = parts.pop();
+      for (var pi2 = 0; pi2 < parts.length; pi2++) {
+        var line = parts[pi2].replace(/^data: /, '').trim();
+        if (!line) continue;
+        try {
+          var ev = JSON.parse(line);
+          if (ev.type === 'text') {
+            agentMsg.text += ev.token;
+            // Inject token directly into live bubble (no re-render)
+            var liveEl = document.getElementById('wcAgentLiveText');
+            if (liveEl) {
+              var cursor = '<span style="display:inline-block;width:2px;height:11px;background:var(--green);vertical-align:text-bottom;animation:streamBlink .7s step-end infinite;margin-left:1px">&#8203;</span>';
+              liveEl.innerHTML = wcEsc(agentMsg.text) + cursor;
+            }
+            wcScrollChatToBottom();
+          } else if (ev.type === 'tool') {
+            agentMsg.tools.push({ op: ev.op, path: ev.path, result: ev.result, oldSnippet: ev.oldSnippet || '', newSnippet: ev.newSnippet || '' });
+            if ((ev.op === 'edit' || ev.op === 'write') && ev.result === 'ok') {
+              anyEdits = true;
+              wcChat[wcChat.length-1] = agentMsg;
+              renderWebCraft(document.getElementById('content'));
+            }
+          } else if (ev.type === 'done') {
+            // Plan mode: detect if response is a plan (no tool edits), show approval banner
+            if (planOrigMsg && !anyEdits) {
+              _wcPlanPending = { plan: agentMsg.text, originalMessage: planOrigMsg };
+            }
+            wcChatRunning = false;
+            if (ev.changed) {
+              // Build diffs before reloading
+              var changedFiles = (agentMsg.tools || []).filter(function(t2){ return t2.op === 'edit' || t2.op === 'write'; }).map(function(t2){ return t2.path; });
+              await wcReloadProjectFiles();
+              // Build diffs from before/after
+              changedFiles.forEach(function(fname) {
+                var after = wcState.generatedFiles.find(function(f){ return f.name === fname; });
+                if (after) _wcDiffQueue.push({ file: fname, before: filesBefore[fname] || '', after: after.content });
+              });
+              // Auto syntax-check after edits
+              if (changedFiles.some(function(f){ return f.endsWith('.js') || f.endsWith('.mjs'); })) {
+                setTimeout(wcRunSyntaxCheck, 500);
+              }
+            }
+            // Persist chat
+            fetch(API + '/api/studio/webcraft/projects/chat/save', {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ projectName: wcState.projectName, chat: wcChat })
+            }).catch(function(){});
+          } else if (ev.type === 'restart_sandbox') {
+            wcStartSandbox();
+          } else if (ev.type === 'error') {
+            agentMsg.text += String.fromCharCode(10) + 'Errore: ' + ev.msg;
+            wcChatRunning = false;
+          }
+        } catch(_) {}
+      }
+    }
+  } catch(e) {
+    wcChat.push({ role: 'agent', text: 'Errore di rete: ' + e.message, tools: [] });
+  }
+
+  wcChatRunning = false;
+  renderWebCraft(document.getElementById('content'));
+  wcScrollChatToBottom();
+}
+
+function wcScrollChatToBottom() {
+  var el2 = document.getElementById('wcChatMessages');
+  if (el2) el2.scrollTop = el2.scrollHeight;
+}
+
+async function wcReloadProjectFiles() {
+  if (!wcState.projectName) return;
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/projects/load/' + encodeURIComponent(wcState.projectName));
+    if (!r.ok) return;
+    var d = await r.json();
+    wcState.generatedFiles = d.files || [];
+    renderWebCraft(document.getElementById('content'));
+  } catch(_) {}
+}
+
+// Auto-fix: poll autofix-queue every 3s while sandbox running
+function wcStartAutoFixPoller() {
+  if (_wcAutoFixTimer) return;
+  _wcAutoFixTimer = setInterval(function() {
+    if (!wcState.sandbox.running && !wcState.sandbox.port) { wcStopAutoFixPoller(); return; }
+    fetch(API + '/api/studio/webcraft/agent/autofix-queue').then(function(r){ return r.json(); }).then(function(d){
+      var items = d.items || [];
+      items.forEach(function(item) {
+        if (item.type === 'module_not_found' && _wcAutoFixAttempts < 3) {
+          _wcAutoFixAttempts++;
+          wcTriggerAutoFix(item.module);
+        } else if (item.type === 'crash_error' && _wcAutoFixAttempts < 3) {
+          _wcAutoFixAttempts++;
+          wcTriggerCrashFix(item.error);
+        }
+      });
+    }).catch(function(){});
+  }, 3000);
+}
+
+function wcStopAutoFixPoller() {
+  if (_wcAutoFixTimer) { clearInterval(_wcAutoFixTimer); _wcAutoFixTimer = null; }
+}
+
+async function wcTriggerAutoFix(missingModule) {
+  if (wcChatRunning) {
+    var waited = 0;
+    await new Promise(function(resolve) {
+      var t = setInterval(function() { waited += 500; if (!wcChatRunning || waited >= 30000) { clearInterval(t); resolve(); } }, 500);
+    });
+    if (wcChatRunning) return;
+  }
+  var fixMsg = 'AUTO-FIX: Cannot find module ' + missingModule + String.fromCharCode(10) + 'Analizza tutti i file del progetto e correggi il require/import per questo modulo. Se il modulo non esiste, rimuovi il require e implementa la funzionalita con moduli disponibili o Node.js built-in.';
+  wcChat.push({ role: 'user', text: '\uD83E\uDD16 Auto-fix modulo mancante: ' + missingModule });
+  wcChatRunning = true;
+  renderWebCraft(document.getElementById('content'));
+  wcScrollChatToBottom();
+
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectName: wcState.projectName, message: fixMsg, autofix: true })
+    });
+    if (!r.ok) { wcChatRunning = false; renderWebCraft(document.getElementById('content')); return; }
+
+    var agentMsg = { role: 'agent', text: '', tools: [] };
+    wcChat.push(agentMsg);
+    var reader3 = r.body.getReader();
+    var dec2 = new TextDecoder();
+    var buf2 = '';
+    while (true) {
+      var res2 = await reader3.read();
+      if (res2.done) break;
+      buf2 += dec2.decode(res2.value, { stream: true });
+      var parts2 = buf2.split(String.fromCharCode(10)+String.fromCharCode(10));
+      buf2 = parts2.pop();
+      for (var pi3 = 0; pi3 < parts2.length; pi3++) {
+        var line2 = parts2[pi3].replace(/^data: /, '').trim();
+        if (!line2) continue;
+        try {
+          var ev2 = JSON.parse(line2);
+          if (ev2.type === 'text') { agentMsg.text += ev2.token; }
+          else if (ev2.type === 'tool') { agentMsg.tools.push({ op: ev2.op, path: ev2.path, result: ev2.result, oldSnippet: ev2.oldSnippet || '', newSnippet: ev2.newSnippet || '' }); }
+          else if (ev2.type === 'done') { wcChatRunning = false; if (ev2.changed) { wcReloadProjectFiles(); } }
+          else if (ev2.type === 'restart_sandbox') { wcStartSandbox(); }
+          else if (ev2.type === 'error') { agentMsg.text += String.fromCharCode(10)+'Errore: '+ev2.msg; wcChatRunning = false; }
+        } catch(_) {}
+      }
+    }
+  } catch(_) {}
+
+  wcChatRunning = false;
+  renderWebCraft(document.getElementById('content'));
+  wcScrollChatToBottom();
+}
+async function wcTriggerCrashFix(errorMsg) {
+  if (wcChatRunning) {
+    // Wait up to 30s for current agent to finish, then retry
+    var waited = 0;
+    await new Promise(function(resolve) {
+      var t = setInterval(function() { waited += 500; if (!wcChatRunning || waited >= 30000) { clearInterval(t); resolve(); } }, 500);
+    });
+    if (wcChatRunning) return;
+  }
+  var fixMsg = 'CRASH FIX RICHIESTO.' + String.fromCharCode(10) + 'ERRORE:' + String.fromCharCode(10) + errorMsg + String.fromCharCode(10) + String.fromCharCode(10) + 'ISTRUZIONI OBBLIGATORIE:' + String.fromCharCode(10) + '1. Leggi i file coinvolti nello stack trace' + String.fromCharCode(10) + '2. Individua la riga esatta del problema' + String.fromCharCode(10) + '3. Usa OBBLIGATORIAMENTE il tool edit_file o write_file per correggere il codice' + String.fromCharCode(10) + '4. NON limitarti a spiegare il problema - DEVI modificare i file' + String.fromCharCode(10) + '5. Dopo aver modificato, il sandbox verrà riavviato automaticamente';
+  wcChat.push({ role: 'user', text: '\uD83E\uDD16 Auto-fix crash: ' + errorMsg });
+  wcChatRunning = true;
+  renderWebCraft(document.getElementById('content'));
+  wcScrollChatToBottom();
+
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectName: wcState.projectName, message: fixMsg, autofix: true })
+    });
+    if (!r.ok) { wcChatRunning = false; renderWebCraft(document.getElementById('content')); return; }
+
+    var agentMsg = { role: 'agent', text: '', tools: [] };
+    wcChat.push(agentMsg);
+    var reader4 = r.body.getReader();
+    var dec4 = new TextDecoder();
+    var buf4 = '';
+    while (true) {
+      var res4 = await reader4.read();
+      if (res4.done) break;
+      buf4 += dec4.decode(res4.value, { stream: true });
+      var parts4 = buf4.split(String.fromCharCode(10)+String.fromCharCode(10));
+      buf4 = parts4.pop();
+      for (var pi4 = 0; pi4 < parts4.length; pi4++) {
+        var line4 = parts4[pi4].replace(/^data: /, '').trim();
+        if (!line4) continue;
+        try {
+          var ev4 = JSON.parse(line4);
+          if (ev4.type === 'text') { agentMsg.text += ev4.token; }
+          else if (ev4.type === 'tool') { agentMsg.tools.push({ op: ev4.op, path: ev4.path, result: ev4.result, oldSnippet: ev4.oldSnippet || '', newSnippet: ev4.newSnippet || '' }); }
+          else if (ev4.type === 'done') { wcChatRunning = false; if (ev4.changed) { wcReloadProjectFiles(); } if (agentMsg.tools.length > 0) { setTimeout(function(){ wcStartSandbox(); }, 500); } }
+          else if (ev4.type === 'restart_sandbox') { wcStartSandbox(); }
+          else if (ev4.type === 'error') { agentMsg.text += String.fromCharCode(10)+'Errore: '+ev4.msg; wcChatRunning = false; }
+        } catch(_) {}
+      }
+    }
+  } catch(_) {}
+
+  wcChatRunning = false;
+  renderWebCraft(document.getElementById('content'));
+  wcScrollChatToBottom();
+}
+
+var _wcPhaseKeys = ['files','shims','pkg','env','deps','install','start'];
+function wcTogglePhase(idx) { var k = _wcPhaseKeys[idx]; if (k) { wcSandboxExpanded[k] = !wcSandboxExpanded[k]; renderWebCraft(document.getElementById('content')); } }
+
+function wcMainTabNew() { wcMainTab = 'new'; renderWebCraft(document.getElementById('content')); }
+function wcMainTabProjects() {
+  wcMainTab = 'projects';
+  renderWebCraft(document.getElementById('content'));
+  // Load projects list from server
+  fetch(API + '/api/studio/webcraft/projects').then(function(r){ return r.json(); }).then(function(d){
+    wcProjectsList = d.projects || [];
+    renderWebCraft(document.getElementById('content'));
+  }).catch(function(){});
+}
+
+function wcProjectsPanelHtml() {
+  if (!wcProjectsList.length) {
+    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:10px;padding:40px;color:var(--dim)">' +
+      '<div style="font-size:32px">&#128193;</div>' +
+      '<div style="font-size:13px">'+t('wc_no_projects')+'</div>' +
+      '<div style="font-size:11px">'+t('wc_no_projects_hint')+'</div>' +
+    '</div>';
+  }
+  return '<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 0">' +
+    wcProjectsList.map(function(p, pi){
+      var date = p.createdAt ? new Date(p.createdAt).toLocaleString() : '';
+      return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+wcEsc(p.name)+'</div>' +
+          '<div style="font-size:10px;color:var(--dim);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+wcEsc(p.description||'')+'</div>' +
+          '<div style="display:flex;gap:10px;font-size:10px;color:var(--dim)">' +
+            '<span>&#128196; '+p.fileCount+' file</span>' +
+            '<span>&#128197; '+date+'</span>' +
+            '<span style="font-family:var(--mono);font-size:9px">'+wcEsc(p.dir||'')+'</span>' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="wcLoadProject('+pi+')" style="padding:6px 14px;background:var(--green3);border:none;border-radius:6px;color:var(--bg);font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">&#8599; Apri</button>' +
+        '<button onclick="wcDeleteProject('+pi+')" style="padding:6px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--red);font-size:11px;cursor:pointer;flex-shrink:0">&#128465;</button>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+
+async function wcLoadProject(pi) {
+  var p = wcProjectsList[pi];
+  if (!p) return;
+  var r = await fetch(API + '/api/studio/webcraft/projects/load/' + encodeURIComponent(p.name));
+  if (!r.ok) return;
+  var d = await r.json();
+  wcState.projectName = d.projectName || p.name;
+  wcState.description = d.description || '';
+  wcState.generatedFiles = d.files || [];
+  wcState.activeFile = 0;
+  wcMainTab = 'new';
+  wcRightTab = 'files';
+  // Load persisted chat history
+  try {
+    var cr = await fetch(API + '/api/studio/webcraft/projects/chat/load/' + encodeURIComponent(wcState.projectName));
+    if (cr.ok) { var cd = await cr.json(); wcChat = cd.chat || []; }
+  } catch(_) { wcChat = []; }
+  // Load skills for this project
+  _wcSkillsLoaded = false;
+  wcSkills = [];
+  try {
+    var sr = await fetch(API + '/api/studio/webcraft/skills/' + encodeURIComponent(wcState.projectName));
+    if (sr.ok) { var sd = await sr.json(); wcSkills = sd.skills || []; _wcSkillsLoaded = true; }
+  } catch(_) {}
+  renderWebCraft(document.getElementById('content'));
+  wcScrollChatToBottom();
+}
+
+async function wcDeleteProject(pi) {
+  var p = wcProjectsList[pi];
+  if (!p) return;
+  if (!confirm('Eliminare: ' + p.name + ' - ' + p.dir + ' ?')) return;
+  await fetch(API + '/api/studio/webcraft/projects/' + encodeURIComponent(p.name), {method:'DELETE'});
+  wcProjectsList.splice(pi, 1);
+  renderWebCraft(document.getElementById('content'));
+}
+function wcUpdateField(i, val) { wcState.authFields[i].label = val; }
+function wcUpdateFieldType(i, t) { wcState.authFields[i].type = t; }
+function wcToggleRequired(i, v) { wcState.authFields[i].required = v; }
+function wcRemoveField(i) { wcState.authFields.splice(i,1); renderWebCraft(document.getElementById('content')); }
+function wcAddField() {
+  wcState.authFields.push({name:'field'+wcState.authFields.length,label:'New field',type:'text',required:false});
+  renderWebCraft(document.getElementById('content'));
+}
+function wcSetFile(i) {
+  wcState.activeFile = i;
+  renderWebCraft(document.getElementById('content'));
+  // Scroll active tab into view after render
+  var tab = document.getElementById('wcTab' + i);
+  if (tab) tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+}
+
+// ── WebCraft: Diff Viewer ─────────────────────────────────────────────────────
+function wcDiffLines(before, after) {
+  var NL = String.fromCharCode(10);
+  var bLines = (before || '').split(NL);
+  var aLines = (after  || '').split(NL);
+  var html = '';
+  var maxLen = Math.max(bLines.length, aLines.length);
+  var bi = 0, ai = 0;
+  while (bi < bLines.length || ai < aLines.length) {
+    var bL = bLines[bi], aL = aLines[ai];
+    if (bL === aL) {
+      html += '<div style="font-family:var(--mono);font-size:10px;padding:1px 8px;color:var(--dim);white-space:pre-wrap">&nbsp;' + wcEsc(bL||'') + '</div>';
+      bi++; ai++;
+    } else if (bi >= bLines.length) {
+      html += '<div style="font-family:var(--mono);font-size:10px;padding:1px 8px;background:#0a3a1a;color:#4ade80;white-space:pre-wrap">+' + wcEsc(aL||'') + '</div>';
+      ai++;
+    } else if (ai >= aLines.length) {
+      html += '<div style="font-family:var(--mono);font-size:10px;padding:1px 8px;background:#3a0a0a;color:#f87171;white-space:pre-wrap">-' + wcEsc(bL||'') + '</div>';
+      bi++;
+    } else {
+      html += '<div style="font-family:var(--mono);font-size:10px;padding:1px 8px;background:#3a0a0a;color:#f87171;white-space:pre-wrap">-' + wcEsc(bL||'') + '</div>';
+      html += '<div style="font-family:var(--mono);font-size:10px;padding:1px 8px;background:#0a3a1a;color:#4ade80;white-space:pre-wrap">+' + wcEsc(aL||'') + '</div>';
+      bi++; ai++;
+    }
+    if (bi > maxLen + 50 && ai > maxLen + 50) break; // safety
+  }
+  return html;
+}
+
+function wcDiffPanelHtml() {
+  if (_wcDiffQueue.length === 0) return '';
+  var items = _wcDiffQueue.map(function(d, di) {
+    var addedLines = (d.after||'').split(String.fromCharCode(10)).length - (d.before||'').split(String.fromCharCode(10)).length;
+    var sign = addedLines >= 0 ? '+' : '';
+    return '<details style="border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--bg3)">' +
+      '<summary style="padding:7px 10px;cursor:pointer;font-size:11px;font-family:var(--mono);color:var(--text);list-style:none;display:flex;align-items:center;gap:8px">' +
+        '<span style="color:var(--green);font-size:10px">&#9650;</span>' +
+        '<span style="flex:1">' + wcEsc(d.file) + '</span>' +
+        '<span style="color:' + (addedLines >= 0 ? '#4ade80' : '#f87171') + ';font-size:10px">' + sign + addedLines + ' linee</span>' +
+      '</summary>' +
+      '<div style="max-height:200px;overflow-y:auto;border-top:1px solid var(--border)">' + wcDiffLines(d.before, d.after) + '</div>' +
+    '</details>';
+  }).join('');
+  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:8px">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px">&#128268; Diff — ' + _wcDiffQueue.length + ' file modificati</div>' +
+      '<button onclick="wcClearDiff()" style="font-size:10px;background:none;border:none;color:var(--dim);cursor:pointer">&#10005; Chiudi</button>' +
+    '</div>' +
+    items +
+  '</div>';
+}
+
+// ── WebCraft: Snapshot / Rollback ─────────────────────────────────────────────
+async function wcManualSnapshot() {
+  var ts = await wcTakeSnapshot();
+  if (ts) {
+    wcChat.push({ role: 'system', text: '&#128190; Snapshot salvato (' + ts.slice(0,16).replace('T',' ') + ')' });
+    await wcLoadSnapshots();
+    renderWebCraft(document.getElementById('content'));
+  }
+}
+
+async function wcTakeSnapshot() {
+  if (!wcState.projectName) return null;
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/snapshot', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ projectName: wcState.projectName })
+    });
+    if (r.ok) { var d = await r.json(); return d.snapshot; }
+  } catch(_) {}
+  return null;
+}
+
+async function wcLoadSnapshots() {
+  if (!wcState.projectName) return;
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/snapshots/' + encodeURIComponent(wcState.projectName));
+    if (r.ok) { var d = await r.json(); _wcSnapshots = d.snapshots || []; renderWebCraft(document.getElementById('content')); }
+  } catch(_) {}
+}
+
+async function wcRestoreSnapshot(ts) {
+  if (!confirm('Ripristinare lo snapshot del ' + ts.replace('T',' ').replace(/-/g,':').slice(0,16) + '? I file attuali verranno sovrascritti.')) return;
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/restore', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ projectName: wcState.projectName, ts: ts })
+    });
+    if (r.ok) {
+      wcChat.push({ role: 'agent', text: 'Snapshot ripristinato (' + ts + '). Ricarico i file...' });
+      await wcReloadProjectFiles();
+    }
+  } catch(_) {}
+}
+
+function wcSnapshotsPanelHtml() {
+  if (_wcSnapshots.length === 0) return '';
+  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px">' +
+    '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">&#128190; Snapshot</div>' +
+    _wcSnapshots.slice(0,5).map(function(s) {
+      var label = s.ts.replace('T',' ').replace(/-/g,':').slice(0,16);
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:10px">' +
+        '<span style="flex:1;color:var(--dim);font-family:var(--mono)">' + label + '</span>' +
+        '<span style="color:var(--dim)">' + s.fileCount + 'f</span>' +
+        '<button onclick="wcRestoreSnapshot(' + JSON.stringify(s.ts) + ')" style="padding:2px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--dim);font-size:10px;cursor:pointer">&#8635;</button>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+
+// ── WebCraft: Syntax Check ────────────────────────────────────────────────────
+async function wcRunSyntaxCheck() {
+  if (!wcState.projectName) return;
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/syntax-check', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ projectName: wcState.projectName })
+    });
+    if (r.ok) {
+      var d = await r.json();
+      _wcSyntaxResults = d.results || [];
+      var errors = _wcSyntaxResults.filter(function(x){ return !x.ok; });
+      if (errors.length > 0) {
+        wcChat.push({ role: 'system', text: '&#9888; Syntax check: ' + errors.length + ' errore/i trovato/i. Clicca "Fix" per correggere automaticamente.', syntaxErrors: errors });
+      } else {
+        wcChat.push({ role: 'system', text: '&#10003; Syntax check: tutti i file JS sono validi.' });
+      }
+      renderWebCraft(document.getElementById('content'));
+      wcScrollChatToBottom();
+    }
+  } catch(_) {}
+}
+
+// ── WebCraft: Grep / Search ───────────────────────────────────────────────────
+async function wcRunGrep() {
+  var el = document.getElementById('wcGrepInput');
+  var q = el ? el.value.trim() : _wcGrepQuery;
+  if (!q || !wcState.projectName) return;
+  _wcGrepQuery = q;
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/grep', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ projectName: wcState.projectName, query: q })
+    });
+    if (r.ok) { var d = await r.json(); _wcGrepResults = d.matches || []; renderWebCraft(document.getElementById('content')); }
+  } catch(_) {}
+}
+
+function wcGrepPanelHtml() {
+  if (!_wcGrepOpen) return '';
+  var resultsHtml = _wcGrepResults.length > 0
+    ? _wcGrepResults.map(function(m) {
+        return '<div style="padding:4px 8px;border-bottom:1px solid var(--border);cursor:pointer" onclick="wcJumpToFile(' + JSON.stringify(m.file) + ')">' +
+          '<span style="font-size:10px;color:var(--green);font-family:var(--mono)">' + wcEsc(m.file) + ':' + m.lineNum + '</span>' +
+          '<pre style="margin:2px 0 0;font-size:10px;color:var(--text);white-space:pre-wrap;overflow:hidden;max-height:30px">' + wcEsc(m.line) + '</pre>' +
+        '</div>';
+      }).join('')
+    : '<div style="font-size:11px;color:var(--dim);padding:8px">Nessun risultato.</div>';
+  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:8px">' +
+    '<div style="display:flex;gap:6px;margin-bottom:8px">' +
+      '<input id="wcGrepInput" value="'+wcEsc(_wcGrepQuery)+'" placeholder="Cerca nel codice..." onkeydown="wcGrepKeydown(event)" style="flex:1;padding:6px 10px;font-size:12px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--mono)">' +
+      '<button onclick="wcRunGrep()" style="padding:6px 12px;background:var(--green3);border:none;border-radius:6px;color:var(--bg);font-size:11px;font-weight:700;cursor:pointer">&#128269;</button>' +
+      '<button onclick="wcCloseGrep()" style="padding:6px 8px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--dim);cursor:pointer">&times;</button>' +
+    '</div>' +
+    (_wcGrepResults.length > 0 ? '<div style="font-size:9px;color:var(--dim);margin-bottom:4px">' + _wcGrepResults.length + ' risultati</div>' : '') +
+    '<div style="max-height:200px;overflow-y:auto">' + resultsHtml + '</div>' +
+  '</div>';
+}
+
+function wcClearDiff() { _wcDiffQueue = []; renderWebCraft(document.getElementById('content')); }
+function wcCloseGrep() { _wcGrepOpen = false; renderWebCraft(document.getElementById('content')); }
+function wcGrepKeydown(e) { if (e.key === 'Enter') wcRunGrep(); }
+
+function wcJumpToFile(fname) {
+  var idx = wcState.generatedFiles.findIndex(function(f){ return f.name === fname; });
+  if (idx >= 0) { wcState.activeFile = idx; wcRightTab = 'files'; renderWebCraft(document.getElementById('content')); }
+}
+
+function wcToggleGrep() { _wcGrepOpen = !_wcGrepOpen; renderWebCraft(document.getElementById('content')); }
+
+// ── WebCraft: Plan Mode ───────────────────────────────────────────────────────
+function wcPlanBannerHtml() {
+  if (!_wcPlanPending) return '';
+  return '<div style="background:#1a2a1a;border:1px solid var(--green3);border-radius:10px;padding:14px;margin-bottom:8px">' +
+    '<div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:8px">&#128204; Piano proposto — approva per eseguire</div>' +
+    '<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0 0 10px;max-height:120px;overflow-y:auto;font-family:var(--mono)">' + wcEsc(_wcPlanPending.plan) + '</pre>' +
+    '<div style="display:flex;gap:8px">' +
+      '<button onclick="wcApprovePlan()" style="padding:7px 18px;background:var(--green3);border:none;border-radius:7px;color:var(--bg);font-size:12px;font-weight:700;cursor:pointer">&#10003; Esegui</button>' +
+      '<button onclick="wcRejectPlan()" style="padding:7px 14px;background:none;border:1px solid var(--border2);border-radius:7px;color:var(--dim);font-size:12px;cursor:pointer">&#10005; Annulla</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function wcApprovePlan() {
+  if (!_wcPlanPending) return;
+  var msg = _wcPlanPending.originalMessage;
+  _wcPlanPending = null;
+  await wcExecuteAgentCall(msg + String.fromCharCode(10) + '[Piano approvato — procedi con le modifiche]', false);
+}
+
+function wcRejectPlan() {
+  wcChat.push({ role: 'agent', text: 'Piano annullato. Dimmi se vuoi modificare la richiesta.' });
+  _wcPlanPending = null;
+  renderWebCraft(document.getElementById('content'));
+  wcScrollChatToBottom();
+}
+
+async function wcGenerate() {
+  if (wcState.running) return;
+  var desc = wcState.description;
+  var projName = wcState.projectName || 'myproject';
+  if (!desc || desc.length < 5) { alert(t('wc_describe_first')); return; }
+  wcState.description = desc;
+  wcState.projectName = projName;
+  wcState.running = true;
+  wcState.generatedFiles = [];
+  wcState.activeFile = 0;
+  _wcOverlayMinimized = false;
+  _wcGenAbortCtrl = new AbortController();
+  renderWebCraft(document.getElementById('content'));
+
+  // Security rules always injected
+  var SECURITY_RULES = [
+    'ALWAYS use security headers via Express/helmet server-side only. NEVER add X-Frame-Options, Strict-Transport-Security, frame-ancestors, or Content-Security-Policy as HTML meta http-equiv tags — the app runs inside an HTTP iframe sandbox and these meta tags will break resource loading. Only allowed HTML security meta: viewport, charset, X-UA-Compatible, Permissions-Policy.',
+    'NEVER put secrets, API keys, or DB credentials in frontend code. Only in .env server-side.',
+    'ALWAYS use prepared statements / parameterized queries. NEVER string-concatenate SQL.',
+    'ALWAYS hash passwords with bcrypt (cost factor 12+). NEVER store plain passwords.',
+    'ALWAYS validate and sanitize all user inputs server-side.',
+    'ALWAYS use httpOnly, secure, sameSite=Strict cookies for session tokens.',
+    'ALWAYS rate-limit auth endpoints (max 5 attempts / 15min per IP).',
+    'CSS MUST follow BEM naming: block__element--modifier. No inline styles except dynamic values.',
+    'PostgreSQL: use pg.Pool (max:10, idleTimeoutMillis:30000). Export singleton. Always use parameterized queries.',
+    'JWT: access token 15min, refresh token 7 days with rotation. Store refresh in httpOnly cookie.',
+  ].join(String.fromCharCode(10));
+
+  var authFieldsDef = wcState.authFields.map(function(f){ return f.label+' ('+f.type+(f.required?', required':'')+')'; }).join(', ');
+  var blocksEnabled = Object.keys(wcState.blocks).filter(function(b){ return wcState.blocks[b]; }).join(', ');
+
+  // File plan — always this structure
+  var filePlan = [
+    { name: 'package.json',          lang: 'json',       prompt: 'Generate package.json for an Express/PostgreSQL project named "'+projName+'". Dependencies: express, pg, bcryptjs, jsonwebtoken, nodemailer, helmet, express-rate-limit, cors, dotenv, express-validator, ioredis. DevDependencies: nodemon. Scripts: start, dev.' },
+    { name: '.env.example',          lang: 'bash',       prompt: 'Generate .env.example with all required env vars: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, JWT_SECRET, JWT_REFRESH_SECRET, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SENDGRID_API_KEY (commented as optional fallback), REDIS_URL (default redis://localhost:6379, works with Dragonfly too), PORT, NODE_ENV, CORS_ORIGIN, BASE_URL. Add helpful comments for each. Note that REDIS_URL is optional — app falls back to in-memory LRU if Redis unavailable.' },
+    { name: 'server/db.js',          lang: 'javascript', prompt: 'Generate server/db.js: pg.Pool singleton (max:10, idleTimeoutMillis:30000, connectionTimeoutMillis:2000). Circuit breaker: if DB fails 5+ times in 60s, open circuit (throw immediately) for 30s, then half-open (try one query). Export pool, query(text, params) with circuit breaker, transaction(callback) helper (BEGIN/COMMIT/ROLLBACK). Graceful shutdown on SIGTERM/SIGINT.' },
+    { name: 'server/middleware/security.js', lang: 'javascript', prompt: 'Generate server/middleware/security.js: detect sandbox via isSandbox = !process.env.NODE_ENV || process.env.NODE_ENV === "development". Use helmet CSP: defaultSrc self, scriptSrc self unsafe-inline, styleSrc self unsafe-inline, imgSrc self data:, connectSrc self, objectSrc none. frameAncestors: if isSandbox use ["self", "http://127.0.0.1:*", "http://localhost:*"] else ["none"]. NO X-Frame-Options DENY (conflicts with frameAncestors). NO HSTS in sandbox (HTTP only). Referrer-Policy strict-origin-when-cross-origin. Add express-rate-limit for general routes (100/15min) and strict limiter for auth (5/15min). Export { applySecurityMiddleware, authLimiter }.' },
+    { name: 'server/middleware/validate.js', lang: 'javascript', prompt: 'Generate server/middleware/validate.js using express-validator. Export handleValidationErrors middleware. Export auth field validators: registerValidator (fields: '+authFieldsDef+'), loginValidator (email + password).' },
+    { name: 'server/services/email.js', lang: 'javascript', prompt: 'Generate server/services/email.js: Nodemailer transporter using SMTP from env. Function sendVerificationEmail(to, token, baseUrl): sends HTML email with verification link. Function sendPasswordResetEmail(to, token, baseUrl). Add SendGrid fallback (commented out, predisposed with transporter swap). Never expose credentials.' },
+    { name: 'server/routes/auth.js',  lang: 'javascript', prompt: 'Generate server/routes/auth.js: POST /register (validate fields: '+authFieldsDef+', check duplicate email, bcrypt hash password cost 12, insert user, send verification email, return 201), POST /login (validate, check email verified, compare bcrypt, issue JWT access 15min + refresh 7d httpOnly cookie), POST /logout (clear refresh cookie), POST /refresh-token (validate refresh from httpOnly cookie, rotate token), GET /verify-email/:token (mark email verified). Use parameterized queries only. Import authLimiter EXACTLY like this: const { authLimiter } = require("../middleware/security"); — do NOT create or import from ../middleware/rateLimiter (that file does not exist). Apply authLimiter to register and login.' },
+    { name: 'server/routes/api.js',   lang: 'javascript', prompt: 'Generate server/routes/api.js: Express router with a verifyToken middleware (validates JWT Bearer). GET /api/me returns authenticated user profile (no password hash). GET /api/health returns {status: ok, timestamp}. Structure ready for adding more routes.' },
+    { name: 'server/index.js',        lang: 'javascript', prompt: 'Generate server/index.js: Express app entry point. Apply applySecurityMiddleware first. Then apply sentinelMiddleware (import from ./middleware/sentinel.js). Use CORS with env CORS_ORIGIN. Parse JSON body (limit 10kb). Mount /api/auth → auth.js, /api → api.js. Serve public/ as static. 404 handler and global error handler (never leak stack traces in production). Start on PORT from env.' },
+    { name: 'db/migrations/001_init.sql', lang: 'sql',   prompt: 'Generate PostgreSQL migration 001_init.sql: CREATE TABLE users with id UUID default gen_random_uuid(), fields for '+authFieldsDef+', email_verified BOOLEAN default false, verification_token VARCHAR, reset_token VARCHAR, reset_token_expires TIMESTAMPTZ, refresh_token_hash VARCHAR, created_at TIMESTAMPTZ default now(), updated_at TIMESTAMPTZ default now(). CREATE INDEX on email. CREATE TABLE refresh_tokens (id, user_id FK, token_hash, expires_at, created_at). Add updated_at trigger function.' },
+    { name: 'public/css/base.css',    lang: 'css',       prompt: 'Generate public/css/base.css: CSS custom properties (color palette, spacing scale, font scale, border-radius, shadows, transitions). CSS reset (*, box-sizing). Base typography (Inter or system-ui). Utility classes using BEM where applicable. Dark/light mode via prefers-color-scheme.' },
+    { name: 'public/css/components.css', lang: 'css',    prompt: 'Generate public/css/components.css following STRICT BEM (block__element--modifier). Components: .btn (--primary, --secondary, --danger, --ghost), .form (form__field, form__label, form__input, form__error, form__hint), .card (card__header, card__body, card__footer), .nav (nav__brand, nav__links, nav__link--active), .alert (--success, --error, --warning, --info), .spinner, .badge, .modal (modal__overlay, modal__content, modal__header, modal__body, modal__footer). Fully accessible (focus states, aria).' },
+    { name: 'public/css/pages.css',   lang: 'css',       prompt: 'Generate public/css/pages.css: page-level layout classes using BEM. .page-auth (centered card layout for login/register), .page-dashboard (sidebar + content grid), .page-landing (hero section, features grid, pricing cards). Responsive at 768px and 480px breakpoints.' },
+    { name: 'public/js/main.js',      lang: 'javascript', prompt: 'Generate public/js/main.js: vanilla JS, no dependencies. authAPI object with methods register(data), login(data), logout(), refreshToken(), getMe(). Cookie banner controller: reads localStorage consent, shows banner if not set, sets consent by category (necessary/analytics/marketing). Form handlers for register and login pages. Global error display utility. Export nothing (IIFE).' },
+    { name: 'public/index.html',      lang: 'html',       prompt: 'Generate public/index.html for "'+projName+'": '+desc+'. Full HTML5. IMPORTANT: do NOT add X-Frame-Options, Strict-Transport-Security, or frame-ancestors meta tags — the app runs in an iframe sandbox on HTTP localhost and these will break it. Only add: X-UA-Compatible IE=edge, viewport, charset, Permissions-Policy (geolocation=(), microphone=(), camera=()). Include base.css, components.css, pages.css. GDPR cookie banner HTML (class .cookie-banner, .cookie-banner__text, .cookie-banner__actions, .cookie-banner__btn--accept, .cookie-banner__btn--reject). Navigation. Hero section. Include main.js at end of body. Semantic HTML, ARIA roles, lang attribute.' },
+    { name: 'public/login.html',      lang: 'html',       prompt: 'Generate public/login.html: login page for "'+projName+'". Form with email + password fields using .form BEM classes. Link to register.html. Error display area. Include same CSS files. ARIA labels, autocomplete attributes. Do NOT add X-Frame-Options or Strict-Transport-Security meta tags.' },
+    { name: 'public/register.html',   lang: 'html',       prompt: 'Generate public/register.html: registration page for "'+projName+'". Form fields: '+authFieldsDef+'. Use .form BEM classes. Client-side validation hints. Link to login.html. Error/success display. Include same CSS files. ARIA labels, autocomplete attributes. Do NOT add X-Frame-Options or Strict-Transport-Security meta tags.' },
+    { name: 'server/middleware/sentinel.js', lang: 'javascript', prompt: 'Generate server/middleware/sentinel.js: a lightweight WAF middleware for Express. Check request for: SQL injection patterns (UNION SELECT, DROP TABLE, etc.), XSS patterns (<script, javascript:, onerror=), path traversal (../), oversized payloads (>100KB body). Rate limit by IP using an in-memory sliding window (fallback when Redis unavailable). Log blocked requests with IP, method, path, reason to stderr. Export sentinelMiddleware(req, res, next).' },
+    { name: 'server/services/cache.js',     lang: 'javascript', prompt: 'Generate server/services/cache.js: Redis/Dragonfly client using ioredis. Connect to REDIS_URL from env. Export: get(key), set(key, value, ttlSeconds), del(key), exists(key). Add circuit breaker pattern: if Redis fails 3+ times in 30s, switch to in-memory LRU fallback (Map with max 1000 entries, LRU eviction). Reconnect Redis in background every 60s. Log circuit state changes. This makes the app resilient when Redis is down.' },
+    { name: 'README.md',              lang: 'markdown',   prompt: 'Generate README.md for "'+projName+'": project description, tech stack (Express, PostgreSQL with circuit breaker, Redis/Dragonfly with LRU fallback, JWT auth, Nodemailer SMTP + SendGrid fallback, Sentinel WAF, BEM CSS), folder structure, setup instructions (clone, npm install, copy .env.example to .env, run migrations with psql, optional: start Redis/Dragonfly, npm run dev), environment variables table (including REDIS_URL), API endpoints table, security notes, email configuration guide.' },
+    { name: 'nginx.conf',             lang: 'nginx',      prompt: 'Generate a production-ready nginx.conf for "'+projName+'" running as an Express app on localhost:3000. Include: HTTPS with TLS 1.2/1.3 only, strong cipher suites, HSTS (max-age=31536000; includeSubDomains; preload), X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy (geolocation=(), microphone=(), camera=()), Content-Security-Policy (default-src self, script-src self, style-src self unsafe-inline, img-src self data:, connect-src self, frame-src none, object-src none), rate limiting (limit_req_zone 10r/s burst 20), gzip compression, proxy_pass to http://127.0.0.1:3000 with correct headers (X-Real-IP, X-Forwarded-For, X-Forwarded-Proto), static files served directly from public/ with long cache headers, Certbot/ACME path. Use server_name example.com with a TODO comment. Security rating: A+ on securityheaders.com.' },
+  ];
+
+  // Filter by selected blocks
+  if (!wcState.blocks.auth) {
+    filePlan = filePlan.filter(function(f){ return !['server/routes/auth.js','public/login.html','public/register.html','server/middleware/validate.js'].includes(f.name); });
+  }
+  if (!wcState.blocks.cookieBanner) {
+    // keep index.html but note no cookie banner
+  }
+  if (!wcState.blocks.emailVerification) {
+    // mark in prompt
+    filePlan = filePlan.map(function(f){ return f.name === 'server/services/email.js' ? Object.assign({},f,{prompt:f.prompt+' (Skip email verification — not enabled)'}) : f; });
+  }
+
+  var _nl = String.fromCharCode(10);
+  var sysPreamble = 'You are an expert full-stack engineer generating production-quality code.' + _nl + _nl + 'SECURITY RULES (non-negotiable):' + _nl + SECURITY_RULES + _nl + _nl + 'Project: ' + projName + _nl + 'Description: ' + desc + _nl + 'Enabled blocks: ' + blocksEnabled + _nl + _nl + 'Generate ONLY the file content requested. No explanations, no markdown code fences, no comments like "here is the file". Output raw file content only.';
+  _wcLastFilePlan = filePlan;
+  _wcLastSysPreamble = sysPreamble;
+
+  _wcGenStartTime = Date.now();
+  _wcTokIn = 0; _wcTokOut = 0;  // reset global counters for this generation run
+
+  // CSS files that need two-pass generation (too long for one call)
+  var WC_CSS_SPLIT = {
+    'public/css/base.css': [
+      'PART 1 of 2. Generate the FIRST HALF of public/css/base.css. Include: (1) all CSS custom properties / design tokens (colors, spacing, font sizes, shadows, radii, transitions, z-index scale, dark/light mode via prefers-color-scheme data-theme), (2) CSS reset (*, box-sizing, margin, padding), (3) base typography (body, h1-h6, p, a, code, pre, blockquote), (4) utility classes (flex, grid helpers, spacing, text alignment, visibility, truncation). End the file at a natural boundary (closing brace). Do NOT generate components. Output raw CSS only.',
+      'PART 2 of 2. Continue (do NOT repeat) public/css/base.css from where part 1 ended. Generate: (5) layout helpers (.container, .grid, .col-*, .stack, .cluster, .sidebar-layout), (6) responsive breakpoint utilities (768px, 480px), (7) animation keyframes (@keyframes fadeIn, slideUp, pulse, spin), (8) scrollbar styling, (9) selection styles, (10) print styles. Output raw CSS only, starting directly from where part 1 ended — no repetition.'
+    ],
+    'public/css/components.css': [
+      'PART 1 of 2. Generate the FIRST HALF of public/css/components.css using strict BEM. Include components: (1) .btn (--primary, --secondary, --danger, --ghost, --sm, --lg, disabled state, loading state with spinner), (2) .form (.form__group, .form__label, .form__input, .form__textarea, .form__select, .form__error, .form__hint, .form__input--invalid, focus states), (3) .card (.card__header, .card__body, .card__footer, .card--interactive hover/active), (4) .badge (--success, --error, --warning, --info, --neutral), (5) .alert (--success, --error, --warning, --info with icon space). Output raw CSS only.',
+      'PART 2 of 2. Continue (do NOT repeat) public/css/components.css from where part 1 ended. Include components: (6) .nav (.nav__brand, .nav__links, .nav__link, .nav__link--active, .nav__toggle mobile hamburger, .nav--sticky), (7) .modal (.modal__overlay, .modal__content, .modal__header, .modal__body, .modal__footer, open/close transition), (8) .spinner (sizes: sm/md/lg, colors), (9) .dropdown (.dropdown__menu, .dropdown__item, open state), (10) .avatar (.avatar--sm/md/lg, .avatar--initials), (11) .progress (.progress__bar, animated fill), (12) .table (.table__head, .table__row, .table__cell, striped, hover). Output raw CSS only, starting directly from where part 1 ended.'
+    ]
+  };
+
+  // Helper: strip markdown fences from LLM output
+  function wcStripFences(content) {
+    var _nl2 = String.fromCharCode(10);
+    var _fence = String.fromCharCode(96,96,96);
+    var lines = content.split(_nl2);
+    if (lines.length > 0 && lines[0].indexOf(_fence) === 0) lines.shift();
+    if (lines.length > 0 && lines[lines.length-1].trim() === _fence) lines.pop();
+    return lines.join(_nl2).trim();
+  }
+
+  // Helper: generate one file (with two-pass split for large CSS files)
+  async function wcGenOneFile(fp, signal) {
+    var _nl2 = String.fromCharCode(10);
+    var splitPrompts = WC_CSS_SPLIT[fp.name];
+    if (splitPrompts) {
+      // Two-pass generation: call LLM twice and concatenate
+      var part1 = await wcCallLLM(sysPreamble, splitPrompts[0] + _nl2 + _nl2 + 'File: ' + fp.name, signal, fp.lang, 8192);
+      part1 = wcStripFences(part1);
+      if (signal && signal.aborted) return part1;
+      var part2 = await wcCallLLM(sysPreamble, splitPrompts[1] + _nl2 + _nl2 + 'File: ' + fp.name, signal, fp.lang, 8192);
+      part2 = wcStripFences(part2);
+      return part1 + _nl2 + _nl2 + part2;
+    }
+    var content = await wcCallLLM(sysPreamble, fp.prompt + _nl2 + _nl2 + 'File to generate: ' + fp.name, signal, fp.lang);
+    return wcStripFences(content);
+  }
+
+  wcStartGenTimer();
+
+  // Pre-populate generatedFiles in order so tabs appear immediately
+  filePlan.forEach(function(fp) {
+    wcState.generatedFiles.push({ name: fp.name, content: '', lang: fp.lang, _pending: true });
+  });
+  wcState.activeFile = 0;
+  renderWebCraft(document.getElementById('content'));
+
+  // Generate in parallel batches of 4 — each call is independent/fresh to Liara
+  var BATCH = 4;
+  var doneCount = 0;
+  for (var bi = 0; bi < filePlan.length; bi += BATCH) {
+    if (_wcGenAbortCtrl && _wcGenAbortCtrl.signal.aborted) break;
+    var batch = filePlan.slice(bi, bi + BATCH);
+    wcUpdateGenOverlay(doneCount, filePlan.length, batch.map(function(f){ return f.name; }).join(', '));
+    var results = await Promise.allSettled(batch.map(function(fp) {
+      return wcGenOneFile(fp, _wcGenAbortCtrl ? _wcGenAbortCtrl.signal : null).then(function(c){ return { fp: fp, content: c }; });
+    }));
+    results.forEach(function(r) {
+      if (r.status === 'fulfilled') {
+        var fp = r.value.fp;
+        for (var gi = 0; gi < wcState.generatedFiles.length; gi++) {
+          if (wcState.generatedFiles[gi].name === fp.name) {
+            wcState.generatedFiles[gi] = { name: fp.name, content: r.value.content, lang: fp.lang };
+            break;
+          }
+        }
+      } else if (r.reason && r.reason.name !== 'AbortError') {
+        var fpName = batch[results.indexOf(r)] ? batch[results.indexOf(r)].name : '?';
+        // find by matching position
+        var batchIdx = results.indexOf(r);
+        if (batch[batchIdx]) fpName = batch[batchIdx].name;
+        for (var gi2 = 0; gi2 < wcState.generatedFiles.length; gi2++) {
+          if (wcState.generatedFiles[gi2].name === fpName) {
+            wcState.generatedFiles[gi2] = { name: fpName, content: '// Error generating this file: ' + (r.reason.message || 'unknown error'), lang: (batch[batchIdx] || {}).lang || '', _error: true };
+            break;
+          }
+        }
+      }
+      doneCount++;
+    });
+    renderWebCraft(document.getElementById('content'));
+  }
+
+  if (_wcTimerInterval) { clearInterval(_wcTimerInterval); _wcTimerInterval = null; }
+
+  wcState.running = false;
+  _wcGenAbortCtrl = null;
+  _wcOverlayMinimized = false;
+
+  // Auto-save
+  try {
+    await fetch(API + '/api/studio/webcraft/projects/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ projectName: wcState.projectName, description: wcState.description, files: wcState.generatedFiles })
+    });
+  } catch(_) {}
+
+  // Post-generation syntax scan — mark truncated/broken files before repair
+  wcState.generatedFiles.forEach(function(f) {
+    if (f._error || f._pending || !f.content) return;
+    var chk = wcSyntaxCheck(f.content, f.lang || '');
+    if (!chk.ok) f._syntaxError = chk.reason;
+  });
+
+  renderWebCraft(document.getElementById('content'));
+
+  // Auto-repair: run immediately after generation completes
+  await wcAutoRepair(filePlan, sysPreamble);
+
+  // Update stats AFTER repair so token counts include repair calls
+  wcState.lastGenStats = { tokIn: _wcTokIn, tokOut: _wcTokOut, seconds: Math.floor((Date.now() - _wcGenStartTime) / 1000), files: wcState.generatedFiles.length };
+  renderWebCraft(document.getElementById('content'));
+}
+
+// ── Auto-repair pass — fixes _error and _syntaxError files ────────────────
+// Called automatically after generation and available as manual button
+var _wcRepairRunning = false;
+async function wcAutoRepair(filePlan, sysPreamble) {
+  if (_wcRepairRunning) return;
+  // Collect broken files: LLM errors + syntax errors
+  var toFix = wcState.generatedFiles.filter(function(f){ return f._error || f._syntaxError; });
+  if (toFix.length === 0) return;
+
+  _wcRepairRunning = true;
+  wcState.repairing = true;
+  wcState.repairTotal = toFix.length;
+  wcState.repairDone = 0;
+  renderWebCraft(document.getElementById('content'));
+
+  // Build a map name→plan for prompt lookup
+  var planMap = {};
+  if (filePlan) filePlan.forEach(function(fp){ planMap[fp.name] = fp; });
+
+  var _nl3 = String.fromCharCode(10);
+  // Use compact system prompt for repair to avoid exceeding Liara context window
+  var sysBase = 'You are an expert full-stack engineer. Output ONLY the complete corrected file content. No explanations, no markdown fences, no preamble. Raw file content only.';
+
+  for (var ri = 0; ri < toFix.length; ri++) {
+    var broken = toFix[ri];
+    var plan = planMap[broken.name];
+    wcState.repairDone = ri;
+    wcState.repairCurrent = broken.name;
+    wcUpdateRepairOverlay();
+
+    await new Promise(function(resolve){ setTimeout(resolve, 2000); });
+    try {
+      var fixSys = sysBase + _nl3 + 'You are fixing a broken or truncated file. Output ONLY the complete corrected file. No fences, no explanations.';
+      var fixUser;
+      if (broken._error) {
+        // LLM failed entirely — regenerate from original prompt
+        fixUser = plan
+          ? plan.prompt + _nl3 + _nl3 + 'File to generate: ' + broken.name
+          : 'Regenerate the file: ' + broken.name;
+      } else {
+        // Syntax error — pass existing content + error for targeted fix
+        fixUser = 'File: ' + broken.name + _nl3 +
+          'Error: ' + (broken._syntaxError || 'truncated/incomplete') + _nl3 + _nl3 +
+          'Current broken content (last 800 chars shown if long):' + _nl3 +
+          (broken.content.length > 800 ? broken.content.slice(0, 400) + _nl3 + '...' + _nl3 + broken.content.slice(-400) : broken.content) + _nl3 + _nl3 +
+          'Output the COMPLETE corrected file from the beginning.';
+      }
+      var fixed = await wcCallLLM(fixSys, fixUser, null, broken.lang || plan && plan.lang, 8192);
+      var _fence3 = String.fromCharCode(96,96,96);
+      var fixLines = fixed.split(_nl3);
+      if (fixLines.length > 0 && fixLines[0].indexOf(_fence3) === 0) fixLines.shift();
+      if (fixLines.length > 0 && fixLines[fixLines.length-1].trim() === _fence3) fixLines.pop();
+      fixed = fixLines.join(_nl3).trim();
+      var lang2 = broken.lang || (plan && plan.lang) || 'text';
+      var check2 = wcSyntaxCheck(fixed, lang2);
+      for (var gi3 = 0; gi3 < wcState.generatedFiles.length; gi3++) {
+        if (wcState.generatedFiles[gi3].name === broken.name) {
+          wcState.generatedFiles[gi3] = { name: broken.name, content: fixed, lang: lang2 };
+          if (!check2.ok) wcState.generatedFiles[gi3]._syntaxError = check2.reason;
+          break;
+        }
+      }
+    } catch(e) { /* keep as broken */ }
+
+    wcState.repairDone = ri + 1;
+    wcUpdateRepairOverlay();
+  }
+
+  _wcRepairRunning = false;
+  wcState.repairing = false;
+  wcState.repairTotal = 0;
+  wcState.repairDone = 0;
+  wcState.repairCurrent = '';
+
+  // Save after repair
+  try {
+    await fetch(API + '/api/studio/webcraft/projects/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ projectName: wcState.projectName, description: wcState.description, files: wcState.generatedFiles })
+    });
+  } catch(_) {}
+
+  renderWebCraft(document.getElementById('content'));
+}
+
+// Manual trigger for repair — called from "Correggi tutti" button
+function wcUpdateRepairOverlay() {
+  var counter = document.getElementById('wcRepairCounter');
+  var fileEl  = document.getElementById('wcRepairFile');
+  if (counter) counter.textContent = wcState.repairDone + ' / ' + wcState.repairTotal + ' file';
+  if (fileEl)  fileEl.textContent  = wcState.repairCurrent;
+}
+
+function wcTriggerRepair() {
+  if (_wcRepairRunning) return;
+  wcAutoRepair(_wcLastFilePlan, _wcLastSysPreamble);
+}
+
+// Quick structural check — returns {ok, reason} without calling the LLM
+// Reads only structure (braces, tags) — does NOT add content to any context
+function wcSyntaxCheck(content, lang) {
+  if (!content || content.length < 20) return { ok: false, reason: 'empty' };
+  var trimmed = content.trimEnd();
+
+  if (lang === 'css' || lang === 'scss') {
+    // Strip comments and strings to avoid false brace counts
+    var stripped = trimmed
+      .replace(new RegExp('/[*][\\s\\S]*?[*]/', 'g'), '')
+      .replace(new RegExp('"[^"]*"', 'g'), '""')
+      .replace(new RegExp("['][^']*[']", 'g'), "''");
+    var open = 0, close = 0;
+    for (var i = 0; i < stripped.length; i++) {
+      if (stripped[i] === '{') open++;
+      else if (stripped[i] === '}') close++;
+    }
+    if (open !== close) return { ok: false, reason: 'unbalanced braces (' + open + ' open, ' + close + ' close)' };
+    if (open === 0) return { ok: false, reason: 'no CSS rules found' };
+    return { ok: true };
+  }
+
+  if (lang === 'javascript') {
+    // Use Function constructor as a zero-overhead parse check (no eval, just syntax)
+    try { new Function(content); return { ok: true }; }
+    catch(e) { return { ok: false, reason: e.message.split(String.fromCharCode(10))[0] }; }
+  }
+
+  if (lang === 'html') {
+    var lower = trimmed.toLowerCase();
+    if (lower.indexOf('</html>') === -1 && lower.indexOf('</body>') === -1)
+      return { ok: false, reason: 'missing </html> or </body>' };
+    // DOMParser check for well-formedness
+    try {
+      var doc = new DOMParser().parseFromString(trimmed, 'text/html');
+      var pe = doc.querySelector('parseerror');
+      if (pe) return { ok: false, reason: pe.textContent.slice(0, 80) };
+    } catch(_) {}
+    return { ok: true };
+  }
+
+  if (lang === 'json') {
+    try { JSON.parse(trimmed); return { ok: true }; }
+    catch(e) { return { ok: false, reason: e.message }; }
+  }
+
+  // For markdown, nginx.conf, sql, bash — just check not truncated mid-line
+  var last = trimmed[trimmed.length - 1];
+  if (last === undefined) return { ok: false, reason: 'empty' };
+  return { ok: true };
+}
+
+// Returns true if content looks truncated (unbalanced braces or ends mid-rule)
+function wcIsTruncated(content, lang) {
+  if (!content || content.length < 100) return false;
+  var check = wcSyntaxCheck(content, lang);
+  if (!check.ok) return true;
+  // Also check raw ending for langs not fully covered above
+  var trimmed = content.trimEnd();
+  if (lang === 'javascript') {
+    var last = trimmed[trimmed.length - 1];
+    return last !== '}' && last !== ';' && last !== ')';
+  }
+  return false;
+}
+
+async function wcCallLLMRaw(sys, user, signal, maxTok) {
+  var fetchOpts = {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({system: sys, user: user, max_tokens: maxTok || 16384})
+  };
+  if (signal) fetchOpts.signal = signal;
+  for (var attempt = 0; attempt < 3; attempt++) {
+    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    var r = await fetch(API + '/api/studio/webcraft', fetchOpts);
+    if (r.ok) {
+      var d = await r.json();
+      // Accumulate token counts if the server returns usage data
+      if (d && d.usage) {
+        _wcTokIn  += (d.usage.prompt_tokens || d.usage.input_tokens || 0);
+        _wcTokOut += (d.usage.completion_tokens || d.usage.output_tokens || 0);
+      } else if (d && d.text) {
+        // Estimate from char count (4 chars ≈ 1 token)
+        _wcTokIn  += Math.round((sys.length + user.length) / 4);
+        _wcTokOut += Math.round((d.text || '').length / 4);
+      }
+      return (d && (d.text || d.content || d.result)) || '';
+    }
+    if (r.status < 500 || attempt === 2) {
+      var errBody = '';
+      try { var errText = await r.text(); try { errBody = JSON.parse(errText).error || errText; } catch(_) { errBody = errText; } } catch(_) {}
+      console.warn('[WebCraft] LLM ' + r.status + ' attempt=' + attempt + ':', errBody.slice(0, 300));
+      throw new Error('LLM error ' + r.status + (errBody ? ': ' + errBody.slice(0, 120) : ''));
+    }
+    await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+  }
+}
+
+async function wcCallLLM(sys, user, signal, lang, maxTok) {
+  var content = await wcCallLLMRaw(sys, user, signal, maxTok);
+  // Continuation loop: if response is truncated, ask model to continue
+  var maxContinuations = 2;
+  for (var ci = 0; ci < maxContinuations; ci++) {
+    if (!wcIsTruncated(content, lang || 'text')) break;
+    if (signal && signal.aborted) break;
+    var continuePrompt = 'Continue generating the file EXACTLY from where you stopped. Do not repeat anything already written. Output ONLY the remaining code, starting from the next character after where you stopped.' +
+      String.fromCharCode(10) + String.fromCharCode(10) + 'The file so far ends with:' +
+      String.fromCharCode(10) + content.slice(-300);
+    var continuation = await wcCallLLMRaw(sys, continuePrompt, signal, maxTok);
+    if (!continuation || continuation.trim().length < 5) break;
+    content = content + String.fromCharCode(10) + continuation;
+  }
+  return content;
+}
+
+function wcSandboxPanelHtml() {
+  var sb = wcState.sandbox;
+  if (!wcState.generatedFiles.length) {
+    return '<div style="display:flex;align-items:center;justify-content:center;flex:1;color:var(--dim);font-size:13px">Genera prima il progetto</div>';
+  }
+
+  // Server ready — show iframe with top bar
+  if (sb.port && !sb.running) {
+    return '<div style="display:flex;flex-direction:column;flex:1;min-height:0">' +
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg3)">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;flex-shrink:0"></span>' +
+        '<span style="font-size:11px;color:var(--text);font-family:var(--mono);font-weight:600">http://127.0.0.1:'+sb.port+'</span>' +
+        '<span style="font-size:10px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+wcEsc(sb.dir||'')+'</span>' +
+        '<button onclick="wcStopSandbox()" style="padding:3px 10px;background:transparent;border:1px solid var(--border2);border-radius:5px;color:var(--dim);font-size:11px;cursor:pointer;flex-shrink:0">&#9632; Ferma</button>' +
+        '<button onclick="wcOpenSandbox()" style="padding:3px 12px;background:var(--green3);border:none;border-radius:5px;color:var(--bg);font-size:11px;cursor:pointer;font-weight:700;flex-shrink:0">&#8599; Apri nel browser</button>' +
+      '</div>' +
+      '<iframe src="http://127.0.0.1:'+sb.port+'" style="flex:1;border:none;width:100%;background:#fff" sandbox="allow-scripts allow-forms allow-same-origin allow-popups"></iframe>' +
+    '</div>';
+  }
+
+  // Pre-launch info panel
+  if (!sb.running && !sb.port && !sb.logs.length) {
+    return '<div style="display:flex;flex-direction:column;flex:1;min-height:0;padding:20px">' +
+      '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:480px">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:12px">&#9654; Cosa succede quando avvii la sandbox:</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;font-size:11px;color:var(--dim)">' +
+          '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--green);flex-shrink:0">1.</span><span>I file vengono scritti in <span style="font-family:var(--mono);color:var(--green)">~/.nha/webcraft/'+wcEsc(wcState.projectName||'project')+'</span></span></div>' +
+          '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--green);flex-shrink:0">2.</span><span>npm install delle dipendenze (solo in quella cartella)</span></div>' +
+          '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--green);flex-shrink:0">3.</span><span>Il server Express parte su una porta locale casuale</span></div>' +
+          '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--green);flex-shrink:0">4.</span><span>DB in-memory (no PostgreSQL richiesto) — i dati si azzerano al riavvio</span></div>' +
+        '</div>' +
+        '<div style="margin-top:12px;padding:8px 10px;background:var(--amberdim);border:1px solid var(--amber3);border-radius:6px;font-size:10px;color:var(--amber)">&#9888; Solo locale — nessun dato esce dal tuo dispositivo</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // Running — show structured phases log
+  var phases = [
+    { key: 'files',   label: 'Scrittura file',         icon: '&#128196;' },
+    { key: 'shims',   label: 'Shim iniettati',          icon: '&#128295;' },
+    { key: 'pkg',     label: 'package.json',            icon: '&#128230;' },
+    { key: 'env',     label: '.env sandbox',            icon: '&#9881;'   },
+    { key: 'deps',    label: 'Dipendenze',              icon: '&#128230;' },
+    { key: 'install', label: 'npm install',             icon: '&#9203;'   },
+    { key: 'start',   label: 'Avvio server',            icon: '&#9654;'   },
+  ];
+  var logs = sb.logs;
+  // Classify each log line into a phase
+  function phaseOf(l) {
+    if (!l) return 'start';
+    if (l.indexOf('Scrittura') !== -1 || l.indexOf('file...') !== -1 || l[0] === ' ' && l.indexOf('.') !== -1 && l.indexOf('✓') !== -1) return 'files';
+    if (l.indexOf('Shim') !== -1 || l.indexOf('shim') !== -1 || l.indexOf('DB shim') !== -1) return 'shims';
+    if (l.indexOf('package.json') !== -1) return 'pkg';
+    if (l.indexOf('.env') !== -1) return 'env';
+    if (l.indexOf('Dipendenze') !== -1 || l.indexOf('Percorso:') !== -1 || (l.indexOf('•') !== -1 && l.indexOf('@') !== -1)) return 'deps';
+    if (l.indexOf('npm install') !== -1 || l.indexOf('added') !== -1 || l.indexOf('packages') !== -1 || l.indexOf('npm error') !== -1 || l.indexOf('audit') !== -1 || l.indexOf('funding') !== -1 || l.indexOf('vulnerability') !== -1) return 'install';
+    return 'start';
+  }
+  var byPhase = {};
+  logs.forEach(function(l){ var p = phaseOf(l); if (!byPhase[p]) byPhase[p] = []; byPhase[p].push(l); });
+
+  // Check if a phase is done (next phase has lines)
+  var phaseKeys = phases.map(function(p){ return p.key; });
+  function phaseStatus(pk) {
+    var idx = phaseKeys.indexOf(pk);
+    if (!byPhase[pk] || !byPhase[pk].length) return 'pending';
+    // Done if next phase has started or if error
+    for (var i = idx+1; i < phaseKeys.length; i++) {
+      if (byPhase[phaseKeys[i]] && byPhase[phaseKeys[i]].length) return 'done';
+    }
+    if (sb.error) return 'error';
+    return 'active';
+  }
+
+  var statusColor = { done:'var(--green)', active:'var(--amber)', pending:'var(--dim)', error:'var(--red)' };
+  var statusIcon  = { done:'&#10003;', active:'&#9203;', pending:'&#9675;', error:'&#10060;' };
+
+  var phasesHtml = phases.map(function(ph, phi){
+    var st = phaseStatus(ph.key);
+    var lines = byPhase[ph.key] || [];
+    var clean = lines.filter(function(l){ return l.indexOf('npm fund') === -1 && l.indexOf('run ') === -1 && l.indexOf('npm audit') === -1; });
+    var isOpen = !!wcSandboxExpanded[ph.key];
+    var hasContent = clean.length > 0;
+
+    // Summary line (always visible)
+    var summary = '';
+    if (ph.key === 'files') {
+      var cnt = clean.filter(function(l){ return l.indexOf('✓') !== -1; }).length;
+      summary = cnt ? cnt + ' file scritti' : '';
+    } else if (ph.key === 'deps') {
+      var dcnt = clean.filter(function(l){ return l.indexOf('•') !== -1; }).length;
+      summary = dcnt ? dcnt + ' dipendenze' : '';
+    } else if (clean.length > 0) {
+      var last = clean.filter(function(l){ return l.trim(); }).slice(-1)[0] || '';
+      summary = wcEsc(last.trim().slice(0, 60));
+    }
+
+    // Expanded detail — all lines
+    var expandedHtml = '';
+    if (isOpen && hasContent) {
+      expandedHtml = '<div style="margin-top:6px;padding:8px;background:var(--bg);border-radius:6px;max-height:180px;overflow-y:auto">' +
+        clean.map(function(l){
+          var col = l.indexOf('❌') !== -1 || l.indexOf('Error') !== -1 ? 'var(--red)' : l.indexOf('✓') !== -1 || l.indexOf('✅') !== -1 ? 'var(--green)' : 'var(--dim)';
+          return '<div style="font-size:10px;font-family:var(--mono);color:'+col+';line-height:1.6;white-space:pre-wrap;word-break:break-all">'+wcEsc(l)+'</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    var clickable = hasContent && st !== 'pending';
+    return '<div style="border-bottom:1px solid var(--border)">' +
+      '<div onclick="'+(clickable?'wcTogglePhase('+phi+')':'')+'" style="display:flex;gap:10px;align-items:center;padding:9px 12px;cursor:'+(clickable?'pointer':'default')+'">' +
+        '<span style="font-size:13px;flex-shrink:0">'+ph.icon+'</span>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:11px;font-weight:600;color:'+(st==='pending'?'var(--dim)':'var(--text)')+'">'+ph.label+'</div>' +
+          (summary && !isOpen ? '<div style="font-size:10px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+summary+'</div>' : '') +
+        '</div>' +
+        (clickable ? '<span style="font-size:10px;color:var(--dim);flex-shrink:0">'+(isOpen?'&#9650;':'&#9660;')+'</span>' : '') +
+        '<span style="font-size:13px;color:'+statusColor[st]+';flex-shrink:0;margin-left:4px">'+statusIcon[st]+'</span>' +
+      '</div>' +
+      (isOpen ? '<div style="padding:0 12px 10px">' + expandedHtml + '</div>' : '') +
+    '</div>';
+  }).join('');
+
+  return '<div style="display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto">' +
+    phasesHtml +
+    (sb.error ?
+      '<div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:0;font-size:11px;font-family:var(--mono);color:var(--red);white-space:pre-wrap;word-break:break-all">&#10060; '+wcEsc(sb.error)+'</div>' +
+        '<button onclick="wcFixSandboxError()" style="flex-shrink:0;padding:6px 14px;background:#7f1d1d;border:1px solid #ef4444;border-radius:6px;color:#fca5a5;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">&#129302; Correggi</button>' +
+      '</div>'
+    : '') +
+  '</div>';
+}
+
+async function wcStartSandbox() {
+  if (wcState.sandbox.running) return;
+  wcState.sandbox = { running: true, port: null, dir: null, logs: [], error: null };
+  wcState.rightTab = 'preview';
+  wcRightTab = 'preview';
+  _wcSkillsLoaded = false;   // force skill panel reload after sandbox completes
+  renderWebCraft(document.getElementById('content'));
+
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/sandbox/start', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        projectName: wcState.projectName || 'webcraft-sandbox',
+        files: wcState.generatedFiles.filter(function(f){ return !f._error && !f._pending; })
+      })
+    });
+    if (!r.ok || !r.body) throw new Error('Sandbox error ' + r.status);
+    var reader = r.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '';
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      buf += dec.decode(chunk.value, {stream: true});
+      var _dbl = String.fromCharCode(10)+String.fromCharCode(10);
+      var parts = buf.split(_dbl);
+      buf = parts.pop();
+      for (var i = 0; i < parts.length; i++) {
+        var line = parts[i].trim();
+        if (!line.startsWith('data:')) continue;
+        try {
+          var evt = JSON.parse(line.slice(5).trim());
+          if (evt.type === 'log') {
+            wcState.sandbox.logs.push(evt.msg);
+            // Live update logs only (avoid full re-render on every line)
+            var logsEl = document.getElementById('wcSbLogs');
+            if (logsEl) {
+              var d = document.createElement('div');
+              d.textContent = evt.msg;
+              logsEl.appendChild(d);
+              logsEl.scrollTop = logsEl.scrollHeight;
+            } else {
+              renderWebCraft(document.getElementById('content'));
+            }
+          } else if (evt.type === 'ready') {
+            wcState.sandbox.running = false;
+            wcState.sandbox.port = evt.port;
+            wcState.sandbox.dir = evt.dir;
+            _wcAutoFixAttempts = 0;
+            wcStartAutoFixPoller();
+            // Reload skills so newly written log file appears in the panel
+            _wcSkillsLoaded = false;
+            renderWebCraft(document.getElementById('content'));
+          } else if (evt.type === 'error') {
+            wcState.sandbox.running = false;
+            wcState.sandbox.error = evt.msg;
+            // Reload skills so error log appears in the panel
+            _wcSkillsLoaded = false;
+            renderWebCraft(document.getElementById('content'));
+            // Auto-fix: try to detect MODULE_NOT_FOUND in crash message and fix it
+            var errMsg = evt.msg || '';
+            var modMatch = errMsg.match(new RegExp("Cannot find module '([^']+)'")) ||
+                           errMsg.match(new RegExp('Cannot find module "([^"]+)"'));
+            if (modMatch && _wcAutoFixAttempts < 3) {
+              _wcAutoFixAttempts++;
+              wcTriggerAutoFix(modMatch[1]);
+            } else if (errMsg && !modMatch && _wcAutoFixAttempts < 3) {
+              _wcAutoFixAttempts++;
+              wcTriggerCrashFix(errMsg);
+            }
+          }
+        } catch(_) {}
+      }
+    }
+  } catch(e) {
+    wcState.sandbox.running = false;
+    wcState.sandbox.error = e.message;
+    renderWebCraft(document.getElementById('content'));
+  }
+}
+
+async function wcStopSandbox() {
+  await fetch(API + '/api/studio/webcraft/sandbox', {method:'DELETE'});
+  wcState.sandbox = { running: false, port: null, dir: null, logs: [], error: null };
+  wcStopAutoFixPoller();
+  renderWebCraft(document.getElementById('content'));
+}
+
+// "Correggi" button — sends full sandbox error to the agent for repair
+async function wcFixSandboxError() {
+  var errText = wcState.sandbox.error || 'Errore sconosciuto avviando il server sandbox';
+  // Put error in chat input so user can see it, then fire agent
+  var fixMsg = 'ERRORE SANDBOX — il server Node.js non si avvia. Analizza tutti i file del progetto, trova la causa e correggi.' +
+    String.fromCharCode(10) + String.fromCharCode(10) +
+    'STACKTRACE COMPLETO:' + String.fromCharCode(10) + errText;
+  // Push as user message so it appears in chat
+  wcChat.push({ role: 'user', text: '\uD83E\uDD16 Correggi errore sandbox' });
+  wcScrollChatToBottom();
+  wcChatRunning = true;
+  renderWebCraft(document.getElementById('content'));
+
+  try {
+    var r = await fetch(API + '/api/studio/webcraft/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectName: wcState.projectName, message: fixMsg, autofix: true })
+    });
+    if (!r.ok) { wcChatRunning = false; renderWebCraft(document.getElementById('content')); return; }
+    var agentMsg = { role: 'agent', text: '', tools: [] };
+    wcChat.push(agentMsg);
+    var reader4 = r.body.getReader();
+    var dec4 = new TextDecoder();
+    var buf4 = '';
+    while (true) {
+      var res4 = await reader4.read();
+      if (res4.done) break;
+      buf4 += dec4.decode(res4.value, { stream: true });
+      var parts4 = buf4.split(String.fromCharCode(10) + String.fromCharCode(10));
+      buf4 = parts4.pop();
+      for (var pi4 = 0; pi4 < parts4.length; pi4++) {
+        var line4 = parts4[pi4].replace(/^data: /, '').trim();
+        if (!line4) continue;
+        try {
+          var ev4 = JSON.parse(line4);
+          if (ev4.type === 'text') { agentMsg.text += ev4.token; renderWebCraft(document.getElementById('content')); wcScrollChatToBottom(); }
+          else if (ev4.type === 'tool') { agentMsg.tools.push({ op: ev4.op, path: ev4.path, result: ev4.result, oldSnippet: ev4.oldSnippet || '', newSnippet: ev4.newSnippet || '' }); renderWebCraft(document.getElementById('content')); }
+          else if (ev4.type === 'done') {
+            wcChatRunning = false;
+            if (ev4.changed) {
+              // Files changed — syntax check then offer to restart
+              wcChat.push({ role: 'system', text: '&#9989; Fix applicato. Clicca &#9654; Avvia Sandbox per ritentare.' });
+            }
+            renderWebCraft(document.getElementById('content'));
+            wcScrollChatToBottom();
+          } else if (ev4.type === 'restart_sandbox') {
+            wcState.sandbox = { running: false, port: null, dir: null, logs: [], error: null };
+            setTimeout(function(){ wcStartSandbox(); }, 800);
+          }
+        } catch(_) {}
+      }
+    }
+  } catch(e2) {
+    wcChatRunning = false;
+    wcChat.push({ role: 'system', text: '&#10060; Errore chiamata agente: ' + e2.message });
+    renderWebCraft(document.getElementById('content'));
+  }
+}
+
+var _wcLastDownload = 0;
+function wcDownloadZip() {
+  if (!wcState.generatedFiles.length) return;
+  var now = Date.now();
+  if (now - _wcLastDownload < 30000) {
+    var wait = Math.ceil((30000 - (now - _wcLastDownload)) / 1000);
+    alert('Attendi ' + wait + 's prima di scaricare di nuovo.');
+    return;
+  }
+  _wcLastDownload = now;
+  // Build a real ZIP file (PKZIP format, stored/no compression) — zero dependencies
+  var enc = new TextEncoder();
+  var parts = [];
+  var centralDir = [];
+  var offset = 0;
+  wcState.generatedFiles.forEach(function(f) {
+    var namBytes = enc.encode(f.name);
+    var dataBytes = enc.encode(f.content);
+    // Local file header
+    var lfh = new Uint8Array(30 + namBytes.length);
+    var lv = new DataView(lfh.buffer);
+    lv.setUint32(0, 0x04034b50, true); // signature
+    lv.setUint16(4, 20, true);  // version needed
+    lv.setUint16(6, 0, true);   // flags
+    lv.setUint16(8, 0, true);   // compression: stored
+    lv.setUint16(10, 0, true);  // mod time
+    lv.setUint16(12, 0, true);  // mod date
+    var crc = wcCrc32(dataBytes);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, dataBytes.length, true);
+    lv.setUint32(22, dataBytes.length, true);
+    lv.setUint16(26, namBytes.length, true);
+    lv.setUint16(28, 0, true);
+    lfh.set(namBytes, 30);
+    // Central directory entry
+    var cde = new Uint8Array(46 + namBytes.length);
+    var cv = new DataView(cde.buffer);
+    cv.setUint32(0, 0x02014b50, true); // signature
+    cv.setUint16(4, 20, true);  // version made by
+    cv.setUint16(6, 20, true);  // version needed
+    cv.setUint16(8, 0, true);   // flags
+    cv.setUint16(10, 0, true);  // compression
+    cv.setUint16(12, 0, true);  // mod time
+    cv.setUint16(14, 0, true);  // mod date
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, dataBytes.length, true);
+    cv.setUint32(24, dataBytes.length, true);
+    cv.setUint16(28, namBytes.length, true);
+    cv.setUint16(30, 0, true);  // extra
+    cv.setUint16(32, 0, true);  // comment
+    cv.setUint16(34, 0, true);  // disk start
+    cv.setUint16(36, 0, true);  // internal attr
+    cv.setUint32(38, 0, true);  // external attr
+    cv.setUint32(42, offset, true); // local header offset
+    cde.set(namBytes, 46);
+    parts.push(lfh, dataBytes);
+    centralDir.push(cde);
+    offset += lfh.length + dataBytes.length;
+  });
+  var cdSize = centralDir.reduce(function(s,c){return s+c.length;},0);
+  var eocd = new Uint8Array(22);
+  var ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, centralDir.length, true);
+  ev.setUint16(10, centralDir.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  ev.setUint16(20, 0, true);
+  var all = parts.concat(centralDir).concat([eocd]);
+  var total = all.reduce(function(s,b){return s+b.length;},0);
+  var out = new Uint8Array(total);
+  var pos = 0;
+  all.forEach(function(b){out.set(b,pos);pos+=b.length;});
+  var blob = new Blob([out], {type:'application/zip'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (wcState.projectName || 'project') + '-webcraft.zip';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function wcCrc32(buf) {
+  var table = wcCrc32.t;
+  if (!table) {
+    table = new Uint32Array(256);
+    for (var i=0;i<256;i++){var c=i;for(var k=0;k<8;k++)c=c&1?(0xEDB88320^(c>>>1)):(c>>>1);table[i]=c;}
+    wcCrc32.t = table;
+  }
+  var crc = 0xFFFFFFFF;
+  for (var j=0;j<buf.length;j++) crc = table[(crc^buf[j])&0xFF]^(crc>>>8);
+  return (crc^0xFFFFFFFF)>>>0;
+}
 `;
 
 export function getHTML(port) {
@@ -6215,6 +9568,7 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .nav-item__badge{background:var(--red);color:var(--bright);font-size:9px;padding:1px 5px;border-radius:8px;margin-left:auto}
 
 .content{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+.content--webcraft{overflow:hidden;display:flex;flex-direction:column}
 
 /* Mobile burger button */
 #mobileBurger{display:block}
@@ -6643,6 +9997,10 @@ input:focus,textarea:focus{border-color:var(--green3)}
 .prl-action-bubble--active{color:#000000;font-weight:700;border-color:#374151;background:#ffffff;animation:parlBubblePop .4s ease}
 @keyframes parlBubblePop{0%{transform:scale(.85);opacity:.5}100%{transform:scale(1);opacity:1}}
 @keyframes streamBlink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes wcBubbleIn{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes wcRobotBob{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-5px) rotate(-4deg)}}
+@keyframes wcDot{0%,80%,100%{opacity:.25;transform:scale(.7)}40%{opacity:1;transform:scale(1.2)}}
+@keyframes wcBarPulse{0%,100%{opacity:1}50%{opacity:.65}}
 /* Character SVG animations */
 @keyframes parlArmType{0%,100%{transform:rotate(-8deg) translateY(0)}50%{transform:rotate(8deg) translateY(2px)}}
 @keyframes parlHeadNod{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(2px) rotate(4deg)}}

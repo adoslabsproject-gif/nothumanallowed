@@ -342,8 +342,12 @@ export async function webSearch(query, maxResults = MAX_RESULTS) {
 function parseDuckDuckGoResults(html, maxResults) {
   const results = [];
 
-  // Split on individual result divs. Each web result starts with this class sequence.
-  const resultBlocks = html.split('class="result results_links');
+  // Split on result__body — stable across DDG HTML layout changes.
+  // Fallback to legacy class="result results_links" if result__body not present.
+  const primarySplit = 'result__body">';
+  const fallbackSplit = 'class="result results_links';
+  const splitOn = html.includes(primarySplit) ? primarySplit : fallbackSplit;
+  const resultBlocks = html.split(splitOn);
 
   for (let i = 1; i < resultBlocks.length && results.length < maxResults; i++) {
     const block = resultBlocks[i];
@@ -406,7 +410,7 @@ export async function webSearchDeep(query, fetchCount = 3) {
           title: content.title || result.title,
           url: result.url,
           snippet: result.snippet,
-          content: content.body,
+          content: content.body ? content.body.slice(0, 2000) : '',
           excerpt: content.excerpt,
         };
       }

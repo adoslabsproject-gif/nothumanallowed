@@ -47,6 +47,17 @@ import {
 
 import { notify } from './notification.mjs';
 
+// ── execute_code: module-level tsx path cache ─────────────────────────────────
+// Resolved once lazily (first TypeScript execution) — avoids shell spawn on every call.
+import { execSync as _execSyncTsx } from 'child_process';
+let _tsxPath = undefined; // undefined = not yet resolved; null = not found; string = path
+function getTsxPath() {
+  if (_tsxPath !== undefined) return _tsxPath;
+  try { _tsxPath = _execSyncTsx('which tsx 2>/dev/null', { timeout: 3000 }).toString().trim() || null; }
+  catch { _tsxPath = null; }
+  return _tsxPath;
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** Actions that mutate external state and require user confirmation. */
@@ -55,6 +66,11 @@ export const DESTRUCTIVE_ACTIONS = new Set([
   'gmail_send_attach',
   'gmail_reply',
   'gmail_delete',
+  'imap_send',
+  'imap_reply',
+  'imap_bulk_send',
+  'imap_send_template',
+  'imap_trash',
   'calendar_create',
   'calendar_move',
   'calendar_update',
@@ -360,9 +376,75 @@ TOOLS:
 63. screen_analyze(question: string)
     Capture the screen AND analyze it with vision. Combines capture + question.
 
+--- IMAP EMAIL (custom accounts) ---
+
+64. imap_list(accountId: string, labelId?: string, search?: string, limit?: number)
+    List emails from a custom IMAP account. accountId is known from the IMAP ACCOUNTS section above — use it directly.
+    search does full-text match on subject, from_address, from_name, body. Use it to filter by sender name/domain.
+    Example: search="zeli" finds all emails from *@zeli.it or with "zeli" in subject/body.
+    Returns: [{id, subject, from_address, from_name, internal_date, body_preview, is_read, is_starred}]
+
+65. imap_accounts()
+    List all configured IMAP accounts. NOTE: accounts are already listed in the IMAP ACCOUNTS section above.
+    Only call this if you need to refresh or the section is missing.
+
+66. imap_read(messageId: string)
+    Read a full email message from the local DB by its id. Returns subject, from, to, body_text, body_html, attachments.
+
+67. imap_send(accountId: string, to: string, subject: string, bodyHtml: string, cc?: string, inReplyTo?: string)
+    Send an email via SMTP from a configured IMAP account. ALWAYS confirm with user before sending.
+    bodyHtml can contain HTML. inReplyTo is the Message-ID of the original email for threading.
+
+68. imap_sync(accountId: string)
+    Trigger an incremental IMAP sync for an account. Fetches new messages into local DB.
+    Run this before imap_list if you need fresh data.
+
+69. imap_labels(accountId: string)
+    List all labels for an IMAP account (system + user-defined). Returns [{id, name, system_type, color, unread_count}].
+
+70. imap_mark_read(messageId: string, isRead?: boolean)
+    Mark a local message as read or unread. Does NOT touch the IMAP server. Default isRead=true.
+
+71. imap_reply(accountId: string, messageId: string, bodyHtml: string, cc?: string)
+    Reply to an existing email. Automatically sets In-Reply-To and References headers for proper threading.
+    Fetches the original message from DB to build correct subject (Re: ...) and recipient.
+    ALWAYS confirm with user before sending.
+
+72. imap_thread(accountId: string, threadId: string)
+    Read all messages in a thread. Returns them in chronological order with subject, from, date, body.
+    Use imap_read() to get the threadId from a message.
+
+73. imap_search(accountId: string, query: string, limit?: number)
+    Full-text search across all synced emails (subject, body_preview, from_address, from_name).
+    query is a plain text string — use sender name, domain, or keyword.
+    Examples: "zeli" finds emails from *@zeli.it. "fattura" finds emails with that word. limit defaults to 20.
+
+74. imap_mark_starred(messageId: string, isStarred?: boolean)
+    Star or unstar a message locally. Default isStarred=true.
+
+75. imap_trash(messageId: string)
+    Move a message to local Trash (soft delete — does NOT touch IMAP server). ALWAYS confirm.
+
+76. imap_draft(accountId: string, to: string, subject: string, bodyHtml: string)
+    Save a draft locally. Safe — does not send anything.
+
+77. imap_send_template(accountId: string, to: string, templateId: string, vars: object)
+    Send an email using a built-in marketing template. templateId is one of:
+    "promo_product" | "newsletter" | "follow_up" | "offerta" | "evento" | "ringraziamento"
+    vars is a key-value object to replace [PLACEHOLDERS] in the template, e.g.:
+    {"AZIENDA": "Zeli Srl", "TITOLO OFFERTA": "Sconto 20%", "LINK_CTA": "https://..."}
+    ALWAYS confirm with user before sending.
+
+78. imap_bulk_send(accountId: string, recipients: string[], subject: string, templateId: string, vars: object, perRecipientVars?: object)
+    Send a templated email to multiple recipients (marketing campaign).
+    recipients: array of email addresses.
+    vars: global placeholders applied to all.
+    perRecipientVars: optional object keyed by email with per-recipient overrides, e.g. {"mario@co.it": {"NOME": "Mario"}}.
+    Sends one-by-one with 1s delay to avoid spam filters. ALWAYS confirm with user — shows recipient count.
+
 --- CANVAS ---
 
-64. canvas_render(html: string, title?: string)
+71. canvas_render(html: string, title?: string)
     Render HTML in the web UI canvas panel. Show charts, tables, diagrams, reports.
     ALWAYS use Chart.js from CDN for charts and graphs — never build charts with raw HTML/CSS.
     Template for charts:
@@ -451,6 +533,21 @@ TOOLS:
 80. drive_download(fileId: string)
     Download a file from Drive. For Google Docs/Sheets/Slides, exports as PDF.
     Returns the file as base64-encoded content. Use for binary files, PDFs, images.
+
+--- CODE EXECUTION ---
+
+81. execute_code(language: "python"|"javascript"|"typescript", code: string, files?: [{path: string, content: string}], packages?: string[], stdin?: string, timeout?: number)
+    Execute code in an isolated sandbox and return the full output.
+    - language: "python", "javascript", or "typescript"
+    - code: the main script to run
+    - files (optional): extra files to create in the sandbox before running (e.g. input CSVs, helper modules). Paths are relative to sandbox.
+    - packages (optional): pip or npm packages to install before execution (e.g. ["pandas","numpy"] for python, ["lodash"] for js)
+    - stdin (optional): text piped to the process stdin
+    - timeout (optional): seconds before SIGKILL, default 30, max 120
+    Returns: exit_code (0=success ✓, non-zero=failure ✗), stdout, stderr, list of files written in sandbox.
+    Sandbox: isolated temp dir, stripped env (no NHA API keys visible to subprocess), SIGKILL on timeout, sandbox deleted after run.
+    Use for: data analysis, algorithm verification, running Python scripts, CSV/JSON processing, math computations, generating files (charts, reports), testing TypeScript/JS logic.
+    Do NOT use for: network requests (use fetch_url), permanent file I/O (use file_write/file_read).
 
 RULES:
 - ABSOLUTE RULE: NEVER LIE. NEVER fabricate, invent, or guess information. If you do not know, say "I don't know." If a tool fails, say it failed. If you cannot see something, say so. Honesty is MORE important than being helpful.
@@ -635,7 +732,7 @@ function driveIcon(type) {
  * @param {string} [initialContext] — optional preloaded context (today's events, etc.)
  * @returns {string}
  */
-export function buildSystemPrompt(persona, personaDescription, config, initialContext) {
+export async function buildSystemPrompt(persona, personaDescription, config, initialContext) {
   const today = new Date().toISOString().split('T')[0];
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -678,6 +775,22 @@ export function buildSystemPrompt(persona, personaDescription, config, initialCo
       prompt += `\n\n--- USER PROFILE (use this for personal references like "my home", "my city", etc.) ---\n${fields.join('\n')}`;
     }
   }
+
+  // Inject IMAP accounts so the AI knows accountIds without calling imap_accounts()
+  try {
+    const { listAccounts } = await import('./email-db.mjs').catch(() => ({ listAccounts: null }));
+    if (listAccounts) {
+      const imapAccounts = listAccounts();
+      if (imapAccounts.length > 0) {
+        prompt += `\n\n--- IMAP EMAIL ACCOUNTS (custom, already configured) ---\n`;
+        prompt += `Use these accountIds directly — do NOT call imap_accounts() first.\n`;
+        for (const a of imapAccounts) {
+          prompt += `accountId: "${a.id}" | email: ${a.email_address} | name: "${a.display_name}" | status: ${a.sync_status}\n`;
+        }
+        prompt += `When the user mentions their company name, email domain, or display name, map it to the correct accountId above.`;
+      }
+    }
+  } catch {}
 
   if (initialContext) {
     prompt += `\n\n--- CURRENT CONTEXT (fetched at session start) ---\n${initialContext}`;
@@ -818,6 +931,209 @@ export async function executeTool(action, params, config) {
       });
 
       return `Email sent to ${params.to} with attachment "${downloaded.name}" (${formatFileSize(downloaded.size)}).`;
+    }
+
+    // ── IMAP Email (custom accounts) ─────────────────────────────────────
+    case 'imap_accounts': {
+      const { listAccounts } = await import('./email-db.mjs');
+      const accs = listAccounts();
+      if (!accs.length) return 'No IMAP accounts configured. Ask the user to add one in Settings > Email Accounts.';
+      return accs.map(a => `[${a.id}] ${a.display_name} <${a.email_address}> — ${a.sync_status}`).join('\n');
+    }
+
+    case 'imap_sync': {
+      if (!params.accountId) return 'accountId required.';
+      const { syncAccount } = await import('./email-imap.mjs');
+      syncAccount(params.accountId).catch(e => console.error('[imap_sync]', e.message));
+      return `Sync started for account ${params.accountId}. New messages will appear in a few seconds.`;
+    }
+
+    case 'imap_labels': {
+      if (!params.accountId) return 'accountId required.';
+      const { listLabels } = await import('./email-db.mjs');
+      const labels = listLabels(params.accountId);
+      if (!labels.length) return 'No labels found.';
+      return labels.map(l => `[${l.id}] ${l.name}${l.system_type ? ' (' + l.system_type + ')' : ''}${l.unread_count > 0 ? ' — ' + l.unread_count + ' unread' : ''}`).join('\n');
+    }
+
+    case 'imap_list': {
+      if (!params.accountId) return 'accountId required. Use imap_accounts() first.';
+      const { listMessages: imapListMessages } = await import('./email-db.mjs');
+      const result = imapListMessages(params.accountId, params.labelId || null, params.limit || 20, 0, params.search || null);
+      if (!result.messages.length) return 'No messages found.';
+      const rows = result.messages.map((m, i) => {
+        const date = (m.internal_date || '').slice(0, 10);
+        const time = (m.internal_date || '').slice(11, 16);
+        const from = m.from_name ? `${m.from_name} <${m.from_address}>` : m.from_address;
+        const status = m.is_read ? '✓' : '● UNREAD';
+        const star = m.is_starred ? ' ★' : '';
+        const attach = m.has_attachments ? ' 📎' : '';
+        const preview = (m.body_preview || '').slice(0, 150);
+        return `${i + 1}. ${status}${star}${attach}\n   ID: ${m.id}\n   From: ${from}\n   Subject: ${m.subject || '(no subject)'}\n   Date: ${date} ${time}\n   Preview: ${preview}`;
+      });
+      return `Found ${result.total} messages (showing ${result.messages.length}):\n\n` + rows.join('\n\n---\n\n');
+    }
+
+    case 'imap_read': {
+      if (!params.messageId) return 'messageId required.';
+      const { getMessage: imapGetMessage, markRead: imapMarkRead } = await import('./email-db.mjs');
+      const msg = imapGetMessage(params.messageId);
+      if (!msg) return 'Message not found.';
+      imapMarkRead(params.messageId, true);
+      const to = (() => { try { const a = JSON.parse(msg.to_addresses || '[]'); return a.map(x => x.address || x).join(', '); } catch { return msg.to_addresses || ''; } })();
+      const body = msg.body_reply_only || msg.body_text || msg.body_preview || '(empty)';
+      return `Subject: ${msg.subject}\nFrom: ${msg.from_name ? msg.from_name + ' <' + msg.from_address + '>' : msg.from_address}\nTo: ${to}\nDate: ${msg.internal_date}\n\n${body.slice(0, 3000)}`;
+    }
+
+    case 'imap_send': {
+      if (!params.accountId || !params.to || !params.subject) return 'accountId, to, subject required.';
+      const { sendEmail: imapSendEmail } = await import('./email-smtp.mjs');
+      try {
+        const result = await imapSendEmail(params.accountId, {
+          to: params.to,
+          cc: params.cc || null,
+          subject: params.subject,
+          bodyHtml: params.bodyHtml || params.body || '',
+          bodyText: params.bodyText || null,
+          inReplyTo: params.inReplyTo || null,
+        });
+        return `✅ Email sent and saved to Sent folder. Message-ID: ${result.messageId}`;
+      } catch (e) {
+        return `❌ SEND FAILED — the email was NOT delivered. Error: ${e.message}. Tell the user the send failed and show the exact error.`;
+      }
+    }
+
+    case 'imap_mark_read': {
+      if (!params.messageId) return 'messageId required.';
+      const { markRead: imapMarkRead2 } = await import('./email-db.mjs');
+      imapMarkRead2(params.messageId, params.isRead !== false);
+      return `Message marked as ${params.isRead !== false ? 'read' : 'unread'}.`;
+    }
+
+    case 'imap_reply': {
+      if (!params.accountId || !params.messageId || !params.bodyHtml) return 'accountId, messageId, bodyHtml required.';
+      const { getMessage: imapGetMsg2 } = await import('./email-db.mjs');
+      const { sendEmail: imapSendReply } = await import('./email-smtp.mjs');
+      const orig = imapGetMsg2(params.messageId);
+      if (!orig) return 'Original message not found in local DB.';
+      const replySubject = orig.subject?.startsWith('Re:') ? orig.subject : 'Re: ' + (orig.subject || '');
+      let refs = [];
+      try { refs = JSON.parse(orig.references_list || '[]'); } catch {}
+      if (orig.message_id) refs.push(orig.message_id);
+      try {
+        const result = await imapSendReply(params.accountId, {
+          to: orig.from_address,
+          cc: params.cc || null,
+          subject: replySubject,
+          bodyHtml: params.bodyHtml,
+          inReplyTo: orig.message_id || null,
+          references: refs,
+        });
+        return `✅ Reply sent to ${orig.from_address} and saved to Sent folder. Message-ID: ${result.messageId}`;
+      } catch (e) {
+        return `❌ SEND FAILED — reply was NOT delivered. Error: ${e.message}. Tell the user the send failed and show the exact error.`;
+      }
+    }
+
+    case 'imap_thread': {
+      if (!params.accountId || !params.threadId) return 'accountId and threadId required.';
+      const { getThread: imapGetThread } = await import('./email-db.mjs');
+      const msgs = imapGetThread(params.threadId, params.accountId);
+      if (!msgs.length) return 'No messages found in thread.';
+      return msgs.map((m, i) => {
+        const body = m.body_reply_only || m.body_text || m.body_preview || '(empty)';
+        return `--- Message ${i + 1} ---\nFrom: ${m.from_name ? m.from_name + ' <' + m.from_address + '>' : m.from_address}\nDate: ${m.internal_date}\n\n${body.slice(0, 1500)}`;
+      }).join('\n\n');
+    }
+
+    case 'imap_search': {
+      if (!params.accountId || !params.query) return 'accountId and query required.';
+      const { listMessages: imapSearch } = await import('./email-db.mjs');
+      const result = imapSearch(params.accountId, null, params.limit || 20, 0, params.query);
+      if (!result.messages.length) return `No messages found for "${params.query}".`;
+      return result.messages.map(m =>
+        `[${m.id}] ${m.is_read ? '' : '[UNREAD] '}From: ${m.from_name || m.from_address} | ${m.subject} | ${(m.internal_date || '').slice(0, 10)}\n  ${(m.body_preview || '').slice(0, 100)}`
+      ).join('\n\n') + `\n\n(${result.total} total matches)`;
+    }
+
+    case 'imap_mark_starred': {
+      if (!params.messageId) return 'messageId required.';
+      const { markStarred } = await import('./email-db.mjs');
+      markStarred(params.messageId, params.isStarred !== false);
+      return `Message ${params.isStarred !== false ? 'starred' : 'unstarred'}.`;
+    }
+
+    case 'imap_trash': {
+      if (!params.messageId) return 'messageId required.';
+      const { softDelete } = await import('./email-db.mjs');
+      softDelete(params.messageId);
+      return 'Message moved to local Trash. Not deleted from IMAP server.';
+    }
+
+    case 'imap_draft': {
+      if (!params.accountId || !params.to || !params.subject) return 'accountId, to, subject required.';
+      const { saveDraft } = await import('./email-db.mjs');
+      const id = saveDraft(params.accountId, {
+        to: [{ address: params.to }],
+        subject: params.subject,
+        body_html: params.bodyHtml || '',
+      });
+      return `Draft saved with id: ${id}`;
+    }
+
+    case 'imap_send_template': {
+      if (!params.accountId || !params.to || !params.templateId || !params.vars) return 'accountId, to, templateId, vars required.';
+      const { sendEmail: imapSendTpl } = await import('./email-smtp.mjs');
+      const TEMPLATES = {
+        promo_product: { subject: 'Scopri la nostra offerta su [PRODOTTO]', html: '<table width="100%" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#1a1a2e;padding:32px 40px;text-align:center"><h1 style="color:#00ff9d;margin:0">[AZIENDA]</h1></td></tr><tr><td style="padding:40px;background:#fff"><h2 style="color:#1a1a2e">[TITOLO OFFERTA]</h2><p style="color:#444;line-height:1.7">[DESCRIZIONE PRODOTTO/SERVIZIO]</p><p style="color:#444;line-height:1.7">[DETTAGLIO BENEFICI O SPECIFICHE]</p><table><tr><td style="background:#00ff9d;border-radius:6px;padding:14px 32px"><a href="[LINK_CTA]" style="color:#1a1a2e;font-weight:700;text-decoration:none">[TESTO CTA]</a></td></tr></table></td></tr><tr><td style="padding:24px 40px;background:#f5f5f5;text-align:center"><p style="color:#888;font-size:12px">[AZIENDA] &bull; [INDIRIZZO] &bull; [EMAIL]</p></td></tr></table>' },
+        newsletter: { subject: '[AZIENDA] Newsletter — [MESE] [ANNO]', html: '<table width="100%" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#0f0f1a;padding:28px 40px;border-bottom:3px solid #00ff9d"><h1 style="color:#fff;margin:0">[AZIENDA]</h1><p style="color:#00ff9d;margin:6px 0 0;font-size:13px">Newsletter [MESE] [ANNO]</p></td></tr><tr><td style="padding:36px 40px;background:#fff"><h2 style="color:#1a1a2e">[TITOLO PRINCIPALE]</h2><p style="color:#555;line-height:1.8">[TESTO PRINCIPALE]</p><hr style="border:none;border-top:1px solid #eee;margin:24px 0"><h3 style="color:#1a1a2e">[TITOLO SEZIONE 2]</h3><p style="color:#555;line-height:1.8">[TESTO SEZIONE 2]</p></td></tr><tr><td style="padding:20px 40px;background:#f9f9f9;text-align:center"><p style="color:#999;font-size:12px">&copy; [ANNO] [AZIENDA]</p></td></tr></table>' },
+        follow_up: { subject: 'Seguito alla nostra conversazione — [ARGOMENTO]', html: '<table width="100%" style="max-width:580px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="padding:40px"><p style="color:#333;line-height:1.7">Gentile [NOME],</p><p style="color:#333;line-height:1.7">la contatto in seguito a [CONTESTO].</p><p style="color:#333;line-height:1.7">[CORPO PRINCIPALE]</p><p style="color:#333;line-height:1.7">[CHIUSURA]</p><p style="color:#333">Cordiali saluti,</p><p style="color:#1a1a2e;font-weight:700">[NOME MITTENTE]</p><p style="color:#888;font-size:13px">[RUOLO] &bull; [AZIENDA] &bull; [TELEFONO]</p></td></tr></table>' },
+        offerta: { subject: 'Offerta [NUMERO] — [OGGETTO FORNITURA]', html: '<table width="100%" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#1a1a2e;padding:24px 40px"><h1 style="color:#00ff9d;margin:0">[AZIENDA]</h1><p style="color:#aaa;margin:4px 0 0;font-size:12px">Offerta n. [NUMERO] del [DATA]</p></td></tr><tr><td style="padding:36px 40px;background:#fff"><p style="color:#333;line-height:1.7">Gentile [NOME],</p><p style="color:#555;font-size:13px"><strong>Condizioni di pagamento:</strong> [PAGAMENTO]</p><p style="color:#555;font-size:13px"><strong>Tempi di consegna:</strong> [CONSEGNA]</p><p style="color:#555;font-size:13px"><strong>Validita offerta:</strong> [VALIDITA]</p><p style="color:#333">Cordiali saluti,</p><p style="color:#1a1a2e;font-weight:700">[NOME MITTENTE]</p></td></tr></table>' },
+        evento: { subject: 'Sei invitato: [NOME EVENTO] — [DATA]', html: '<table width="100%" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:linear-gradient(135deg,#0f0f1a,#1a2a1a);padding:48px 40px;text-align:center"><h1 style="color:#00ff9d;margin:0">[NOME EVENTO]</h1><p style="color:#aaffcc;margin:8px 0 0">[DATA] &bull; [ORA] &bull; [LUOGO]</p></td></tr><tr><td style="padding:40px;background:#fff;text-align:center"><p style="color:#444;line-height:1.8;max-width:460px;margin:0 auto 28px">[DESCRIZIONE EVENTO]</p><table style="margin:0 auto"><tr><td style="background:#00ff9d;border-radius:8px;padding:14px 40px"><a href="[LINK_REGISTRAZIONE]" style="color:#0f0f1a;font-weight:700;text-decoration:none">Registrati ora</a></td></tr></table></td></tr></table>' },
+        ringraziamento: { subject: 'Grazie per la fiducia, [NOME]', html: '<table width="100%" style="max-width:580px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#0f0f1a;padding:32px 40px;text-align:center"><h1 style="color:#fff;font-size:22px">Grazie, [NOME]!</h1></td></tr><tr><td style="padding:40px;background:#fff"><p style="color:#333;line-height:1.8">Volevamo ringraziarti per [MOTIVO].</p><p style="color:#333;line-height:1.8">[MESSAGGIO PERSONALE]</p><p style="color:#333">Con stima,</p><p style="color:#1a1a2e;font-weight:700">[NOME MITTENTE]</p></td></tr></table>' },
+      };
+      const tpl = TEMPLATES[params.templateId];
+      if (!tpl) return `Unknown templateId "${params.templateId}". Valid: ${Object.keys(TEMPLATES).join(', ')}`;
+      const applyVars = (str, vars) => Object.entries(vars).reduce((s, [k, v]) => s.split('[' + k + ']').join(v || ''), str);
+      const subject = applyVars(tpl.subject, params.vars);
+      const html = applyVars(tpl.html, params.vars);
+      try {
+        const result = await imapSendTpl(params.accountId, { to: params.to, subject, bodyHtml: html });
+        return `✅ Template email "${params.templateId}" sent to ${params.to} and saved to Sent folder. Message-ID: ${result.messageId}`;
+      } catch (e) {
+        return `❌ SEND FAILED — email was NOT delivered. Error: ${e.message}. Tell the user the send failed and show the exact error.`;
+      }
+    }
+
+    case 'imap_bulk_send': {
+      if (!params.accountId || !params.recipients?.length || !params.subject || !params.templateId) return 'accountId, recipients, subject, templateId required.';
+      const { sendEmail: imapSendBulk } = await import('./email-smtp.mjs');
+      const BULK_TEMPLATES = {
+        promo_product: '<table width="100%" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#1a1a2e;padding:32px 40px;text-align:center"><h1 style="color:#00ff9d;margin:0">[AZIENDA]</h1></td></tr><tr><td style="padding:40px;background:#fff"><h2 style="color:#1a1a2e">[TITOLO OFFERTA]</h2><p style="color:#444;line-height:1.7">[DESCRIZIONE PRODOTTO/SERVIZIO]</p><table><tr><td style="background:#00ff9d;border-radius:6px;padding:14px 32px"><a href="[LINK_CTA]" style="color:#1a1a2e;font-weight:700;text-decoration:none">[TESTO CTA]</a></td></tr></table></td></tr></table>',
+        newsletter: '<table width="100%" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#0f0f1a;padding:28px 40px;border-bottom:3px solid #00ff9d"><h1 style="color:#fff;margin:0">[AZIENDA]</h1></td></tr><tr><td style="padding:36px 40px;background:#fff"><h2 style="color:#1a1a2e">[TITOLO PRINCIPALE]</h2><p style="color:#555;line-height:1.8">[TESTO PRINCIPALE]</p></td></tr></table>',
+        follow_up: '<table width="100%" style="max-width:580px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="padding:40px"><p style="color:#333;line-height:1.7">Gentile [NOME],</p><p style="color:#333;line-height:1.7">[CORPO PRINCIPALE]</p><p style="color:#1a1a2e;font-weight:700">[NOME MITTENTE]</p></td></tr></table>',
+        offerta: '<table width="100%" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#1a1a2e;padding:24px 40px"><h1 style="color:#00ff9d;margin:0">[AZIENDA]</h1></td></tr><tr><td style="padding:36px 40px;background:#fff"><p style="color:#333;line-height:1.7">Gentile [NOME],</p><p style="color:#555">[CORPO PRINCIPALE]</p><p style="color:#1a1a2e;font-weight:700">[NOME MITTENTE]</p></td></tr></table>',
+        evento: '<table width="100%" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#0f0f1a;padding:48px 40px;text-align:center"><h1 style="color:#00ff9d;margin:0">[NOME EVENTO]</h1><p style="color:#aaffcc">[DATA]</p></td></tr><tr><td style="padding:40px;background:#fff;text-align:center"><p style="color:#444;line-height:1.8">[DESCRIZIONE EVENTO]</p><table style="margin:0 auto"><tr><td style="background:#00ff9d;border-radius:8px;padding:14px 40px"><a href="[LINK_REGISTRAZIONE]" style="color:#0f0f1a;font-weight:700;text-decoration:none">Registrati</a></td></tr></table></td></tr></table>',
+        ringraziamento: '<table width="100%" style="max-width:580px;margin:0 auto;font-family:Arial,sans-serif"><tr><td style="background:#0f0f1a;padding:32px 40px;text-align:center"><h1 style="color:#fff">Grazie, [NOME]!</h1></td></tr><tr><td style="padding:40px;background:#fff"><p style="color:#333;line-height:1.8">[MESSAGGIO PERSONALE]</p><p style="color:#1a1a2e;font-weight:700">[NOME MITTENTE]</p></td></tr></table>',
+      };
+      const baseTplHtml = BULK_TEMPLATES[params.templateId];
+      if (!baseTplHtml) return `Unknown templateId. Valid: ${Object.keys(BULK_TEMPLATES).join(', ')}`;
+      const applyVars2 = (str, vars) => Object.entries(vars).reduce((s, [k, v]) => s.split('[' + k + ']').join(v || ''), str);
+      const results = [];
+      for (const email of params.recipients) {
+        const perVars = { ...(params.vars || {}), ...((params.perRecipientVars || {})[email] || {}) };
+        const subject = applyVars2(params.subject, perVars);
+        const html = applyVars2(baseTplHtml, perVars);
+        try {
+          await imapSendBulk(params.accountId, { to: email, subject, bodyHtml: html });
+          results.push(`OK: ${email}`);
+        } catch (e) {
+          results.push(`FAIL: ${email} — ${e.message}`);
+        }
+        await new Promise(r => setTimeout(r, 1200)); // 1.2s delay between sends
+      }
+      const ok = results.filter(r => r.startsWith('OK')).length;
+      return `Bulk send complete: ${ok}/${params.recipients.length} sent.\n${results.join('\n')}`;
     }
 
     // ── Calendar ──────────────────────────────────────────────────────────
@@ -1443,7 +1759,7 @@ export async function executeTool(action, params, config) {
         for (const dr of result.deepResults) {
           lines.push(`--- ${dr.title} ---`);
           lines.push(`URL: ${dr.url}`);
-          lines.push(dr.content.slice(0, 2000));
+          lines.push(dr.content.slice(0, 4000));
           lines.push('');
         }
 
@@ -1946,6 +2262,200 @@ export async function executeTool(action, params, config) {
 
       if (results.length === 0) return `No files matching "${params.query}" in ${searchDir}`;
       return `Found ${results.length} match${results.length > 1 ? 'es' : ''} for "${params.query}":\n\n${results.join('\n')}`;
+    }
+
+    case 'execute_code': {
+      const {
+        language = 'python',
+        code,
+        files = [],    // [{path: string, content: string}] — extra files to write in sandbox
+        packages = [], // string[] — pip/npm packages to install before running
+        stdin = '',    // string — piped to process stdin
+        timeout = 30,  // seconds (max 120)
+      } = params;
+
+      if (!code || typeof code !== 'string') return 'execute_code: missing required param "code"';
+
+      // bash removed: unrestricted shell has full filesystem access and can exfiltrate data.
+      const SUPPORTED = ['python', 'javascript', 'typescript'];
+      if (!SUPPORTED.includes(language)) {
+        return `execute_code: unsupported language "${language}" — use: ${SUPPORTED.join(', ')}`;
+      }
+
+      const { spawn } = await import('child_process');
+      const os = await import('os');
+      const fs = await import('fs');
+      const path = await import('path');
+      const crypto = await import('crypto');
+
+      const MAX_OUTPUT_BYTES = 128 * 1024;   // 128 KB per stream
+      const TIMEOUT_MS = Math.min(Math.max(timeout, 5), 120) * 1000;
+
+      // ── Isolated sandbox directory ─────────────────────────────────────────
+      // Each execution gets its own temp dir — cleaned up after run.
+      // Subprocess never sees NHA's cwd or env vars (API keys etc.).
+      const sandboxId = crypto.default.randomBytes(8).toString('hex');
+      const sandboxDir = path.default.join(os.default.tmpdir(), `nha_sandbox_${sandboxId}`);
+      fs.default.mkdirSync(sandboxDir, { recursive: true });
+
+      // Stripped env — only safe POSIX vars, zero NHA secrets.
+      // NOTE: packages install runs with network access (pip/npm fetch from registries).
+      // This is an accepted risk for a local CLI tool — not suitable for server deployment.
+      const safeEnv = {
+        PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+        HOME: sandboxDir,
+        TMPDIR: sandboxDir,
+        LANG: 'en_US.UTF-8',
+        PYTHONDONTWRITEBYTECODE: '1',
+        PYTHONUNBUFFERED: '1',
+        NODE_NO_WARNINGS: '1',
+      };
+
+      const cleanup = () => {
+        try { fs.default.rmSync(sandboxDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      };
+
+      try {
+        // ── Write extra files first ──────────────────────────────────────────
+        for (const f of (files || [])) {
+          if (!f.path || typeof f.content !== 'string') continue;
+          // Prevent path traversal — only allow relative paths inside sandbox
+          const safePath = path.default.join(sandboxDir, path.default.normalize(f.path).replace(/^(\.\.[/\\])+/, ''));
+          fs.default.mkdirSync(path.default.dirname(safePath), { recursive: true });
+          fs.default.writeFileSync(safePath, f.content, 'utf-8');
+        }
+
+        // ── Install packages ─────────────────────────────────────────────────
+        if (packages && packages.length > 0) {
+          const validPkgName = /^[a-zA-Z0-9@._/-]+$/;
+          const safePkgs = packages.filter(p => typeof p === 'string' && validPkgName.test(p) && p.length < 80);
+          if (safePkgs.length > 0) {
+            let installCmd, installArgs;
+            if (language === 'python') {
+              installCmd = 'pip3';
+              // --only-binary=:all: forces pre-built wheels — no setup.py/build hook execution,
+              // eliminating arbitrary code execution during install.
+              // Network access is still live (accepted risk for local CLI; use --no-index for server).
+              installArgs = ['install', '--quiet', '--only-binary=:all:', '--target', path.default.join(sandboxDir, 'site-packages'), ...safePkgs];
+            } else {
+              // javascript / typescript
+              fs.default.writeFileSync(path.default.join(sandboxDir, 'package.json'), JSON.stringify({ type: 'module' }));
+              installCmd = 'npm';
+              installArgs = ['install', '--prefix', sandboxDir, '--no-save', '--quiet', ...safePkgs];
+            }
+            await new Promise((resolve) => {
+              const inst = spawn(installCmd, installArgs, { cwd: sandboxDir, env: safeEnv, timeout: 60_000 });
+              inst.on('close', resolve);
+              inst.on('error', resolve);
+            });
+          }
+        }
+
+        // ── Resolve runtime + write main entrypoint ──────────────────────────
+        let cmd, cmdArgs, mainFile;
+        if (language === 'python') {
+          mainFile = path.default.join(sandboxDir, 'main.py');
+          // Prepend sys.path so installed packages are found
+          const sitePkgs = path.default.join(sandboxDir, 'site-packages');
+          const preamble = `import sys; sys.path.insert(0, ${JSON.stringify(sitePkgs)})\n`;
+          fs.default.writeFileSync(mainFile, preamble + code, 'utf-8');
+          cmd = 'python3'; cmdArgs = [mainFile];
+        } else if (language === 'javascript') {
+          mainFile = path.default.join(sandboxDir, 'main.mjs');
+          fs.default.writeFileSync(mainFile, code, 'utf-8');
+          cmd = 'node'; cmdArgs = [mainFile];
+        } else if (language === 'typescript') {
+          // Prefer tsx (faster, more compatible), fallback to node --experimental-strip-types (Node 22+)
+          mainFile = path.default.join(sandboxDir, 'main.ts');
+          fs.default.writeFileSync(mainFile, code, 'utf-8');
+          const tsxPath = getTsxPath();
+          if (tsxPath) { cmd = tsxPath; cmdArgs = [mainFile]; }
+          else { cmd = 'node'; cmdArgs = ['--experimental-strip-types', mainFile]; }
+        }
+
+        // ── Execute ──────────────────────────────────────────────────────────
+        const result = await new Promise((resolve) => {
+          const child = spawn(cmd, cmdArgs, {
+            cwd: sandboxDir,
+            env: safeEnv,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+
+          // Feed stdin if provided
+          if (stdin) {
+            child.stdin.write(stdin);
+            child.stdin.end();
+          } else {
+            child.stdin.end();
+          }
+
+          let stdoutBuf = '';
+          let stderrBuf = '';
+          let stdoutTrunc = false;
+          let stderrTrunc = false;
+
+          child.stdout.on('data', (d) => {
+            if (stdoutBuf.length < MAX_OUTPUT_BYTES) stdoutBuf += d.toString();
+            else stdoutTrunc = true;
+          });
+          child.stderr.on('data', (d) => {
+            if (stderrBuf.length < MAX_OUTPUT_BYTES) stderrBuf += d.toString();
+            else stderrTrunc = true;
+          });
+
+          // Hard kill after timeout
+          const killer = setTimeout(() => {
+            try { child.kill('SIGKILL'); } catch {}
+            resolve({ exit_code: 124, stdout: stdoutBuf, stderr: stderrBuf, timed_out: true });
+          }, TIMEOUT_MS);
+
+          child.on('close', (exitCode) => {
+            clearTimeout(killer);
+            resolve({
+              exit_code: exitCode ?? 1,
+              stdout: stdoutBuf + (stdoutTrunc ? '\n[stdout truncated at 128 KB]' : ''),
+              stderr: stderrBuf + (stderrTrunc ? '\n[stderr truncated at 128 KB]' : ''),
+              timed_out: false,
+            });
+          });
+
+          child.on('error', (err) => {
+            clearTimeout(killer);
+            resolve({ exit_code: 1, stdout: '', stderr: `[spawn error] ${err.message}`, timed_out: false });
+          });
+        });
+
+        // ── Collect created/modified files ───────────────────────────────────
+        // List files written inside sandbox (excluding the main entrypoint and site-packages)
+        let createdFiles = [];
+        try {
+          const walk = (dir, base) => {
+            for (const entry of fs.default.readdirSync(dir, { withFileTypes: true })) {
+              const rel = base ? `${base}/${entry.name}` : entry.name;
+              if (entry.isDirectory()) {
+                if (!['site-packages', 'node_modules', '__pycache__'].includes(entry.name)) walk(path.default.join(dir, entry.name), rel);
+              } else if (!['main.py','main.mjs','main.ts','main.sh','package.json'].includes(entry.name)) {
+                const size = fs.default.statSync(path.default.join(dir, entry.name)).size;
+                createdFiles.push(`  ${rel} (${size} bytes)`);
+              }
+            }
+          };
+          walk(sandboxDir, '');
+        } catch {}
+
+        // ── Format response ──────────────────────────────────────────────────
+        const lines = [];
+        if (result.timed_out) lines.push(`⏱ TIMEOUT — execution exceeded ${timeout}s (exit 124)`);
+        lines.push(`exit_code: ${result.exit_code}${result.exit_code === 0 ? ' ✓' : ' ✗'}`);
+        if (result.stdout.trim()) lines.push(`\nstdout:\n${result.stdout.trimEnd()}`);
+        if (result.stderr.trim()) lines.push(`\nstderr:\n${result.stderr.trimEnd()}`);
+        if (!result.stdout.trim() && !result.stderr.trim()) lines.push('\n(no output)');
+        if (createdFiles.length > 0) lines.push(`\nfiles written in sandbox:\n${createdFiles.join('\n')}`);
+
+        return lines.join('\n');
+      } finally {
+        cleanup();
+      }
     }
 
     default:
