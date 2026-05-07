@@ -236,7 +236,7 @@ export async function cmdUI(args) {
       port = parseInt(arg.split('=')[1], 10) || DEFAULT_PORT;
     } else if (arg === '--no-browser') {
       noBrowser = true;
-    } else if (arg === '--lan') {
+    } else if (arg === '--lan' || arg === '--host' || arg === '--host=0.0.0.0') {
       lanMode = true;
     }
   }
@@ -6551,16 +6551,20 @@ CRITICAL WRITING RULES — ENFORCE STRICTLY:
     console.log('');
     console.log(`  ${G}Local:${NC}              ${localUrl}`);
     if (lanUrl) {
-      console.log(`  ${G}Network:${NC}            ${lanUrl}  ${D}(mobile/tablet)${NC}`);
+      console.log(`  ${G}Network:${NC}            ${lanUrl}  ${D}(VM host, phone, tablet)${NC}`);
     }
-    console.log(`  ${D}Provider:${NC}           ${config.llm.provider || 'not set'}`);
-    console.log(`  ${D}API Key:${NC}            ${config.llm.apiKey ? config.llm.apiKey.slice(0, 12) + '...' : '\x1b[0;31mnot set\x1b[0m'}`);
+    const providerLabel = config.llm.provider || 'nha';
+    const providerDisplay = providerLabel === 'nha' ? `${G}nha (Liara — free, no key needed)${NC}` : providerLabel;
+    console.log(`  ${D}Provider:${NC}           ${providerDisplay}`);
+    if (providerLabel !== 'nha') {
+      console.log(`  ${D}API Key:${NC}            ${config.llm.apiKey ? config.llm.apiKey.slice(0, 12) + '...' : '\x1b[0;31mnot set — run: nha config set provider nha\x1b[0m'}`);
+    }
     console.log(`  ${D}Agents loaded:${NC}      ${agentCards.length}`);
     console.log('');
     if (lanUrl) {
-      console.log(`  ${D}Open ${lanUrl} on your phone to use NHA from mobile.${NC}`);
+      console.log(`  ${D}Open ${lanUrl} on your host machine / phone / tablet.${NC}`);
     } else {
-      console.log(`  ${D}Tip: use --lan to access from phone/tablet on same WiFi.${NC}`);
+      console.log(`  ${D}Tip: use --lan to access from VM host, phone or tablet on same network.${NC}`);
     }
     console.log(`  ${D}Press Ctrl+C to stop${NC}`);
     console.log('');
