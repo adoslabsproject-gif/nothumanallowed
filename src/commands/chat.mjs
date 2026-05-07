@@ -570,8 +570,9 @@ function formatToolResult(action, params, result) {
 export async function cmdChat(args) {
   const config = loadConfig();
 
-  if (!config.llm.apiKey) {
-    fail('No API key configured. Run: nha config set key YOUR_KEY');
+  const activeProvider = config.llm.provider || 'anthropic';
+  if (activeProvider !== 'nha' && !config.llm.apiKey) {
+    fail('No API key configured. Run: nha config set key YOUR_KEY\n  Or use the free tier: nha config set provider nha');
     process.exit(1);
   }
 
