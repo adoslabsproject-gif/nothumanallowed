@@ -5276,6 +5276,21 @@ function downloadStudioPDF() {
   // ── Sections ─────────────────────────────────────────────────────────────
   sectionsHtml +
 
+  // ── Charts / Canvas section (from CanvasAgent HTML) ──────────────────────
+  (studioState.canvas ? (
+    '<div class="section" style="page-break-before:always">' +
+      '<div class="agent-header"><span class="agent-icon">&#128202;</span>' +
+        '<div><div class="agent-name">Grafici e Dashboard</div>' +
+        '<div class="agent-sub">CANVAS AGENT &nbsp;&#183;&nbsp; Visualizzazioni dati</div></div>' +
+      '</div>' +
+      '<div id="nha-canvas-charts" style="width:100%;overflow:hidden">' +
+        studioState.canvas
+          .replace(new RegExp('<script[^>]*>[\\s\\S]*?<\\/script>', 'gi'), '')
+          .replace(new RegExp('<html[^>]*>|<\\/html>|<head[\\s\\S]*?<\\/head>|<body[^>]*>|<\\/body>', 'gi'), '') +
+      '</div>' +
+    '</div>'
+  ) : '') +
+
   // ── Footer ───────────────────────────────────────────────────────────────
   '<div class="footer-bar">' +
     '<span class="footer-left">NHA Studio &nbsp;&#183;&nbsp; nothumanallowed.com</span>' +
@@ -5283,6 +5298,32 @@ function downloadStudioPDF() {
       (totalTokensIn > 0 ? ' &nbsp;&#183;&nbsp; ' + totalTokensIn.toLocaleString() + ' token in / ' + totalTokensOut.toLocaleString() + ' out' : '') +
     '</span>' +
   '</div>' +
+
+  // ── Canvas-to-image script: converts <canvas> → <img> before printing ────
+  // This runs inside the iframe, ensuring charts are visible in the PDF.
+  '<script>' +
+    'window.addEventListener("load", function() {' +
+      // Give Chart.js time to render all charts
+      'setTimeout(function() {' +
+        'function freezeCanvases() {' +
+          'var canvases = document.querySelectorAll("canvas");' +
+          'canvases.forEach(function(cv) {' +
+            'try {' +
+              'var img = document.createElement("img");' +
+              'img.src = cv.toDataURL("image/png");' +
+              'img.style.cssText = cv.style.cssText || "";' +
+              'img.style.maxWidth = "100%";' +
+              'img.style.display = "block";' +
+              'img.style.margin = "0 auto";' +
+              'if (cv.parentNode) cv.parentNode.replaceChild(img, cv);' +
+            '} catch(e) {}' +
+          '});' +
+        '}' +
+        'window.addEventListener("beforeprint", freezeCanvases);' +
+      '}, 1200);' +
+    '});' +
+  '<\/script>' +
+
   '</body></html>';
 
   // ── Generate PDF via hidden in-page iframe ─────────────────────────────────
@@ -5310,7 +5351,8 @@ function downloadStudioPDF() {
 
     // Set up onload BEFORE appending — avoids WebKit race condition
     iframe.onload = function() {
-      // Wait for Chart.js to initialize all charts (needs ~800ms for animation frames)
+      // Wait for Chart.js to initialize all charts and freezeCanvases to run (needs ~2s)
+      var waitMs = studioState.canvas ? 2500 : 800;
       setTimeout(function() {
         try {
           iframe.contentWindow.focus();
@@ -7968,16 +8010,16 @@ function wcChatPanelHtml() {
         var color = isOk ? 'var(--green)' : 'var(--red)';
         var label = isParseErr ? ('JSON err: ' + wcEsc(tool.result)) : wcEsc(tool.path);
         var title = isOk ? tool.op + ': ' + tool.path : (tool.result || '');
-        // Build inline diff block for successful edits
-        if (isOk && tool.op === 'edit' && tool.oldSnippet) {
-          var oldLines = tool.oldSnippet.split(String.fromCharCode(10)).map(function(l){ return '<div style="background:#3f0f0f;color:#fca5a5;font-family:var(--mono);font-size:9px;padding:0 8px;white-space:pre-wrap;word-break:break-all">- '+wcEsc(l)+'</div>'; }).join('');
-          var newLines = tool.newSnippet.split(String.fromCharCode(10)).map(function(l){ return '<div style="background:#0f2f0f;color:#86efac;font-family:var(--mono);font-size:9px;padding:0 8px;white-space:pre-wrap;word-break:break-all">+ '+wcEsc(l)+'</div>'; }).join('');
-          diffBlocks += '<details style="margin:2px 0;border:1px solid rgba(255,255,255,0.08);border-radius:5px;overflow:hidden">' +
-            '<summary style="padding:3px 8px;font-size:9px;font-family:var(--mono);color:var(--dim);cursor:pointer;list-style:none;display:flex;align-items:center;gap:4px">' +
-              '<span style="color:var(--green)">&#9998;</span> '+wcEsc(tool.path)+' <span style="margin-left:auto;opacity:.5">&#9660;</span>' +
-            '</summary>' +
+        // Build inline diff block for successful edits/writes — always visible, no collapse
+        if (isOk && (tool.op === 'edit' || tool.op === 'write') && (tool.oldSnippet || tool.newSnippet)) {
+          var oldLines = tool.oldSnippet ? tool.oldSnippet.split(String.fromCharCode(10)).map(function(l){ return '<div style="background:#3f0f0f;color:#fca5a5;font-family:var(--mono);font-size:9px;padding:1px 8px;white-space:pre-wrap;word-break:break-all">- '+wcEsc(l)+'</div>'; }).join('') : '';
+          var newLines = tool.newSnippet ? tool.newSnippet.split(String.fromCharCode(10)).map(function(l){ return '<div style="background:#0f2f0f;color:#86efac;font-family:var(--mono);font-size:9px;padding:1px 8px;white-space:pre-wrap;word-break:break-all">+ '+wcEsc(l)+'</div>'; }).join('') : '';
+          diffBlocks += '<div style="margin:4px 0;border:1px solid rgba(255,255,255,0.1);border-radius:5px;overflow:hidden">' +
+            '<div style="padding:3px 8px;font-size:9px;font-family:var(--mono);color:var(--dim);background:rgba(255,255,255,0.04);display:flex;align-items:center;gap:4px">' +
+              '<span style="color:var(--green)">&#9998;</span> '+wcEsc(tool.path) +
+            '</div>' +
             oldLines + newLines +
-          '</details>';
+          '</div>';
         }
         return '<span title="'+wcEsc(title)+'" style="display:inline-flex;align-items:center;gap:3px;background:var(--bg3);border:1px solid '+(isOk?'var(--green3)':'var(--red)')+';border-radius:4px;padding:2px 6px;font-size:9px;font-family:var(--mono);color:'+color+'">' +
           icon + ' ' + label + '</span>';
@@ -8371,7 +8413,8 @@ async function wcTriggerCrashFix(errorMsg) {
     });
     if (wcChatRunning) return;
   }
-  var fixMsg = 'CRASH FIX RICHIESTO.' + String.fromCharCode(10) + 'ERRORE:' + String.fromCharCode(10) + errorMsg + String.fromCharCode(10) + String.fromCharCode(10) + 'ISTRUZIONI OBBLIGATORIE:' + String.fromCharCode(10) + '1. Leggi i file coinvolti nello stack trace' + String.fromCharCode(10) + '2. Individua la riga esatta del problema' + String.fromCharCode(10) + '3. Usa OBBLIGATORIAMENTE il tool edit_file o write_file per correggere il codice' + String.fromCharCode(10) + '4. NON limitarti a spiegare il problema - DEVI modificare i file' + String.fromCharCode(10) + '5. Dopo aver modificato, il sandbox verrà riavviato automaticamente';
+  var attemptNum = _wcAutoFixAttempts;
+  var fixMsg = 'CRASH FIX RICHIESTO (tentativo ' + attemptNum + '/3).' + String.fromCharCode(10) + 'ERRORE:' + String.fromCharCode(10) + errorMsg + String.fromCharCode(10) + String.fromCharCode(10) + 'REGOLE OBBLIGATORIE:' + String.fromCharCode(10) + '1. Leggi i file coinvolti nello stack trace con view_file' + String.fromCharCode(10) + '2. Individua la riga esatta del problema' + String.fromCharCode(10) + '3. Usa edit_file per patch chirurgiche. SE edit_file fallisce con "old_string non trovato", usa SUBITO write_file per riscrivere il file intero correttamente' + String.fromCharCode(10) + '4. NON spiegare - MODIFICA i file. Se non usi edit_file o write_file il problema non viene risolto' + String.fromCharCode(10) + (attemptNum > 1 ? '5. ATTENZIONE: tentativi precedenti sono falliti. Usa write_file per riscrivere completamente i file problematici invece di patch parziali.' : '5. Dopo la modifica il sandbox si riavvia automaticamente');
   wcChat.push({ role: 'user', text: '\uD83E\uDD16 Auto-fix crash: ' + errorMsg });
   wcChatRunning = true;
   renderWebCraft(document.getElementById('content'));
@@ -8544,7 +8587,7 @@ function wcDiffPanelHtml() {
   var items = _wcDiffQueue.map(function(d, di) {
     var addedLines = (d.after||'').split(String.fromCharCode(10)).length - (d.before||'').split(String.fromCharCode(10)).length;
     var sign = addedLines >= 0 ? '+' : '';
-    return '<details style="border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--bg3)">' +
+    return '<details open style="border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--bg3)">' +
       '<summary style="padding:7px 10px;cursor:pointer;font-size:11px;font-family:var(--mono);color:var(--text);list-style:none;display:flex;align-items:center;gap:8px">' +
         '<span style="color:var(--green);font-size:10px">&#9650;</span>' +
         '<span style="flex:1">' + wcEsc(d.file) + '</span>' +
@@ -8763,7 +8806,7 @@ async function wcGenerate() {
     { name: 'server/services/email.js', lang: 'javascript', prompt: 'Generate server/services/email.js: Nodemailer transporter using SMTP from env. Function sendVerificationEmail(to, token, baseUrl): sends HTML email with verification link. Function sendPasswordResetEmail(to, token, baseUrl). Add SendGrid fallback (commented out, predisposed with transporter swap). Never expose credentials.' },
     { name: 'server/routes/auth.js',  lang: 'javascript', prompt: 'Generate server/routes/auth.js: POST /register (validate fields: '+authFieldsDef+', check duplicate email, bcrypt hash password cost 12, insert user, send verification email, return 201), POST /login (validate, check email verified, compare bcrypt, issue JWT access 15min + refresh 7d httpOnly cookie), POST /logout (clear refresh cookie), POST /refresh-token (validate refresh from httpOnly cookie, rotate token), GET /verify-email/:token (mark email verified). Use parameterized queries only. Import authLimiter EXACTLY like this: const { authLimiter } = require("../middleware/security"); — do NOT create or import from ../middleware/rateLimiter (that file does not exist). Apply authLimiter to register and login.' },
     { name: 'server/routes/api.js',   lang: 'javascript', prompt: 'Generate server/routes/api.js: Express router with a verifyToken middleware (validates JWT Bearer). GET /api/me returns authenticated user profile (no password hash). GET /api/health returns {status: ok, timestamp}. Structure ready for adding more routes.' },
-    { name: 'server/index.js',        lang: 'javascript', prompt: 'Generate server/index.js: Express app entry point. Apply applySecurityMiddleware first. Then apply sentinelMiddleware (import from ./middleware/sentinel.js). Use CORS with env CORS_ORIGIN. Parse JSON body (limit 10kb). Mount /api/auth → auth.js, /api → api.js. Serve public/ as static. 404 handler and global error handler (never leak stack traces in production). Start on PORT from env.' },
+    { name: 'server/index.js',        lang: 'javascript', prompt: 'Generate server/index.js: Express app entry point. Apply applySecurityMiddleware first. Then apply sentinelMiddleware (import from ./middleware/sentinel.js). Use CORS with env CORS_ORIGIN. Parse JSON body (limit 10kb). Mount /api/auth to auth.js, /api to api.js. CRITICAL: serve static files using the ABSOLUTE path computed with path.join and __dirname — specifically path.join(__dirname, double-dot, public) so it resolves correctly regardless of cwd. After mounting all API routes and before the 404 handler, add a SPA catch-all: app.get with wildcard star that calls res.sendFile with path.join(__dirname, double-dot, public, index.html). This ensures GET / and any unmatched frontend route returns index.html instead of a 404 JSON error. 404 handler and global error handler (never leak stack traces in production). Start on PORT from env.' },
     { name: 'db/migrations/001_init.sql', lang: 'sql',   prompt: 'Generate PostgreSQL migration 001_init.sql: CREATE TABLE users with id UUID default gen_random_uuid(), fields for '+authFieldsDef+', email_verified BOOLEAN default false, verification_token VARCHAR, reset_token VARCHAR, reset_token_expires TIMESTAMPTZ, refresh_token_hash VARCHAR, created_at TIMESTAMPTZ default now(), updated_at TIMESTAMPTZ default now(). CREATE INDEX on email. CREATE TABLE refresh_tokens (id, user_id FK, token_hash, expires_at, created_at). Add updated_at trigger function.' },
     { name: 'public/css/base.css',    lang: 'css',       prompt: 'Generate public/css/base.css: CSS custom properties (color palette, spacing scale, font scale, border-radius, shadows, transitions). CSS reset (*, box-sizing). Base typography (Inter or system-ui). Utility classes using BEM where applicable. Dark/light mode via prefers-color-scheme.' },
     { name: 'public/css/components.css', lang: 'css',    prompt: 'Generate public/css/components.css following STRICT BEM (block__element--modifier). Components: .btn (--primary, --secondary, --danger, --ghost), .form (form__field, form__label, form__input, form__error, form__hint), .card (card__header, card__body, card__footer), .nav (nav__brand, nav__links, nav__link--active), .alert (--success, --error, --warning, --info), .spinner, .badge, .modal (modal__overlay, modal__content, modal__header, modal__body, modal__footer). Fully accessible (focus states, aria).' },
@@ -9310,7 +9353,9 @@ async function wcStartSandbox() {
             wcState.sandbox.running = false;
             wcState.sandbox.port = evt.port;
             wcState.sandbox.dir = evt.dir;
-            _wcAutoFixAttempts = 0;
+            // Reset counter only after stable uptime (5s), not immediately on first ready
+            // This prevents infinite loop: crash → fix → restart → crash → reset → crash → ...
+            setTimeout(function() { _wcAutoFixAttempts = 0; }, 5000);
             wcStartAutoFixPoller();
             // Reload skills so newly written log file appears in the panel
             _wcSkillsLoaded = false;

@@ -1,6 +1,6 @@
 # NotHumanAllowed
 
-**38 specialized AI agents, 80 tools, Studio visual workflows — all local, all free.** Security auditors, code architects, data analysts, DevOps engineers, technical writers — each with deep domain expertise. Use them individually, run complex multi-agent workflows in Studio, or let them deliberate together.
+**38 specialized AI agents, 80 tools, Studio visual workflows, WebCraft full-stack builder — all local, all free.** Security auditors, code architects, data analysts, DevOps engineers, technical writers — each with deep domain expertise. Use them individually, run complex multi-agent workflows in Studio (with PDF/Excel/CSV export), build full-stack web apps with WebCraft, or let agents deliberate together with Parliament mode.
 
 ## Quick Start
 
@@ -36,8 +36,86 @@ EmailAgent → WebSearchAgent → WriterAgent
 
 - **No configuration** — works with any LLM provider including Liara (free, no API key)
 - **Live canvas** — see each agent activate, stream output, and hand off to the next
-- **2–5 step workflows** — context flows automatically between steps
+- **HTML dashboard** — canvas generates a downloadable visual report (HTML + PDF)
+- **Parliament mode** — enable for 2+ specialist agents to cross-read and deliberate: R1 (independent), R2 (agents read each other), R3 (HERALD mediation), convergence score
 - Open `nha ui` → click **Studio** in the sidebar
+
+### Studio Export
+
+When a workflow completes, Studio provides three export formats:
+
+- **PDF** — full structured report with all agent outputs, typography, token counters
+- **Excel (XLSX)** — professional multi-sheet workbook via SheetJS: one sheet per agent, auto-detected numeric columns with formatting, alternating row colors, freeze panes, auto-column widths, index sheet with token summary. Data tables are extracted from Markdown output automatically.
+- **CSV** — all Markdown tables from the report merged into a single file
+
+Export buttons appear in the result panel and in the toolbar after each run.
+
+---
+
+## WebCraft — Full-Stack Web Apps from a Chat
+
+WebCraft is a full-stack web app builder embedded in `nha ui`. Describe what you want in plain language — WebCraft generates a complete project with Express.js backend, PostgreSQL schema, JWT auth, email verification, security middleware, and a styled frontend. Everything runs locally with a live sandbox.
+
+```
+Open nha ui → click WebCraft in the sidebar
+```
+
+### How it works
+
+1. **Describe your project** in the chat (or pick an example: MySaaS, MyShop, MyBlog, MyPortfolio...)
+2. **WebCraft generates** all files: `server/`, `public/`, `db/migrations/`, `.env.example`, `package.json`, nginx config
+3. **Click ▶ Sandbox** — runs `npm install && node server/index.js` in an isolated process, live on a local port
+4. **Chat with the agent** to modify, fix, or extend anything — the agent edits files directly on disk, you see diffs in real time
+
+### WebCraft Agent
+
+An AI assistant permanently available in the chat panel. Powered by Liara (Qwen3 32B, free) or your own API key.
+
+**What it can do:**
+- Edit files surgically (old → new string replace) or rewrite them completely
+- Read any project file for context
+- Auto-fix `MODULE_NOT_FOUND` and common require() path errors
+- Restart the sandbox after fixes
+- Process attached screenshots or PDFs (vision) to debug visual issues
+
+**Context files** (created automatically for every project, editable via sidebar):
+| File | Type | Purpose |
+|---|---|---|
+| `skills/memory.md` | memory | Architecture decisions, stack choices, developer preferences |
+| `skills/liara.md` | provider | Calibrate AI tone, code style, constraints |
+| `skills/skills.md` | skill | Reusable patterns, snippets, API integrations |
+
+Add more skill files (unlimited) for specific integrations (Stripe, email templates, etc.).
+
+### Developer Tools (sidebar toolbar)
+
+| Tool | Description |
+|---|---|
+| **Diff viewer** | After every agent edit, see before/after for each changed file — color-coded, collapsible |
+| **Syntax check** ✅ | Runs `node --check` on all JS files, reports errors instantly |
+| **Search** 🔍 | Grep across all project files — click a result to jump to that file |
+| **Snapshot** 💾 | Save a full point-in-time backup of all files. Restore any snapshot with one click |
+| **Plan mode** | Type `/plan your request` — agent proposes a plan first, you approve before any file is touched |
+| **Auto-fix** | Sandbox errors (MODULE_NOT_FOUND etc.) trigger automatic Liara fix attempts (3 free, unlimited with own key) |
+
+### Example session
+
+```
+You: "Add a contact form with SMTP email and honeypot spam protection"
+Agent: → edits server/routes/api.js (add /contact POST route)
+       → edits server/services/email.js (add sendContactEmail)
+       → edits public/index.html (add form HTML)
+       → edits public/js/main.js (add form JS with honeypot)
+       [Diff viewer shows 4 files changed]
+       [Syntax check: ✅ all files valid]
+       [Sandbox restarted automatically]
+```
+
+```
+You: "/plan refactor auth to use refresh token rotation"
+Agent: → proposes plan (3 files, 6 changes) — no edits yet
+       → you click Approve → agent executes
+```
 
 ## Daily Operations (PAO)
 
@@ -82,6 +160,26 @@ All data stored locally in `~/.nha/ops/`. Tokens encrypted with AES-256-GCM. You
 ## The Agents
 
 38 agents across 11 domains. Each agent is a standalone `.mjs` file you own locally — inspect it, modify it, run it offline.
+
+## Code Execution
+
+`execute_code` runs Python, JavaScript, or TypeScript in an isolated sandbox:
+
+```bash
+# Python with auto-installed packages
+nha chat
+> use execute_code to analyze this CSV with pandas
+
+# TypeScript
+> write and run a TypeScript script that parses this JSON
+```
+
+- **Isolated sandbox** — dedicated temp dir per run, deleted after execution
+- **Stripped environment** — subprocess never sees NHA API keys
+- **Package install** — `packages: ["pandas", "numpy"]` auto-installs via pip/npm
+- **Multi-file** — pass extra files (CSV, JSON, helper modules) via `files: [{path, content}]`
+- **SIGKILL on timeout** — 30s default, configurable up to 120s
+- **Returns** stdout, stderr, exit code, and list of files created in sandbox
 
 ### Security
 - **SABER** — Security audit, OWASP, threat modeling, pentest planning

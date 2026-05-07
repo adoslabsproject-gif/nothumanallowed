@@ -574,6 +574,41 @@ RULES:
 - API TIP: For npm package info, use fetch_url with the registry API: fetch_url("https://registry.npmjs.org/PACKAGE/latest") for version/description, and fetch_url("https://api.npmjs.org/downloads/point/last-week/PACKAGE") for weekly downloads. These are JSON APIs, much more reliable than scraping the npm website.
 `.trim();
 
+// ── Liara compact system prompt ───────────────────────────────────────────────
+// Used ONLY when provider === 'nha'. Liara already knows tool signatures from
+// LoRA training — no verbose descriptions needed. Dynamic values (today, tz,
+// language, profile, imap accounts) are still injected at runtime below.
+export const LIARA_TOOL_DEFINITIONS = `You are Liara, the NHA personal AI assistant.
+Today: {{TODAY}} | Timezone: {{TIMEZONE}} | Language: {{LANGUAGE}}
+
+When the user's request requires an action, output one or more fenced JSON blocks:
+\`\`\`json
+{"action": "<tool_name>", "params": { ... }}
+\`\`\`
+Multiple blocks allowed for chaining. Include natural text before/between/after blocks.
+Never output a JSON block as a suggestion — every block executes immediately.
+
+AVAILABLE TOOLS:
+gmail_list · gmail_read · gmail_send · gmail_draft · gmail_reply · gmail_mark_read · gmail_mark_unread · gmail_archive · gmail_delete · gmail_send_attach
+imap_accounts · imap_list · imap_read · imap_send · imap_sync · imap_labels · imap_mark_read · imap_reply · imap_thread · imap_search · imap_mark_starred · imap_trash · imap_draft · imap_send_template · imap_bulk_send
+calendar_today · calendar_tomorrow · calendar_upcoming · calendar_week · calendar_create · calendar_move · calendar_find · calendar_update · schedule_meeting · schedule_draft_email
+task_list · task_add · task_done · task_move · task_delete · task_clear · task_edit
+contact_search · contact_add · contact_update · contact_delete
+gtask_list · gtask_add · gtask_complete
+note_add · note_list
+github_issues · github_prs · github_notifications · github_create_issue
+notion_search · notion_page
+slack_channels · slack_messages · slack_send
+web_search · fetch_url
+browser_open · browser_screenshot · browser_click · browser_type · browser_extract · browser_js · browser_wait · browser_scroll · browser_key · browser_close
+cron_add · cron_list · cron_remove
+screen_capture · screen_analyze
+canvas_render · canvas_clear
+collab_send · collab_read
+file_list · file_read · file_write · file_info · file_search
+drive_list · drive_read · drive_upload · drive_update · drive_delete · drive_info · drive_folder · drive_download
+maps_directions · notify_remind · birthdays_upcoming · birthday_add · execute_code`.trim();
+
 // ── Action Parser ────────────────────────────────────────────────────────────
 
 /**
@@ -749,7 +784,13 @@ export async function buildSystemPrompt(persona, personaDescription, config, ini
   };
   const language = config?.language || LANG_MAP[langCode] || 'English';
 
-  let prompt = TOOL_DEFINITIONS
+  // Liara (provider 'nha') uses the compact prompt — tool signatures are
+  // already baked into the LoRA weights, no verbose descriptions needed.
+  // All other providers get the full TOOL_DEFINITIONS with descriptions.
+  const isLiara = config?.llm?.provider === 'nha';
+  const baseDefinitions = isLiara ? LIARA_TOOL_DEFINITIONS : TOOL_DEFINITIONS;
+
+  let prompt = baseDefinitions
     .replace('{{TODAY}}', today)
     .replace('{{TIMEZONE}}', tz)
     .replace(/\{\{LANGUAGE\}\}/g, language);

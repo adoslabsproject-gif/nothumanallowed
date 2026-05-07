@@ -4979,6 +4979,8 @@ ${completedHeadings ? `## SECTIONS ALREADY WRITTEN (headings only):\n${completed
               html = html.replace(/<meta[^>]+X-Frame-Options[^>]*>/gi, '');
               // Remove Content-Security-Policy meta http-equiv (server sets it via helmet with sandbox-safe values)
               html = html.replace(/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
+              // Remove upgrade-insecure-requests directive if present in any remaining CSP meta
+              html = html.replace(/upgrade-insecure-requests\s*;?\s*/gi, '');
               // Remove frame-ancestors none/self directives from any remaining CSP meta
               html = html.replace(/<meta[^>]+content=["'][^"']*frame-ancestors[^"']*["'][^>]*>/gi, '');
               if (html.length !== before) {
@@ -5145,6 +5147,7 @@ module.exports.notFoundHandler = notFoundHandler;
           // Always overwrite — older shim versions may be missing exports like notFoundHandler
           fs.writeFileSync(path.join(sandboxDir, 'server', 'middleware', 'errors.js'), errorsShim, 'utf8');
 
+
           // Models shim — LLM often generates require('../models/User') etc. that don't exist
           // Create a generic User model shim backed by the in-memory DB shim
           const userModelShim = `
@@ -5241,9 +5244,15 @@ module.exports = { validateEmail, sanitizeText, validatePassword, validateUserna
             [/require\(['"]\.\/config\/redis['"]\)/g,                  "require('../services/cache')"],
             [/require\(['"]\.\.\/services\/redis['"]\)/g,             "require('../services/cache')"],
             [/require\(['"]\.\/services\/redis['"]\)/g,               "require('../services/cache')"],
-            // email utils: LLM puts utils/email but file is in services/email
+            // email utils: LLM puts utils/email or services/emailService but file is services/email
             [/require\(['"]\.\.\/utils\/email['"]\)/g,                 "require('../services/email')"],
             [/require\(['"]\.\/utils\/email['"]\)/g,                   "require('./services/email')"],
+            [/require\(['"]\.\.\/services\/emailService['"]\)/g,       "require('../services/email')"],
+            [/require\(['"]\.\/services\/emailService['"]\)/g,         "require('./services/email')"],
+            [/require\(['"]\.\.\/services\/mailer['"]\)/g,             "require('../services/email')"],
+            [/require\(['"]\.\/services\/mailer['"]\)/g,               "require('./services/email')"],
+            [/require\(['"]\.\.\/utils\/mailer['"]\)/g,                "require('../services/email')"],
+            [/require\(['"]\.\/utils\/mailer['"]\)/g,                  "require('./services/email')"],
             // config module: LLM generates require('../../config') or require('../config')
             [/require\(['"]\.\.\/\.\.\/config['"]\)/g,                 "{env:process.env}"],
             [/require\(['"]\.\.\/config['"]\)/g,                       "{env:process.env}"],
@@ -5272,6 +5281,11 @@ module.exports = { validateEmail, sanitizeText, validatePassword, validateUserna
             [/require\(['"]\.\/middleware\/rateLimit['"]\)/g,          "require('./middleware/security')"],
             [/require\(['"]\.\.\/middleware\/limiter['"]\)/g,          "require('../middleware/security')"],
             [/require\(['"]\.\/middleware\/limiter['"]\)/g,            "require('./middleware/security')"],
+            // nodemailer: LLM calls createTransporter (wrong) instead of createTransport (correct)
+            [/nodemailer\.createTransporter\s*\(/g,                    "nodemailer.createTransport("],
+            [/\{createTransporter\s*:/g,                               "{createTransport:"],
+            // helmet: upgradeInsecureRequests forces HTTPS on local sandbox — always disable it
+            [/upgradeInsecureRequests\s*:\s*(?:true|\{\}|undefined)/g, "upgradeInsecureRequests: false"],
           ];
           function patchJsFiles(dir, rootDir) {
             if (!fs.existsSync(dir)) return;
@@ -5303,6 +5317,59 @@ module.exports = { validateEmail, sanitizeText, validatePassword, validateUserna
           }
           patchJsFiles(path.join(sandboxDir, 'server'), path.join(sandboxDir, 'server'));
           sendLog('🔧 Shim iniettati: DB (in-memory), Sentinel WAF, Cache — require() patchati');
+
+          // Post-process server/index.js: fix static path + ensure SPA fallback
+          // The LLM sometimes generates a relative path ('public') instead of the absolute
+          // path.join(__dirname, '..', 'public') — causing "Not found: /" when the cwd
+          // differs from the project root.
+          const serverIndexPath = path.join(sandboxDir, 'server', 'index.js');
+          if (fs.existsSync(serverIndexPath)) {
+            let srvSrc = fs.readFileSync(serverIndexPath, 'utf8');
+            let srvChanged = false;
+
+            // Fix: express.static('public') / express.static("public") → absolute path
+            const staticRelRe = /express\.static\s*\(\s*['"]\.?\/?public['"]\s*\)/g;
+            const staticAbsolute = "express.static(path.join(__dirname, '..', 'public'))";
+            if (staticRelRe.test(srvSrc)) {
+              srvSrc = srvSrc.replace(staticRelRe, staticAbsolute);
+              srvChanged = true;
+            }
+
+            // Fix: express.static(path.join(__dirname, 'public')) → go up one level
+            const staticWrongDepth = /express\.static\s*\(\s*path\.join\s*\(\s*__dirname\s*,\s*['"]public['"]\s*\)\s*\)/g;
+            if (staticWrongDepth.test(srvSrc)) {
+              srvSrc = srvSrc.replace(staticWrongDepth, staticAbsolute);
+              srvChanged = true;
+            }
+
+            // Ensure 'path' is required if we injected path.join
+            if (srvChanged && !/require\(['"]path['"]\)/.test(srvSrc)) {
+              srvSrc = "const path = require('path');\n" + srvSrc;
+            }
+
+            // Inject SPA fallback before the 404 / error handler if missing
+            // Detects: app.use((req,res,next)... or app.use(function(err... or app.use(errorHandler)
+            // and inserts the wildcard GET before it
+            const hasSpaFallback = /app\s*\.\s*get\s*\(\s*['"]\*['"]/.test(srvSrc);
+            if (!hasSpaFallback) {
+              const spaFallback = "\n// SPA fallback — serve index.html for all unmatched GET routes\napp.get('*', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));\n";
+              // Insert before the 404 handler (app.use with 4-arg function) or before app.listen
+              const listenIdx = srvSrc.lastIndexOf('app.listen');
+              const notFoundIdx = srvSrc.search(/app\.use\s*\(\s*(notFoundHandler|\(req,\s*res\)|function\s*\(req,\s*res)/);
+              const insertAt = notFoundIdx !== -1 ? notFoundIdx : listenIdx;
+              if (insertAt !== -1) {
+                srvSrc = srvSrc.slice(0, insertAt) + spaFallback + srvSrc.slice(insertAt);
+              } else {
+                srvSrc += spaFallback;
+              }
+              srvChanged = true;
+            }
+
+            if (srvChanged) {
+              fs.writeFileSync(serverIndexPath, srvSrc, 'utf8');
+              sendLog('🔧 server/index.js: static path corretto + SPA fallback iniettato');
+            }
+          }
 
           // Patch package.json to remove pg, add only what's needed
           const pkgPath = path.join(sandboxDir, 'package.json');
@@ -5643,9 +5710,32 @@ module.exports = { validateEmail, sanitizeText, validatePassword, validateUserna
           // Also include: any file whose name appears in the user message, plus error-related files.
           const msgLower = (message || '').toLowerCase();
           const alwaysInclude = ['package.json', 'server/index.js', '.env.example'];
+
+          // For autofix: extract file paths directly from stack trace (e.g. "at Object.<anonymous> (/path/server/routes/auth.js:11:8)")
+          const stackFileMatches = autofix ? [...(message.matchAll(/\(([^)]+\.(?:js|mjs|cjs|ts)):\d+:\d+\)/g))] : [];
+          const stackFiles = new Set(stackFileMatches.map(m => {
+            const abs = m[1];
+            // Make relative to sandboxDir
+            return abs.startsWith(sandboxDir) ? abs.slice(sandboxDir.length + 1) : abs.split('/').slice(-3).join('/');
+          }));
+
+          // For autofix: also detect "Cannot find module './redis'" style errors and extract the requiring file
+          // Stack trace line: "at Object.<anonymous> (/path/server/middleware/security.js:3:X)"
+          // We want to guarantee the file that contains the bad require() is always in context.
+          const moduleNotFoundMatch = autofix ? message.match(/Cannot find module '([^']+)'[\s\S]*?at Object[^(]*\(([^)]+\.js):\d+:\d+\)/) : null;
+          if (moduleNotFoundMatch) {
+            const requirerAbs = moduleNotFoundMatch[2];
+            const requirerRel = requirerAbs.startsWith(sandboxDir) ? requirerAbs.slice(sandboxDir.length + 1) : requirerAbs.split('/').slice(-3).join('/');
+            stackFiles.add(requirerRel);
+          }
+
+          const isStackFile = (f) => stackFiles.size > 0 && [...stackFiles].some(sf => f.name.includes(sf) || sf.includes(f.name));
+
           const relevantFiles = allFiles.filter(f => {
             const nameLower = f.name.toLowerCase();
             if (alwaysInclude.some(a => nameLower.endsWith(a))) return true;
+            // Always include files mentioned in stack trace (autofix) — highest priority
+            if (isStackFile(f)) return true;
             // Include if file name or path fragment mentioned in message
             const parts = f.name.split('/');
             if (parts.some(p => msgLower.includes(p.replace(/\.[^.]+$/, '').toLowerCase()))) return true;
@@ -5653,11 +5743,19 @@ module.exports = { validateEmail, sanitizeText, validatePassword, validateUserna
             if (/errore|error|fix|crash|module|require|import/i.test(message) && f.name.startsWith('server/') && f.name.endsWith('.js')) return true;
             return false;
           });
+          // Sort: stack trace files first (guaranteed to be in context regardless of budget)
+          relevantFiles.sort((a, b) => {
+            const aStack = isStackFile(a) ? 0 : 1;
+            const bStack = isStackFile(b) ? 0 : 1;
+            return aStack - bStack;
+          });
           // Cap total context at ~24KB to stay within 7B model limits
+          // Stack trace files are always included even if over budget
           let contextBudget = 24 * 1024;
           const selectedFiles = [];
           for (const f of relevantFiles) {
-            if (contextBudget <= 0) break;
+            const isRequired = isStackFile(f) || alwaysInclude.some(a => f.name.toLowerCase().endsWith(a));
+            if (contextBudget <= 0 && !isRequired) break;
             selectedFiles.push(f);
             contextBudget -= f.content.length;
           }
@@ -5691,7 +5789,7 @@ Per leggere un file (se hai bisogno di piu contesto):
 
 REGOLE CRITICHE:
 - Spiega SEMPRE in linguaggio naturale cosa stai facendo PRIMA dei blocchi tool
-- Usa "edit" (old/new) quando possibile, "write" solo per file nuovi o riscritture complete
+- ${autofix ? 'MODALITA AUTO-FIX: il file incriminato è già incluso qui sotto. Riscrivilo COMPLETAMENTE con "write" — è più affidabile di "edit" quando il file ha già subito modifiche. REGOLE CRITICHE PER IL FIX: (1) SyntaxError "Unexpected token \';\'" in helmet/CSP = stai usando punto-e-virgola invece di virgola negli oggetti JS — usa VIRGOLE. (2) "Cannot find module \'./redis\'" = rimuovi il require e usa solo i moduli in package.json. (3) NON aggiungere require() di moduli non in package.json. (4) SyntaxError "Unexpected identifier" con nomi spezzati tipo "create Transport" o "SMTP _HOST" o "trans porter" = c\'è uno SPAZIO nel mezzo di un nome di variabile/metodo/property — unisci le parole: createTransport, SMTP_HOST, transporter. (5) "nodemailer.createTransporter is not a function" = il metodo corretto di nodemailer e\' createTransport (senza r finale). Includi il contenuto COMPLETO del file nel campo "content".' : 'Usa "edit" (old/new) quando possibile, "write" solo per file nuovi o riscritture complete'}
 - old_string deve essere ESATTO come appare nel file (copy-paste)
 - Non inventare moduli npm: usa solo quelli in package.json o standard Node.js
 - Dopo ogni fix spiega brevemente cosa hai cambiato e perche
@@ -5749,7 +5847,7 @@ REGOLE CRITICHE:
                     _inTool = false;
                   }
                 }
-              }, { max_tokens: 4096 });
+              }, { max_tokens: 8192 });
               // Flush any remaining visible text after stream ends
               if (!_inTool && _toolBuf.trim()) sendEv({ type: 'text', token: _toolBuf });
             }
@@ -5769,24 +5867,63 @@ REGOLE CRITICHE:
           }
 
           // Parse and execute tool calls from response
-          // Sanitize JSON from LLM: replace literal newlines inside JSON strings with \n
-          // Models often write multiline strings without escaping, which breaks JSON.parse
-          const sanitizeToolJson = (raw) => {
-            // Replace literal CR/LF inside JSON string values with escaped versions
-            // Strategy: walk char by char, track if we're inside a JSON string
+          // Sanitize JSON from LLM: replace literal newlines and invalid escape sequences inside JSON strings
+          // Models often write multiline strings without escaping, or use \s \d \w in regex inside content
+          // Robust JSON string extractor: reads a JSON string value starting at position i (after the opening ")
+          // Returns { value, end } where end is the index after the closing "
+          const extractJsonString = (s, i) => {
             let out = '';
-            let inStr = false;
-            let escaped = false;
-            for (let ci = 0; ci < raw.length; ci++) {
-              const ch = raw[ci];
-              if (escaped) { out += ch; escaped = false; continue; }
-              if (ch === '\\') { out += ch; escaped = true; continue; }
-              if (ch === '"') { inStr = !inStr; out += ch; continue; }
-              if (inStr && (ch === '\n' || ch === '\r')) {
-                out += ch === '\n' ? '\\n' : '\\r';
+            const validEscapes = new Set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u']);
+            while (i < s.length) {
+              const ch = s[i];
+              if (ch === '\\') {
+                const next = s[i + 1];
+                if (next === undefined) { out += '\\\\'; i++; break; }
+                if (validEscapes.has(next)) {
+                  // valid escape — keep as-is, but handle \u specially
+                  if (next === 'u') {
+                    const hex = s.slice(i + 2, i + 6);
+                    if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                      out += s.slice(i, i + 6); i += 6;
+                    } else {
+                      out += '\\\\u'; i += 2;
+                    }
+                  } else {
+                    out += s.slice(i, i + 2); i += 2;
+                  }
+                } else {
+                  // invalid escape (e.g. \s \d \w \( \. \n written as literal) — escape the backslash
+                  out += '\\\\' + next; i += 2;
+                }
                 continue;
               }
-              out += ch;
+              if (ch === '"') { i++; break; } // closing quote
+              if (ch === '\n') { out += '\\n'; i++; continue; }
+              if (ch === '\r') { out += '\\r'; i++; continue; }
+              if (ch === '\t') { out += '\\t'; i++; continue; }
+              // other control chars
+              if (ch.charCodeAt(0) < 0x20) { out += '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0'); i++; continue; }
+              out += ch; i++;
+            }
+            return { value: out, end: i };
+          };
+
+          const sanitizeToolJson = (raw) => {
+            // Rebuild the JSON char-by-char, using extractJsonString for string values
+            let out = '';
+            let i = 0;
+            let inStr = false;
+            while (i < raw.length) {
+              if (!inStr && raw[i] === '"') {
+                // Start of a JSON string — extract it robustly
+                out += '"';
+                i++;
+                const { value, end } = extractJsonString(raw, i);
+                out += value + '"';
+                i = end;
+              } else {
+                out += raw[i++];
+              }
             }
             return out;
           };
@@ -5845,14 +5982,33 @@ REGOLE CRITICHE:
                   oldSnippet: (toolCall.old || '').slice(0, 300),
                   newSnippet: (toolCall.new || '').slice(0, 300) });
               } else {
-                sendEv({ type: 'tool', op: 'edit', path: toolCall.path, result: 'old_string non trovato — patch fallita' });
+                // edit fallback: old_string not found → do a second LLM call with the full file
+                // and ask it to rewrite the file correctly. No client loop needed.
+                sendEv({ type: 'tool', op: 'edit', path: toolCall.path, result: 'patch chirurgica fallita — riscrittura automatica in corso...' });
+                try {
+                  const fallbackSys = `Sei un esperto di Node.js. Riscrivi il seguente file correggendo questo problema: ${message.slice(0, 500)}
+Rispondi SOLO con il contenuto completo del file corretto, senza markdown fence, senza spiegazioni.`;
+                  const fallbackUser = `FILE: ${toolCall.path}\n\`\`\`\n${content}\n\`\`\``;
+                  const newContent = await callLLM(config, fallbackSys, fallbackUser, { max_tokens: 8192 });
+                  const cleaned = newContent.replace(/^```[\w]*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
+                  if (cleaned && cleaned.length > 20) {
+                    fs.writeFileSync(fp, cleaned, 'utf8');
+                    toolResults.push({ op: 'write', path: toolCall.path, ok: true });
+                    sendEv({ type: 'tool', op: 'write', path: toolCall.path, result: 'ok (fallback rewrite)',
+                      oldSnippet: content.slice(0, 300), newSnippet: cleaned.slice(0, 300) });
+                  }
+                } catch(fallbackErr) {
+                  sendEv({ type: 'tool', op: 'edit', path: toolCall.path, result: 'fallback rewrite fallito: ' + fallbackErr.message.slice(0, 80) });
+                }
               }
             } else if (toolCall.op === 'write') {
               const fp = path.join(sandboxDir, toolCall.path.replace(/^\/+/, ''));
               fs.mkdirSync(path.dirname(fp), { recursive: true });
+              const oldContent = fs.existsSync(fp) ? fs.readFileSync(fp, 'utf8') : '';
               fs.writeFileSync(fp, toolCall.content || '', 'utf8');
               toolResults.push({ op: 'write', path: toolCall.path, ok: true });
-              sendEv({ type: 'tool', op: 'write', path: toolCall.path, result: 'ok' });
+              sendEv({ type: 'tool', op: 'write', path: toolCall.path, result: 'ok',
+                oldSnippet: oldContent.slice(0, 300), newSnippet: (toolCall.content || '').slice(0, 300) });
             }
           }
 

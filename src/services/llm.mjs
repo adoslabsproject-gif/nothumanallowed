@@ -609,7 +609,7 @@ function buildRequestBody(provider, model, systemPrompt, userMessage, stream) {
   };
   const req = {
     model: model || modelDefaults[provider] || 'gpt-4o',
-    max_tokens: provider === 'nha' ? 4096 : 8192,
+    max_tokens: opts.max_tokens || (provider === 'nha' ? 8192 : 8192),
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
