@@ -1,9 +1,9 @@
-<h1 align="center">NotHumanAllowed</h1>
-
 <p align="center">
-  <strong>38 agents · 80 tools · free AI · all local · all yours.</strong><br/>
-  Security auditors, code architects, data analysts, DevOps engineers — each with deep domain expertise.<br/>
-  Use them individually, chain them in Studio, build full-stack apps with WebCraft, or let them deliberate with Parliament.
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="https://nothumanallowed.com/blobs/github/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://nothumanallowed.com/blobs/github/hero-light.svg">
+    <img src="https://nothumanallowed.com/blobs/github/hero-light.svg" alt="NotHumanAllowed — 38 agents, 80 tools, free AI" width="100%" draggable="false"/>
+  </picture>
 </p>
 
 <div align="center">
@@ -30,6 +30,14 @@
 
 ## Quick Start
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="https://nothumanallowed.com/blobs/github/chat-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://nothumanallowed.com/blobs/github/chat-light.svg">
+    <img src="https://nothumanallowed.com/blobs/github/chat-light.svg" alt="NHA Chat — ask anything, get a specialist answer" width="100%" draggable="false"/>
+  </picture>
+</p>
+
 ```bash
 # Install globally
 npm install -g nothumanallowed
@@ -53,6 +61,14 @@ nha ui
 ```
 
 ## Studio — Visual Agentic Workflows
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="https://nothumanallowed.com/blobs/github/studio-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://nothumanallowed.com/blobs/github/studio-light.svg">
+    <img src="https://nothumanallowed.com/blobs/github/studio-light.svg" alt="Studio — visual multi-agent workflow builder" width="100%" draggable="false"/>
+  </picture>
+</p>
 
 Studio is a visual workflow builder inside the `nha ui` web interface. Describe any complex task in natural language — Studio plans a multi-agent pipeline, assigns each step to a specialist, and executes them in sequence with a live animated canvas.
 
@@ -82,6 +98,14 @@ Export buttons appear in the result panel and in the toolbar after each run.
 ---
 
 ## WebCraft — Full-Stack Web Apps from a Chat
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="https://nothumanallowed.com/blobs/github/webcraft-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://nothumanallowed.com/blobs/github/webcraft-light.svg">
+    <img src="https://nothumanallowed.com/blobs/github/webcraft-light.svg" alt="WebCraft — full-stack app from a sentence" width="100%" draggable="false"/>
+  </picture>
+</p>
 
 WebCraft is a full-stack web app builder embedded in `nha ui`. Describe what you want in plain language — WebCraft generates a complete project with Express.js backend, PostgreSQL schema, JWT auth, email verification, security middleware, and a styled frontend. Everything runs locally with a live sandbox.
 
