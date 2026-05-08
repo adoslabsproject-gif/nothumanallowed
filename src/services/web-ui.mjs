@@ -11,8 +11,8 @@ var currentView = 'dashboard';
 var chatHistory = [];
 var activeConvId = null;
 var convList = [];
-var dash = {emails:[],events:[],tasks:[],plan:null,status:null};
-var dashLoaded = {emails:false,events:false,tasks:false,contacts:false,notes:false,drive:false,github:false,notion:false,slack:false};
+var dash = {emails:[],events:[],tasks:[],plan:null,status:null,weather:null};
+var dashLoaded = {emails:false,events:false,tasks:false,contacts:false,notes:false,drive:false,github:false,notion:false,slack:false,weather:false};
 var chatStreaming = false;
 var chatAbortController = null;
 
@@ -286,11 +286,47 @@ function apiPost(p,b,m){return fetch(API+p,{method:m||'POST',headers:{'Content-T
 function apiPatch(p){return fetch(API+p,{method:'PATCH'}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}
 
 // ---- LOAD DATA ----
+function loadWeather(){
+  var savedLoc=localStorage.getItem('nha_weather_location');
+  function fetchWeather(loc){
+    apiGet('/api/weather?location='+encodeURIComponent(loc)).then(function(r){
+      if(r&&r.tempC){dash.weather=r;dashLoaded.weather=true;if(currentView==='dashboard')render();}
+      else{dashLoaded.weather=true;if(currentView==='dashboard')render();}
+    }).catch(function(){dashLoaded.weather=true;if(currentView==='dashboard')render();});
+  }
+  function ipFallback(){
+    fetch('https://ipapi.co/json/').then(function(r){return r.json();}).then(function(d){
+      var city=d.city||'';
+      if(city){localStorage.setItem('nha_weather_location',city);fetchWeather(city);}
+      else{dashLoaded.weather=true;render();}
+    }).catch(function(){dashLoaded.weather=true;render();});
+  }
+  // If location already known, use it directly
+  if(savedLoc){fetchWeather(savedLoc);return;}
+  // Try browser geolocation — pass lat,lng directly to wttr.in (no reverse geocoding needed)
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(pos){
+      var latLng=pos.coords.latitude.toFixed(4)+','+pos.coords.longitude.toFixed(4);
+      fetchWeather(latLng);
+      // Also resolve city name for display — save for next time
+      fetch('https://nominatim.openstreetmap.org/reverse?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude+'&format=json&accept-language=en&zoom=10')
+        .then(function(r){return r.json();}).then(function(d){
+          // zoom=10 = city level — avoids resolving to suburbs/villages
+          var city=d.address&&(d.address.city||d.address.town||d.address.county||'');
+          if(city)localStorage.setItem('nha_weather_location',city);
+        }).catch(function(){});
+    },function(){ipFallback();},{timeout:6000,maximumAge:300000});
+  } else {
+    ipFallback();
+  }
+}
+
 function loadDash(){
   // Load each API independently  -  render as each arrives (emails are slow)
   apiGet('/api/status').then(function(r){dash.status=r;render()});
   apiGet('/api/tasks').then(function(r){dash.tasks=(r&&r.tasks)||[];dashLoaded.tasks=true;updateBadges();render()});
   apiGet('/api/calendar').then(function(r){dash.events=(r&&r.events)||[];dashLoaded.events=true;updateBadges();render()});
+  if(!dashLoaded.weather)loadWeather();
   return apiGet('/api/emails?page=0&pageSize=25').then(function(r){dash.emails=(r&&r.emails)||[];dash._emailHasMore=r&&r.hasMore;dashLoaded.emails=true;emailPage=0;updateBadges();render()});
 }
 function loadAgents(){return apiGet('/api/agents').then(function(r){agentsList=(r&&r.agents)||[]})}
@@ -358,11 +394,28 @@ function renderDash(el){
   var done=t.filter(function(x){return x.status==='done'}).length;
   var pend=t.length-done;
   var pct=t.length>0?Math.round(done/t.length*100):0;
+  var weatherCard;
+  if(dashLoaded.weather&&dash.weather){
+    var wm=dash.weather;
+    var wIcons={Sunny:'&#9728;',Clear:'&#9728;','Partly Cloudy':'&#9925;','Partly cloudy':'&#9925;',Cloudy:'&#9729;',Overcast:'&#9729;','Light rain':'&#127783;','Patchy light drizzle':'&#127783;','Moderate rain':'&#127783;','Heavy rain':'&#127783;',Rain:'&#127783;',Drizzle:'&#127783;',Snow:'&#10052;','Light snow':'&#10052;',Fog:'&#127787;',Mist:'&#127787;',Thunder:'&#9889;','Thundery outbreaks':'&#9889;'};
+    var wIcon=wIcons[wm.desc]||'&#127781;';
+    weatherCard='<div class="card" style="cursor:default"><div class="card__title" style="display:flex;align-items:center;justify-content:space-between">'+
+      '<span>'+esc(wm.city)+(wm.country?', '+esc(wm.country.slice(0,2)):'')+'</span>'+
+      '<span style="font-size:10px;color:var(--dim);cursor:pointer" onclick="nhaSetWeatherLocation()">&#9998; change</span>'+
+      '</div>'+
+      '<div class="card__value" style="font-size:28px">'+wIcon+' '+esc(wm.tempC)+'&#176;C</div>'+
+      '<div class="card__sub">'+esc(wm.desc)+' &middot; feels '+esc(wm.feelsC)+'&#176;C &middot; &#128167;'+esc(wm.humidity)+'%</div>'+
+    '</div>';
+  } else {
+    weatherCard='<div class="card" style="cursor:default"><div class="card__title" style="display:flex;align-items:center;justify-content:space-between"><span>Weather</span><span style="font-size:10px;color:var(--dim);cursor:pointer" onclick="nhaSetWeatherLocation()">&#9998; set location</span></div>'+
+      '<div class="card__value" style="font-size:22px">--</div>'+
+      '<div class="card__sub">'+(dashLoaded.weather?'No data':'Loading...')+'</div></div>';
+  }
   var h='<div class="dash-grid">'+
     '<div class="card"><div class="card__title">Tasks</div><div class="card__value">'+pend+'</div><div class="card__sub">'+done+'/'+t.length+' done ('+pct+'%)</div></div>'+
     '<div class="card"><div class="card__title">Emails</div><div class="card__value">'+(dashLoaded.emails?e.length:'<span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle"></span>')+'</div><div class="card__sub">'+(dashLoaded.emails?(e.length>0?esc(e[0].from):'Inbox zero'):'Loading...')+'</div></div>'+
     '<div class="card"><div class="card__title">Events</div><div class="card__value">'+ev.length+'</div><div class="card__sub">'+(ev.length>0?esc(ev[0].summary):'No events')+'</div></div>'+
-    '<div class="card"><div class="card__title">Agents</div><div class="card__value">38</div><div class="card__sub">Ready</div></div>'+
+    weatherCard+
   '</div>';
   if(ev.length>0){h+='<div class="section-title">Events</div>';ev.slice(0,5).forEach(function(x){h+='<div class="card event"><span class="event__time">'+(x.isAllDay?'All day':fmtTime(x.start)+' - '+fmtTime(x.end))+'</span><span class="event__title">'+esc(x.summary)+'</span>'+(x.location?'<span class="event__location">'+esc(x.location)+'</span>':'')+'</div>'})}
   if(e.length>0){h+='<div class="section-title">Emails</div>';e.slice(0,5).forEach(function(x){h+='<div class="card email"><div class="email__header"><span class="email__from">'+esc(x.from)+'</span><span class="email__date">'+esc(x.date)+'</span></div><div class="email__subject">'+esc(x.subject)+'</div><div class="email__snippet">'+esc((x.snippet||'').slice(0,120))+'</div></div>'})}
@@ -1036,7 +1089,7 @@ function sendChat(){
                 if(data.markers.indexOf('[CANVAS_CLEAR]')!==-1)closeCanvas();
               }
               if(currentEvent==='tool_synthesis'){chatHistory[streamIdx].content='';renderMessages();}
-              if(currentEvent==='done'){endStreaming();if(data.content){chatHistory[streamIdx].content=data.content.replace(/<think>[\\s\\S]*?<\\/think>/g,'').trim();}else{chatHistory[streamIdx].content=chatHistory[streamIdx].content.replace(/<think>[\\s\\S]*?<\\/think>/g,'').trim();}var ssf=data.screenshotFiles||[];for(var fi=0;fi<ssf.length;fi++){chatHistory[streamIdx].content+='\\n![Screenshot](/api/screenshots/'+ssf[fi]+')\\n';}if(data.inlineHtml){chatHistory[streamIdx].inlineHtml=data.inlineHtml;}var bt=data.browserThumbs||[];if(bt.length>0){var cd=getConvCanvasData();for(var bti=0;bti<bt.length;bti++){var exists=cd.browsers.some(function(b){return b.file===bt[bti].file;});if(!exists)cd.browsers.push({file:bt[bti].file,url:bt[bti].url,ts:new Date().toLocaleTimeString()});}browserIdx=cd.browsers.length-1;saveCanvasData();}renderMessages();loadConvList();if(activeConvId){setTimeout(function(){loadConv(activeConvId);},500);}}
+              if(currentEvent==='done'){endStreaming();if(data.__sentinel_blocked){chatHistory.splice(streamIdx-1,2);var sentinelWarn=data.content||'Message blocked by SENTINEL.';var el=document.getElementById('chatMessages');if(el){var warn=document.createElement('div');warn.className='msg msg--assistant';warn.style.cssText='border-left:3px solid #ff9800;margin:8px 0;opacity:0.85';warn.innerHTML='<div class="msg__label">SENTINEL</div><div class="msg__bubble md-body" style="color:#ff9800">'+esc(sentinelWarn)+'</div>';el.appendChild(warn);el.scrollTop=el.scrollHeight;}renderMessages();return;}if(data.content){chatHistory[streamIdx].content=data.content.replace(/<think>[\\s\\S]*?<\\/think>/g,'').trim();}else{chatHistory[streamIdx].content=chatHistory[streamIdx].content.replace(/<think>[\\s\\S]*?<\\/think>/g,'').trim();}var ssf=data.screenshotFiles||[];for(var fi=0;fi<ssf.length;fi++){chatHistory[streamIdx].content+='\\n![Screenshot](/api/screenshots/'+ssf[fi]+')\\n';}if(data.inlineHtml){chatHistory[streamIdx].inlineHtml=data.inlineHtml;}var bt=data.browserThumbs||[];if(bt.length>0){var cd=getConvCanvasData();for(var bti=0;bti<bt.length;bti++){var exists=cd.browsers.some(function(b){return b.file===bt[bti].file;});if(!exists)cd.browsers.push({file:bt[bti].file,url:bt[bti].url,ts:new Date().toLocaleTimeString()});}browserIdx=cd.browsers.length-1;saveCanvasData();}renderMessages();loadConvList();if(activeConvId){setTimeout(function(){loadConv(activeConvId);},500);}}
               if(currentEvent==='error'){endStreaming();chatHistory[streamIdx].content='Error: '+(data.message||'Unknown');renderMessages();}
             }catch(e){}
           }
@@ -1135,6 +1188,7 @@ var emailState = {
   composing: false,
   composeData: null,   // {to, subject, inReplyTo, references, replyType}
   quillEditor: null,
+  googleUnreadCount: 0,
 };
 
 function renderEmails(el) {
@@ -1217,7 +1271,10 @@ function emailRenderSidebar() {
     for (var gi = 0; gi < googleFolders.length; gi++) {
       var gf = googleFolders[gi];
       var sel = emailState.labelId === gf.id;
-      h += '<div onclick="emailSelectGoogleFolder(\\x27' + gf.id + '\\x27,\\x27' + gf.name + '\\x27)" style="padding:7px 14px;cursor:pointer;font-size:12px;' + (sel ? 'background:var(--green3);color:var(--bg);font-weight:700' : 'color:var(--fg)') + '">' + gf.icon + ' ' + esc(gf.name) + '</div>';
+      var gUnread = (gf.id === 'INBOX' && emailState.googleUnreadCount > 0)
+        ? '<span style="margin-left:auto;background:var(--green3);color:var(--bg);border-radius:10px;padding:0 5px;font-size:9px;font-weight:700">' + emailState.googleUnreadCount + '</span>'
+        : '';
+      h += '<div onclick="emailSelectGoogleFolder(\\x27' + gf.id + '\\x27,\\x27' + gf.name + '\\x27)" style="padding:7px 14px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;' + (sel ? 'background:var(--green3);color:var(--bg);font-weight:700' : 'color:var(--fg)') + '">' + gf.icon + ' ' + esc(gf.name) + gUnread + '</div>';
     }
   } else {
     // IMAP labels
@@ -1266,6 +1323,7 @@ function emailSelectAccount(accountId, type) {
   emailState.offset = 0;
   emailState.messages = [];
   emailState.activeMessageId = null;
+  if (type !== 'google') emailState.googleUnreadCount = 0;
   if (type === 'imap') {
     apiGet('/api/imap/labels?accountId=' + accountId).then(function(r) {
       emailState.labels = r.labels || [];
@@ -1331,24 +1389,28 @@ function emailLoadMessages() {
 function emailLoadGoogleMessages() {
   var listBody = document.getElementById('emailListBody');
   if (listBody) listBody.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
-  var q = emailState.labelId === 'INBOX' ? 'in:inbox' : 'in:' + emailState.labelId.toLowerCase();
-  if (emailState.search) q = emailState.search;
-  import('../services/google-gmail.mjs').then(function(gm) {
-    gm.listMessages(config, q, 50).then(function(refs) {
-      if (!refs || !refs.length) { emailState.messages = []; emailRenderMessageList(); return; }
-      var page = refs.slice(0, 50);
-      return Promise.all(page.slice(0, 20).map(function(r) { return gm.getMessage(config, r.id); }));
-    }).then(function(msgs) {
-      emailState.messages = (msgs || []).map(function(m) {
-        return { id: m.id, subject: m.subject, from_name: m.from, from_address: m.from, internal_date: m.date, body_preview: m.snippet, is_read: !m.isUnread, is_starred: false, has_attachments: false, _google: true };
-      });
-      emailRenderMessageList();
+  // Use the server-side API endpoint — avoids Node.js module imports in browser context
+  var filter = (emailState.labelId === 'INBOX' || !emailState.labelId) ? 'all' : emailState.labelId.toLowerCase();
+  var qs = '/api/emails?filter=' + encodeURIComponent(filter) + '&page=0&pageSize=50';
+  if (emailState.search) qs = '/api/emails?filter=' + encodeURIComponent(emailState.search) + '&page=0&pageSize=50';
+  apiGet(qs).then(function(r) {
+    emailState.messages = (r.emails || []).map(function(m) {
+      return { id: m.id, subject: m.subject, from_name: m.from, from_address: m.from, internal_date: m.date, body_preview: m.snippet, is_read: !m.isUnread, is_starred: false, has_attachments: false, _google: true };
     });
+    emailState.total = emailState.messages.length;
+    if (emailState.labelId === 'INBOX' || !emailState.labelId) {
+      emailState.googleUnreadCount = emailState.messages.filter(function(m) { return !m.is_read; }).length;
+      emailRenderSidebar();
+    }
+    emailRenderMessageList();
   }).catch(function() {
-    // Fallback to dash emails
+    // Fallback to cached dash emails
     emailState.messages = (dash.emails || []).map(function(m) {
       return { id: m.id, subject: m.subject, from_name: m.from, from_address: m.from, internal_date: m.date, body_preview: m.snippet, is_read: !m.isUnread, is_starred: false, has_attachments: false, _google: true };
     });
+    emailState.total = emailState.messages.length;
+    emailState.googleUnreadCount = emailState.messages.filter(function(m) { return !m.is_read; }).length;
+    emailRenderSidebar();
     emailRenderMessageList();
   });
 }
@@ -3195,7 +3257,7 @@ function renderSettings(el) {
       ['model', 'Model', 'Leave empty for default'],
       ['thinking', 'Extended Thinking', 'on / off  -  Qwen3 reasoning mode (NHA Free only)'],
     ]) +
-    settingsSection('responder', 'Message Responder', 'Auto-reply to Telegram and Discord messages.', [
+    settingsSection('responder', 'Telegram & Discord Bot', 'Auto-reply to Telegram and Discord messages.', [
       ['telegram-bot-token', 'Telegram Bot Token', 'Get from @BotFather', true],
       ['discord-bot-token', 'Discord Bot Token', 'From Discord Developer Portal', true],
     ]) +
@@ -3405,10 +3467,15 @@ function imapSync(accountId) {
 
 function connectGoogle() {
   var s = document.getElementById('googleStatus');
-  if (s) s.textContent = 'Starting Google sign-in...';
+  if (s) { s.textContent = 'Opening Google sign-in...'; s.style.color = 'var(--dim)'; }
   apiPost('/api/google/auth', {}).then(function(r) {
-    if (s) s.textContent = r.message || 'Check the browser window that opened.';
-    if (s) s.style.color = 'var(--green)';
+    if (r.url) {
+      // Open OAuth URL in current browser — works on VMs and LAN
+      window.open(r.url, '_blank');
+      if (s) { s.textContent = 'Sign-in page opened. Complete the login then reload NHA.'; s.style.color = 'var(--green)'; }
+    } else if (r.error) {
+      if (s) { s.textContent = 'Error: ' + r.error; s.style.color = 'var(--red)'; }
+    }
   }).catch(function(e) {
     if (s) { s.textContent = 'Error: ' + e.message; s.style.color = 'var(--red)'; }
   });
@@ -3794,7 +3861,112 @@ function handleDaemonEvent(msg) {
         }
       }
       break;
+
+    case 'npm-update':
+      var upLog = document.getElementById('npmUpdateLog');
+      if (upLog) {
+        upLog.textContent += msg.line || '';
+        upLog.scrollTop = upLog.scrollHeight;
+      }
+      if (msg.done) {
+        var upStatus = document.getElementById('npmUpdateStatus');
+        if (upStatus) upStatus.textContent = 'npm install complete — server restarting...';
+        // Reload is handled by the independent poll in npmUpdate()
+      }
+      if (msg.error) {
+        var upStatus2 = document.getElementById('npmUpdateStatus');
+        if (upStatus2) { upStatus2.textContent = 'Update failed. See output above.'; upStatus2.style.color = 'var(--red)'; }
+        var upBtn = document.getElementById('npmUpdateCloseBtn');
+        if (upBtn) upBtn.style.display = 'inline-block';
+      }
+      break;
   }
+}
+
+function nhaSetWeatherLocation() {
+  var current = localStorage.getItem('nha_weather_location') || '';
+  var city = prompt('Enter your city for weather (e.g. "Rome", "Viterbo, Italy"):', current);
+  if (city === null) return;
+  city = city.trim();
+  if (!city) { localStorage.removeItem('nha_weather_location'); dash.weather = null; dashLoaded.weather = false; render(); return; }
+  localStorage.setItem('nha_weather_location', city);
+  dash.weather = null; dashLoaded.weather = false;
+  render();
+  apiGet('/api/weather?location=' + encodeURIComponent(city)).then(function(r) {
+    if (r && r.tempC) { dash.weather = r; dashLoaded.weather = true; render(); }
+  }).catch(function() {});
+}
+
+function npmUpdate() {
+  var existing = document.getElementById('npmUpdateModal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'npmUpdateModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML =
+    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:24px;width:540px;max-width:95vw;display:flex;flex-direction:column;gap:12px">' +
+      '<div style="font-size:14px;font-weight:700;color:var(--fg)">&#8593; Updating NotHumanAllowed</div>' +
+      '<div id="npmUpdateStatus" style="font-size:11px;color:var(--dim)">Installing latest version...</div>' +
+      '<pre id="npmUpdateLog" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:10px;color:var(--green);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0"></pre>' +
+      '<div style="display:flex;justify-content:flex-end">' +
+        '<button id="npmUpdateCloseBtn" onclick="document.getElementById(String.fromCharCode(110,112,109,85,112,100,97,116,101,77,111,100,97,108)).remove()" style="display:none;padding:6px 16px;background:var(--bg);color:var(--dim);border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:11px">Close</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  // Start update — fire and forget (server will exit after npm install)
+  apiPost('/api/update-npm', {}).catch(function(){});
+
+  // Independent reconnect poll — does NOT depend on WebSocket
+  // Phase 1: wait for server to go down (up to 3 min)
+  // Phase 2: wait for server to come back up, then reload
+  var serverWasUp = true;
+  var pollStart = Date.now();
+  var MAX_WAIT = 180000; // 3 min total
+  function pollDown() {
+    if (Date.now() - pollStart > MAX_WAIT) {
+      var st = document.getElementById('npmUpdateStatus');
+      if (st) { st.textContent = 'Timeout — reload the page manually.'; st.style.color = 'var(--red)'; }
+      var cb = document.getElementById('npmUpdateCloseBtn');
+      if (cb) cb.style.display = 'inline-block';
+      return;
+    }
+    fetch(window.location.origin + '/api/status', { cache: 'no-store' }).then(function() {
+      setTimeout(pollDown, 1000); // still up, keep waiting
+    }).catch(function() {
+      // Server went down — now wait for it to come back
+      var st = document.getElementById('npmUpdateStatus');
+      if (st) st.textContent = 'Server restarting — reconnecting...';
+      setTimeout(pollUp, 1500);
+    });
+  }
+  function pollUp() {
+    if (Date.now() - pollStart > MAX_WAIT) {
+      var st = document.getElementById('npmUpdateStatus');
+      if (st) { st.textContent = 'Server took too long — reload the page manually.'; st.style.color = 'var(--red)'; }
+      var cb = document.getElementById('npmUpdateCloseBtn');
+      if (cb) cb.style.display = 'inline-block';
+      return;
+    }
+    fetch(window.location.origin + '/api/status', { cache: 'no-store' }).then(function() {
+      // First response — wait 2s then confirm server is stable before reloading
+      var st = document.getElementById('npmUpdateStatus');
+      if (st) st.textContent = 'Server back — loading...';
+      setTimeout(function() {
+        fetch(window.location.origin + '/api/status', { cache: 'no-store' }).then(function() {
+          if (st) st.textContent = 'Update complete! Reloading...';
+          setTimeout(function() { window.location.reload(); }, 500);
+        }).catch(function() {
+          // Went back down, keep polling
+          setTimeout(pollUp, 1500);
+        });
+      }, 2000);
+    }).catch(function() {
+      setTimeout(pollUp, 1500);
+    });
+  }
+  // Start polling for server going down after a short delay
+  setTimeout(pollDown, 5000);
 }
 
 // ---- VOICE INPUT (in chat view) ----
@@ -4150,7 +4322,7 @@ function renderSidebar() {
       \x27<a href="https://nothumanallowed.com/docs/mobile" target="_blank" class="nav-item" style="text-decoration:none"><span class="nav-item__icon">&#128241;</span> \x27+t(\x27nav_mobile\x27)+\x27</a>\x27+
     \x27</div>\x27+
     \x27<div style="padding:12px 16px;margin-top:auto;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">nothumanallowed.com<span style="margin-left:6px;opacity:.5">v${VERSION}</span>\x27+
-    (_updateInfo&&_updateInfo.updateAvailable?\x27<span style="margin-left:8px;background:#f59e0b;color:#000;border-radius:4px;padding:1px 6px;font-weight:700;cursor:pointer" title="Run: npm i -g nothumanallowed to update to v\x27+(_updateInfo.latest||\x27\x27)+\x27">&#8593; Update v\x27+(_updateInfo.latest||\x27\x27)+\x27</span>\x27:\x27\x27)+
+    (_updateInfo&&_updateInfo.updateAvailable?\x27<span onclick="npmUpdate()" style="margin-left:8px;background:#f59e0b;color:#000;border-radius:4px;padding:1px 6px;font-weight:700;cursor:pointer" title="Click to update to v\x27+(_updateInfo.latest||\x27\x27)+\x27">&#8593; Update v\x27+(_updateInfo.latest||\x27\x27)+\x27</span>\x27:\x27\x27)+
     \x27</div>\x27;
 }
 
@@ -7301,6 +7473,8 @@ function init(){
   renderSidebar();
   var el=document.getElementById('content');
   if(el)el.innerHTML=\x27<div style="display:flex;align-items:center;justify-content:center;height:50vh;flex-direction:column"><div class="spinner"></div><div style="color:var(--dim)">Loading...</div></div>\x27;
+  // Pre-load config so hasGoogle/hasMicrosoft are available immediately in any view
+  apiGet('/api/config').then(function(r){ settingsData = r || {}; settingsLoaded = true; }).catch(function(){});
   loadDash().then(function(){render()}).catch(function(){render()});
   loadAgents().catch(function(){});
   setInterval(function(){loadDash().then(function(){if(currentView===\x27dashboard\x27)render()}).catch(function(){})},120000);
@@ -7362,8 +7536,7 @@ var _wcGrepOpen = false;     // grep panel visible
 var _wcGrepQuery = '';
 var _updateInfo = null;  // {current, latest, updateAvailable} — fetched once at boot
 var _wcGrepResults = [];
-var _wcOverlayMinimized = false;   // overlay minimized by user click
-var _wcOverlayTimer = null;        // inactivity timer to restore overlay
+// (overlay pill removed — inline progress bar used instead)
 var _wcGenAbortCtrl = null;        // AbortController for generation stop
 var _wcSyntaxResults = [];   // [{file, ok, error}]
 var _wcSnapshots = [];       // [{ts, fileCount}]
@@ -7384,38 +7557,25 @@ function wcGenElapsed() {
 function wcStartGenTimer() {
   if (_wcTimerInterval) clearInterval(_wcTimerInterval);
   _wcTimerInterval = setInterval(function() {
-    if (!wcState.running) { clearInterval(_wcTimerInterval); _wcTimerInterval = null; return; }
-    if (_wcOverlayMinimized) {
-      var pill = document.getElementById('wcPillLabel');
-      if (pill) pill.textContent = _wcGenOverlayState.name || 'Generando...';
-      var ov = document.getElementById('wcGenOverlay');
-      if (ov) { var spans = ov.querySelectorAll('span'); if (spans[1]) spans[1].textContent = wcGenElapsed(); }
-    } else {
-      wcUpdateGenOverlay(_wcGenOverlayState.fi, _wcGenOverlayState.total, _wcGenOverlayState.name);
-    }
+    if (!wcState.running && !wcState.repairing) { clearInterval(_wcTimerInterval); _wcTimerInterval = null; return; }
+    // Always update time in-place — never re-render the whole component
+    wcUpdateGenOverlay(_wcGenOverlayState.fi, _wcGenOverlayState.total, _wcGenOverlayState.name);
+    var repairTime = document.getElementById('wcRepairTime');
+    if (repairTime) repairTime.textContent = wcGenElapsed();
   }, 1000);
 }
 
 function wcUpdateGenOverlay(fi2, total, name) {
   _wcGenOverlayState = { fi: fi2, total: total, name: name };
-  if (_wcOverlayMinimized) return;
-  var ov = document.getElementById('wcGenOverlay');
-  if (!ov) return;
-  var pct = Math.round((fi2 / total) * 100);
-  var tokLabel = (_wcTokIn + _wcTokOut) > 0
-    ? '<div style="font-size:10px;color:var(--dim);margin-top:4px;font-family:var(--mono)">&#8679;' + _wcTokIn.toLocaleString() + ' &#8681;' + _wcTokOut.toLocaleString() + ' tok</div>'
-    : '';
-  ov.innerHTML =
-    '<div style="font-size:38px;animation:wcRobotBob 1s ease-in-out infinite">&#129302;</div>' +
-    '<div style="font-size:13px;font-weight:700;color:var(--green);margin-top:12px">' + (name.indexOf('Retry:') === 0 ? 'Retry in corso...' : name.indexOf('Fix:') === 0 ? 'Correzione in corso...' : 'Generazione in corso...') + '</div>' +
-    '<div style="font-size:10px;color:var(--dim);margin-top:2px">Clicca per navigare i file</div>' +
-    '<div style="font-size:11px;color:'+(name.indexOf('Retry:')===0?'#fb923c':name.indexOf('Fix:')===0?'#facc15':'var(--dim)')+';font-family:var(--mono);max-width:300px;text-align:center;word-break:break-all;margin-top:8px">'+wcEsc(name)+'</div>' +
-    '<div style="width:220px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-top:12px">' +
-      '<div style="height:100%;width:'+pct+'%;background:var(--green);border-radius:2px;transition:width .4s ease;animation:wcBarPulse 1.5s ease-in-out infinite"></div>' +
-    '</div>' +
-    '<div style="font-size:10px;color:var(--dim);margin-top:6px">'+fi2+' / '+total+' file &nbsp;&#183;&nbsp; '+wcGenElapsed()+'</div>' +
-    tokLabel +
-    '<div style="display:flex;gap:4px;margin-top:10px">'+[0,1,2,3,4].map(function(_,idx){ return '<div style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:wcDot 1.1s ease-in-out infinite '+(idx*0.14)+'s"></div>'; }).join('')+'</div>';
+  var pct = total > 0 ? Math.round((fi2 / total) * 100) : 0;
+  var counterEl = document.getElementById('wcGenCounter');
+  var barEl     = document.getElementById('wcGenBar');
+  var nameEl    = document.getElementById('wcGenFileName');
+  var timeEl    = document.getElementById('wcGenTime');
+  if (counterEl) counterEl.textContent = fi2 + ' / ' + total;
+  if (barEl)     barEl.style.width = pct + '%';
+  if (nameEl)    nameEl.textContent = name ? name.split(',')[0].trim() : '';
+  if (timeEl)    timeEl.textContent = wcGenElapsed();
 }
 
 // Skills state
@@ -7479,8 +7639,8 @@ function renderWebCraft(el) {
           '</div>' +
           (_activeFile._error ? '<div style="padding:8px 14px;background:rgba(239,68,68,0.12);border-bottom:1px solid rgba(239,68,68,0.3);font-size:11px;color:#f87171;display:flex;align-items:center;gap:6px">&#9888; Generazione fallita — chiedi al modello di rigenerare questo file</div>' :
            _activeFile._syntaxError ? '<div style="padding:8px 14px;background:rgba(234,179,8,0.1);border-bottom:1px solid rgba(234,179,8,0.3);font-size:11px;color:#facc15;display:flex;align-items:center;gap:6px">&#9888; Syntax error: '+wcEsc(_activeFile._syntaxError)+'</div>' : '') +
-          (_activeFile._pending ? '<div style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--dim);font-size:12px;gap:8px">&#8987; In generazione...</div>' :
-          '<pre style="margin:0;padding:14px 16px;font-size:11px;line-height:1.6;color:'+(_activeFile._error?'#f87171':_activeFile._syntaxError?'#fde68a':'var(--text)')+';font-family:var(--mono);white-space:pre-wrap;word-break:break-all">'+wcEsc(_activeFile.content)+'</pre>') +
+          (_activeFile._pending ? '<div id="wcLivePending" style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--dim);font-size:12px;gap:8px">&#8987; In generazione...</div>' :
+          '<pre id="wcLiveCode" style="margin:0;padding:14px 16px;font-size:11px;line-height:1.6;color:'+(_activeFile._error?'#f87171':_activeFile._syntaxError?'#fde68a':'var(--text)')+';font-family:var(--mono);white-space:pre-wrap;word-break:break-all">'+wcEsc(_activeFile.content)+'</pre>') +
         '</div>' +
         fileSidebarHtml +
       '</div>'
@@ -7589,44 +7749,41 @@ function renderWebCraft(el) {
         : '') +
       '</div>' +
       '<div data-wc-files style="position:relative;flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;height:100%;overflow:hidden">' +
-        (wcState.repairing ?
-          (_wcOverlayMinimized
-            ? '<div id="wcRepairOverlay" onclick="wcOverlayRestore()" style="position:absolute;bottom:12px;right:12px;z-index:50;background:rgba(0,0,0,0.85);border:1px solid rgba(234,179,8,0.6);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:7px;cursor:pointer;animation:wcBubbleIn .2s ease;backdrop-filter:blur(4px)">'
-                +'<span style="font-size:16px;animation:wcRobotBob .9s ease-in-out infinite">&#128295;</span>'
-                +'<span style="font-size:10px;color:#facc15;font-weight:700;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(wcState.repairCurrent || 'Correzione...')+'</span>'
-                +'<span style="font-size:9px;color:var(--dim)">'+wcState.repairDone+'/'+wcState.repairTotal+'</span>'
-                +'<span style="display:flex;gap:3px">'+[0,1,2].map(function(_,idx){ return '<span style="width:4px;height:4px;border-radius:50%;background:#facc15;animation:wcDot 1.1s ease-in-out infinite '+(idx*0.18)+'s"></span>'; }).join('')+'</span>'
-              +'</div>'
-            : '<div id="wcRepairOverlay" onclick="wcOverlayMinimize()" title="Clicca per navigare i file" style="position:absolute;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);border-radius:10px;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;animation:wcBubbleIn .3s ease">'
-                +'<div style="font-size:38px;animation:wcRobotBob 1s ease-in-out infinite">&#128295;</div>'
-                +'<div style="font-size:13px;font-weight:700;color:#facc15;margin-top:12px">Correzione automatica in corso...</div>'
-                +'<div style="font-size:10px;color:var(--dim);margin-top:4px">Clicca per navigare i file</div>'
-                +'<div id="wcRepairCounter" style="font-size:11px;color:var(--dim);margin-top:6px">'+wcState.repairDone+' / '+wcState.repairTotal+' file</div>'
-                +'<div id="wcRepairFile" style="font-size:10px;color:#fde68a;font-family:var(--mono);margin-top:4px;max-width:280px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(wcState.repairCurrent)+'</div>'
-                +'<div style="display:flex;gap:4px;margin-top:16px">'+[0,1,2,3,4].map(function(_,idx){ return '<div style="width:6px;height:6px;border-radius:50%;background:#facc15;animation:wcDot 1.1s ease-in-out infinite '+(idx*0.14)+'s"></div>'; }).join('')+'</div>'
-              +'</div>'
-          )
-        : wcState.running ? (
-          _wcOverlayMinimized
-          // Minimized: small pill in bottom-right corner
-          ? '<div id="wcGenOverlay" onclick="wcOverlayRestore()" style="position:absolute;bottom:12px;right:12px;z-index:50;background:rgba(0,0,0,0.85);border:1px solid var(--green3);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:7px;cursor:pointer;animation:wcBubbleIn .2s ease;backdrop-filter:blur(4px)">'
-              +'<span style="font-size:16px;animation:wcRobotBob .9s ease-in-out infinite">&#129302;</span>'
-              +'<span id="wcPillLabel" style="font-size:10px;color:var(--green);font-weight:700;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+wcEsc(_wcGenOverlayState.name || 'Generando...')+'</span>'
-              +'<span style="font-size:9px;color:var(--dim)">'+wcGenElapsed()+'</span>'
-              +'<span style="display:flex;gap:3px">'+[0,1,2].map(function(_,idx){ return '<span style="width:4px;height:4px;border-radius:50%;background:var(--green);animation:wcDot 1.1s ease-in-out infinite '+(idx*0.18)+'s"></span>'; }).join('')+'</span>'
-            +'</div>'
-          // Full overlay
-          : '<div id="wcGenOverlay" onclick="wcOverlayMinimize()" title="Clicca per nascondere e navigare i file" style="position:absolute;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);border-radius:10px;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:wcBubbleIn .3s ease;cursor:pointer">'
-              +'<div style="font-size:38px;animation:wcRobotBob 1s ease-in-out infinite">&#129302;</div>'
-              +'<div style="font-size:13px;font-weight:700;color:var(--green);margin-top:12px">Generazione in corso...</div>'
-              +'<div style="font-size:10px;color:var(--dim);margin-top:4px">Clicca per navigare i file</div>'
-              +'<div style="display:flex;gap:4px;margin-top:16px">'+[0,1,2,3,4].map(function(_,idx){ return '<div style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:wcDot 1.1s ease-in-out infinite '+(idx*0.14)+'s"></div>'; }).join('')+'</div>'
-            +'</div>'
-        ) : '') +
+        // ── Tab bar: File / Sandbox ───────────────────────────────────────────
         '<div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">' +
           '<button onclick="wcTabFiles()" style="padding:8px 16px;background:'+(wcRightTab==='preview'?'transparent':'var(--bg3)')+';border:none;border-right:1px solid var(--border);color:'+(wcRightTab==='preview'?'var(--dim)':'var(--text)')+';font-size:11px;font-weight:600;cursor:pointer">&#128196; File</button>' +
           '<button onclick="wcTabPreview()" style="padding:8px 16px;background:'+(wcRightTab==='preview'?'var(--bg3)':'transparent')+';border:none;color:'+(wcRightTab==='preview'?'var(--text)':'var(--dim)')+';font-size:11px;font-weight:600;cursor:pointer">&#127760; Sandbox</button>' +
         '</div>' +
+        // ── Generation progress bar (inline, above code area) ─────────────────
+        (wcState.repairing ?
+          '<div id="wcRepairBar" style="flex-shrink:0;background:rgba(20,16,0,0.96);border-bottom:2px solid rgba(234,179,8,0.6);padding:6px 14px;display:flex;flex-direction:column;gap:3px">'
+            +'<div style="display:flex;align-items:center;gap:8px">'
+              +'<span style="font-size:13px;animation:wcRobotBob .9s ease-in-out infinite;flex-shrink:0">&#128295;</span>'
+              +'<span style="font-size:10px;font-weight:700;color:#facc15;flex-shrink:0">Auto-fix</span>'
+              +'<span style="font-size:10px;color:#fde68a;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" id="wcRepairFile">'+wcEsc(wcState.repairCurrent || '')+'</span>'
+              +'<span style="font-size:10px;color:var(--dim);flex-shrink:0" id="wcRepairCounter">'+wcState.repairDone+' / '+wcState.repairTotal+'</span>'
+              +'<span style="display:flex;gap:3px">'+[0,1,2].map(function(_,idx){ return '<span style="width:4px;height:4px;border-radius:50%;background:#facc15;animation:wcDot 1.1s ease-in-out infinite '+(idx*0.18)+'s"></span>'; }).join('')+'</span>'
+              +'<button onclick="wcStopRepair()" style="padding:2px 8px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:4px;color:#f87171;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0">&#9632; Stop</button>'
+            +'</div>'
+            +'<div style="height:2px;background:rgba(255,255,255,0.07);border-radius:1px;overflow:hidden">'
+              +'<div id="wcRepairProg" style="height:100%;width:'+(wcState.repairTotal>0?Math.round((wcState.repairDone/wcState.repairTotal)*100):0)+'%;background:#facc15;border-radius:1px;transition:width .3s ease"></div>'
+            +'</div>'
+          +'</div>'
+        : wcState.running ?
+          '<div id="wcGenOverlay" style="flex-shrink:0;background:rgba(0,14,0,0.96);border-bottom:2px solid var(--green3);padding:6px 14px;display:flex;flex-direction:column;gap:3px">'
+            +'<div style="display:flex;align-items:center;gap:8px">'
+              +'<span style="font-size:13px;animation:wcRobotBob .9s ease-in-out infinite;flex-shrink:0">&#129302;</span>'
+              +'<span style="font-size:10px;font-weight:700;color:var(--green);flex-shrink:0">Generazione</span>'
+              +'<span id="wcGenFileName" style="font-size:10px;color:var(--dim);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+wcEsc((_wcGenOverlayState.name||'').split(',')[0].trim())+'</span>'
+              +'<span id="wcGenCounter" style="font-size:10px;color:var(--dim);flex-shrink:0">'+_wcGenOverlayState.fi+' / '+_wcGenOverlayState.total+'</span>'
+              +'<span id="wcGenTime" style="font-size:10px;color:var(--dim);flex-shrink:0">'+wcGenElapsed()+'</span>'
+              +'<span style="display:flex;gap:3px">'+[0,1,2].map(function(_,idx){ return '<span style="width:4px;height:4px;border-radius:50%;background:var(--green);animation:wcDot 1.1s ease-in-out infinite '+(idx*0.18)+'s"></span>'; }).join('')+'</span>'
+            +'</div>'
+            +'<div style="height:2px;background:rgba(255,255,255,0.07);border-radius:1px;overflow:hidden">'
+              +'<div id="wcGenBar" style="height:100%;width:'+Math.round((_wcGenOverlayState.fi/_wcGenOverlayState.total||0)*100)+'%;background:var(--green);border-radius:1px;transition:width .3s ease"></div>'
+            +'</div>'
+          +'</div>'
+        : '') +
         (wcRightTab === 'preview' ? wcSandboxPanelHtml() : codeHtml) +
       '</div>' +
     '</div>' +
@@ -8109,26 +8266,11 @@ function wcStopAll() {
   if (_wcGenAbortCtrl) { _wcGenAbortCtrl.abort(); _wcGenAbortCtrl = null; }
   wcState.running = false;
   wcChatRunning = false;
-  _wcOverlayMinimized = false;
-  if (_wcOverlayTimer) { clearTimeout(_wcOverlayTimer); _wcOverlayTimer = null; }
   wcChat.push({ role: 'system', text: '&#9632; Generazione interrotta.' });
   renderWebCraft(document.getElementById('content'));
 }
 
-function wcOverlayMinimize() {
-  _wcOverlayMinimized = true;
-  renderWebCraft(document.getElementById('content'));
-  if (_wcOverlayTimer) clearTimeout(_wcOverlayTimer);
-  _wcOverlayTimer = setTimeout(function() {
-    if (wcState.running || wcState.repairing) { _wcOverlayMinimized = false; renderWebCraft(document.getElementById('content')); }
-  }, 10000);
-}
-
-function wcOverlayRestore() {
-  if (_wcOverlayTimer) { clearTimeout(_wcOverlayTimer); _wcOverlayTimer = null; }
-  _wcOverlayMinimized = false;
-  renderWebCraft(document.getElementById('content'));
-}
+// wcOverlayMinimize/Restore removed — overlay replaced with inline progress bar
 
 function wcRemoveAttachment(ai) {
   wcChatAttachments.splice(ai, 1);
@@ -8535,6 +8677,14 @@ async function wcDeleteProject(pi) {
   if (!confirm('Eliminare: ' + p.name + ' - ' + p.dir + ' ?')) return;
   await fetch(API + '/api/studio/webcraft/projects/' + encodeURIComponent(p.name), {method:'DELETE'});
   wcProjectsList.splice(pi, 1);
+  // If the deleted project was the currently open one, reset all state
+  if (wcState.projectName === p.name) {
+    wcState.projectName = '';
+    wcState.generatedFiles = [];
+    wcState.activeFile = 0;
+    wcState.description = '';
+    wcChat = [];
+  }
   renderWebCraft(document.getElementById('content'));
 }
 function wcUpdateField(i, val) { wcState.authFields[i].label = val; }
@@ -8775,7 +8925,6 @@ async function wcGenerate() {
   wcState.running = true;
   wcState.generatedFiles = [];
   wcState.activeFile = 0;
-  _wcOverlayMinimized = false;
   _wcGenAbortCtrl = new AbortController();
   renderWebCraft(document.getElementById('content'));
 
@@ -8834,7 +8983,7 @@ async function wcGenerate() {
   }
 
   var _nl = String.fromCharCode(10);
-  var sysPreamble = 'You are an expert full-stack engineer generating production-quality code.' + _nl + _nl + 'SECURITY RULES (non-negotiable):' + _nl + SECURITY_RULES + _nl + _nl + 'Project: ' + projName + _nl + 'Description: ' + desc + _nl + 'Enabled blocks: ' + blocksEnabled + _nl + _nl + 'Generate ONLY the file content requested. No explanations, no markdown code fences, no comments like "here is the file". Output raw file content only.';
+  var sysPreamble = 'You are an expert full-stack engineer generating production-quality code.' + _nl + _nl + 'SECURITY RULES (non-negotiable):' + _nl + SECURITY_RULES + _nl + _nl + 'JSON FILES RULES (non-negotiable):' + _nl + '- NEVER add spaces inside JSON keys or string values that are identifiers (package names, field names).' + _nl + '- package.json "name" must be lowercase with no spaces. All dependency names must match exactly the npm package name (no spaces, no leading/trailing spaces).' + _nl + '- NEVER duplicate dependency entries. Each package name appears exactly once.' + _nl + '- "devDependencies" key has NO trailing space. All JSON keys are exact.' + _nl + _nl + 'Project: ' + projName + _nl + 'Description: ' + desc + _nl + 'Enabled blocks: ' + blocksEnabled + _nl + _nl + 'Generate ONLY the file content requested. No explanations, no markdown code fences, no comments like "here is the file". Output raw file content only.';
   _wcLastFilePlan = filePlan;
   _wcLastSysPreamble = sysPreamble;
 
@@ -8864,20 +9013,77 @@ async function wcGenerate() {
   }
 
   // Helper: generate one file (with two-pass split for large CSS files)
-  async function wcGenOneFile(fp, signal) {
+  // onLiveUpdate(partialContent) is called on each token for live display
+  async function wcGenOneFile(fp, signal, onLiveUpdate) {
     var _nl2 = String.fromCharCode(10);
     var splitPrompts = WC_CSS_SPLIT[fp.name];
     if (splitPrompts) {
-      // Two-pass generation: call LLM twice and concatenate
-      var part1 = await wcCallLLM(sysPreamble, splitPrompts[0] + _nl2 + _nl2 + 'File: ' + fp.name, signal, fp.lang, 8192);
+      // Two-pass generation: streaming on first pass only
+      var part1 = await wcCallLLM(sysPreamble, splitPrompts[0] + _nl2 + _nl2 + 'File: ' + fp.name, signal, fp.lang, 8192, onLiveUpdate, fp.name);
       part1 = wcStripFences(part1);
       if (signal && signal.aborted) return part1;
-      var part2 = await wcCallLLM(sysPreamble, splitPrompts[1] + _nl2 + _nl2 + 'File: ' + fp.name, signal, fp.lang, 8192);
+      var part2 = await wcCallLLM(sysPreamble, splitPrompts[1] + _nl2 + _nl2 + 'File: ' + fp.name, signal, fp.lang, 8192, function(p2) { if (onLiveUpdate) onLiveUpdate(part1 + _nl2 + _nl2 + p2); }, fp.name);
       part2 = wcStripFences(part2);
       return part1 + _nl2 + _nl2 + part2;
     }
-    var content = await wcCallLLM(sysPreamble, fp.prompt + _nl2 + _nl2 + 'File to generate: ' + fp.name, signal, fp.lang);
-    return wcStripFences(content);
+    var content = await wcCallLLM(sysPreamble, fp.prompt + _nl2 + _nl2 + 'File to generate: ' + fp.name, signal, fp.lang, undefined, onLiveUpdate, fp.name);
+    content = wcStripFences(content);
+    // Detect model confusion: if output looks like a conversational reply instead of code, retry once
+    var firstLine = content.trim().split(_nl2)[0] || '';
+    var confusionPhrases = ['I notice', 'Could you please', 'I need to know', 'I don', 'To help you', 'Please clarify', 'I apologize', 'Unfortunately', 'As an AI'];
+    var isConfused = confusionPhrases.some(function(p) { return firstLine.indexOf(p) === 0; });
+    if (isConfused && !(signal && signal.aborted)) {
+      var retryPrompt = 'IMPORTANT: Output ONLY the raw file content for ' + fp.name + '. No explanations, no questions, no markdown. Just the code.' + _nl2 + _nl2 + fp.prompt;
+      content = await wcCallLLM(sysPreamble, retryPrompt + _nl2 + _nl2 + 'File to generate: ' + fp.name, signal, fp.lang, undefined, onLiveUpdate, fp.name);
+      content = wcStripFences(content);
+    }
+    // Post-process: fix LLM streaming artifacts (spaces inserted inside keywords/identifiers)
+    if (fp.lang === 'javascript' || fp.lang === 'typescript') {
+      // Fix spaces inside JS/TS keywords that LLMs sometimes split during streaming
+      var jsKeywords = ['const', 'let', 'var', 'function', 'return', 'require', 'import', 'export',
+        'class', 'extends', 'async', 'await', 'throw', 'catch', 'finally', 'typeof', 'instanceof',
+        'switch', 'default', 'continue', 'debugger', 'delete', 'module', 'exports', 'process'];
+      jsKeywords.forEach(function(kw) {
+        // Match keyword split across 1-3 chars with a space e.g. "con st", "re quire", "ex port"
+        for (var split = 1; split < kw.length - 1; split++) {
+          var broken = kw.slice(0, split) + ' ' + kw.slice(split);
+          // Only replace when at word boundary (start of line or after space/punctuation)
+          content = content.split(broken).join(kw);
+        }
+      });
+      // Fix spaces inside common identifiers like "error Handler", "api Routes", "sec urityMiddleware"
+      // Pattern: camelCase word split by a space before an uppercase letter
+      content = content.replace(new RegExp('([a-z]) ([A-Z][a-z])', 'g'), '$1$2');
+      // Fix "r equire" style splits in middle of word before a space+letter
+      content = content.replace(new RegExp('\\b([a-z]{1,4}) ([a-z]{2,})', 'g'), function(m, a, b) {
+        var joined = a + b;
+        if (jsKeywords.indexOf(joined) !== -1) return joined;
+        return m; // don't join random words
+      });
+      // Fix backslash-n literal artifacts from LLM
+      var bsn = String.fromCharCode(92) + ' n';
+      content = content.split(bsn).join('');
+      var bsn2 = String.fromCharCode(92) + 'n';
+      content = content.split(bsn2).join('');
+    }
+    // Post-process package.json: fix spaces in keys/names, duplicates
+    if (fp.name === 'package.json' && fp.lang === 'json') {
+      try {
+        var pkg = JSON.parse(content);
+        if (typeof pkg.name === 'string') pkg.name = pkg.name.trim().toLowerCase().replace(/\s+/g, '-');
+        ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'].forEach(function(section) {
+          if (!pkg[section] || typeof pkg[section] !== 'object') return;
+          var clean = {};
+          Object.keys(pkg[section]).forEach(function(k) {
+            var cleanKey = k.trim();
+            if (cleanKey && !clean[cleanKey]) clean[cleanKey] = pkg[section][k];
+          });
+          pkg[section] = clean;
+        });
+        content = JSON.stringify(pkg, null, 2);
+      } catch(_) {}
+    }
+    return content;
   }
 
   wcStartGenTimer();
@@ -8889,47 +9095,89 @@ async function wcGenerate() {
   wcState.activeFile = 0;
   renderWebCraft(document.getElementById('content'));
 
-  // Generate in parallel batches of 4 — each call is independent/fresh to Liara
-  var BATCH = 4;
+  // Live update: write token directly into DOM — zero re-render, zero flicker
+  var _wcLiveDomTimers = {};
+  function wcLiveUpdateFile(fpName, fpLang, partialContent) {
+    // Always update state
+    var fileIdx = -1;
+    for (var li = 0; li < wcState.generatedFiles.length; li++) {
+      if (wcState.generatedFiles[li].name === fpName) {
+        wcState.generatedFiles[li].content = partialContent;
+        wcState.generatedFiles[li]._pending = false;
+        fileIdx = li;
+        break;
+      }
+    }
+    // If this file is the active one, update the <pre> directly (throttled 80ms)
+    if (fileIdx !== wcState.activeFile) return;
+    if (_wcLiveDomTimers[fpName]) return;
+    _wcLiveDomTimers[fpName] = setTimeout(function() {
+      delete _wcLiveDomTimers[fpName];
+      // Replace pending placeholder with live <pre> if needed
+      var pending = document.getElementById('wcLivePending');
+      var pre = document.getElementById('wcLiveCode');
+      var wrap = document.getElementById('wcCodeWrap');
+      if (pending && wrap) {
+        // First token: swap placeholder for <pre>
+        var newPre = document.createElement('pre');
+        newPre.id = 'wcLiveCode';
+        newPre.style.cssText = 'margin:0;padding:14px 16px;font-size:11px;line-height:1.6;color:var(--text);font-family:var(--mono);white-space:pre-wrap;word-break:break-all';
+        newPre.textContent = partialContent;
+        pending.parentNode.replaceChild(newPre, pending);
+        return;
+      }
+      if (pre) {
+        pre.textContent = partialContent;
+        // Auto-scroll to bottom so user sees latest tokens
+        var codeWrap = document.getElementById('wcCodeWrap');
+        if (codeWrap) codeWrap.scrollTop = codeWrap.scrollHeight;
+      }
+    }, 80);
+  }
+
+  // Generate sequentially — one file at a time so every file streams visibly
+  // and the progress bar increments file by file
   var doneCount = 0;
-  for (var bi = 0; bi < filePlan.length; bi += BATCH) {
+  wcUpdateGenOverlay(0, filePlan.length, '');
+  for (var si = 0; si < filePlan.length; si++) {
     if (_wcGenAbortCtrl && _wcGenAbortCtrl.signal.aborted) break;
-    var batch = filePlan.slice(bi, bi + BATCH);
-    wcUpdateGenOverlay(doneCount, filePlan.length, batch.map(function(f){ return f.name; }).join(', '));
-    var results = await Promise.allSettled(batch.map(function(fp) {
-      return wcGenOneFile(fp, _wcGenAbortCtrl ? _wcGenAbortCtrl.signal : null).then(function(c){ return { fp: fp, content: c }; });
-    }));
-    results.forEach(function(r) {
-      if (r.status === 'fulfilled') {
-        var fp = r.value.fp;
-        for (var gi = 0; gi < wcState.generatedFiles.length; gi++) {
-          if (wcState.generatedFiles[gi].name === fp.name) {
-            wcState.generatedFiles[gi] = { name: fp.name, content: r.value.content, lang: fp.lang };
-            break;
-          }
-        }
-      } else if (r.reason && r.reason.name !== 'AbortError') {
-        var fpName = batch[results.indexOf(r)] ? batch[results.indexOf(r)].name : '?';
-        // find by matching position
-        var batchIdx = results.indexOf(r);
-        if (batch[batchIdx]) fpName = batch[batchIdx].name;
-        for (var gi2 = 0; gi2 < wcState.generatedFiles.length; gi2++) {
-          if (wcState.generatedFiles[gi2].name === fpName) {
-            wcState.generatedFiles[gi2] = { name: fpName, content: '// Error generating this file: ' + (r.reason.message || 'unknown error'), lang: (batch[batchIdx] || {}).lang || '', _error: true };
-            break;
-          }
+    var fp = filePlan[si];
+
+    // Switch viewer to this file and show its name in the bar
+    var fileIdx = wcState.generatedFiles.findIndex(function(f){ return f.name === fp.name; });
+    if (fileIdx >= 0) wcState.activeFile = fileIdx;
+    wcUpdateGenOverlay(doneCount, filePlan.length, fp.name);
+
+    var liveCallback = (function(fpCap) {
+      return function(partial) { wcLiveUpdateFile(fpCap.name, fpCap.lang, partial); };
+    }(fp));
+
+    try {
+      var genContent = await wcGenOneFile(fp, _wcGenAbortCtrl ? _wcGenAbortCtrl.signal : null, liveCallback);
+      for (var gi = 0; gi < wcState.generatedFiles.length; gi++) {
+        if (wcState.generatedFiles[gi].name === fp.name) {
+          wcState.generatedFiles[gi] = { name: fp.name, content: genContent, lang: fp.lang };
+          break;
         }
       }
-      doneCount++;
-    });
-    renderWebCraft(document.getElementById('content'));
+    } catch(genErr) {
+      if (genErr && genErr.name === 'AbortError') break;
+      for (var gi2 = 0; gi2 < wcState.generatedFiles.length; gi2++) {
+        if (wcState.generatedFiles[gi2].name === fp.name) {
+          wcState.generatedFiles[gi2] = { name: fp.name, content: '// Error generating this file: ' + (genErr && genErr.message || 'unknown error'), lang: fp.lang || '', _error: true };
+          break;
+        }
+      }
+    }
+
+    doneCount++;
+    wcUpdateGenOverlay(doneCount, filePlan.length, si + 1 < filePlan.length ? filePlan[si + 1].name : '');
   }
 
   if (_wcTimerInterval) { clearInterval(_wcTimerInterval); _wcTimerInterval = null; }
 
   wcState.running = false;
   _wcGenAbortCtrl = null;
-  _wcOverlayMinimized = false;
 
   // Auto-save
   try {
@@ -8959,12 +9207,17 @@ async function wcGenerate() {
 // ── Auto-repair pass — fixes _error and _syntaxError files ────────────────
 // Called automatically after generation and available as manual button
 var _wcRepairRunning = false;
+var _wcRepairAbortCtrl = null;
+function wcStopRepair() {
+  if (_wcRepairAbortCtrl) { _wcRepairAbortCtrl.abort(); _wcRepairAbortCtrl = null; }
+}
 async function wcAutoRepair(filePlan, sysPreamble) {
   if (_wcRepairRunning) return;
   // Collect broken files: LLM errors + syntax errors
   var toFix = wcState.generatedFiles.filter(function(f){ return f._error || f._syntaxError; });
   if (toFix.length === 0) return;
 
+  _wcRepairAbortCtrl = new AbortController();
   _wcRepairRunning = true;
   wcState.repairing = true;
   wcState.repairTotal = toFix.length;
@@ -8980,13 +9233,35 @@ async function wcAutoRepair(filePlan, sysPreamble) {
   var sysBase = 'You are an expert full-stack engineer. Output ONLY the complete corrected file content. No explanations, no markdown fences, no preamble. Raw file content only.';
 
   for (var ri = 0; ri < toFix.length; ri++) {
+    if (_wcRepairAbortCtrl && _wcRepairAbortCtrl.signal.aborted) break;
     var broken = toFix[ri];
     var plan = planMap[broken.name];
     wcState.repairDone = ri;
     wcState.repairCurrent = broken.name;
     wcUpdateRepairOverlay();
 
-    await new Promise(function(resolve){ setTimeout(resolve, 2000); });
+    // Switch active file to the one being repaired so tokens appear in the viewer
+    var repairFileIdx = wcState.generatedFiles.findIndex(function(f){ return f.name === broken.name; });
+    if (repairFileIdx >= 0) wcState.activeFile = repairFileIdx;
+
+    // "Destruction" animation: fade the existing code out in the <pre>
+    (function animateWipe() {
+      var pre = document.getElementById('wcLiveCode');
+      if (!pre) return;
+      var txt = pre.textContent;
+      var len = txt.length;
+      if (len === 0) return;
+      var step = Math.max(1, Math.floor(len / 18));
+      var remaining = len;
+      var wipeInterval = setInterval(function() {
+        remaining = Math.max(0, remaining - step);
+        pre.style.opacity = String(remaining / len);
+        pre.textContent = txt.slice(0, remaining);
+        if (remaining <= 0) { clearInterval(wipeInterval); pre.style.opacity = '1'; pre.textContent = ''; }
+      }, 40);
+    }());
+
+    await new Promise(function(resolve){ setTimeout(resolve, 800); });
     try {
       var fixSys = sysBase + _nl3 + 'You are fixing a broken or truncated file. Output ONLY the complete corrected file. No fences, no explanations.';
       var fixUser;
@@ -9003,17 +9278,23 @@ async function wcAutoRepair(filePlan, sysPreamble) {
           (broken.content.length > 800 ? broken.content.slice(0, 400) + _nl3 + '...' + _nl3 + broken.content.slice(-400) : broken.content) + _nl3 + _nl3 +
           'Output the COMPLETE corrected file from the beginning.';
       }
-      var fixed = await wcCallLLM(fixSys, fixUser, null, broken.lang || plan && plan.lang, 8192);
+      // Stream repair tokens directly into the <pre>
+      var repairAccum = '';
+      var repairLang2 = broken.lang || (plan && plan.lang) || 'text';
+      var fixed = await wcCallLLM(fixSys, fixUser, _wcRepairAbortCtrl ? _wcRepairAbortCtrl.signal : null, repairLang2, 8192, function(tok) {
+        repairAccum += tok;
+        var pre2 = document.getElementById('wcLiveCode');
+        if (pre2) { pre2.textContent = repairAccum; pre2.style.opacity = '1'; var cw = document.getElementById('wcCodeWrap'); if(cw) cw.scrollTop = cw.scrollHeight; }
+      });
       var _fence3 = String.fromCharCode(96,96,96);
       var fixLines = fixed.split(_nl3);
       if (fixLines.length > 0 && fixLines[0].indexOf(_fence3) === 0) fixLines.shift();
       if (fixLines.length > 0 && fixLines[fixLines.length-1].trim() === _fence3) fixLines.pop();
       fixed = fixLines.join(_nl3).trim();
-      var lang2 = broken.lang || (plan && plan.lang) || 'text';
-      var check2 = wcSyntaxCheck(fixed, lang2);
+      var check2 = wcSyntaxCheck(fixed, repairLang2);
       for (var gi3 = 0; gi3 < wcState.generatedFiles.length; gi3++) {
         if (wcState.generatedFiles[gi3].name === broken.name) {
-          wcState.generatedFiles[gi3] = { name: broken.name, content: fixed, lang: lang2 };
+          wcState.generatedFiles[gi3] = { name: broken.name, content: fixed, lang: repairLang2 };
           if (!check2.ok) wcState.generatedFiles[gi3]._syntaxError = check2.reason;
           break;
         }
@@ -9025,6 +9306,7 @@ async function wcAutoRepair(filePlan, sysPreamble) {
   }
 
   _wcRepairRunning = false;
+  _wcRepairAbortCtrl = null;
   wcState.repairing = false;
   wcState.repairTotal = 0;
   wcState.repairDone = 0;
@@ -9045,8 +9327,10 @@ async function wcAutoRepair(filePlan, sysPreamble) {
 function wcUpdateRepairOverlay() {
   var counter = document.getElementById('wcRepairCounter');
   var fileEl  = document.getElementById('wcRepairFile');
-  if (counter) counter.textContent = wcState.repairDone + ' / ' + wcState.repairTotal + ' file';
+  var prog    = document.getElementById('wcRepairProg');
+  if (counter) counter.textContent = wcState.repairDone + ' / ' + wcState.repairTotal;
   if (fileEl)  fileEl.textContent  = wcState.repairCurrent;
+  if (prog)    prog.style.width = (wcState.repairTotal > 0 ? Math.round((wcState.repairDone / wcState.repairTotal) * 100) : 0) + '%';
 }
 
 function wcTriggerRepair() {
@@ -9120,7 +9404,57 @@ function wcIsTruncated(content, lang) {
   return false;
 }
 
-async function wcCallLLMRaw(sys, user, signal, maxTok) {
+async function wcCallLLMRaw(sys, user, signal, maxTok, onToken) {
+  // Streaming path: use SSE endpoint so tokens appear live in the file editor
+  if (onToken) {
+    var streamOpts = {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({system: sys, user: user, max_tokens: maxTok || 16384})
+    };
+    if (signal) streamOpts.signal = signal;
+    for (var sa = 0; sa < 3; sa++) {
+      if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      var sr = await fetch(API + '/api/studio/webcraft/stream', streamOpts);
+      if (!sr.ok) {
+        if (sr.status < 500 || sa === 2) throw new Error('LLM stream error ' + sr.status);
+        await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+        continue;
+      }
+      var sreader = sr.body.getReader();
+      var sdec = new TextDecoder();
+      var sbuf = '';
+      var fullText = '';
+      while (true) {
+        var sres = await sreader.read();
+        if (sres.done) break;
+        sbuf += sdec.decode(sres.value, {stream: true});
+        var sparts = sbuf.split(String.fromCharCode(10) + String.fromCharCode(10));
+        sbuf = sparts.pop();
+        for (var si = 0; si < sparts.length; si++) {
+          var sline = sparts[si].replace(/^data: /, '').trim();
+          if (!sline) continue;
+          try {
+            var sev = JSON.parse(sline);
+            if (sev.type === 'token') {
+              fullText += sev.token;
+              onToken(fullText);
+            } else if (sev.type === 'done') {
+              if (sev.usage) {
+                _wcTokIn  += (sev.usage.prompt_tokens || 0);
+                _wcTokOut += (sev.usage.completion_tokens || 0);
+              }
+            } else if (sev.type === 'error') {
+              throw new Error(sev.message || 'Stream error');
+            }
+          } catch(_) {}
+        }
+      }
+      return fullText;
+    }
+  }
+
+  // Non-streaming fallback (used by repair and continuation passes)
   var fetchOpts = {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -9132,12 +9466,10 @@ async function wcCallLLMRaw(sys, user, signal, maxTok) {
     var r = await fetch(API + '/api/studio/webcraft', fetchOpts);
     if (r.ok) {
       var d = await r.json();
-      // Accumulate token counts if the server returns usage data
       if (d && d.usage) {
         _wcTokIn  += (d.usage.prompt_tokens || d.usage.input_tokens || 0);
         _wcTokOut += (d.usage.completion_tokens || d.usage.output_tokens || 0);
       } else if (d && d.text) {
-        // Estimate from char count (4 chars ≈ 1 token)
         _wcTokIn  += Math.round((sys.length + user.length) / 4);
         _wcTokOut += Math.round((d.text || '').length / 4);
       }
@@ -9153,19 +9485,22 @@ async function wcCallLLMRaw(sys, user, signal, maxTok) {
   }
 }
 
-async function wcCallLLM(sys, user, signal, lang, maxTok) {
-  var content = await wcCallLLMRaw(sys, user, signal, maxTok);
-  // Continuation loop: if response is truncated, ask model to continue
+async function wcCallLLM(sys, user, signal, lang, maxTok, onToken, fileName) {
+  var content = await wcCallLLMRaw(sys, user, signal, maxTok, onToken);
+  // Continuation loop: if response is truncated, ask model to continue (no streaming for continuations)
   var maxContinuations = 2;
   for (var ci = 0; ci < maxContinuations; ci++) {
     if (!wcIsTruncated(content, lang || 'text')) break;
     if (signal && signal.aborted) break;
-    var continuePrompt = 'Continue generating the file EXACTLY from where you stopped. Do not repeat anything already written. Output ONLY the remaining code, starting from the next character after where you stopped.' +
-      String.fromCharCode(10) + String.fromCharCode(10) + 'The file so far ends with:' +
-      String.fromCharCode(10) + content.slice(-300);
+    var _nlc = String.fromCharCode(10);
+    var continuePrompt = (fileName ? 'File: ' + fileName + _nlc + _nlc : '') +
+      'You were generating this file and ran out of tokens. The file is INCOMPLETE.' + _nlc +
+      'Continue EXACTLY from where you stopped. Output ONLY the remaining code — do NOT repeat anything already written, do NOT explain, do NOT use markdown fences.' + _nlc + _nlc +
+      'The file so far ends with (last 600 chars):' + _nlc + content.slice(-600);
     var continuation = await wcCallLLMRaw(sys, continuePrompt, signal, maxTok);
     if (!continuation || continuation.trim().length < 5) break;
-    content = content + String.fromCharCode(10) + continuation;
+    content = content + _nlc + continuation;
+    if (onToken) onToken(content);
   }
   return content;
 }

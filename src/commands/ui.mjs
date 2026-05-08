@@ -27,6 +27,7 @@ import {
 } from '../services/task-store.mjs';
 import { runPlanningPipeline } from '../services/ops-pipeline.mjs';
 import { AGENTS, AGENTS_DIR, NHA_DIR, VERSION } from '../constants.mjs';
+import { startDaemon, isRunning } from '../services/ops-daemon.mjs';
 import { getHTML, getJS } from '../services/web-ui.mjs';
 import { loadChatHistory, saveChatHistory, extractMemory, buildMemoryContext } from '../services/memory.mjs';
 import {
@@ -59,6 +60,9 @@ import {
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const DEFAULT_PORT = 3847;
+
+// In-memory pending OAuth state (verifier + state for PKCE callback)
+let _googleOAuthPending = null;
 
 /**
  * Extract text from PDF buffer — zero dependencies.
@@ -246,6 +250,14 @@ export async function cmdUI(args) {
   const htmlPage = getHTML(port);
   const jsBundle = getJS();
 
+  // Auto-start daemon (Telegram bot + cron jobs) if not already running
+  if (!isRunning()) {
+    const daemonResult = startDaemon();
+    if (daemonResult.ok) {
+      console.log(`  ✓ PAO daemon started (PID ${daemonResult.pid}) — Telegram + cron active`);
+    }
+  }
+
   // Migrate old chat history to multi-conversation format
   migrateOldHistory();
 
@@ -361,17 +373,46 @@ export async function cmdUI(args) {
         return;
       }
 
-      // POST /api/google/auth — trigger Google OAuth flow from web UI
+      // POST /api/google/auth — return OAuth URL for the browser to open
       if (method === 'POST' && pathname === '/api/google/auth') {
         try {
-          const { runAuthFlow } = await import('../services/google-oauth.mjs');
-          // Run auth flow in background — opens browser
-          runAuthFlow(config).then(success => {
-            if (success) config._googleConnected = true;
-          }).catch(() => {});
-          sendJSON(res, 200, { ok: true, message: 'OAuth flow started. Check the browser window that opened.' });
+          const { buildAuthUrl } = await import('../services/google-oauth.mjs');
+          // Derive the redirect URI from the request Host header so it works
+          // on any IP/port (localhost, LAN, VM, etc.)
+          const host = req.headers['host'] || `127.0.0.1:${PORT}`;
+          const redirectUri = `http://${host}/api/google/callback`;
+          const { url, verifier, state } = buildAuthUrl(config, redirectUri);
+          // Store verifier+state in memory for the callback
+          _googleOAuthPending = { verifier, state, redirectUri };
+          sendJSON(res, 200, { ok: true, url });
         } catch (e) {
           sendJSON(res, 500, { error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // GET /api/google/callback — receives OAuth code from Google redirect
+      if (method === 'GET' && pathname === '/api/google/callback') {
+        const params = new URL(req.url, `http://localhost`).searchParams;
+        const code = params.get('code');
+        const state = params.get('state');
+        if (!code || !_googleOAuthPending || _googleOAuthPending.state !== state) {
+          res.writeHead(400, { 'Content-Type': 'text/html' });
+          res.end('<html><body><h2>OAuth error: invalid state or missing code.</h2><p>Please try again from the NHA UI.</p></body></html>');
+          logRequest(method, pathname, 400, Date.now() - start);
+          return;
+        }
+        try {
+          const { exchangeCodeFromUI } = await import('../services/google-oauth.mjs');
+          const { email } = await exchangeCodeFromUI(config, code, _googleOAuthPending.verifier, _googleOAuthPending.redirectUri);
+          _googleOAuthPending = null;
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end(`<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#0a0a0a;color:#fff"><h2 style="color:#22c55e">&#10003; Google Connected!</h2><p style="color:#aaa">Signed in as <strong>${email}</strong></p><p style="color:#aaa">You can close this tab and return to NHA.</p><script>setTimeout(function(){window.close()},3000)</script></body></html>`);
+        } catch (e) {
+          _googleOAuthPending = null;
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end(`<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#0a0a0a;color:#fff"><h2 style="color:#ef4444">&#10007; Error</h2><p style="color:#aaa">${e.message}</p></body></html>`);
         }
         logRequest(method, pathname, 200, Date.now() - start);
         return;
@@ -593,6 +634,44 @@ export async function cmdUI(args) {
         return;
       }
 
+      // POST /api/update-npm — install latest nothumanallowed package and restart
+      if (method === 'POST' && pathname === '/api/update-npm') {
+        sendJSON(res, 200, { ok: true, message: 'Update started' });
+        logRequest(method, pathname, 200, Date.now() - start);
+        // Stream npm install output via WebSocket, then restart
+        setTimeout(async () => {
+          const { spawn } = await import('child_process');
+          wsBroadcast({ type: 'npm-update', line: '⟳ Running: npm install -g nothumanallowed@latest\n' });
+          const child = spawn('npm', ['install', '-g', 'nothumanallowed@latest'], { stdio: ['ignore', 'pipe', 'pipe'] });
+          child.stdout.on('data', (d) => wsBroadcast({ type: 'npm-update', line: d.toString() }));
+          child.stderr.on('data', (d) => wsBroadcast({ type: 'npm-update', line: d.toString() }));
+          child.on('close', (code) => {
+            if (code === 0) {
+              wsBroadcast({ type: 'npm-update', line: '\n✅ Update complete! Restarting server...\n', done: true });
+              setTimeout(async () => {
+                // Self-restart: launch new nha ui process, then exit current one
+                try {
+                  const { exec: execCmd } = await import('child_process');
+                  const isWindows = process.platform === 'win32';
+                  const extraArgs = (lanMode ? ' --lan' : '') + (port !== DEFAULT_PORT ? ` --port=${port}` : '');
+                  if (isWindows) {
+                    // start /B launches detached in background on Windows
+                    execCmd(`start /B nha ui --no-browser${extraArgs}`, { shell: true });
+                  } else {
+                    execCmd(`nohup nha ui --no-browser${extraArgs} </dev/null >/dev/null 2>&1 &`);
+                  }
+                } catch (_) {}
+                setTimeout(() => process.exit(0), 500);
+              }, 1500);
+            } else {
+              wsBroadcast({ type: 'npm-update', line: '\n❌ Update failed (exit code ' + code + '). Check output above.\n', error: true });
+              // Don't exit on failure — server stays alive
+            }
+          });
+        }, 100);
+        return;
+      }
+
       // GET /api/version/check — check npm registry for latest version
       if (method === 'GET' && pathname === '/api/version/check') {
         try {
@@ -615,15 +694,61 @@ export async function cmdUI(args) {
         return;
       }
 
+      // GET /api/weather?location=<city> — live weather via wttr.in (no API key)
+      if (method === 'GET' && pathname === '/api/weather') {
+        const loc = (url.searchParams.get('location') || config.location || '').trim();
+        if (!loc) { sendJSON(res, 400, { error: 'location required' }); return; }
+        try {
+          const wttrRes = await fetch(`https://wttr.in/${encodeURIComponent(loc)}?format=j1`, {
+            headers: { 'User-Agent': 'nha-cli/1.0' },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!wttrRes.ok) { sendJSON(res, 502, { error: `wttr.in ${wttrRes.status}` }); return; }
+          const w = await wttrRes.json();
+          const cur = w.current_condition?.[0];
+          const area = w.nearest_area?.[0];
+          if (!cur) { sendJSON(res, 404, { error: 'No weather data' }); return; }
+          const forecast = (w.weather || []).slice(0, 3).map(d => ({
+            date: d.date,
+            maxC: d.maxtempC,
+            minC: d.mintempC,
+            desc: d.hourly?.[4]?.weatherDesc?.[0]?.value || '',
+            rain: d.hourly?.[4]?.chanceofrain || '0',
+          }));
+          // Use the user-provided location as display name — wttr.in nearest_area
+          // often resolves to a nearby suburb (e.g. "Modena" → "Sant'Agnese") which
+          // is confusing. The weather data itself is correct regardless.
+          const displayCity = loc.includes(',') ? loc.split(',')[0].trim() : loc;
+          sendJSON(res, 200, {
+            city: displayCity,
+            country: area?.country?.[0]?.value || '',
+            tempC: cur.temp_C,
+            feelsC: cur.FeelsLikeC,
+            humidity: cur.humidity,
+            windKmph: cur.windspeedKmph,
+            windDir: cur.winddir16Point,
+            uvIndex: cur.uvIndex,
+            desc: cur.weatherDesc?.[0]?.value || '',
+            cloudcover: cur.cloudcover,
+            forecast,
+          });
+        } catch (e) {
+          sendJSON(res, 502, { error: e.message });
+        }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
       // GET /api/status
       if (method === 'GET' && pathname === '/api/status') {
+        const { loadTokens: loadTokSt } = await import('../services/token-store.mjs');
         sendJSON(res, 200, {
           connected: true,
           version: VERSION,
           provider: config.llm.provider,
           hasApiKey: !!config.llm.apiKey || config.llm.provider === 'nha',
-          hasGoogle: !!config.google?.clientId,
-          hasMicrosoft: !!config.microsoft?.clientId,
+          hasGoogle: loadTokSt('google') !== null,
+          hasMicrosoft: loadTokSt('microsoft') !== null,
           mailProvider: detectMailProvider(config),
           mailProviders: getProviderStatus(),
           agentName: config.agent?.name || null,
@@ -655,6 +780,7 @@ export async function cmdUI(args) {
 
       // GET /api/config — read config values for settings UI
       if (method === 'GET' && pathname === '/api/config') {
+        const { loadTokens: loadTok } = await import('../services/token-store.mjs');
         // Return non-sensitive config for the settings form
         sendJSON(res, 200, {
           profile: config.profile || {},
@@ -666,6 +792,8 @@ export async function cmdUI(args) {
           meetingAlert: config.ops?.meetingAlertMinutes || 30,
           hasTelegram: !!config.responder?.telegram?.token,
           hasDiscord: !!config.responder?.discord?.token,
+          hasGoogle: loadTok('google') !== null,
+          hasMicrosoft: loadTok('microsoft') !== null,
         });
         logRequest(method, pathname, 200, Date.now() - start);
         return;
@@ -2731,7 +2859,12 @@ export async function cmdUI(args) {
           const browserThumbs = res._browserThumbs || [];
           sendSSE('done', { content: finalResponse, screenshotFiles: ssFiles, browserThumbs, inlineHtml: inlineEmbeds || '' });
         } catch (e) {
-          sendSSE('error', { message: e.message });
+          // SENTINEL blocked — send done with flag so client shows message but does NOT save to history
+          if (e.__sentinel_blocked) {
+            sendSSE('done', { content: e.message, __sentinel_blocked: true, screenshotFiles: [], browserThumbs: [], inlineHtml: '' });
+          } else {
+            sendSSE('error', { message: e.message });
+          }
         }
 
         res.end();
@@ -4648,6 +4781,39 @@ ${completedHeadings ? `## SECTIONS ALREADY WRITTEN (headings only):\n${completed
         } catch (e) {
           sendJSON(res, 500, { error: e.message });
         }
+        logRequest(method, pathname, 200, Date.now() - start);
+        return;
+      }
+
+      // POST /api/studio/webcraft/stream  { system, user, max_tokens }  → SSE token stream
+      // Used by WebCraft generation for live typewriter effect per file
+      if (pathname === '/api/studio/webcraft/stream' && method === 'POST') {
+        const body = await parseBody(req, 131072);
+        if (!body.system || !body.user) {
+          sendJSON(res, 400, { error: 'system and user required' });
+          logRequest(method, pathname, 400, Date.now() - start);
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        });
+        let fullText = '';
+        let tokIn = 0, tokOut = 0;
+        try {
+          await callLLMStream(config, body.system, body.user, (token) => {
+            fullText += token;
+            tokOut++;
+            res.write('data: ' + JSON.stringify({ type: 'token', token }) + '\n\n');
+          }, { max_tokens: body.max_tokens || 16384, temperature: 0.3 });
+          tokIn = Math.round((body.system.length + body.user.length) / 4);
+          res.write('data: ' + JSON.stringify({ type: 'done', text: fullText, usage: { prompt_tokens: tokIn, completion_tokens: tokOut } }) + '\n\n');
+        } catch (e) {
+          res.write('data: ' + JSON.stringify({ type: 'error', message: e.message }) + '\n\n');
+        }
+        res.end();
         logRequest(method, pathname, 200, Date.now() - start);
         return;
       }

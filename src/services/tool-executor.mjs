@@ -302,6 +302,12 @@ TOOLS:
     Returns: title, excerpt, and body text (max 8000 chars). Only fetches text/html/json/xml.
     Use this when the user provides a specific URL to read, summarize, or analyze.
 
+49. get_weather(location: string, lang?: string)
+    Get current weather and 3-day forecast for any city or location. No API key needed.
+    Returns: temperature (°C/°F), feels like, humidity, wind speed, UV index, weather condition, and 3-day forecast.
+    ALWAYS use this for weather requests ("meteo", "tempo", "weather", "temperatura", "piove", "sole", "forecast").
+    Examples: get_weather("Viterbo"), get_weather("Rome, Italy"), get_weather("New York")
+
 --- BROWSER AUTOMATION ---
 
 49. browser_open(url: string, waitForLoad?: boolean)
@@ -599,7 +605,7 @@ note_add · note_list
 github_issues · github_prs · github_notifications · github_create_issue
 notion_search · notion_page
 slack_channels · slack_messages · slack_send
-web_search · fetch_url
+web_search · fetch_url · get_weather
 browser_open · browser_screenshot · browser_click · browser_type · browser_extract · browser_js · browser_wait · browser_scroll · browser_key · browser_close
 cron_add · cron_list · cron_remove
 screen_capture · screen_analyze
@@ -1874,6 +1880,62 @@ export async function executeTool(action, params, config) {
       lines.push(result.body);
 
       return lines.join('\n');
+    }
+
+    // ── Weather ──────────────────────────────────────────────────────────
+    case 'get_weather': {
+      const location = (params.location || '').trim();
+      if (!location) return 'A location is required (e.g. "Rome", "Viterbo, Italy").';
+      try {
+        const encodedLoc = encodeURIComponent(location);
+        const wttrRes = await fetch(`https://wttr.in/${encodedLoc}?format=j1`, {
+          headers: { 'User-Agent': 'nha-cli/1.0' },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!wttrRes.ok) return `Weather service returned ${wttrRes.status} for "${location}". Try a different location name.`;
+        const w = await wttrRes.json();
+        const cur = w.current_condition?.[0];
+        const area = w.nearest_area?.[0];
+        if (!cur) return `No weather data found for "${location}".`;
+
+        const cityName = area?.areaName?.[0]?.value || location;
+        const country = area?.country?.[0]?.value || '';
+        const desc = cur.weatherDesc?.[0]?.value || '';
+        const tempC = cur.temp_C;
+        const feelsC = cur.FeelsLikeC;
+        const humidity = cur.humidity;
+        const windKmph = cur.windspeedKmph;
+        const windDir = cur.winddir16Point;
+        const uvIndex = cur.uvIndex;
+        const visibility = cur.visibility;
+        const cloudcover = cur.cloudcover;
+
+        const lines = [
+          `📍 ${cityName}${country ? ', ' + country : ''}`,
+          `🌡️  ${tempC}°C (feels like ${feelsC}°C) — ${desc}`,
+          `💧 Humidity: ${humidity}%  |  💨 Wind: ${windKmph} km/h ${windDir}`,
+          `☀️  UV Index: ${uvIndex}  |  👁️  Visibility: ${visibility} km  |  ☁️  Cloud: ${cloudcover}%`,
+        ];
+
+        // 3-day forecast
+        const forecast = w.weather || [];
+        if (forecast.length > 0) {
+          lines.push('');
+          lines.push('📅 3-day forecast:');
+          for (const day of forecast.slice(0, 3)) {
+            const date = day.date;
+            const maxC = day.maxtempC;
+            const minC = day.mintempC;
+            const dayDesc = day.hourly?.[4]?.weatherDesc?.[0]?.value || '';
+            const rain = day.hourly?.[4]?.chanceofrain || '0';
+            lines.push(`  ${date}: ${minC}°C → ${maxC}°C  ${dayDesc}  🌧️ ${rain}% rain`);
+          }
+        }
+
+        return lines.join('\n');
+      } catch (e) {
+        return `Weather lookup failed: ${e.message}. Try using web_search("weather ${location}") as fallback.`;
+      }
     }
 
     // ── Cron / Heartbeat ───────────────────────────────────────────────

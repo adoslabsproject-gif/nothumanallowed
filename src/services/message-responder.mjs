@@ -8,7 +8,8 @@
  * Routing: keyword-based (no LLM call) to save API costs. Falls back to CONDUCTOR.
  */
 
-import { callAgent } from './llm.mjs';
+import { callAgent, callLLM } from './llm.mjs';
+import { buildSystemPrompt, parseActions, executeTool, TOOL_DEFINITIONS } from './tool-executor.mjs';
 import https from 'https';
 import http from 'http';
 import { URL } from 'url';
@@ -107,6 +108,64 @@ function routeMessage(text, useAutoRoute = true) {
   }
 
   return bestAgent;
+}
+
+// ── Tool-aware agent call (LLM + tool execution loop) ────────────────────────
+
+/**
+ * Call an agent with full tool execution support.
+ * Like chat.mjs but headless — no confirmation prompts, all tools auto-executed.
+ * Returns a human-readable summary of what was done.
+ */
+async function callAgentWithTools(config, agentName, userMessage) {
+  const today = new Date().toISOString().split('T')[0];
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en';
+  const LANG_MAP = { en: 'English', it: 'Italian', es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', nl: 'Dutch', pl: 'Polish', ru: 'Russian', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', ar: 'Arabic', hi: 'Hindi', tr: 'Turkish' };
+  const language = config?.language || LANG_MAP[locale.split('-')[0]] || 'English';
+
+  const systemPrompt = TOOL_DEFINITIONS
+    .replace('{{TODAY}}', today)
+    .replace('{{TIMEZONE}}', tz)
+    .replace(/\{\{LANGUAGE\}\}/g, language);
+
+  // Multi-turn: serialize history as [User]/[Assistant] string (same pattern as chat.mjs)
+  const history = []; // [{role, content}]
+  let finalText = '';
+
+  for (let round = 0; round < 3; round++) {
+    // Build serialized message
+    const parts = history.map(h => (h.role === 'user' ? '[User]' : '[Assistant]') + ' ' + h.content);
+    parts.push('[User] ' + userMessage);
+    if (round > 0) {
+      // Replace last user with tool results continuation
+    }
+    const serialized = parts.join('\n\n');
+
+    const response = await callLLM(config, systemPrompt, serialized);
+    const { textParts, actions } = parseActions(response);
+    finalText = textParts.join('\n').trim();
+
+    if (actions.length === 0) break; // No tools — pure text response
+
+    // Execute all tools and collect results
+    const toolResults = [];
+    for (const { action, params } of actions) {
+      try {
+        const result = await executeTool(action, params, config);
+        const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+        toolResults.push(`[${action}] ${resultStr}`);
+      } catch (err) {
+        toolResults.push(`[${action}] Error: ${err.message}`);
+      }
+    }
+
+    // Feed results back: append assistant response + tool results as next user turn
+    history.push({ role: 'assistant', content: response });
+    userMessage = 'Tool results:\n' + toolResults.join('\n') + '\n\nNow give the user a concise confirmation in ' + language + '. Do NOT use HERALD format — respond conversationally.';
+  }
+
+  return finalText || 'Done.';
 }
 
 // ── Telegram Bot (Long Polling via native fetch) ─────────────────────────────
@@ -226,8 +285,11 @@ class TelegramResponder {
       // Send typing indicator
       await this._telegramCall('sendChatAction', { chat_id: chatId, action: 'typing' });
 
-      // Call agent
-      const response = await callAgent(this.config, agent, cleanText);
+      // Tool-capable agents use the full tool execution loop
+      // Pure reasoning/analysis agents use the simple callAgent (no tools)
+      const TOOL_AGENTS = new Set(['herald', 'hermes', 'edi', 'jarvis', 'flux', 'echo', 'mercury', 'pipe', 'navi', 'link', 'prometheus', 'tempest']);
+      const callFn = TOOL_AGENTS.has(agent) ? callAgentWithTools : callAgent;
+      const response = await callFn(this.config, agent, cleanText);
 
       // Truncate if too long for Telegram (4096 char limit)
       const truncated = response.length > 4000
@@ -607,8 +669,10 @@ class DiscordResponder {
       // Send typing indicator
       await this._discordApiCall('POST', `/channels/${channelId}/typing`);
 
-      // Call agent
-      const response = await callAgent(this.config, agent, cleanText);
+      // Tool-capable agents use the full tool execution loop
+      const TOOL_AGENTS = new Set(['herald', 'hermes', 'edi', 'jarvis', 'flux', 'echo', 'mercury', 'pipe', 'navi', 'link', 'prometheus', 'tempest']);
+      const callFn = TOOL_AGENTS.has(agent) ? callAgentWithTools : callAgent;
+      const response = await callFn(this.config, agent, cleanText);
 
       // Discord message limit is 2000 chars
       const truncated = response.length > 1900

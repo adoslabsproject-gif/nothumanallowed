@@ -563,6 +563,14 @@ export async function callLLMStream(config, systemPrompt, userMessage, onToken, 
     }
     // Non-streaming: vLLM returns complete text — no BPE subword splitting issues
     const nhaJson = await nhaRes.json();
+    // SENTINEL blocked — throw special error so caller skips conversation persistence
+    if (nhaJson.__sentinel_blocked) {
+      const blockedMsg = nhaJson.choices?.[0]?.message?.content || 'Message blocked by SENTINEL.';
+      if (onToken) onToken(blockedMsg);
+      const err = new Error(blockedMsg);
+      err.__sentinel_blocked = true;
+      throw err;
+    }
     let fullNhaText = nhaJson.choices?.[0]?.message?.content || '';
     // Strip <think>...</think> blocks
     fullNhaText = fullNhaText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();

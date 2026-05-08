@@ -1,11 +1,12 @@
 /**
  * Google OAuth 2.0 with PKCE — browser-based consent flow.
- * Runs ephemeral local HTTP server for callback.
- * Zero dependencies — uses Node.js native http + crypto.
+ * Runs ephemeral local HTTP server for callback, or manual code-paste for headless/VM.
+ * Zero dependencies — uses Node.js native http + crypto + readline.
  */
 
 import http from 'http';
 import crypto from 'crypto';
+import readline from 'readline';
 import { execSync } from 'child_process';
 import os from 'os';
 import { saveTokens, loadTokens, deleteTokens } from './token-store.mjs';
@@ -40,17 +41,69 @@ function generatePKCE() {
 
 /**
  * Open URL in user's default browser.
+ * Returns true if browser opened successfully, false otherwise.
  */
 function openBrowser(url) {
   const platform = os.platform();
   try {
-    if (platform === 'darwin') execSync(`open "${url}"`);
-    else if (platform === 'win32') execSync(`start "" "${url}"`);
-    else execSync(`xdg-open "${url}"`);
+    if (platform === 'darwin') execSync(`open "${url}"`, { stdio: 'ignore' });
+    else if (platform === 'win32') execSync(`start "" "${url}"`, { stdio: 'ignore' });
+    else execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+    return true;
   } catch {
-    warn('Could not open browser automatically.');
-    info(`Open this URL manually:\n\n  ${url}\n`);
+    return false;
   }
+}
+
+/**
+ * Manual mode: print the auth URL and ask the user to paste back
+ * the full redirect URL (http://127.0.0.1:PORT/callback?code=...&state=...)
+ * that appears in their browser's address bar after Google login.
+ * Works on any headless/VM/SSH setup — no local server needed.
+ */
+function waitForManualCode(authUrl, state) {
+  return new Promise((resolve, reject) => {
+    console.log('\n\x1b[1;33m  MANUAL AUTH MODE\x1b[0m');
+    console.log('\x1b[0;90m  ─────────────────────────────────────────────────────\x1b[0m');
+    console.log('  1. Open this URL on any device with a browser (phone, PC...):');
+    console.log('\n\x1b[0;36m  ' + authUrl + '\x1b[0m\n');
+    console.log('  2. Log in with Google and grant permissions.');
+    console.log('  3. The browser will try to open a page that fails to load.');
+    console.log('     That is expected. Copy the full URL from the address bar.');
+    console.log('     It looks like: \x1b[0;32mhttp://127.0.0.1:19847/callback?code=4/0A...&state=...\x1b[0m');
+    console.log('\x1b[0;90m  ─────────────────────────────────────────────────────\x1b[0m\n');
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question('  Paste the full redirect URL here: ', (answer) => {
+      rl.close();
+      const trimmed = answer.trim();
+      try {
+        // Accept both the full URL and just the code= value
+        let code, returnedState;
+        if (trimmed.startsWith('http')) {
+          const parsed = new URL(trimmed);
+          code = parsed.searchParams.get('code');
+          returnedState = parsed.searchParams.get('state');
+        } else {
+          // Maybe they pasted just the code directly
+          code = trimmed;
+          returnedState = state; // trust them
+        }
+
+        if (!code) {
+          reject(new Error('No authorization code found in the URL you pasted.'));
+          return;
+        }
+        if (returnedState && returnedState !== state) {
+          reject(new Error('State mismatch — the URL does not match this auth session. Try again.'));
+          return;
+        }
+        resolve(code);
+      } catch {
+        reject(new Error('Could not parse the URL. Make sure you copied the full address bar URL.'));
+      }
+    });
+  });
 }
 
 /**
@@ -156,8 +209,9 @@ async function getUserEmail(accessToken) {
 /**
  * Run the full OAuth consent flow.
  * @param {object} config — NHA config
+ * @param {boolean} manual — force manual code-paste mode (for VMs/headless)
  */
-export async function runAuthFlow(config) {
+export async function runAuthFlow(config, manual = false) {
   const clientId = config.google?.clientId || DEFAULT_CLIENT_ID;
   const clientSecret = config.google?.clientSecret || '';
 
@@ -174,8 +228,8 @@ export async function runAuthFlow(config) {
     return false;
   }
 
-  // Find available port
-  let port = 0;
+  // Find available port (used for redirect_uri even in manual mode)
+  let port = CALLBACK_PORTS[0];
   for (const p of CALLBACK_PORTS) {
     try {
       const srv = http.createServer();
@@ -186,10 +240,6 @@ export async function runAuthFlow(config) {
       port = p;
       break;
     } catch { continue; }
-  }
-  if (!port) {
-    fail('No available port for OAuth callback (tried 19847-19851)');
-    return false;
   }
 
   const redirectUri = `http://127.0.0.1:${port}/callback`;
@@ -207,14 +257,32 @@ export async function runAuthFlow(config) {
   authUrl.searchParams.set('access_type', 'offline');
   authUrl.searchParams.set('prompt', 'consent');
 
-  info('Opening browser for Google authorization...');
-  openBrowser(authUrl.toString());
-  info('Waiting for authorization (5 min timeout)...\n');
+  const authUrlStr = authUrl.toString();
 
   try {
-    const { code } = await waitForCallback(state, port);
-    info('Authorization code received. Exchanging for tokens...');
+    let code;
 
+    if (manual) {
+      // Explicit manual mode
+      code = await waitForManualCode(authUrlStr, state);
+    } else {
+      // Try to open browser — if it fails, auto-switch to manual mode
+      info('Opening browser for Google authorization...');
+      const browserOpened = openBrowser(authUrlStr);
+
+      if (!browserOpened) {
+        // Headless/VM detected — auto-switch to manual mode
+        warn('No browser found. Switching to manual mode...');
+        code = await waitForManualCode(authUrlStr, state);
+      } else {
+        // Browser opened — wait for local callback
+        info('Waiting for authorization (5 min timeout)...\n');
+        const result = await waitForCallback(state, port);
+        code = result.code;
+      }
+    }
+
+    info('Authorization code received. Exchanging for tokens...');
     const tokenData = await exchangeCode(code, verifier, clientId, clientSecret, redirectUri);
     const email = await getUserEmail(tokenData.access_token);
 
@@ -228,13 +296,59 @@ export async function runAuthFlow(config) {
 
     saveTokens(tokens);
     ok(`Google account connected: ${email || 'unknown'}`);
-    ok('Gmail + Calendar access granted.');
+    ok('Gmail + Calendar + Drive access granted.');
     info('Run "nha plan" to generate your first daily plan.');
     return true;
   } catch (err) {
     fail(err.message);
     return false;
   }
+}
+
+/**
+ * Build an OAuth URL for the web UI flow.
+ * The redirect_uri points back to the NHA web UI server so the callback
+ * is received directly in the browser session (works across VMs/headless).
+ *
+ * @param {object} config
+ * @param {string} redirectUri — e.g. http://192.168.1.45:3847/api/google/callback
+ * @returns {{ url: string, verifier: string, state: string }}
+ */
+export function buildAuthUrl(config, redirectUri) {
+  const clientId = config.google?.clientId || DEFAULT_CLIENT_ID;
+  if (!clientId) throw new Error('Google client ID not configured. Run: nha config set google-client-id YOUR_ID');
+  const { verifier, challenge } = generatePKCE();
+  const state = crypto.randomBytes(16).toString('hex');
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('scope', SCOPES);
+  authUrl.searchParams.set('state', state);
+  authUrl.searchParams.set('code_challenge', challenge);
+  authUrl.searchParams.set('code_challenge_method', 'S256');
+  authUrl.searchParams.set('access_type', 'offline');
+  authUrl.searchParams.set('prompt', 'consent');
+  return { url: authUrl.toString(), verifier, state };
+}
+
+/**
+ * Exchange an auth code received by the web UI callback.
+ */
+export async function exchangeCodeFromUI(config, code, verifier, redirectUri) {
+  const clientId = config.google?.clientId || DEFAULT_CLIENT_ID;
+  const clientSecret = config.google?.clientSecret || '';
+  const tokenData = await exchangeCode(code, verifier, clientId, clientSecret, redirectUri);
+  const email = await getUserEmail(tokenData.access_token);
+  const tokens = {
+    access_token: tokenData.access_token,
+    refresh_token: tokenData.refresh_token,
+    expires_at: Date.now() + (tokenData.expires_in * 1000),
+    scope: tokenData.scope,
+    email: email || 'unknown',
+  };
+  saveTokens(tokens);
+  return { email: email || 'unknown' };
 }
 
 /**

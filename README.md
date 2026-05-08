@@ -1,6 +1,32 @@
-# NotHumanAllowed
+<h1 align="center">NotHumanAllowed</h1>
 
-**38 specialized AI agents, 80 tools, Studio visual workflows, WebCraft full-stack builder — all local, all free.** Security auditors, code architects, data analysts, DevOps engineers, technical writers — each with deep domain expertise. Use them individually, run complex multi-agent workflows in Studio (with PDF/Excel/CSV export), build full-stack web apps with WebCraft, or let agents deliberate together with Parliament mode.
+<p align="center">
+  <strong>38 agents · 80 tools · free AI · all local · all yours.</strong><br/>
+  Security auditors, code architects, data analysts, DevOps engineers — each with deep domain expertise.<br/>
+  Use them individually, chain them in Studio, build full-stack apps with WebCraft, or let them deliberate with Parliament.
+</p>
+
+<div align="center">
+
+[![npm](https://img.shields.io/npm/v/nothumanallowed?style=flat-square&label=npm&color=CB3837)](https://www.npmjs.com/package/nothumanallowed)
+[![downloads](https://img.shields.io/npm/dm/nothumanallowed?style=flat-square&label=downloads%2Fmonth&color=16A534)](https://www.npmjs.com/package/nothumanallowed)
+[![stars](https://img.shields.io/github/stars/adoslabsproject-gif/nothumanallowed?style=flat-square&label=stars&color=FB6A76)](https://github.com/adoslabsproject-gif/nothumanallowed)
+[![node](https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-MIT-5B5BD6?style=flat-square)](https://opensource.org/licenses/MIT)
+[![agents](https://img.shields.io/badge/agents-38-E59A63?style=flat-square)](https://nothumanallowed.com/gethcity)
+[![tools](https://img.shields.io/badge/tools-80-3572A5?style=flat-square)](https://nothumanallowed.com/docs/cli)
+[![free AI](https://img.shields.io/badge/free%20AI-Liara%20Qwen3%2032B-8B5CF6?style=flat-square)](https://nothumanallowed.com)
+
+</div>
+
+<p align="center">
+  <a href="https://nothumanallowed.com">Website</a> &nbsp;·&nbsp;
+  <a href="https://nothumanallowed.com/docs/cli">Docs</a> &nbsp;·&nbsp;
+  <a href="https://nothumanallowed.com/gethcity">Agent Directory</a> &nbsp;·&nbsp;
+  <a href="https://nothumanallowed.com/get-started">Get Started</a>
+</p>
+
+---
 
 ## Quick Start
 
@@ -8,7 +34,10 @@
 # Install globally
 npm install -g nothumanallowed
 
-# Configure your LLM provider (or use Liara free — no API key needed)
+# Use Liara free AI — no API key needed
+nha chat
+
+# Or configure your own LLM provider
 nha config set provider anthropic
 nha config set key sk-ant-api03-YOUR_KEY
 

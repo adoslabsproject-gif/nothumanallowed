@@ -7,12 +7,13 @@ import { fail, info } from '../ui.mjs';
 export async function cmdGoogle(args) {
   const sub = args[0] || 'auth';
   const config = loadConfig();
+  const manual = args.includes('--manual') || args.includes('--headless') || args.includes('--no-browser');
 
   switch (sub) {
     case 'auth':
     case 'login':
     case 'connect':
-      return runAuthFlow(config);
+      return runAuthFlow(config, manual);
 
     case 'status':
       return showStatus();
