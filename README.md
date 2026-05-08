@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)"  srcset="https://nothumanallowed.com/blobs/github/hero-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://nothumanallowed.com/blobs/github/hero-light.svg">
-    <img src="https://nothumanallowed.com/blobs/github/hero-light.svg" alt="NotHumanAllowed — 38 agents, 80 tools, free AI" width="100%" draggable="false"/>
+    <source media="(prefers-color-scheme: dark)"  srcset="assets/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/hero-light.svg">
+    <img src="assets/hero-light.svg" alt="NotHumanAllowed — 38 agents, 80 tools, free AI" width="100%" draggable="false"/>
   </picture>
 </p>
 
@@ -32,9 +32,9 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)"  srcset="https://nothumanallowed.com/blobs/github/chat-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://nothumanallowed.com/blobs/github/chat-light.svg">
-    <img src="https://nothumanallowed.com/blobs/github/chat-light.svg" alt="NHA Chat — ask anything, get a specialist answer" width="100%" draggable="false"/>
+    <source media="(prefers-color-scheme: dark)"  srcset="assets/chat-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/chat-light.svg">
+    <img src="assets/chat-light.svg" alt="NHA Chat — ask anything, get a specialist answer" width="100%" draggable="false"/>
   </picture>
 </p>
 
@@ -64,9 +64,9 @@ nha ui
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)"  srcset="https://nothumanallowed.com/blobs/github/studio-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://nothumanallowed.com/blobs/github/studio-light.svg">
-    <img src="https://nothumanallowed.com/blobs/github/studio-light.svg" alt="Studio — visual multi-agent workflow builder" width="100%" draggable="false"/>
+    <source media="(prefers-color-scheme: dark)"  srcset="assets/studio-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/studio-light.svg">
+    <img src="assets/studio-light.svg" alt="Studio — visual multi-agent workflow builder" width="100%" draggable="false"/>
   </picture>
 </p>
 
@@ -98,14 +98,6 @@ Export buttons appear in the result panel and in the toolbar after each run.
 ---
 
 ## WebCraft — Full-Stack Web Apps from a Chat
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)"  srcset="https://nothumanallowed.com/blobs/github/webcraft-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://nothumanallowed.com/blobs/github/webcraft-light.svg">
-    <img src="https://nothumanallowed.com/blobs/github/webcraft-light.svg" alt="WebCraft — full-stack app from a sentence" width="100%" draggable="false"/>
-  </picture>
-</p>
 
 WebCraft is a full-stack web app builder embedded in `nha ui`. Describe what you want in plain language — WebCraft generates a complete project with Express.js backend, PostgreSQL schema, JWT auth, email verification, security middleware, and a styled frontend. Everything runs locally with a live sandbox.
 

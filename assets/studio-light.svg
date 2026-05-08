@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260">
+  <title>Studio — Visual multi-agent pipelines</title>
+  <rect width="800" height="260" rx="12" fill="#F6F8FA"/>
+  <text x="32" y="34" font-family="Inter,-apple-system,sans-serif" font-size="11" font-weight="600" fill="#7C3AED" letter-spacing="1">STUDIO</text>
+  <text x="32" y="54" font-family="Inter,-apple-system,sans-serif" font-size="20" font-weight="700" fill="#1F2328">Visual multi-agent pipelines</text>
+  <text x="32" y="72" font-family="Inter,-apple-system,sans-serif" font-size="12" fill="#59636E">Describe a task · agents plan &amp; execute · export PDF / Excel / CSV</text>
+  <!-- Prompt box -->
+  <rect x="32" y="84" width="736" height="26" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1"/>
+  <text x="44" y="101" font-family="JetBrains Mono,ui-monospace,monospace" font-size="11" fill="#5B21B6">"Analyze my inbox, find action items, write a briefing doc"</text>
+  <!-- Progress track -->
+  <rect x="32" y="120" width="400" height="3" rx="2" fill="#E5E7EB"/>
+  <rect x="32" y="120" width="3" height="3" rx="2" fill="#7C3AED">
+    <animate attributeName="width" values="0;100;200;300;400;400" keyTimes="0;0.2;0.35;0.5;0.65;1" dur="10s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- NODE 1: EMAIL -->
+  <!-- ring pulse -->
+  <circle cx="112" cy="175" r="28" fill="none" stroke="#7C3AED" stroke-width="2" opacity="0">
+    <animate attributeName="opacity" values="0;0;0.5;0;0" keyTimes="0;0.12;0.16;0.22;1" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="r" values="24;24;38;38" keyTimes="0;0.12;0.22;1" dur="10s" repeatCount="indefinite"/>
+  </circle>
+  <rect x="80" y="153" width="64" height="44" rx="10" fill="#F3F4F6" stroke="#D1D9E0" stroke-width="1.5">
+    <animate attributeName="fill" values="#F3F4F6;#F3F4F6;#7C3AED;#7C3AED;#EDE9FE" keyTimes="0;0.14;0.18;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="stroke" values="#D1D9E0;#D1D9E0;#7C3AED;#7C3AED;#7C3AED" keyTimes="0;0.14;0.18;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </rect>
+  <text x="112" y="173" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="10" font-weight="700" fill="#6B7280">
+    EMAIL
+    <animate attributeName="fill" values="#6B7280;#6B7280;#FFFFFF;#FFFFFF;#7C3AED" keyTimes="0;0.14;0.18;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="112" y="186" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="8" fill="#9CA3AF">
+    agent
+    <animate attributeName="fill" values="#9CA3AF;#9CA3AF;#E9D5FF;#E9D5FF;#9CA3AF" keyTimes="0;0.14;0.18;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <!-- check -->
+  <text x="112" y="202" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="10" fill="#7C3AED" opacity="0">
+    ✓<animate attributeName="opacity" values="0;0;0;1;1" keyTimes="0;0.14;0.87;0.90;1" dur="10s" repeatCount="indefinite"/>
+  </text>
+
+  <!-- Arrow 1→2 -->
+  <line x1="148" y1="175" x2="190" y2="175" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-dasharray="44" stroke-dashoffset="44">
+    <animate attributeName="stroke-dashoffset" values="44;44;0;0" keyTimes="0;0.18;0.26;1" dur="10s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- NODE 2: SABER -->
+  <circle cx="238" cy="175" r="28" fill="none" stroke="#7C3AED" stroke-width="2" opacity="0">
+    <animate attributeName="opacity" values="0;0;0;0.5;0;0" keyTimes="0;0.12;0.26;0.30;0.36;1" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="r" values="24;24;24;38;38" keyTimes="0;0.12;0.26;0.36;1" dur="10s" repeatCount="indefinite"/>
+  </circle>
+  <rect x="206" y="153" width="64" height="44" rx="10" fill="#F3F4F6" stroke="#D1D9E0" stroke-width="1.5">
+    <animate attributeName="fill" values="#F3F4F6;#F3F4F6;#F3F4F6;#7C3AED;#7C3AED;#EDE9FE" keyTimes="0;0.14;0.28;0.32;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="stroke" values="#D1D9E0;#D1D9E0;#D1D9E0;#7C3AED;#7C3AED;#7C3AED" keyTimes="0;0.14;0.28;0.32;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </rect>
+  <text x="238" y="173" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="10" font-weight="700" fill="#6B7280">
+    SABER
+    <animate attributeName="fill" values="#6B7280;#6B7280;#6B7280;#FFFFFF;#FFFFFF;#7C3AED" keyTimes="0;0.14;0.28;0.32;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="238" y="186" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="8" fill="#9CA3AF">
+    security
+    <animate attributeName="fill" values="#9CA3AF;#9CA3AF;#9CA3AF;#E9D5FF;#E9D5FF;#9CA3AF" keyTimes="0;0.14;0.28;0.32;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="238" y="202" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="10" fill="#7C3AED" opacity="0">
+    ✓<animate attributeName="opacity" values="0;0;0;0;1;1" keyTimes="0;0.14;0.28;0.87;0.90;1" dur="10s" repeatCount="indefinite"/>
+  </text>
+
+  <!-- Arrow 2→3 -->
+  <line x1="274" y1="175" x2="316" y2="175" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-dasharray="44" stroke-dashoffset="44">
+    <animate attributeName="stroke-dashoffset" values="44;44;44;0;0" keyTimes="0;0.18;0.36;0.44;1" dur="10s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- NODE 3: ORACLE -->
+  <circle cx="364" cy="175" r="28" fill="none" stroke="#7C3AED" stroke-width="2" opacity="0">
+    <animate attributeName="opacity" values="0;0;0;0;0.5;0;0" keyTimes="0;0.12;0.26;0.40;0.44;0.50;1" dur="10s" repeatCount="indefinite"/>
+  </circle>
+  <rect x="332" y="153" width="64" height="44" rx="10" fill="#F3F4F6" stroke="#D1D9E0" stroke-width="1.5">
+    <animate attributeName="fill" values="#F3F4F6;#F3F4F6;#F3F4F6;#F3F4F6;#7C3AED;#7C3AED;#EDE9FE" keyTimes="0;0.14;0.28;0.42;0.46;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="stroke" values="#D1D9E0;#D1D9E0;#D1D9E0;#D1D9E0;#7C3AED;#7C3AED;#7C3AED" keyTimes="0;0.14;0.28;0.42;0.46;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </rect>
+  <text x="364" y="173" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="10" font-weight="700" fill="#6B7280">
+    ORACLE
+    <animate attributeName="fill" values="#6B7280;#6B7280;#6B7280;#6B7280;#FFFFFF;#FFFFFF;#7C3AED" keyTimes="0;0.14;0.28;0.42;0.46;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="364" y="186" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="8" fill="#9CA3AF">
+    analysis
+    <animate attributeName="fill" values="#9CA3AF;#9CA3AF;#9CA3AF;#9CA3AF;#E9D5FF;#E9D5FF;#9CA3AF" keyTimes="0;0.14;0.28;0.42;0.46;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="364" y="202" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="10" fill="#7C3AED" opacity="0">
+    ✓<animate attributeName="opacity" values="0;0;0;0;0;1;1" keyTimes="0;0.14;0.28;0.42;0.87;0.90;1" dur="10s" repeatCount="indefinite"/>
+  </text>
+
+  <!-- Arrow 3→4 -->
+  <line x1="400" y1="175" x2="442" y2="175" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-dasharray="44" stroke-dashoffset="44">
+    <animate attributeName="stroke-dashoffset" values="44;44;44;44;0;0" keyTimes="0;0.18;0.36;0.54;0.62;1" dur="10s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- NODE 4: WRITER -->
+  <rect x="442" y="153" width="64" height="44" rx="10" fill="#F3F4F6" stroke="#D1D9E0" stroke-width="1.5">
+    <animate attributeName="fill" values="#F3F4F6;#F3F4F6;#F3F4F6;#F3F4F6;#F3F4F6;#7C3AED;#7C3AED;#EDE9FE" keyTimes="0;0.14;0.28;0.42;0.56;0.60;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="stroke" values="#D1D9E0;#D1D9E0;#D1D9E0;#D1D9E0;#D1D9E0;#7C3AED;#7C3AED;#7C3AED" keyTimes="0;0.14;0.28;0.42;0.56;0.60;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </rect>
+  <text x="474" y="173" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="10" font-weight="700" fill="#6B7280">
+    WRITER
+    <animate attributeName="fill" values="#6B7280;#6B7280;#6B7280;#6B7280;#6B7280;#FFFFFF;#FFFFFF;#7C3AED" keyTimes="0;0.14;0.28;0.42;0.56;0.60;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="474" y="186" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="8" fill="#9CA3AF">
+    briefing
+    <animate attributeName="fill" values="#9CA3AF;#9CA3AF;#9CA3AF;#9CA3AF;#9CA3AF;#E9D5FF;#E9D5FF;#9CA3AF" keyTimes="0;0.14;0.28;0.42;0.56;0.60;0.85;0.90" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="474" y="202" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="10" fill="#7C3AED" opacity="0">
+    ✓<animate attributeName="opacity" values="0;0;0;0;0;0;1;1" keyTimes="0;0.14;0.28;0.42;0.56;0.87;0.90;1" dur="10s" repeatCount="indefinite"/>
+  </text>
+
+  <!-- Output panel -->
+  <rect x="544" y="140" width="224" height="108" rx="8" fill="#FFFFFF" stroke="#D1D9E0" stroke-width="1"/>
+  <text x="556" y="158" font-family="Inter,-apple-system,sans-serif" font-size="10" font-weight="600" fill="#6B7280">OUTPUT</text>
+  <text x="556" y="176" font-family="Inter,-apple-system,sans-serif" font-size="11" fill="#1F2328" opacity="0">
+    3 urgent emails flagged
+    <animate attributeName="opacity" values="0;0;0;0;0;0;1;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;1" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="556" y="193" font-family="Inter,-apple-system,sans-serif" font-size="11" fill="#1F2328" opacity="0">
+    7 action items extracted
+    <animate attributeName="opacity" values="0;0;0;0;0;0;0;1;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;0.72;1" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <text x="556" y="210" font-family="Inter,-apple-system,sans-serif" font-size="11" fill="#059669" opacity="0">
+    Briefing doc ready ✓
+    <animate attributeName="opacity" values="0;0;0;0;0;0;0;0;1;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;0.72;0.76;1" dur="10s" repeatCount="indefinite"/>
+  </text>
+  <!-- Export buttons -->
+  <rect x="556" y="222" width="38" height="15" rx="4" fill="#EF4444" opacity="0"><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;0.72;0.78;1" dur="10s" repeatCount="indefinite"/></rect>
+  <text x="575" y="233" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="9" font-weight="700" fill="#FFFFFF" opacity="0">PDF<animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;0.72;0.78;1" dur="10s" repeatCount="indefinite"/></text>
+  <rect x="600" y="222" width="44" height="15" rx="4" fill="#059669" opacity="0"><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;0.72;0.80;1" dur="10s" repeatCount="indefinite"/></rect>
+  <text x="622" y="233" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="9" font-weight="700" fill="#FFFFFF" opacity="0">Excel<animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;0.72;0.80;1" dur="10s" repeatCount="indefinite"/></text>
+  <rect x="650" y="222" width="36" height="15" rx="4" fill="#3572A5" opacity="0"><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;0.72;0.82;1" dur="10s" repeatCount="indefinite"/></rect>
+  <text x="668" y="233" text-anchor="middle" font-family="Inter,-apple-system,sans-serif" font-size="9" font-weight="700" fill="#FFFFFF" opacity="0">CSV<animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1" keyTimes="0;0.14;0.28;0.42;0.56;0.63;0.68;0.72;0.82;1" dur="10s" repeatCount="indefinite"/></text>
+</svg>
