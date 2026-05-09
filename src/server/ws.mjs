@@ -20,8 +20,11 @@ let wss = null;
 export function setupWebSocket(server) {
   wss = new WebSocketServer({ server, path: '/api' });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', async (ws) => {
+    const { VERSION } = await import('../constants.mjs');
     ws.send(JSON.stringify({ type: 'connected', ts: Date.now() }));
+    // Send current server version so UI can detect updates
+    ws.send(JSON.stringify({ type: 'version', version: VERSION }));
 
     ws.on('message', (data) => {
       try {

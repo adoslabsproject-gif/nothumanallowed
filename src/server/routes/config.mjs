@@ -37,9 +37,10 @@ export function register(router) {
     try {
       const r = await fetch('https://registry.npmjs.org/nothumanallowed/latest');
       const data = await r.json();
-      sendJSON(res, 200, { current: VERSION, latest: data.version, hasUpdate: data.version !== VERSION });
+      const upd = data.version !== VERSION;
+      sendJSON(res, 200, { current: VERSION, latest: data.version, hasUpdate: upd, updateAvailable: upd });
     } catch {
-      sendJSON(res, 200, { current: VERSION, latest: VERSION, hasUpdate: false });
+      sendJSON(res, 200, { current: VERSION, latest: VERSION, hasUpdate: false, updateAvailable: false });
     }
   });
 

@@ -275,12 +275,59 @@ export function register(router) {
           a.params = { url: 'https://' + a.params.query.trim() };
         }
       }
+      // Auto-detect email reading intent — force imap_list if LLM didn't emit the tool
+      const wantsReadEmail = /\b(leggi|read|mostra|lista|ultime?|recenti?|email|mail|inbox|posta)\b.*\b(email|mail|messag|inbox|posta)\b|\b(email|mail)\b.*\b(leggi|read|mostra|lista|ultime?|recenti?)\b/i.test(msg);
+      if (wantsReadEmail && !actions.some(a => a.action?.startsWith('imap_') || a.action === 'list_emails')) {
+        try {
+          const { listAccounts: _la } = await import('../../services/email-db.mjs');
+          const imapAccs = _la();
+          if (imapAccs.length > 0) {
+            const firstAcc = imapAccs[0];
+            const limitMatch = msg.match(/\b(\d+)\b/);
+            const limit = limitMatch ? Math.min(parseInt(limitMatch[1]), 20) : 5;
+            actions.push({ action: 'imap_list', params: { accountId: firstAcc.id, limit } });
+          }
+        } catch { /* fallback to LLM response */ }
+      }
 
       for (const { action, params } of actions) {
         if (action === 'web_search' && wantsScreenshot) params.screenshot = true;
         sse('tool', { action, status: 'executing' });
         try {
           const result = await executeTool(action, params, config);
+
+          // ── Screenshot result handling ───────────────────────────────────
+          if (result && typeof result === 'object' && result.__screenshot) {
+            // Copy file to ~/.nha/screenshots/ so the UI can load it via /api/screenshots/
+            let screenshotUrl = null;
+            try {
+              const ssDir = path.join(os.homedir(), '.nha', 'screenshots');
+              if (!fs.existsSync(ssDir)) fs.mkdirSync(ssDir, { recursive: true });
+              const filename = `screenshot-${Date.now()}.png`;
+              const destPath = path.join(ssDir, filename);
+              if (result.path && fs.existsSync(result.path)) {
+                fs.copyFileSync(result.path, destPath);
+                screenshotUrl = `/api/screenshots/${filename}`;
+              } else if (result.base64) {
+                fs.writeFileSync(destPath, Buffer.from(result.base64, 'base64'));
+                screenshotUrl = `/api/screenshots/${filename}`;
+              }
+            } catch { /* fallback — no image shown */ }
+
+            // Vision analysis — LLM describes what's in the screenshot
+            let visionDescription = 'Screenshot captured.';
+            if (result.base64) {
+              try {
+                visionDescription = await callLLMVision(config, 'You are a helpful assistant describing a screenshot.', result.question || 'Describe EXACTLY and ONLY what you see in this screenshot.', { base64: result.base64, mediaType: 'image/png' });
+              } catch { /* keep default description */ }
+            }
+
+            toolResults.push({ action, result: visionDescription });
+            sse('tool', { action, status: 'done', result: visionDescription.slice(0, 500) });
+            if (screenshotUrl) sse('screenshot', { url: screenshotUrl });
+            continue;
+          }
+
           let resultStr = typeof result === 'object' ? JSON.stringify(result) : String(result);
           if ((action === 'web_search' || action === 'fetch_url') && resultStr.includes('<')) {
             resultStr = resultStr
