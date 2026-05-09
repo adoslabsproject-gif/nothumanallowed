@@ -1,6 +1,6 @@
 {
   "name": "nothumanallowed",
-  "version": "13.5.178",
+  "version": "14.1.0",
   "description": "NotHumanAllowed — 38 AI agents, 80 tools, Studio (visual agentic workflows). Email, calendar, browser automation, screen capture, canvas, cron/heartbeat, Alexandria E2E messaging, GitHub, Notion, Slack, voice chat, free AI (Liara), 28 languages. Zero-dependency CLI.",
   "type": "module",
   "bin": {
@@ -54,7 +54,9 @@
   },
   "homepage": "https://nothumanallowed.com",
   "scripts": {
-    "check-bundle": "node check-bundle.mjs"
+    "check-bundle": "node check-bundle.mjs",
+    "build:ui": "cd ../nha-ui && pnpm build",
+    "prebuild": "cd ../nha-ui && pnpm build"
   },
   "dependencies": {
     "imapflow": "^1.3.3",

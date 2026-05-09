@@ -21,6 +21,7 @@ import {
   getEventsForDate,
   createEvent,
   updateEvent,
+  deleteEvent,
   listEvents,
   markAsRead,
   markAsUnread,
@@ -74,6 +75,7 @@ export const DESTRUCTIVE_ACTIONS = new Set([
   'calendar_create',
   'calendar_move',
   'calendar_update',
+  'calendar_delete',
   'contact_delete',
   'task_done',
   'task_delete',
@@ -153,6 +155,11 @@ TOOLS:
 13. calendar_week(startDate?: string)
     List all events for a full week starting from startDate (YYYY-MM-DD). Defaults to current week.
 
+13b. calendar_month(month?: string)
+    List ALL events for a full calendar month. month is YYYY-MM (e.g. "2026-05"). Defaults to current month.
+    USE THIS when the user asks for events in a month: "appuntamenti di maggio", "eventi di giugno", "show me April", "cosa ho in marzo".
+    NEVER use calendar_find with month names — use calendar_month instead.
+
 14. calendar_create(summary: string, start: string, end: string, attendees?: string[], description?: string)
     Create a calendar event. start/end are ISO 8601 datetime strings.
     ALWAYS confirm with the user before creating.
@@ -160,18 +167,25 @@ TOOLS:
 15. calendar_move(eventId: string, newStart: string, newEnd: string)
     Reschedule an event. ALWAYS confirm before moving.
 
-16. calendar_find(query: string, daysAhead?: number)
-    Search for a calendar event by name/keyword in the next N days (default 7). Returns matching events with their IDs.
+16. calendar_date(date: string)
+    List all events for a specific date (YYYY-MM-DD). Use this when the user asks about a specific day (e.g. "May 13", "next Tuesday"). ALWAYS prefer this over calendar_week when a specific date is mentioned.
+
+17. calendar_find(query: string, daysAhead?: number)
+    Search for a calendar event by name/keyword in the next N days (default 30). Returns matching events with their IDs.
     ALWAYS use this FIRST when the user wants to modify an event — you need the eventId.
 
-17. calendar_update(eventId: string, summary?: string, location?: string, description?: string, start?: string, end?: string)
+18. calendar_update(eventId: string, summary?: string, location?: string, description?: string, start?: string, end?: string)
     Update ANY field of an existing calendar event: title, location, description, start time, end time.
     You MUST call calendar_find first to get the eventId. Only include fields that need to change. ALWAYS confirm before updating.
 
-18. schedule_meeting(clientName: string, subject: string, location: string, durationMinutes: number, dateFrom: string, dateTo: string, workdayStart?: number, workdayEnd?: number)
+19. calendar_delete(eventId: string)
+    Delete (permanently remove) a calendar event by its eventId.
+    You MUST call calendar_find first to get the eventId. ALWAYS confirm with the user before deleting.
+
+20. schedule_meeting(clientName: string, subject: string, location: string, durationMinutes: number, dateFrom: string, dateTo: string, workdayStart?: number, workdayEnd?: number)
     Find optimal meeting slots considering existing calendar events, locations, and estimated travel time between appointments. Returns ranked slots with travel info. dateFrom and dateTo are YYYY-MM-DD.
 
-19. schedule_draft_email(clientName: string, subject: string, location: string, durationMinutes: number, dateFrom: string, dateTo: string)
+20. schedule_draft_email(clientName: string, subject: string, location: string, durationMinutes: number, dateFrom: string, dateTo: string)
     Same as schedule_meeting, but also generates a professional email proposing the top 3 slots to the client. Returns both the slots and a ready-to-send email draft.
 
 --- TASKS ---
@@ -540,6 +554,50 @@ TOOLS:
     Download a file from Drive. For Google Docs/Sheets/Slides, exports as PDF.
     Returns the file as base64-encoded content. Use for binary files, PDFs, images.
 
+--- FINANCIAL MARKET DATA (Real-time) ---
+
+82. market_price(ticker: string)
+    Get the real-time price quote for any stock, ETF, index, forex pair, or futures contract.
+    Uses Yahoo Finance — no API key needed. Returns: price, change %, day range, 52-week range, volume.
+    ticker examples: "AAPL" (Apple), "TSLA" (Tesla), "ENI.MI" (Borsa Italiana), "BMW.DE" (DAX),
+    "BTC-USD" (Bitcoin), "GC=F" (Gold futures), "EURUSD=X" (EUR/USD forex), "^GSPC" (S&P 500).
+    ALWAYS use this before any financial analysis — get real data first.
+
+83. market_chart(ticker: string, period?: string, interval?: string)
+    Get OHLCV price history + computed technical indicators (RSI-14, MACD 12/26/9, EMA-20, EMA-50, ATR-14).
+    period: "1d" "5d" "1mo" "3mo" "6mo" "1y" "2y" "5y" "ytd" "max". Default: "3mo".
+    interval: "1m" "5m" "15m" "1h" "1d" "1wk" "1mo". Default: "1d".
+    Returns last 10 candles + full indicator breakdown + trend signal.
+    Use this for technical analysis, support/resistance, momentum assessment.
+
+84. market_indicators(ticker: string)
+    Get comprehensive fundamental analysis: P/E, P/B, PEG, EV/EBITDA, EV/Revenue, gross/EBITDA/profit margins,
+    ROE, ROA, debt/equity, current ratio, quick ratio, revenue growth, market cap, enterprise value,
+    dividend yield, beta, short interest, analyst consensus (buy/hold/sell), and price target.
+    Use this for fundamental/value analysis, DCF inputs, and screener-style evaluation.
+
+85. macro_data(indicator?: string)
+    Get real-time macroeconomic data. indicator: "all" | "yield" | "commodities" | "indices" | "macro".
+    Default: "all" — returns everything.
+    - yield: U.S. Treasury yield curve (3M/5Y/10Y/30Y) + inversion status (recession signal)
+    - commodities: Gold, Silver, WTI Crude, Natural Gas, EUR/USD, DXY Dollar Index
+    - indices: S&P 500, Nasdaq 100, Dow, Russell 2000, VIX, EURO STOXX 50, DAX, CAC 40, Nikkei, Shanghai
+    - macro: FRED indicators (Fed Funds Rate, CPI, Unemployment, GDP) — requires FRED_API_KEY
+    ALWAYS use this for macro regime analysis, risk-on/risk-off context, and cross-asset positioning.
+
+86. crypto_data(coin: string, vs_currency?: string)
+    Get real-time crypto data from CoinGecko (no API key needed, 60 req/min free tier).
+    coin: CoinGecko ID like "bitcoin", "ethereum", "solana", "ripple". vs_currency default: "usd".
+    Returns: price, 24h/7d/30d/1y performance, market cap, volume, ATH, circulating supply,
+    max supply, sparkline momentum signal, and global crypto market context (BTC/ETH dominance).
+    Also returns supply scarcity % and ATH distance zone (fear/greed proxy).
+
+87. market_news(ticker?: string, query?: string, limit?: number)
+    Get latest financial news from Yahoo Finance for a ticker or topic. limit default: 10, max: 20.
+    ticker: "AAPL", "BTC-USD", "^SPX" — returns news specific to that asset.
+    query: free-text like "Federal Reserve inflation", "AI chips", "earnings season".
+    Returns: headline, source, publish time, and URL for each article.
+
 --- CODE EXECUTION ---
 
 81. execute_code(language: "python"|"javascript"|"typescript", code: string, files?: [{path: string, content: string}], packages?: string[], stdin?: string, timeout?: number)
@@ -578,6 +636,9 @@ RULES:
 - BROWSER TIP: Cookie/consent banners are auto-dismissed when a page loads. Do NOT waste time clicking cookie buttons — the browser handles it automatically.
 - BROWSER TIP: When extracting data from a page, prefer browser_js with code "document.body.innerText.slice(0, 3000)" to get all visible text. This is more reliable than guessing CSS selectors.
 - API TIP: For npm package info, use fetch_url with the registry API: fetch_url("https://registry.npmjs.org/PACKAGE/latest") for version/description, and fetch_url("https://api.npmjs.org/downloads/point/last-week/PACKAGE") for weekly downloads. These are JSON APIs, much more reliable than scraping the npm website.
+- FINANCE TIP: For ANY financial analysis request, ALWAYS call real data tools FIRST — never fabricate prices, never use training data prices (they are stale). Workflow: market_price → market_chart → market_indicators → macro_data → analysis. For crypto: crypto_data → market_news. For macro regime: macro_data(indicator="all").
+- FINANCE TIP: After gathering data, use canvas_render to produce a professional HTML report with Chart.js charts (price chart, indicator gauges, summary table). A visual report is ALWAYS superior to plain text for financial analysis. Use dark theme: bg #0a0a0a, green #00ff41, amber #f59e0b, red #ff4444, blue #00e5ff.
+- FINANCE TIP: When building a trading strategy, ALWAYS cover: 1) macro regime (macro_data), 2) asset-specific technicals (market_chart), 3) fundamentals if equity (market_indicators), 4) news catalyst (market_news), 5) entry/exit/stop levels with specific prices, 6) position sizing (% of portfolio), 7) risk/reward ratio.
 `.trim();
 
 // ── Liara compact system prompt ───────────────────────────────────────────────
@@ -593,11 +654,12 @@ When the user's request requires an action, output one or more fenced JSON block
 \`\`\`
 Multiple blocks allowed for chaining. Include natural text before/between/after blocks.
 Never output a JSON block as a suggestion — every block executes immediately.
+FINANCE: For financial analysis — ALWAYS call real data tools first (market_price → market_chart → market_indicators OR crypto_data + macro_data), then canvas_render with a full Chart.js HTML dashboard (dark theme: bg #070b0f, green #00ff41, amber #f59e0b, red #ff4444, blue #00e5ff). Never invent prices.
 
 AVAILABLE TOOLS:
 gmail_list · gmail_read · gmail_send · gmail_draft · gmail_reply · gmail_mark_read · gmail_mark_unread · gmail_archive · gmail_delete · gmail_send_attach
 imap_accounts · imap_list · imap_read · imap_send · imap_sync · imap_labels · imap_mark_read · imap_reply · imap_thread · imap_search · imap_mark_starred · imap_trash · imap_draft · imap_send_template · imap_bulk_send
-calendar_today · calendar_tomorrow · calendar_upcoming · calendar_week · calendar_create · calendar_move · calendar_find · calendar_update · schedule_meeting · schedule_draft_email
+calendar_today · calendar_tomorrow · calendar_date · calendar_upcoming · calendar_week · calendar_month · calendar_create · calendar_move · calendar_find · calendar_update · calendar_delete · schedule_meeting · schedule_draft_email
 task_list · task_add · task_done · task_move · task_delete · task_clear · task_edit
 contact_search · contact_add · contact_update · contact_delete
 gtask_list · gtask_add · gtask_complete
@@ -613,7 +675,8 @@ canvas_render · canvas_clear
 collab_send · collab_read
 file_list · file_read · file_write · file_info · file_search
 drive_list · drive_read · drive_upload · drive_update · drive_delete · drive_info · drive_folder · drive_download
-maps_directions · notify_remind · birthdays_upcoming · birthday_add · execute_code`.trim();
+maps_directions · notify_remind · birthdays_upcoming · birthday_add · execute_code
+market_price · market_chart · market_indicators · macro_data · crypto_data · market_news`.trim();
 
 // ── Action Parser ────────────────────────────────────────────────────────────
 
@@ -627,12 +690,19 @@ maps_directions · notify_remind · birthdays_upcoming · birthday_add · execut
 export function parseActions(text) {
   const actions = [];
   const textParts = [];
+
+  // Normalize: some LLMs output "json ... " (double-quote fences) instead of ```json ... ```
+  // Replace "json\n{...}\n" patterns with proper ```json fences before parsing
+  const normalized = text
+    .replace(/"json\s*\n([\s\S]*?)\n\s*"/g, (_, body) => '```json\n' + body.trim() + '\n```')
+    .replace(/'json\s*\n([\s\S]*?)\n\s*'/g, (_, body) => '```json\n' + body.trim() + '\n```');
+
   const fenceRegex = /```json\s*\n?([\s\S]*?)```/g;
   let lastIndex = 0;
   let match;
 
-  while ((match = fenceRegex.exec(text)) !== null) {
-    const before = text.slice(lastIndex, match.index).trim();
+  while ((match = fenceRegex.exec(normalized)) !== null) {
+    const before = normalized.slice(lastIndex, match.index).trim();
     if (before) textParts.push(before);
 
     try {
@@ -647,8 +717,29 @@ export function parseActions(text) {
     lastIndex = match.index + match[0].length;
   }
 
-  const trailing = text.slice(lastIndex).trim();
+  const trailing = normalized.slice(lastIndex).trim();
   if (trailing) textParts.push(trailing);
+
+  // Fallback: if no fenced blocks found, scan for bare {"action": ...} objects in the text
+  if (actions.length === 0) {
+    const bareRegex = /\{[\s\S]*?"action"\s*:\s*"[^"]+[\s\S]*?\}/g;
+    let bareMatch;
+    const consumed = new Set();
+    while ((bareMatch = bareRegex.exec(text)) !== null) {
+      try {
+        const parsed = JSON.parse(bareMatch[0]);
+        if (parsed.action && typeof parsed.action === 'string' && !consumed.has(bareMatch[0])) {
+          actions.push({ action: parsed.action, params: parsed.params || {} });
+          consumed.add(bareMatch[0]);
+        }
+      } catch { /* not valid JSON, skip */ }
+    }
+    // If we found bare actions, rebuild textParts stripping out the JSON blobs
+    if (actions.length > 0) {
+      const cleaned = text.replace(/\{[\s\S]*?"action"\s*:\s*"[^"]+[\s\S]*?\}/g, '').trim();
+      return { textParts: cleaned ? [cleaned] : [], actions };
+    }
+  }
 
   return { textParts, actions };
 }
@@ -1199,6 +1290,14 @@ export async function executeTool(action, params, config) {
       return formatEvents(events);
     }
 
+    case 'calendar_date': {
+      const dateStr = params.date;
+      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return 'Invalid date format. Use YYYY-MM-DD.';
+      const events = await getEventsForDate(config, dateStr);
+      if (events.length === 0) return `No events scheduled for ${dateStr}.`;
+      return formatEvents(events);
+    }
+
     case 'calendar_upcoming': {
       const hours = params.hours || 2;
       const events = await getUpcomingEvents(config, hours);
@@ -1253,9 +1352,49 @@ export async function executeTool(action, params, config) {
       return lines.join('\n');
     }
 
+    case 'calendar_month': {
+      // Determine target month: params.month = 'YYYY-MM' or defaults to current month
+      const now = new Date();
+      let year = now.getFullYear();
+      let month = now.getMonth(); // 0-based
+
+      if (params.month && /^\d{4}-\d{2}$/.test(params.month)) {
+        const parts = params.month.split('-');
+        year = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10) - 1; // convert to 0-based
+      }
+
+      const from = new Date(year, month, 1, 0, 0, 0);
+      const to = new Date(year, month + 1, 1, 0, 0, 0);
+      const events = await listEvents(config, 'primary', from, to);
+      const monthLabel = from.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+
+      if (events.length === 0) return `Nessun evento trovato per ${monthLabel}.`;
+
+      const byDay = new Map();
+      for (const e of events) {
+        const day = e.start.split('T')[0];
+        if (!byDay.has(day)) byDay.set(day, []);
+        byDay.get(day).push(e);
+      }
+
+      const lines = [`📅 ${monthLabel} — ${events.length} eventi:`];
+      for (const [day, dayEvents] of [...byDay.entries()].sort()) {
+        const d = new Date(day + 'T12:00:00');
+        const dayName = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
+        lines.push(`\n${dayName}:`);
+        for (const e of dayEvents) {
+          const time = e.isAllDay ? 'Tutto il giorno' : `${formatTime(e.start)} - ${formatTime(e.end)}`;
+          const loc = e.location ? ` @ ${e.location}` : '';
+          lines.push(`  ${time} — ${e.summary}${loc}`);
+        }
+      }
+      return lines.join('\n');
+    }
+
     case 'calendar_find': {
       const query = (params.query || '').toLowerCase();
-      const daysAhead = params.daysAhead || 7;
+      const daysAhead = params.daysAhead || 30;
       const from = new Date();
       const to = new Date(from.getTime() + daysAhead * 86400000);
       const events = await listEvents(config, 'primary', from, to);
@@ -1305,6 +1444,25 @@ export async function executeTool(action, params, config) {
       await updateEvent(config, 'primary', eventId, patch);
       const changes = Object.keys(patch).join(', ');
       return `Event updated successfully (${changes}). ${params.location ? `New location: ${params.location}` : ''}`;
+    }
+
+    case 'calendar_delete': {
+      if (!params.eventId) return 'eventId required. Call calendar_find first to get the eventId.';
+      // Smart eventId resolution: if it looks like a name instead of a Google Calendar ID, search for it
+      let delEventId = params.eventId;
+      if (delEventId && (delEventId.includes(' ') || delEventId.length < 10 || /[A-Z]/.test(delEventId))) {
+        const fromD = new Date();
+        const toD = new Date(fromD.getTime() + 60 * 86400000);
+        const evts = await listEvents(config, 'primary', fromD, toD);
+        const m = evts.find(e => (e.summary || '').toLowerCase().includes(delEventId.toLowerCase()));
+        if (m) {
+          delEventId = m.id;
+        } else {
+          return `Could not find event matching "${params.eventId}" in the next 60 days. Use calendar_find to search first.`;
+        }
+      }
+      await deleteEvent(config, 'primary', delEventId);
+      return `Event deleted successfully.`;
     }
 
     // ── Smart Scheduling ──────────────────────────────────────────────────
@@ -2558,6 +2716,612 @@ export async function executeTool(action, params, config) {
         return lines.join('\n');
       } finally {
         cleanup();
+      }
+    }
+
+    // ── Financial Market Data ────────────────────────────────────────────
+    // All endpoints are free-tier, no API key required for Yahoo Finance, CoinGecko.
+    // FRED macro data requires a free key (optional — falls back gracefully).
+
+    case 'market_price': {
+      const ticker = (params.ticker || '').trim().toUpperCase();
+      if (!ticker) return 'market_price: ticker is required (e.g. "AAPL", "BTC-USD", "EURUSD=X")';
+
+      try {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1m&range=1d&includePrePost=true&events=div%2Csplits`;
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)',
+            'Accept': 'application/json',
+          },
+        });
+        if (!res.ok) return `market_price: Yahoo Finance returned HTTP ${res.status} for ${ticker}. Check the ticker symbol.`;
+        const data = await res.json();
+        const meta = data?.chart?.result?.[0]?.meta;
+        if (!meta) return `market_price: No data found for ticker "${ticker}". Try adding the exchange suffix (e.g. "ENI.MI" for Borsa Italiana, "BMW.DE" for XETRA).`;
+
+        const price = meta.regularMarketPrice;
+        const prev  = meta.previousClose || meta.chartPreviousClose;
+        const change = prev ? price - prev : null;
+        const changePct = prev ? ((price - prev) / prev) * 100 : null;
+        const currency = meta.currency || 'USD';
+        const exchange = meta.exchangeName || meta.fullExchangeName || '';
+        const marketState = meta.marketState || 'UNKNOWN';
+        const dayHigh = meta.regularMarketDayHigh;
+        const dayLow  = meta.regularMarketDayLow;
+        const volume  = meta.regularMarketVolume;
+        const fiftyTwoHigh = meta.fiftyTwoWeekHigh;
+        const fiftyTwoLow  = meta.fiftyTwoWeekLow;
+
+        const fmtNum = (n, d=2) => n != null ? n.toFixed(d) : 'N/A';
+        const fmtVol = (n) => {
+          if (n == null) return 'N/A';
+          if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+          if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+          if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+          return n.toString();
+        };
+
+        const arrow = change == null ? '' : change >= 0 ? '+' : '';
+        const lines = [
+          `${ticker} — ${exchange} [${marketState}]`,
+          `Price: ${fmtNum(price)} ${currency}  ${arrow}${fmtNum(change)} (${arrow}${fmtNum(changePct)}%)`,
+          `Day Range: ${fmtNum(dayLow)} – ${fmtNum(dayHigh)}`,
+          `52-Week Range: ${fmtNum(fiftyTwoLow)} – ${fmtNum(fiftyTwoHigh)}`,
+          `Volume: ${fmtVol(volume)}`,
+          `As of: ${new Date(meta.regularMarketTime * 1000).toISOString()}`,
+        ];
+        return lines.join('\n');
+      } catch (e) {
+        return `market_price error: ${e.message}`;
+      }
+    }
+
+    case 'market_chart': {
+      const ticker   = (params.ticker || '').trim().toUpperCase();
+      const period   = params.period   || '3mo';  // 1d 5d 1mo 3mo 6mo 1y 2y 5y 10y ytd max
+      const interval = params.interval || '1d';   // 1m 2m 5m 15m 30m 60m 90m 1h 1d 5d 1wk 1mo 3mo
+      if (!ticker) return 'market_chart: ticker is required';
+
+      try {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${period}&events=div%2Csplits`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!res.ok) return `market_chart: HTTP ${res.status} for ${ticker}`;
+        const data = await res.json();
+        const result = data?.chart?.result?.[0];
+        if (!result) return `market_chart: No data for "${ticker}"`;
+
+        const meta        = result.meta;
+        const timestamps  = result.timestamp || [];
+        const ohlcv       = result.indicators?.quote?.[0] || {};
+        const closes      = ohlcv.close  || [];
+        const opens       = ohlcv.open   || [];
+        const highs       = ohlcv.high   || [];
+        const lows        = ohlcv.low    || [];
+        const volumes     = ohlcv.volume || [];
+
+        // Filter valid candles
+        const candles = timestamps.map((t, i) => ({
+          date: new Date(t * 1000).toISOString().slice(0, 10),
+          open:  opens[i],  high: highs[i], low: lows[i],
+          close: closes[i], volume: volumes[i],
+        })).filter(c => c.close != null);
+
+        if (candles.length < 2) return `market_chart: insufficient data for ${ticker}`;
+
+        // ── Technical indicators (computed in pure JS — no dependencies) ──
+
+        // EMA helper
+        const ema = (arr, n) => {
+          const k = 2 / (n + 1);
+          const out = [];
+          let prev = null;
+          for (const v of arr) {
+            if (v == null) { out.push(null); continue; }
+            if (prev == null) { out.push(v); prev = v; continue; }
+            const e = v * k + prev * (1 - k);
+            out.push(e);
+            prev = e;
+          }
+          return out;
+        };
+
+        const priceArr = candles.map(c => c.close);
+
+        // EMA 20 & 50
+        const ema20arr = ema(priceArr, 20);
+        const ema50arr = ema(priceArr, 50);
+        const ema20 = ema20arr[ema20arr.length - 1];
+        const ema50 = ema50arr[ema50arr.length - 1];
+
+        // RSI 14
+        let gains = 0, losses = 0;
+        const rsiBars = priceArr.slice(-15);
+        for (let i = 1; i < rsiBars.length; i++) {
+          const d = rsiBars[i] - rsiBars[i - 1];
+          if (d > 0) gains += d; else losses += Math.abs(d);
+        }
+        const avgGain = gains / 14;
+        const avgLoss = losses / 14;
+        const rsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+
+        // MACD (12/26/9)
+        const ema12arr = ema(priceArr, 12);
+        const ema26arr = ema(priceArr, 26);
+        const macdLine  = ema12arr.map((v, i) => (v != null && ema26arr[i] != null) ? v - ema26arr[i] : null);
+        const macdSignal = ema(macdLine.filter(v => v != null), 9);
+        const macdVal    = macdLine[macdLine.length - 1];
+        const signalVal  = macdSignal[macdSignal.length - 1];
+        const macdHist   = macdVal != null && signalVal != null ? macdVal - signalVal : null;
+
+        // ATR 14
+        const atrPeriod = 14;
+        const trs = candles.slice(-(atrPeriod + 1)).map((c, i, arr) => {
+          if (i === 0) return c.high - c.low;
+          const prev = arr[i - 1].close;
+          return Math.max(c.high - c.low, Math.abs(c.high - prev), Math.abs(c.low - prev));
+        });
+        const atr = trs.reduce((a, b) => a + b, 0) / trs.length;
+
+        // Volume SMA 20
+        const vols = volumes.filter(v => v != null);
+        const volSma20 = vols.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, vols.length);
+
+        const lastCandle = candles[candles.length - 1];
+        const firstCandle = candles[0];
+        const totalReturn = ((lastCandle.close / firstCandle.close) - 1) * 100;
+
+        const maxHigh = Math.max(...candles.map(c => c.high).filter(Boolean));
+        const minLow  = Math.min(...candles.map(c => c.low).filter(Boolean));
+
+        const fmt2 = (n) => n != null ? n.toFixed(2) : 'N/A';
+        const fmtV = (n) => {
+          if (n == null) return 'N/A';
+          if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+          if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+          return (n/1e3).toFixed(0) + 'K';
+        };
+
+        const rsiSignal = rsi < 30 ? 'OVERSOLD' : rsi > 70 ? 'OVERBOUGHT' : 'NEUTRAL';
+        const macdSignalStr = macdHist != null ? (macdHist > 0 ? 'BULLISH' : 'BEARISH') : 'N/A';
+        const trend = ema20 && ema50 ? (ema20 > ema50 ? 'BULLISH (EMA20 > EMA50)' : 'BEARISH (EMA20 < EMA50)') : 'N/A';
+
+        const lines = [
+          `${ticker} Chart — ${period} / ${interval} bars (${candles.length} candles)`,
+          `Currency: ${meta.currency || 'USD'} | Exchange: ${meta.exchangeName || ''}`,
+          '',
+          `── Price Summary ──`,
+          `Current:  ${fmt2(lastCandle.close)}  (${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}% period return)`,
+          `Period High: ${fmt2(maxHigh)}  |  Period Low: ${fmt2(minLow)}`,
+          `Last Candle: O ${fmt2(lastCandle.open)} H ${fmt2(lastCandle.high)} L ${fmt2(lastCandle.low)} C ${fmt2(lastCandle.close)} V ${fmtV(lastCandle.volume)}`,
+          '',
+          `── Technical Indicators ──`,
+          `RSI(14):     ${fmt2(rsi)} → ${rsiSignal}`,
+          `MACD(12,26,9): Line ${fmt2(macdVal)} / Signal ${fmt2(signalVal)} / Hist ${fmt2(macdHist)} → ${macdSignalStr}`,
+          `EMA(20):     ${fmt2(ema20)}`,
+          `EMA(50):     ${fmt2(ema50)}`,
+          `Trend:       ${trend}`,
+          `ATR(14):     ${fmt2(atr)} (volatility proxy)`,
+          `Vol SMA(20): ${fmtV(volSma20)}  |  Last Volume: ${fmtV(lastCandle.volume)}`,
+          '',
+          `── Last 10 Candles (OHLCV) ──`,
+          candles.slice(-10).map(c =>
+            `${c.date}  O ${fmt2(c.open)} H ${fmt2(c.high)} L ${fmt2(c.low)} C ${fmt2(c.close)}  V ${fmtV(c.volume)}`
+          ).join('\n'),
+        ];
+
+        return lines.join('\n');
+      } catch (e) {
+        return `market_chart error: ${e.message}`;
+      }
+    }
+
+    case 'market_indicators': {
+      const ticker = (params.ticker || '').trim().toUpperCase();
+      if (!ticker) return 'market_indicators: ticker is required';
+
+      try {
+        // Fetch quote summary — fundamentals, key stats, analyst data
+        const url = `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=summaryDetail%2CdefaultKeyStatistics%2CfinancialData%2CassetProfile%2CearningsTrend%2CrecommendationTrend`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!res.ok) return `market_indicators: HTTP ${res.status} for ${ticker}`;
+        const data = await res.json();
+        const r = data?.quoteSummary?.result?.[0];
+        if (!r) return `market_indicators: No fundamental data for "${ticker}"`;
+
+        const sd  = r.summaryDetail || {};
+        const ks  = r.defaultKeyStatistics || {};
+        const fd  = r.financialData || {};
+        const ap  = r.assetProfile || {};
+        const rt  = r.recommendationTrend?.trend?.[0] || {};
+
+        const fmtN  = (v) => v?.raw != null ? v.raw.toFixed(2) : (v?.fmt || 'N/A');
+        const fmtPct = (v) => v?.raw != null ? (v.raw * 100).toFixed(2) + '%' : (v?.fmt || 'N/A');
+        const fmtLg = (v) => {
+          const n = v?.raw ?? v;
+          if (n == null) return 'N/A';
+          if (n >= 1e12) return (n/1e12).toFixed(2) + 'T';
+          if (n >= 1e9)  return (n/1e9).toFixed(2) + 'B';
+          if (n >= 1e6)  return (n/1e6).toFixed(2) + 'M';
+          return n.toFixed(0);
+        };
+
+        const totalBuy = (rt.strongBuy?.raw || 0) + (rt.buy?.raw || 0);
+        const totalSell = (rt.strongSell?.raw || 0) + (rt.sell?.raw || 0);
+        const totalHold = rt.hold?.raw || 0;
+        const analystSum = totalBuy + totalSell + totalHold;
+        const analystRec = analystSum > 0
+          ? `Buy: ${totalBuy} | Hold: ${totalHold} | Sell: ${totalSell} (${analystSum} analysts)`
+          : 'N/A';
+
+        const lines = [
+          `${ticker} — Fundamental & Key Indicators`,
+          `Sector: ${ap.sector || 'N/A'}  |  Industry: ${ap.industry || 'N/A'}`,
+          '',
+          `── Valuation ──`,
+          `Market Cap:       ${fmtLg(sd.marketCap)}`,
+          `Enterprise Value: ${fmtLg(ks.enterpriseValue)}`,
+          `P/E (trailing):   ${fmtN(sd.trailingPE)}`,
+          `P/E (forward):    ${fmtN(sd.forwardPE)}`,
+          `PEG Ratio:        ${fmtN(ks.pegRatio)}`,
+          `P/B Ratio:        ${fmtN(ks.priceToBook)}`,
+          `EV/EBITDA:        ${fmtN(ks.enterpriseToEbitda)}`,
+          `EV/Revenue:       ${fmtN(ks.enterpriseToRevenue)}`,
+          '',
+          `── Profitability ──`,
+          `Revenue (TTM):        ${fmtLg(fd.totalRevenue)}`,
+          `Revenue Growth (YoY): ${fmtPct(fd.revenueGrowth)}`,
+          `Gross Margin:         ${fmtPct(fd.grossMargins)}`,
+          `EBITDA Margin:        ${fmtPct(fd.ebitdaMargins)}`,
+          `Operating Margin:     ${fmtPct(fd.operatingMargins)}`,
+          `Profit Margin:        ${fmtPct(fd.profitMargins)}`,
+          `ROE:                  ${fmtPct(fd.returnOnEquity)}`,
+          `ROA:                  ${fmtPct(fd.returnOnAssets)}`,
+          '',
+          `── Balance Sheet ──`,
+          `Total Cash:    ${fmtLg(fd.totalCash)}`,
+          `Total Debt:    ${fmtLg(fd.totalDebt)}`,
+          `Debt/Equity:   ${fmtN(fd.debtToEquity)}`,
+          `Current Ratio: ${fmtN(fd.currentRatio)}`,
+          `Quick Ratio:   ${fmtN(fd.quickRatio)}`,
+          '',
+          `── Dividends & Shares ──`,
+          `Dividend Yield:  ${fmtPct(sd.dividendYield)}`,
+          `Payout Ratio:    ${fmtPct(sd.payoutRatio)}`,
+          `Shares Out:      ${fmtLg(ks.sharesOutstanding)}`,
+          `Float:           ${fmtLg(ks.floatShares)}`,
+          `Short Interest:  ${fmtPct(ks.shortPercentOfFloat)}`,
+          `Beta:            ${fmtN(sd.beta)}`,
+          '',
+          `── Analyst Consensus ──`,
+          `Recommendation: ${fd.recommendationKey?.toUpperCase() || 'N/A'}`,
+          `Target Price:   ${fmtN(fd.targetMeanPrice)} (low ${fmtN(fd.targetLowPrice)} / high ${fmtN(fd.targetHighPrice)})`,
+          `Analysts:       ${analystRec}`,
+        ];
+
+        return lines.join('\n');
+      } catch (e) {
+        return `market_indicators error: ${e.message}`;
+      }
+    }
+
+    case 'macro_data': {
+      // Returns key macro indicators from multiple free sources
+      // FRED requires a free API key (optional — config.fredApiKey or env FRED_API_KEY)
+      const indicator = (params.indicator || 'all').toLowerCase();
+      const fredKey = config?.fredApiKey || process.env.FRED_API_KEY || null;
+
+      const results = [];
+
+      // ── 1. Treasury yields from Yahoo Finance (always available) ──
+      const yieldTickers = [
+        ['^IRX',  '13-Week T-Bill'],
+        ['^FVX',  '5-Year T-Note'],
+        ['^TNX',  '10-Year T-Note'],
+        ['^TYX',  '30-Year T-Bond'],
+      ];
+
+      if (indicator === 'all' || indicator === 'yield' || indicator === 'yields' || indicator === 'curve') {
+        const yieldResults = await Promise.all(yieldTickers.map(async ([sym, name]) => {
+          try {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
+            const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+            const d = await res.json();
+            const meta = d?.chart?.result?.[0]?.meta;
+            if (meta?.regularMarketPrice) return `  ${name.padEnd(20)} ${meta.regularMarketPrice.toFixed(3)}%`;
+            return `  ${name.padEnd(20)} N/A`;
+          } catch { return `  ${name.padEnd(20)} N/A`; }
+        }));
+        results.push('── U.S. Treasury Yield Curve ──');
+        results.push(...yieldResults);
+        // Inversion check
+        try {
+          const r2 = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/%5EIRX?interval=1d&range=5d', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+          const r10 = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/%5ETNX?interval=1d&range=5d', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+          const d2 = (await r2.json())?.chart?.result?.[0]?.meta;
+          const d10 = (await r10.json())?.chart?.result?.[0]?.meta;
+          if (d2 && d10) {
+            const spread = d10.regularMarketPrice - d2.regularMarketPrice;
+            const inv = spread < 0 ? ' *** INVERTED — recession signal ***' : '';
+            results.push(`  10Y-3M Spread: ${spread.toFixed(3)}%${inv}`);
+          }
+        } catch {}
+        results.push('');
+      }
+
+      // ── 2. Key commodities & FX ──
+      const commodTickers = [
+        ['GC=F',   'Gold ($/oz)'],
+        ['SI=F',   'Silver ($/oz)'],
+        ['CL=F',   'WTI Crude Oil ($/bbl)'],
+        ['NG=F',   'Nat. Gas ($/MMBtu)'],
+        ['EURUSD=X', 'EUR/USD'],
+        ['DX-Y.NYB', 'DXY (Dollar Index)'],
+      ];
+
+      if (indicator === 'all' || indicator === 'commodities' || indicator === 'fx' || indicator === 'commodity') {
+        const commodResults = await Promise.all(commodTickers.map(async ([sym, name]) => {
+          try {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
+            const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+            const d = await res.json();
+            const meta = d?.chart?.result?.[0]?.meta;
+            if (!meta?.regularMarketPrice) return `  ${name.padEnd(26)} N/A`;
+            const prev = meta.previousClose || meta.chartPreviousClose;
+            const chg = prev ? ((meta.regularMarketPrice - prev) / prev * 100).toFixed(2) : null;
+            const chgStr = chg != null ? ` (${parseFloat(chg) >= 0 ? '+' : ''}${chg}%)` : '';
+            return `  ${name.padEnd(26)} ${meta.regularMarketPrice.toFixed(3)}${chgStr}`;
+          } catch { return `  ${name.padEnd(26)} N/A`; }
+        }));
+        results.push('── Commodities & FX ──');
+        results.push(...commodResults);
+        results.push('');
+      }
+
+      // ── 3. Major equity indices ──
+      const indexTickers = [
+        ['^GSPC',  'S&P 500'],
+        ['^NDX',   'Nasdaq 100'],
+        ['^DJI',   'Dow Jones'],
+        ['^RUT',   'Russell 2000'],
+        ['^VIX',   'VIX (Fear Index)'],
+        ['^STOXX50E', 'EURO STOXX 50'],
+        ['^FCHI',  'CAC 40'],
+        ['^GDAXI', 'DAX'],
+        ['^N225',  'Nikkei 225'],
+        ['000001.SS', 'Shanghai Comp.'],
+      ];
+
+      if (indicator === 'all' || indicator === 'indices' || indicator === 'index' || indicator === 'equity') {
+        const idxResults = await Promise.all(indexTickers.map(async ([sym, name]) => {
+          try {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
+            const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+            const d = await res.json();
+            const meta = d?.chart?.result?.[0]?.meta;
+            if (!meta?.regularMarketPrice) return `  ${name.padEnd(20)} N/A`;
+            const prev = meta.previousClose || meta.chartPreviousClose;
+            const chg = prev ? ((meta.regularMarketPrice - prev) / prev * 100).toFixed(2) : null;
+            const chgStr = chg != null ? ` (${parseFloat(chg) >= 0 ? '+' : ''}${chg}%)` : '';
+            return `  ${name.padEnd(20)} ${meta.regularMarketPrice.toFixed(2)}${chgStr}`;
+          } catch { return `  ${name.padEnd(20)} N/A`; }
+        }));
+        results.push('── Global Equity Indices ──');
+        results.push(...idxResults);
+        results.push('');
+      }
+
+      // ── 4. FRED macro indicators (requires free key) ──
+      if (fredKey && (indicator === 'all' || indicator === 'macro' || indicator === 'fred')) {
+        const fredSeries = [
+          ['FEDFUNDS',   'Fed Funds Rate'],
+          ['CPIAUCSL',   'CPI (YoY)'],
+          ['UNRATE',     'Unemployment Rate'],
+          ['GDP',        'US GDP (Annualized)'],
+          ['T10YIE',     '10Y Breakeven Inflation'],
+          ['IORB',       'Interest on Reserve Balances'],
+        ];
+        const fredResults = await Promise.all(fredSeries.map(async ([id, name]) => {
+          try {
+            const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${fredKey}&file_type=json&sort_order=desc&limit=2`;
+            const res = await fetch(url);
+            const d = await res.json();
+            const obs = d?.observations?.filter(o => o.value !== '.') || [];
+            const latest = obs[0];
+            if (!latest) return `  ${name.padEnd(30)} N/A`;
+            return `  ${name.padEnd(30)} ${latest.value}  (${latest.date})`;
+          } catch { return `  ${name.padEnd(30)} N/A`; }
+        }));
+        results.push('── FRED Macro Indicators ──');
+        results.push(...fredResults);
+        results.push('');
+      } else if (!fredKey && (indicator === 'macro' || indicator === 'fred')) {
+        results.push('── FRED Macro Indicators ──');
+        results.push('  FRED API key not configured. Set config.fredApiKey or FRED_API_KEY env var.');
+        results.push('  Free key at: https://fred.stlouisfed.org/docs/api/api_key.html');
+        results.push('');
+      }
+
+      if (results.length === 0) return `macro_data: unknown indicator "${params.indicator}". Use: all | yield | commodities | indices | macro`;
+      return [`Macro Overview — ${new Date().toUTCString()}`, '', ...results].join('\n');
+    }
+
+    case 'crypto_data': {
+      const coin = (params.coin || 'bitcoin').toLowerCase().replace(/\s+/g, '-');
+      const vsCurrency = (params.vs_currency || 'usd').toLowerCase();
+
+      try {
+        // CoinGecko free tier — no API key needed (60 req/min)
+        const [marketRes, globalRes] = await Promise.all([
+          fetch(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coin)}?localization=false&tickers=true&market_data=true&community_data=false&developer_data=false&sparkline=true`, {
+            headers: { 'Accept': 'application/json' },
+          }),
+          fetch('https://api.coingecko.com/api/v3/global', { headers: { 'Accept': 'application/json' } }),
+        ]);
+
+        if (!marketRes.ok) {
+          // Try searching by symbol
+          const searchRes = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(coin)}`, { headers: { 'Accept': 'application/json' } });
+          const searchData = await searchRes.json();
+          const found = searchData?.coins?.[0];
+          if (found) return `crypto_data: "${coin}" not found. Did you mean "${found.id}" (${found.symbol.toUpperCase()})? Retry with that id.`;
+          return `crypto_data: "${coin}" not found on CoinGecko.`;
+        }
+
+        const d  = await marketRes.json();
+        const gl = marketRes.ok && globalRes.ok ? (await globalRes.json())?.data : null;
+        const md = d.market_data;
+        const p  = md?.current_price?.[vsCurrency];
+        const mc = md?.market_cap?.[vsCurrency];
+        const vol = md?.total_volume?.[vsCurrency];
+        const h24 = md?.high_24h?.[vsCurrency];
+        const l24 = md?.low_24h?.[vsCurrency];
+        const chg1h  = md?.price_change_percentage_1h_in_currency?.[vsCurrency];
+        const chg24  = md?.price_change_percentage_24h_in_currency?.[vsCurrency];
+        const chg7d  = md?.price_change_percentage_7d_in_currency?.[vsCurrency];
+        const chg30d = md?.price_change_percentage_30d_in_currency?.[vsCurrency];
+        const chgYtd = md?.price_change_percentage_1y_in_currency?.[vsCurrency];
+        const ath    = md?.ath?.[vsCurrency];
+        const athDate = md?.ath_date?.[vsCurrency]?.slice(0, 10);
+        const athPct  = md?.ath_change_percentage?.[vsCurrency];
+        const supply  = md?.circulating_supply;
+        const maxSupply = md?.max_supply;
+        const mcRank = d.market_cap_rank;
+
+        const fmtP   = (n) => n != null ? n.toLocaleString('en-US', { maximumFractionDigits: 6 }) : 'N/A';
+        const fmtPct = (n) => n != null ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}%` : 'N/A';
+        const fmtLg  = (n) => {
+          if (n == null) return 'N/A';
+          if (n >= 1e12) return (n/1e12).toFixed(2) + 'T';
+          if (n >= 1e9)  return (n/1e9).toFixed(2) + 'B';
+          if (n >= 1e6)  return (n/1e6).toFixed(2) + 'M';
+          return n.toFixed(0);
+        };
+
+        // Sparkline momentum signal
+        const sparkline = md?.sparkline_in_7d?.price || [];
+        const sparkStart = sparkline[0];
+        const sparkEnd   = sparkline[sparkline.length - 1];
+        const sparkMomentum = sparkStart && sparkEnd ? ((sparkEnd - sparkStart) / sparkStart * 100).toFixed(2) : null;
+
+        // Supply inflation
+        const supplyPct = supply && maxSupply ? ((supply / maxSupply) * 100).toFixed(1) + '%' : 'uncapped';
+
+        // Fear/Greed proxy via ATH distance
+        const fearGreedy = athPct != null ? (athPct > -20 ? 'GREED ZONE' : athPct > -60 ? 'NEUTRAL' : 'FEAR ZONE') : 'N/A';
+
+        const lines = [
+          `${d.name} (${d.symbol?.toUpperCase()}) — CoinGecko  |  Rank #${mcRank || 'N/A'}`,
+          `Category: ${(d.categories || []).slice(0, 3).join(', ') || 'N/A'}`,
+          '',
+          `── Price & Market Data ──`,
+          `Price:       ${fmtP(p)} ${vsCurrency.toUpperCase()}`,
+          `24h Range:   ${fmtP(l24)} – ${fmtP(h24)}`,
+          `Market Cap:  ${fmtLg(mc)} ${vsCurrency.toUpperCase()}`,
+          `24h Volume:  ${fmtLg(vol)} ${vsCurrency.toUpperCase()}`,
+          `Vol/MC:      ${mc && vol ? (vol / mc * 100).toFixed(2) + '%' : 'N/A'}`,
+          '',
+          `── Performance ──`,
+          `1h:   ${fmtPct(chg1h)}`,
+          `24h:  ${fmtPct(chg24)}`,
+          `7d:   ${fmtPct(chg7d)}`,
+          `30d:  ${fmtPct(chg30d)}`,
+          `1y:   ${fmtPct(chgYtd)}`,
+          `7d Sparkline Momentum: ${sparkMomentum != null ? fmtPct(parseFloat(sparkMomentum)) : 'N/A'}`,
+          '',
+          `── On-Chain / Supply ──`,
+          `ATH:           ${fmtP(ath)} ${vsCurrency.toUpperCase()} (${athDate}) — ${fmtPct(athPct)} from ATH`,
+          `Circulating:   ${fmtLg(supply)} ${d.symbol?.toUpperCase() || ''}`,
+          `Max Supply:    ${maxSupply ? fmtLg(maxSupply) : 'None (uncapped)'}`,
+          `Supply %:      ${supplyPct}`,
+          `ATH Distance Zone: ${fearGreedy}`,
+        ];
+
+        // Global market context
+        if (gl) {
+          const glMcPct = gl.market_cap_percentage;
+          const btcDom = glMcPct?.btc ? glMcPct.btc.toFixed(1) + '%' : 'N/A';
+          const ethDom = glMcPct?.eth ? glMcPct.eth.toFixed(1) + '%' : 'N/A';
+          const totalMc = gl.total_market_cap?.[vsCurrency];
+          lines.push('');
+          lines.push('── Crypto Market Context ──');
+          lines.push(`Total Crypto Market Cap: ${fmtLg(totalMc)} ${vsCurrency.toUpperCase()}`);
+          lines.push(`BTC Dominance: ${btcDom}  |  ETH Dominance: ${ethDom}`);
+          lines.push(`Active Coins: ${(gl.active_cryptocurrencies || 0).toLocaleString()}`);
+        }
+
+        return lines.join('\n');
+      } catch (e) {
+        return `crypto_data error: ${e.message}`;
+      }
+    }
+
+    case 'market_news': {
+      const query  = params.query  || params.ticker || '';
+      const ticker = params.ticker || '';
+      const limit  = Math.min(params.limit || 10, 20);
+
+      try {
+        let articles = [];
+
+        // Source 1: Yahoo Finance news for a specific ticker
+        if (ticker) {
+          const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(ticker)}&newsCount=${limit}&quotesCount=0&enableFuzzyQuery=false`;
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)', 'Accept': 'application/json' } });
+          if (res.ok) {
+            const d = await res.json();
+            const news = d?.news || [];
+            articles = news.map(n => ({
+              title:     n.title,
+              source:    n.publisher,
+              published: n.providerPublishTime ? new Date(n.providerPublishTime * 1000).toISOString().slice(0, 16).replace('T', ' ') : 'N/A',
+              url:       n.link,
+            }));
+          }
+        }
+
+        // Source 2: Yahoo Finance search for general query
+        if (articles.length === 0 && query) {
+          const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&newsCount=${limit}&quotesCount=0`;
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)', 'Accept': 'application/json' } });
+          if (res.ok) {
+            const d = await res.json();
+            articles = (d?.news || []).map(n => ({
+              title:     n.title,
+              source:    n.publisher,
+              published: n.providerPublishTime ? new Date(n.providerPublishTime * 1000).toISOString().slice(0, 16).replace('T', ' ') : 'N/A',
+              url:       n.link,
+            }));
+          }
+        }
+
+        // Source 3: Fallback to web_search via fetch for financial news
+        if (articles.length === 0) {
+          const wt = await import('./web-tools.mjs');
+          const searchQ = query || ticker ? `${query || ticker} stock market news today` : 'financial markets news today';
+          const sr = await wt.webSearch(searchQ);
+          if (sr.results?.length > 0) {
+            articles = sr.results.slice(0, limit).map(r => ({
+              title:     r.title,
+              source:    r.url ? new URL(r.url).hostname.replace('www.', '') : 'Web',
+              published: 'recent',
+              url:       r.url,
+              snippet:   r.snippet,
+            }));
+          }
+        }
+
+        if (articles.length === 0) return `market_news: no news found for "${query || ticker}"`;
+
+        const label = ticker ? `${ticker} News` : query ? `News: "${query}"` : 'Financial News';
+        const header = `${label} — ${new Date().toUTCString()} (${articles.length} articles)`;
+        const body = articles.map((a, i) =>
+          `${i + 1}. ${a.title}\n   Source: ${a.source}  |  ${a.published}\n   ${a.url || ''}${a.snippet ? '\n   ' + a.snippet.slice(0, 200) : ''}`
+        ).join('\n\n');
+
+        return `${header}\n\n${body}`;
+      } catch (e) {
+        return `market_news error: ${e.message}`;
       }
     }
 

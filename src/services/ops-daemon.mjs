@@ -28,7 +28,8 @@ import { notify } from './notification.mjs';
 import { callAgent } from './llm.mjs';
 import { runPlanningPipeline } from './ops-pipeline.mjs';
 import { getTasks, getWeekTasks } from './task-store.mjs';
-import { startResponder, stopResponder, getResponderStatus } from './message-responder.mjs';
+import { startResponder, stopResponder, getResponderStatus, getAllTelegramChatIds } from './message-responder.mjs';
+import { VERSION } from '../constants.mjs';
 
 const DAEMON_DIR = path.join(NHA_DIR, 'ops', 'daemon');
 const PID_FILE = path.join(DAEMON_DIR, 'daemon.pid');
@@ -861,6 +862,71 @@ async function daemonLoop() {
   const responderResult = startResponder(config, log, wsBroadcast);
   if (responderResult.telegram) log('Message responder: Telegram active');
   if (responderResult.discord) log('Message responder: Discord active');
+
+  // ── Auto-update check: every 24h, notify + restart if new npm version ──────
+  // First check after 5 minutes (let things settle), then every 24h.
+  // When a new version is found: notifies via Telegram, then does
+  // `npm install -g nothumanallowed@latest` and restarts itself.
+  let _lastNotifiedUpdateVersion = null;
+  async function _checkAndAutoUpdate() {
+    try {
+      const res = await fetch('https://registry.npmjs.org/nothumanallowed/latest', {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'Accept': 'application/json' },
+      });
+      const data = await res.json();
+      const latest = data.version;
+      const current = VERSION;
+
+      // Compare semver
+      const pa = current.split('.').map(Number);
+      const pb = latest.split('.').map(Number);
+      let updateAvailable = false;
+      for (let i = 0; i < 3; i++) {
+        if ((pb[i] || 0) > (pa[i] || 0)) { updateAvailable = true; break; }
+        if ((pb[i] || 0) < (pa[i] || 0)) break;
+      }
+
+      if (!updateAvailable) return;
+      if (_lastNotifiedUpdateVersion === latest) return;
+      _lastNotifiedUpdateVersion = latest;
+
+      log(`[AutoUpdate] New version ${latest} available (current: ${current}). Updating...`);
+
+      // Notify via Telegram before restarting
+      const tgToken = config.responder?.telegram?.token;
+      if (tgToken) {
+        const chatIds = getAllTelegramChatIds();
+        const msg = `NHA v${latest} disponibile — aggiornamento automatico in corso...\nIl bot si riavvierà tra pochi secondi.`;
+        for (const chatId of chatIds) {
+          await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: parseInt(chatId, 10), text: msg }),
+          }).catch(() => {});
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+
+      // npm install -g then restart
+      await new Promise((resolve) => {
+        const proc = spawn('npm', ['install', '-g', `nothumanallowed@${latest}`], { stdio: 'inherit' });
+        proc.on('close', resolve);
+      });
+
+      log('[AutoUpdate] npm install complete. Restarting daemon...');
+      // Exit — the parent process (startDaemon) will restart us, or the user will
+      // The daemon is spawned detached so we just exit and the next `nha ops start` picks it up
+      process.exit(0);
+    } catch (err) {
+      log(`[AutoUpdate] Check failed: ${err.message}`);
+    }
+  }
+
+  setTimeout(() => {
+    _checkAndAutoUpdate();
+    setInterval(_checkAndAutoUpdate, 24 * 60 * 60 * 1000);
+  }, 5 * 60 * 1000);
 
   const state = {
     startedAt: new Date().toISOString(),

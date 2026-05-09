@@ -228,6 +228,8 @@ export function setConfigValue(key, value) {
     'gemini-key': 'llm.geminiKey',
     'deepseek-key': 'llm.deepseekKey',
     'grok-key': 'llm.grokKey',
+    'groq-key': 'llm.groqKey',
+    'groqKey': 'llm.groqKey',
     'mistral-key': 'llm.mistralKey',
     'cohere-key': 'llm.cohereKey',
     'model': 'llm.model',

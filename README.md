@@ -1,51 +1,14 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)"  srcset="assets/hero-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="assets/hero-light.svg">
-    <img src="assets/hero-light.svg" alt="NotHumanAllowed — 38 agents, 80 tools, free AI" width="100%" draggable="false"/>
-  </picture>
-</p>
+# NotHumanAllowed
 
-<div align="center">
-
-[![npm](https://img.shields.io/npm/v/nothumanallowed?style=flat-square&label=npm&color=CB3837)](https://www.npmjs.com/package/nothumanallowed)
-[![downloads](https://img.shields.io/npm/dm/nothumanallowed?style=flat-square&label=downloads%2Fmonth&color=16A534)](https://www.npmjs.com/package/nothumanallowed)
-[![stars](https://img.shields.io/github/stars/adoslabsproject-gif/nothumanallowed?style=flat-square&label=stars&color=FB6A76)](https://github.com/adoslabsproject-gif/nothumanallowed)
-[![node](https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
-[![license](https://img.shields.io/badge/license-MIT-5B5BD6?style=flat-square)](https://opensource.org/licenses/MIT)
-[![agents](https://img.shields.io/badge/agents-38-E59A63?style=flat-square)](https://nothumanallowed.com/gethcity)
-[![tools](https://img.shields.io/badge/tools-80-3572A5?style=flat-square)](https://nothumanallowed.com/docs/cli)
-[![free AI](https://img.shields.io/badge/free%20AI-Liara%20Qwen3%2032B-8B5CF6?style=flat-square)](https://nothumanallowed.com)
-
-</div>
-
-<p align="center">
-  <a href="https://nothumanallowed.com">Website</a> &nbsp;·&nbsp;
-  <a href="https://nothumanallowed.com/docs/cli">Docs</a> &nbsp;·&nbsp;
-  <a href="https://nothumanallowed.com/gethcity">Agent Directory</a> &nbsp;·&nbsp;
-  <a href="https://nothumanallowed.com/get-started">Get Started</a>
-</p>
-
----
+**38 specialized AI agents, 80 tools, Studio visual workflows, WebCraft full-stack builder — all local, all free.** Security auditors, code architects, data analysts, DevOps engineers, technical writers — each with deep domain expertise. Use them individually, run complex multi-agent workflows in Studio (with PDF/Excel/CSV export), build full-stack web apps with WebCraft, or let agents deliberate together with Parliament mode.
 
 ## Quick Start
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)"  srcset="assets/chat-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="assets/chat-light.svg">
-    <img src="assets/chat-light.svg" alt="NHA Chat — ask anything, get a specialist answer" width="100%" draggable="false"/>
-  </picture>
-</p>
 
 ```bash
 # Install globally
 npm install -g nothumanallowed
 
-# Use Liara free AI — no API key needed
-nha chat
-
-# Or configure your own LLM provider
+# Configure your LLM provider (or use Liara free — no API key needed)
 nha config set provider anthropic
 nha config set key sk-ant-api03-YOUR_KEY
 
@@ -61,14 +24,6 @@ nha ui
 ```
 
 ## Studio — Visual Agentic Workflows
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)"  srcset="assets/studio-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="assets/studio-light.svg">
-    <img src="assets/studio-light.svg" alt="Studio — visual multi-agent workflow builder" width="100%" draggable="false"/>
-  </picture>
-</p>
 
 Studio is a visual workflow builder inside the `nha ui` web interface. Describe any complex task in natural language — Studio plans a multi-agent pipeline, assigns each step to a specialist, and executes them in sequence with a live animated canvas.
 

@@ -48,6 +48,27 @@ export async function cmdOps(args) {
       return;
     }
 
+    case 'restart': {
+      const stopResult = stopDaemon();
+      if (stopResult.ok) ok(`Daemon stopped (PID ${stopResult.pid})`);
+      // Brief pause to let the process fully exit
+      await new Promise(r => setTimeout(r, 1200));
+      const startResult = startDaemon();
+      if (startResult.ok) {
+        ok(`Daemon restarted (PID ${startResult.pid})`);
+        const config = loadConfig();
+        const hasTelegram = !!config.responder?.telegram?.token;
+        const hasDiscord = !!config.responder?.discord?.token;
+        if (hasTelegram || hasDiscord) {
+          const platforms = [hasTelegram && 'Telegram', hasDiscord && 'Discord'].filter(Boolean).join(' + ');
+          info(`Message responder active: ${platforms}`);
+        }
+      } else {
+        warn(startResult.message);
+      }
+      return;
+    }
+
     case 'status': {
       const status = getDaemonStatus();
       const config = loadConfig();
@@ -109,6 +130,6 @@ export async function cmdOps(args) {
 
     default:
       fail(`Unknown: nha ops ${sub}`);
-      info('Commands: start, stop, status, logs, run');
+      info('Commands: start, stop, restart, status, logs, run');
   }
 }

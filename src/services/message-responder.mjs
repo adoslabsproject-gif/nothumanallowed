@@ -9,14 +9,44 @@
  */
 
 import { callAgent, callLLM } from './llm.mjs';
-import { buildSystemPrompt, parseActions, executeTool, TOOL_DEFINITIONS } from './tool-executor.mjs';
+import { buildSystemPrompt, parseActions, executeTool, TOOL_DEFINITIONS, LIARA_TOOL_DEFINITIONS } from './tool-executor.mjs';
 import https from 'https';
 import http from 'http';
 import { URL } from 'url';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { VERSION } from '../constants.mjs';
 
 // ── Agent Routing (keyword-based, zero LLM calls) ───────────────────────────
 
 const ROUTING_TABLE = [
+  {
+    // HERALD first — most common daily use case (email, calendar, weather, news)
+    // Italian keywords included — Telegram users speak Italian
+    agent: 'herald',
+    keywords: [
+      // Calendar/scheduling EN
+      'schedule', 'scheduling', 'meeting', 'meetings', 'calendar',
+      'appointment', 'event', 'agenda', 'reminder', 'remind',
+      'reschedule', 'book', 'booking', 'slot', 'availability',
+      'tomorrow', 'next week', 'today', 'this week',
+      // Calendar/scheduling IT
+      'calendario', 'appuntamento', 'appuntamenti', 'riunione', 'riunioni',
+      'promemoria', 'ricordami', 'prenotazione', 'evento', 'eventi',
+      'disponibilità', 'domani', 'settimana', 'oggi', 'questa settimana',
+      'prossima settimana', 'orario', 'orari', 'stamattina', 'stasera',
+      // Email EN+IT
+      'email', 'emails', 'mail', 'inbox', 'unread', 'posta',
+      'non lette', 'da leggere', 'controlla', 'controllare',
+      'verifica', 'verificare', 'leggi', 'guarda',
+      // Weather EN+IT
+      'weather', 'temperature', 'forecast',
+      'meteo', 'tempo', 'temperatura', 'previsioni', 'piove', 'sole', 'pioggia',
+      // News/summary EN+IT
+      'news', 'summary', 'briefing', 'notizie', 'riassunto', 'riepilogo',
+    ],
+  },
   {
     agent: 'saber',
     keywords: [
@@ -24,16 +54,17 @@ const ROUTING_TABLE = [
       'pentest', 'penetration', 'cve', 'owasp', 'xss', 'sql injection',
       'firewall', 'malware', 'phishing', 'ransomware', 'encryption',
       'authentication', 'auth', 'csrf', 'ssrf', 'rce', 'injection',
+      'sicurezza', 'vulnerabilità', 'attacco', 'hacking',
     ],
   },
   {
     agent: 'forge',
     keywords: [
-      'code', 'coding', 'deploy', 'deployment', 'ci', 'cd', 'cicd',
-      'pipeline', 'build', 'compile', 'docker', 'kubernetes', 'k8s',
+      'deploy', 'deployment', 'ci', 'cd', 'cicd',
+      'docker', 'kubernetes', 'k8s',
       'git', 'commit', 'merge', 'pull request', 'pr', 'branch',
-      'debug', 'debugger', 'refactor', 'typescript', 'javascript',
-      'python', 'rust', 'golang', 'java', 'react', 'node', 'npm',
+      'debug', 'debugger', 'refactor', 'typescript',
+      'rust', 'golang', 'java', 'react', 'npm',
     ],
   },
   {
@@ -41,32 +72,25 @@ const ROUTING_TABLE = [
     keywords: [
       'data', 'analysis', 'analyze', 'analytics', 'stats', 'statistics',
       'metric', 'metrics', 'chart', 'graph', 'dashboard', 'report',
-      'trend', 'forecast', 'predict', 'prediction', 'dataset',
+      'trend', 'predict', 'prediction', 'dataset',
       'database', 'query', 'sql', 'aggregate', 'visualization',
-    ],
-  },
-  {
-    agent: 'herald',
-    keywords: [
-      'schedule', 'scheduling', 'meeting', 'meetings', 'calendar',
-      'appointment', 'event', 'agenda', 'reminder', 'remind',
-      'reschedule', 'cancel meeting', 'book', 'booking', 'slot',
-      'availability', 'free time', 'when', 'tomorrow', 'next week',
+      'analisi', 'dati', 'grafico', 'statistiche',
     ],
   },
   {
     agent: 'scheherazade',
     keywords: [
       'write', 'writing', 'draft', 'blog', 'article', 'essay',
-      'documentation', 'docs', 'readme', 'copywriting', 'copy',
-      'content', 'post', 'newsletter', 'email draft', 'template',
+      'documentation', 'docs', 'readme', 'copywriting',
+      'content', 'post', 'newsletter', 'template',
       'summarize', 'summary', 'outline', 'creative', 'story',
+      'scrivi', 'scrivere', 'bozza', 'articolo', 'testo', 'riassumi',
     ],
   },
   {
     agent: 'athena',
     keywords: [
-      'audit', 'review', 'compliance', 'policy', 'governance',
+      'audit', 'compliance', 'policy', 'governance',
       'risk', 'assessment', 'standard', 'regulation', 'gdpr',
       'hipaa', 'soc2', 'iso', 'framework', 'benchmark',
     ],
@@ -75,7 +99,7 @@ const ROUTING_TABLE = [
     agent: 'sauron',
     keywords: [
       'monitor', 'monitoring', 'alert', 'alerting', 'uptime',
-      'downtime', 'health check', 'status', 'incident', 'outage',
+      'downtime', 'health check', 'incident', 'outage',
       'prometheus', 'grafana', 'log', 'logs', 'logging', 'trace',
     ],
   },
@@ -110,6 +134,44 @@ function routeMessage(text, useAutoRoute = true) {
   return bestAgent;
 }
 
+// ── Language detection from message text ─────────────────────────────────────
+
+const IT_WORDS = new Set(['il','lo','la','le','gli','un','una','che','di','da','in','con','su','per','tra','fra','non','ma','se','come','dove','quando','chi','cosa','ho','hai','ha','sono','sei','siamo','avere','essere','fare','dire','andare','mi','ti','ci','si','vi','li','le','gli','mio','tuo','suo','nostro','vostro','loro','questo','quello','questi','quelli','anche','già','ancora','sempre','mai','oggi','domani','ieri','adesso','ora','poi','dopo','prima','qui','qua','lì','là','più','meno','molto','poco','bene','male','sì','no','grazie','prego','ciao','buongiorno','buonasera','appuntamenti','appuntamento','calendario','riunione','meteo','temperatura','email','posta','notizie','del','dello','della','degli','delle','nel','nello','nella','negli','nelle','dal','dallo','dalla','dagli','dalle','sul','sullo','sulla','sugli','sulle','col','coi','quello','quella','quelli','quelle','cancella','cancellare','elimina','eliminare','crea','creare','sposta','spostare','aggiungi','aggiungere','modifica','modificare','ricerca','trovami','trovare','mostra','mostrami','dimmi','rispondimi','aiutami','puoi','voglio','vorrei','devo','posso','giorno','giorni','mese','mesi','anno','anni','settimana','settimane','ore','minuto','minuti','mattina','pomeriggio','sera','notte','veterinario','medico','dentista','dottore','riunioni','scadenza','scadenze']);
+const ES_WORDS = new Set(['el','la','los','las','un','una','que','de','en','con','por','para','pero','como','donde','cuando','quien','qué','tengo','tienes','tiene','somos','soy','eres','hacer','decir','ir','me','te','se','nos','este','ese','estos','esos','también','ya','todavía','siempre','nunca','hoy','mañana','ayer','aquí','allí','más','menos','muy','bien','mal','sí','no','gracias','hola','buenos']);
+const FR_WORDS = new Set(['le','la','les','un','une','des','que','de','en','avec','pour','par','mais','comme','où','quand','qui','je','tu','il','elle','nous','vous','ils','elles','avoir','être','faire','dire','aller','me','te','se','ce','cet','cette','ces','aussi','déjà','toujours','jamais','aujourd','demain','hier','ici','là','plus','moins','très','bien','mal','oui','non','merci','bonjour','bonsoir']);
+const DE_WORDS = new Set(['der','die','das','ein','eine','und','oder','aber','nicht','mit','für','von','zu','an','auf','ist','sind','hat','haben','sein','werden','ich','du','er','sie','es','wir','ihr','mich','dich','sich','uns','euch','diesem','diesen','dieser','dieses','auch','schon','noch','immer','nie','heute','morgen','gestern','hier','dort','mehr','weniger','sehr','gut','schlecht','ja','nein','danke','hallo']);
+const PT_WORDS = new Set(['o','a','os','as','um','uma','que','de','em','com','por','para','mas','como','onde','quando','quem','eu','tu','ele','ela','nós','vós','eles','elas','ter','ser','fazer','dizer','ir','me','te','se','nos','este','esse','isso','aquele','também','já','ainda','sempre','nunca','hoje','amanhã','ontem','aqui','lá','mais','menos','muito','bem','mal','sim','não','obrigado','olá']);
+
+function detectLanguage(text) {
+  if (!text || text.length < 6) return null;
+  const words = text.toLowerCase().replace(/[^a-zàáâãäèéêëìíîïòóôõöùúûüýñçàèìòù\s]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+  if (words.length < 2) return null;
+
+  let it = 0, es = 0, fr = 0, de = 0, pt = 0, en = 0;
+  for (const w of words) {
+    if (IT_WORDS.has(w)) it++;
+    if (ES_WORDS.has(w)) es++;
+    if (FR_WORDS.has(w)) fr++;
+    if (DE_WORDS.has(w)) de++;
+    if (PT_WORDS.has(w)) pt++;
+    // Basic English common words
+    if (['the','a','an','is','are','was','were','have','has','do','does','i','you','he','she','we','they','and','or','but','not','with','for','from','to','in','on','at','this','that','these','those','can','will','would','could','should','what','where','when','who','how'].includes(w)) en++;
+  }
+
+  const max = Math.max(it, es, fr, de, pt, en);
+  if (max === 0) return null;
+  const threshold = Math.max(2, words.length * 0.15); // at least 15% of words or 2
+  if (max < threshold) return null;
+
+  if (it === max) return 'Italian';
+  if (es === max) return 'Spanish';
+  if (fr === max) return 'French';
+  if (de === max) return 'German';
+  if (pt === max) return 'Portuguese';
+  if (en === max) return 'English';
+  return null;
+}
+
 // ── Tool-aware agent call (LLM + tool execution loop) ────────────────────────
 
 /**
@@ -117,55 +179,197 @@ function routeMessage(text, useAutoRoute = true) {
  * Like chat.mjs but headless — no confirmation prompts, all tools auto-executed.
  * Returns a human-readable summary of what was done.
  */
-async function callAgentWithTools(config, agentName, userMessage) {
+// Detect if a message is a reaction/continuation (not a new independent request)
+// Used to decide whether to use sticky agent context
+function isContinuationMessage(text, lastCtx) {
+  if (!lastCtx) return false;
+  const lower = text.toLowerCase().trim();
+
+  // Explicit confirmations / reactions
+  const CONFIRMATIONS = ['sì','si','yes','ok','okay','procedi','fallo','vai','confermo','cancellalo',
+    'eliminalo','mandalo','esegui','perfetto','giusto','corretto','fatto','bene','certo','esatto',
+    'assolutamente','ovviamente','naturalmente','ciao','avanti','go','do it','proceed','confirm',
+    'sure','yep','yup','please','per favore','grazie','thanks'];
+  if (CONFIRMATIONS.some(c => lower === c || lower.startsWith(c + ' ') || lower.endsWith(' ' + c))) return true;
+
+  // Negative reactions that refer to previous turn (not new requests)
+  const REACTIONS = ['no','nope','annulla','stop','lascia perdere','non farlo','aspetta',
+    'sbagliato','non è quello','con cazzo','impossibile','stai scherzando','non ci credo',
+    'ma va','davvero','sicuro','sei sicuro','ma sei sicuro','ancora','di nuovo','riprova'];
+  if (REACTIONS.some(r => lower === r || lower.startsWith(r + ' ') || lower.endsWith(' ' + r))) return true;
+
+  // Short messages (≤ 6 words) without clear new-request keywords are likely continuations
+  const words = lower.split(/\s+/);
+  if (words.length <= 6) {
+    const NEW_REQUEST_KEYWORDS = ['calendario','appuntamento','email','posta','meteo','tempo',
+      'crea','aggiungi','cerca','trova','mostra','mandami','dimmi','quanto','quando','dove',
+      'create','add','find','search','show','send','delete','cancel','weather','mail','event'];
+    const hasNewKeyword = NEW_REQUEST_KEYWORDS.some(k => lower.includes(k));
+    if (!hasNewKeyword) return true;
+  }
+
+  return false;
+}
+
+// Detect if the last agent response indicates a completed action (context should reset after)
+function isCompletedAction(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const DONE_SIGNALS = ['cancellato con successo','eliminato con successo','evento eliminato',
+    'evento cancellato','deleted successfully','removed successfully','email inviata','email sent',
+    'draft created','bozza creata','aggiornato con successo','updated successfully',
+    'task completato','task done','creato con successo','created successfully',
+    'spostato con successo','moved successfully'];
+  return DONE_SIGNALS.some(s => lower.includes(s));
+}
+
+async function callAgentWithTools(config, agentName, userMessage, languageOverride, preHistory) {
   const today = new Date().toISOString().split('T')[0];
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en';
   const LANG_MAP = { en: 'English', it: 'Italian', es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', nl: 'Dutch', pl: 'Polish', ru: 'Russian', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', ar: 'Arabic', hi: 'Hindi', tr: 'Turkish' };
-  const language = config?.language || LANG_MAP[locale.split('-')[0]] || 'English';
+  const language = languageOverride || config?.profile?.language || config?.language || LANG_MAP[locale.split('-')[0]] || 'English';
 
-  const systemPrompt = TOOL_DEFINITIONS
+  // Use compact Liara prompt when provider is 'nha' (same logic as buildSystemPrompt)
+  const isLiara = config?.llm?.provider === 'nha';
+  const baseDefinitions = isLiara ? LIARA_TOOL_DEFINITIONS : TOOL_DEFINITIONS;
+  const systemPrompt = baseDefinitions
     .replace('{{TODAY}}', today)
     .replace('{{TIMEZONE}}', tz)
-    .replace(/\{\{LANGUAGE\}\}/g, language);
+    .replace(/\{\{LANGUAGE\}\}/g, language) +
+    // Telegram context: execute destructive actions immediately, user already confirmed via chat
+    '\n\nTELEGRAM BOT RULES:\n' +
+    '- Execute ALL actions (including delete, cancel, send) IMMEDIATELY when the user confirms. Never say "I need an ID" if you can search for the event yourself using calendar_find.\n' +
+    '- When you find an event with calendar_find, include its eventId in your reply so the user sees it.\n' +
+    '- After completing an action, confirm it simply and clearly. Do not loop back asking for more info.\n' +
+    '- If the user says "procedi", "sì", "fallo", "cancellalo" etc. — they are confirming. Execute the action.\n' +
+    '- Never ask the user to provide an eventId manually — always search with calendar_find first.';
 
-  // Multi-turn: serialize history as [User]/[Assistant] string (same pattern as chat.mjs)
-  const history = []; // [{role, content}]
+  // preHistory: full conversation history from previous turn (for sticky confirmations)
+  const history = preHistory ? [...preHistory] : [];
   let finalText = '';
 
-  for (let round = 0; round < 3; round++) {
-    // Build serialized message
+  for (let round = 0; round < 5; round++) {
     const parts = history.map(h => (h.role === 'user' ? '[User]' : '[Assistant]') + ' ' + h.content);
     parts.push('[User] ' + userMessage);
-    if (round > 0) {
-      // Replace last user with tool results continuation
-    }
     const serialized = parts.join('\n\n');
 
     const response = await callLLM(config, systemPrompt, serialized);
     const { textParts, actions } = parseActions(response);
-    finalText = textParts.join('\n').trim();
 
-    if (actions.length === 0) break; // No tools — pure text response
+    if (actions.length === 0) {
+      finalText = textParts.join('\n').trim();
+      break;
+    }
 
-    // Execute all tools and collect results
+    // Execute all tools
     const toolResults = [];
+    let authError = null;
     for (const { action, params } of actions) {
       try {
         const result = await executeTool(action, params, config);
         const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
         toolResults.push(`[${action}] ${resultStr}`);
       } catch (err) {
+        // Detect Google/Microsoft OAuth token expiry — give user a clear fix instruction
+        const msg = err.message || '';
+        const isAuthErr = /invalid.?credentials|token.*expired|unauthorized|401|invalid_grant|auth.*failed|authentication.*failed/i.test(msg);
+        if (isAuthErr) {
+          authError = action.startsWith('gmail') || action.startsWith('imap') || action.startsWith('calendar') || action.startsWith('contact') || action.startsWith('drive') || action.startsWith('gtask')
+            ? 'google' : 'microsoft';
+        }
         toolResults.push(`[${action}] Error: ${err.message}`);
       }
     }
 
-    // Feed results back: append assistant response + tool results as next user turn
+    // If auth error detected, return a user-friendly message immediately — don't pass to LLM
+    if (authError === 'google') {
+      return {
+        text: language === 'Italian'
+          ? 'Il token Google è scaduto. Esegui questo comando sul tuo computer per rinnovarlo:\n\nnha google auth\n\nDopo il login si rinnova tutto automaticamente.'
+          : 'Your Google token has expired. Run this command on your computer to renew it:\n\nnha google auth\n\nAfter logging in everything will work again.',
+        history,
+      };
+    }
+    if (authError === 'microsoft') {
+      return {
+        text: language === 'Italian'
+          ? 'Il token Microsoft è scaduto. Esegui:\n\nnha microsoft auth'
+          : 'Your Microsoft token has expired. Run:\n\nnha microsoft auth',
+        history,
+      };
+    }
+
     history.push({ role: 'assistant', content: response });
-    userMessage = 'Tool results:\n' + toolResults.join('\n') + '\n\nNow give the user a concise confirmation in ' + language + '. Do NOT use HERALD format — respond conversationally.';
+    userMessage = 'Tool results:\n' + toolResults.join('\n') + '\n\nNow give the user a short, clear confirmation in ' + language + '. Be direct — no preamble, no HERALD format. If an action was completed, say so clearly.';
   }
 
-  return finalText || 'Done.';
+  return { text: finalText || 'Fatto.', history };
+}
+
+// ── Telegram Bot (Long Polling via native fetch) ─────────────────────────────
+
+// ── User store for Telegram chat IDs (for broadcast notifications) ──────────
+
+const TELEGRAM_USERS_FILE = path.join(os.homedir(), '.nha', 'telegram-users.json');
+
+function loadTelegramUsers() {
+  try {
+    const raw = fs.readFileSync(TELEGRAM_USERS_FILE, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function saveTelegramUsers(users) {
+  try {
+    fs.mkdirSync(path.dirname(TELEGRAM_USERS_FILE), { recursive: true });
+    fs.writeFileSync(TELEGRAM_USERS_FILE, JSON.stringify(users, null, 2));
+  } catch {}
+}
+
+function touchTelegramUser(chatId, username, firstName) {
+  const users = loadTelegramUsers();
+  const id = String(chatId);
+  const now = new Date().toISOString();
+  users[id] = {
+    chatId: id,
+    username: username || null,
+    firstName: firstName || null,
+    firstSeen: users[id]?.firstSeen || now,
+    lastSeen: now,
+  };
+  saveTelegramUsers(users);
+}
+
+export function getAllTelegramChatIds() {
+  const users = loadTelegramUsers();
+  return Object.keys(users);
+}
+
+// ── npm update check ─────────────────────────────────────────────────────────
+
+function compareSemver(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
+}
+
+async function checkNpmVersion() {
+  const res = await fetch('https://registry.npmjs.org/nothumanallowed/latest', {
+    signal: AbortSignal.timeout(8000),
+    headers: { 'Accept': 'application/json' },
+  });
+  const data = await res.json();
+  const latest = data.version;
+  const current = VERSION;
+  const updateAvailable = compareSemver(latest, current) > 0;
+  return { current, latest, updateAvailable };
 }
 
 // ── Telegram Bot (Long Polling via native fetch) ─────────────────────────────
@@ -183,6 +387,11 @@ class TelegramResponder {
     this.abortController = null;
     this.pendingRequests = 0;
     this.maxConcurrent = 3;
+    this._updateCheckTimer = null;
+    this._lastNotifiedVersion = null;
+    // Per-chat sticky agent: remembers last agent used, plus last turn context
+    this._lastAgentByChatId = {};       // chatId → agentName
+    this._lastContextByChatId = {};     // chatId → { agent, userMsg, agentReply, ts }
   }
 
   get enabled() {
@@ -194,6 +403,8 @@ class TelegramResponder {
     this.running = true;
     this.log('[Telegram] Responder started — polling for messages');
     this._pollLoop();
+    // Check for npm updates after 60s, then every 24h
+    this._updateCheckTimer = setTimeout(() => this._scheduleUpdateCheck(), 60 * 1000);
   }
 
   stop() {
@@ -202,7 +413,53 @@ class TelegramResponder {
       this.abortController.abort();
       this.abortController = null;
     }
+    if (this._updateCheckTimer) {
+      clearTimeout(this._updateCheckTimer);
+      clearInterval(this._updateCheckTimer);
+      this._updateCheckTimer = null;
+    }
     this.log('[Telegram] Responder stopped');
+  }
+
+  async _scheduleUpdateCheck() {
+    await this._checkAndNotifyUpdate();
+    // Then every 24h
+    this._updateCheckTimer = setInterval(() => this._checkAndNotifyUpdate(), 24 * 60 * 60 * 1000);
+  }
+
+  async _checkAndNotifyUpdate() {
+    try {
+      const { latest, updateAvailable } = await checkNpmVersion();
+      if (!updateAvailable) return;
+      if (this._lastNotifiedVersion === latest) return; // Already notified for this version
+
+      this._lastNotifiedVersion = latest;
+      const chatIds = getAllTelegramChatIds();
+      if (chatIds.length === 0) return;
+
+      const msg =
+        `🆕 NHA v${latest} disponibile!\n\n` +
+        `Una nuova versione di NotHumanAllowed è stata pubblicata.\n\n` +
+        `Aggiorna con:\nnpm install -g nothumanallowed@latest\n\n` +
+        `Poi riavvia il bot con: nha ops stop && nha ops start`;
+
+      this.log(`[Telegram] Broadcasting update notification v${latest} to ${chatIds.length} users`);
+
+      for (const chatId of chatIds) {
+        try {
+          await this._telegramCall('sendMessage', {
+            chat_id: parseInt(chatId, 10),
+            text: msg,
+          });
+        } catch {
+          // User blocked bot or chat no longer exists — ignore
+        }
+        // Small delay to avoid Telegram rate limits
+        await this._sleep(300);
+      }
+    } catch (err) {
+      this.log(`[Telegram] Update check failed: ${err.message}`);
+    }
   }
 
   async _pollLoop() {
@@ -234,7 +491,7 @@ class TelegramResponder {
         for (const update of data.result) {
           this.offset = update.update_id + 1;
 
-          if (update.message && update.message.text) {
+          if (update.message && (update.message.text || update.message.voice || update.message.audio)) {
             // Fire-and-forget with concurrency guard
             if (this.pendingRequests < this.maxConcurrent) {
               this._handleMessage(update.message).catch(err => {
@@ -251,9 +508,91 @@ class TelegramResponder {
     }
   }
 
+  async _transcribeVoice(fileId) {
+    // Download OGG voice note from Telegram and transcribe with Groq or OpenAI Whisper
+    // Step 1: get file path
+    const fileInfo = await this._telegramCall('getFile', { file_id: fileId });
+    const filePath = fileInfo.result?.file_path;
+    if (!filePath) throw new Error('Could not get file path from Telegram');
+
+    // Step 2: download OGG bytes
+    const token = this.token;
+    const audioRes = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`);
+    if (!audioRes.ok) throw new Error(`Download failed: ${audioRes.status}`);
+    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+
+    // Step 3: transcribe — priority: NHA proxy (no user key needed) → Groq local key → OpenAI local key
+    const groqKey = this.config.llm?.groqKey;
+    const openaiKey = this.config.llm?.openaiKey || (this.config.llm?.provider === 'openai' ? this.config.llm?.apiKey : null);
+
+    // Option A: NHA voice proxy (server-side Groq key, free for all users)
+    try {
+      const proxyForm = new FormData();
+      proxyForm.append('audio', new Blob([audioBuffer], { type: 'audio/ogg' }), 'voice.ogg');
+      const proxyRes = await fetch('https://nothumanallowed.com/api/v1/voice/transcribe', {
+        method: 'POST',
+        body: proxyForm,
+        signal: AbortSignal.timeout(30000),
+      });
+      if (proxyRes.ok) {
+        const d = await proxyRes.json();
+        if (d.text) return d.text;
+      }
+      // If proxy returned rate limit or error, fall through to local keys
+    } catch {
+      // Network error — fall through to local keys
+    }
+
+    // Option B: local Groq key
+    const boundary = '----NHAVoice' + Date.now().toString(36);
+    const crlf = '\r\n';
+    const filename = 'voice.ogg';
+    const header = Buffer.from(
+      `--${boundary}${crlf}` +
+      `Content-Disposition: form-data; name="file"; filename="${filename}"${crlf}` +
+      `Content-Type: audio/ogg${crlf}${crlf}`
+    );
+    const modelPart = Buffer.from(
+      `${crlf}--${boundary}${crlf}` +
+      `Content-Disposition: form-data; name="model"${crlf}${crlf}` +
+      `whisper-large-v3-turbo${crlf}--${boundary}--${crlf}`
+    );
+    const body = Buffer.concat([header, audioBuffer, modelPart]);
+
+    if (groqKey) {
+      const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+        body,
+      });
+      if (!r.ok) throw new Error(`Groq Whisper ${r.status}: ${await r.text()}`);
+      const d = await r.json();
+      return d.text || '';
+    }
+
+    // Option C: local OpenAI key
+    if (openaiKey) {
+      const modelPartOAI = Buffer.from(
+        `${crlf}--${boundary}${crlf}` +
+        `Content-Disposition: form-data; name="model"${crlf}${crlf}` +
+        `whisper-1${crlf}--${boundary}--${crlf}`
+      );
+      const bodyOAI = Buffer.concat([header, audioBuffer, modelPartOAI]);
+      const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+        body: bodyOAI,
+      });
+      if (!r.ok) throw new Error(`OpenAI Whisper ${r.status}: ${await r.text()}`);
+      const d = await r.json();
+      return d.text || '';
+    }
+
+    throw new Error('Voice transcription unavailable. The NHA proxy is temporarily unreachable.');
+  }
+
   async _handleMessage(message) {
     const chatId = message.chat.id;
-    const text = message.text;
     const fromUser = message.from?.first_name || message.from?.username || 'Unknown';
 
     // Chat ID allowlist check
@@ -261,49 +600,131 @@ class TelegramResponder {
       return;
     }
 
+    // Track this user for broadcast notifications (update alerts, etc.)
+    touchTelegramUser(chatId, message.from?.username, message.from?.first_name);
+
+    let rawText = message.text || '';
+    let isVoice = false;
+
+    // Handle voice notes — transcribe with Whisper (Groq or OpenAI)
+    if (message.voice || message.audio) {
+      const fileId = (message.voice || message.audio).file_id;
+      isVoice = true;
+      try {
+        await this._telegramCall('sendChatAction', { chat_id: chatId, action: 'typing' });
+        rawText = await this._transcribeVoice(fileId);
+        if (!rawText.trim()) {
+          await this._telegramCall('sendMessage', { chat_id: chatId, text: 'Non ho capito il vocale. Riprova.' });
+          return;
+        }
+        this.log(`[Telegram] Voice transcribed for ${fromUser}: "${rawText.slice(0, 80)}"`);
+      } catch (err) {
+        this.log(`[Telegram] Voice transcription failed: ${err.message}`);
+        await this._telegramCall('sendMessage', {
+          chat_id: chatId,
+          text: `Non riesco a trascrivere il vocale: ${err.message}\n\nAggiungi una chiave Groq (gratuita) con: nha config set groqKey gsk-...`,
+        });
+        return;
+      }
+    }
+
+    if (!rawText) return;
+
     // Skip bot commands that aren't directed at us
-    if (text.startsWith('/') && !text.startsWith('/ask') && !text.startsWith('/nha')) {
+    if (rawText.startsWith('/') && !rawText.startsWith('/ask') && !rawText.startsWith('/nha')) {
       return;
     }
 
     // Strip /ask or /nha prefix if present
-    const cleanText = text.replace(/^\/(ask|nha)\s*/i, '').trim();
+    const cleanText = rawText.replace(/^\/(ask|nha)\s*/i, '').trim();
     if (!cleanText) return;
+
+    // If voice: show transcription so user knows what was understood
+    if (isVoice) {
+      await this._telegramCall('sendMessage', {
+        chat_id: chatId,
+        text: `🎤 "${cleanText}"`,
+      }).catch(() => {});
+    }
 
     this.pendingRequests++;
     try {
-      const agent = routeMessage(cleanText, this.autoRoute);
-      this.log(`[Telegram] ${fromUser} (chat ${chatId}): routed to ${agent.toUpperCase()}`);
+      const lastCtx = this._lastContextByChatId[chatId];
+      const stickyAge = lastCtx ? (Date.now() - lastCtx.ts) : Infinity;
+      const withinStickyWindow = stickyAge < 5 * 60 * 1000; // 5 min
+
+      // Determine if this message is a continuation of the previous turn
+      // (confirmation, reaction, short reply) vs a new independent request
+      const isContinuation = withinStickyWindow && isContinuationMessage(cleanText, lastCtx);
+
+      // If last response was a completed action, don't carry history forward —
+      // the next message is a fresh request even if it looks like a reaction
+      const lastWasCompleted = lastCtx && isCompletedAction(lastCtx.agentReply);
+
+      let agent;
+      let enrichedMessage = cleanText;
+      let preHistory = null;
+
+      if (isContinuation && !lastWasCompleted) {
+        // Continue with same agent and inject full history for context
+        agent = lastCtx.agent;
+        if (lastCtx.history && lastCtx.history.length > 0) {
+          preHistory = lastCtx.history;
+        }
+        this.log(`[Telegram] ${fromUser}: continuation → ${agent.toUpperCase()} (ctx ${Math.round(stickyAge/1000)}s ago, history=${preHistory ? preHistory.length : 0})`);
+      } else {
+        // Fresh request — route normally
+        agent = routeMessage(cleanText, this.autoRoute);
+        this.log(`[Telegram] ${fromUser}: new request → ${agent.toUpperCase()}${isVoice ? ' [voice]' : ''}${lastWasCompleted ? ' [prev completed]' : ''}`);
+      }
 
       // Broadcast event
       this.wsBroadcast({
         type: 'responder_message',
         timestamp: new Date().toISOString(),
-        data: { platform: 'telegram', from: fromUser, chatId, agent, text: cleanText.slice(0, 120) },
+        data: { platform: 'telegram', from: fromUser, chatId, agent, text: cleanText.slice(0, 120), isVoice },
       });
 
       // Send typing indicator
       await this._telegramCall('sendChatAction', { chat_id: chatId, action: 'typing' });
 
-      // Tool-capable agents use the full tool execution loop
-      // Pure reasoning/analysis agents use the simple callAgent (no tools)
+      // Language: detect from message, fallback to previous turn's language
+      const detectedLang = detectLanguage(cleanText) || (lastCtx ? detectLanguage(lastCtx.userMsg) : null);
+
       const TOOL_AGENTS = new Set(['herald', 'hermes', 'edi', 'jarvis', 'flux', 'echo', 'mercury', 'pipe', 'navi', 'link', 'prometheus', 'tempest']);
-      const callFn = TOOL_AGENTS.has(agent) ? callAgentWithTools : callAgent;
-      const response = await callFn(this.config, agent, cleanText);
+      let responseText;
+      let responseHistory = null;
 
-      // Truncate if too long for Telegram (4096 char limit)
-      const truncated = response.length > 4000
-        ? response.slice(0, 3950) + '\n\n... [truncated]'
-        : response;
+      if (TOOL_AGENTS.has(agent)) {
+        const result = await callAgentWithTools(this.config, agent, enrichedMessage, detectedLang, preHistory);
+        responseText = result.text;
+        responseHistory = result.history;
+      } else {
+        const langInstruction = detectedLang ? `[Respond in ${detectedLang}] ` : '';
+        responseText = await callAgent(this.config, agent, langInstruction + enrichedMessage);
+      }
 
-      // Send response
+      // Truncate to Telegram limit (4096 chars)
+      const truncated = responseText.length > 4000
+        ? responseText.slice(0, 3950) + '\n\n... [truncated]'
+        : responseText;
+
+      // Save context — if action was completed, mark it so next turn starts fresh
+      this._lastContextByChatId[chatId] = {
+        agent,
+        userMsg: cleanText,
+        agentReply: responseText,
+        history: isCompletedAction(responseText) ? null : responseHistory, // clear history after success
+        ts: Date.now(),
+      };
+      this._lastAgentByChatId[chatId] = agent;
+
       await this._telegramCall('sendMessage', {
         chat_id: chatId,
         text: `[${agent.toUpperCase()}]\n\n${truncated}`,
-        parse_mode: 'Markdown',
       });
 
-      this.log(`[Telegram] Responded to ${fromUser} via ${agent.toUpperCase()} (${response.length} chars)`);
+      this.log(`[Telegram] Responded to ${fromUser} via ${agent.toUpperCase()} (${responseText.length} chars)${isCompletedAction(responseText) ? ' [action completed — context reset]' : ''}`);
     } catch (err) {
       this.log(`[Telegram] Agent call failed: ${err.message}`);
       // Send error message to user

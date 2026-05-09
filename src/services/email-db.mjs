@@ -424,18 +424,31 @@ export function deleteLabel(id) {
   getDb().prepare('DELETE FROM email_labels WHERE id = ? AND is_system = 0').run(id);
 }
 
-export function updateLabelCounts(db, labelId) {
-  db.prepare(`
-    UPDATE email_labels SET
-      total_count = (SELECT COUNT(*) FROM email_message_labels eml
-        JOIN email_messages m ON m.id = eml.message_id
-        WHERE eml.label_id = ? AND m.permanently_deleted = 0),
-      unread_count = (SELECT COUNT(*) FROM email_message_labels eml
-        JOIN email_messages m ON m.id = eml.message_id
-        LEFT JOIN email_message_state s ON s.message_id = m.id
-        WHERE eml.label_id = ? AND m.permanently_deleted = 0 AND (s.is_read IS NULL OR s.is_read = 0))
-    WHERE id = ?
-  `).run(labelId, labelId, labelId);
+const UPDATE_LABEL_SQL = `
+  UPDATE email_labels SET
+    total_count = (SELECT COUNT(*) FROM email_message_labels eml
+      JOIN email_messages m ON m.id = eml.message_id
+      WHERE eml.label_id = ? AND m.permanently_deleted = 0),
+    unread_count = (SELECT COUNT(*) FROM email_message_labels eml
+      JOIN email_messages m ON m.id = eml.message_id
+      LEFT JOIN email_message_state s ON s.message_id = m.id
+      WHERE eml.label_id = ? AND m.permanently_deleted = 0 AND (s.is_read IS NULL OR s.is_read = 0))
+  WHERE id = ?
+`;
+
+// Called from email-imap.mjs after a folder sync — updates all labels for the account
+export function updateLabelCounts(accountId) {
+  const db = getDb();
+  const labels = db.prepare('SELECT id FROM email_labels WHERE account_id = ?').all(accountId);
+  const stmt = db.prepare(UPDATE_LABEL_SQL);
+  for (const lbl of labels) {
+    stmt.run(lbl.id, lbl.id, lbl.id);
+  }
+}
+
+// Called internally after adding/removing a single message from a label
+function updateSingleLabelCount(db, labelId) {
+  db.prepare(UPDATE_LABEL_SQL).run(labelId, labelId, labelId);
 }
 
 // ── MESSAGE CRUD ───────────────────────────────────────────────────────────
@@ -494,13 +507,13 @@ export function insertAttachments(messageId, attachments) {
 export function addMessageToLabel(messageId, labelId) {
   const db = getDb();
   db.prepare('INSERT OR IGNORE INTO email_message_labels (message_id, label_id) VALUES (?, ?)').run(messageId, labelId);
-  updateLabelCounts(db, labelId);
+  updateSingleLabelCount(db, labelId);
 }
 
 export function removeMessageFromLabel(messageId, labelId) {
   const db = getDb();
   db.prepare('DELETE FROM email_message_labels WHERE message_id = ? AND label_id = ?').run(messageId, labelId);
-  updateLabelCounts(db, labelId);
+  updateSingleLabelCount(db, labelId);
 }
 
 export function getMessageLabels(messageId) {
@@ -578,9 +591,13 @@ export function getThread(threadId, accountId) {
 // ── STATE MUTATIONS (local only — never touches IMAP) ─────────────────────
 
 export function markRead(messageId, isRead) {
-  getDb().prepare(`INSERT INTO email_message_state (message_id, is_read, is_starred) VALUES (?, ?, 0)
+  const db = getDb();
+  db.prepare(`INSERT INTO email_message_state (message_id, is_read, is_starred) VALUES (?, ?, 0)
     ON CONFLICT(message_id) DO UPDATE SET is_read = excluded.is_read, updated_at = datetime('now')`)
     .run(messageId, isRead ? 1 : 0);
+  // Refresh label unread counts for this message's account
+  const msg = db.prepare('SELECT account_id FROM email_messages WHERE id = ?').get(messageId);
+  if (msg?.account_id) updateLabelCounts(msg.account_id);
 }
 
 export function markStarred(messageId, isStarred) {

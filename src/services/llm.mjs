@@ -600,7 +600,7 @@ export async function callLLMStream(config, systemPrompt, userMessage, onToken, 
 function buildRequestBody(provider, model, systemPrompt, userMessage, stream) {
   if (provider === 'anthropic') {
     return {
-      model: model || 'claude-sonnet-4-20250514',
+      model: model || 'claude-sonnet-4-6',
       max_tokens: 8192,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
@@ -617,7 +617,7 @@ function buildRequestBody(provider, model, systemPrompt, userMessage, stream) {
   };
   const req = {
     model: model || modelDefaults[provider] || 'gpt-4o',
-    max_tokens: opts.max_tokens || (provider === 'nha' ? 8192 : 8192),
+    max_tokens: 8192,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
