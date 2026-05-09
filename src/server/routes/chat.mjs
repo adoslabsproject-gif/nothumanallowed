@@ -399,6 +399,57 @@ export function register(router) {
     }
   });
 
+  // POST /api/chat — non-streaming, for attachments (PDF, image, text file)
+  router.post('/api/chat', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      if (!body.message) return sendError(res, 400, 'message required');
+      const config = loadConfig();
+      const chatSystemPrompt = await getChatSystemPrompt();
+      let enrichedPrompt = chatSystemPrompt;
+      try { const ic = await getImapAccountsContext(); if (ic) enrichedPrompt += ic; } catch {}
+      const LANG_MAP = { it:'Italian', en:'English', es:'Spanish', fr:'French', de:'German', pt:'Portuguese', nl:'Dutch', pl:'Polish', ru:'Russian', zh:'Chinese', ja:'Japanese', ko:'Korean', ar:'Arabic', hi:'Hindi', tr:'Turkish', sv:'Swedish', da:'Danish', fi:'Finnish', cs:'Czech' };
+      const userLang = LANG_MAP[(config?.language || config?.lang || 'en').slice(0,2)] || 'English';
+      enrichedPrompt += `\n\nIMPORTANT: Always respond in ${userLang}.`;
+
+      let response;
+
+      if (body.pdfBase64) {
+        const userMsg = body.message || 'Analyze this PDF document and describe its content.';
+        const provider = config?.llm?.provider || 'nha';
+        if (provider === 'nha') {
+          // Liara Vision non supporta PDF — estrai testo grezzo dal base64 come fallback
+          const buf = Buffer.from(body.pdfBase64, 'base64');
+          const rawText = buf.toString('latin1').replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{4,}/g, '\n').slice(0, 20000);
+          const fileCtx = `\n\n--- PDF: ${body.pdfName || 'document.pdf'} (testo estratto) ---\n${rawText}\n--- END PDF ---`;
+          response = await callLLM(config, enrichedPrompt + fileCtx, userMsg);
+        } else {
+          // Anthropic/OpenAI/Gemini — vision nativa per PDF
+          response = await callLLMVision(config, enrichedPrompt, userMsg, {
+            base64: body.pdfBase64,
+            mediaType: 'application/pdf',
+            fileName: body.pdfName || 'document.pdf',
+          });
+        }
+      } else if (body.imageBase64) {
+        // Image — vision call
+        const userMsg = body.message || 'Describe what you see in this image.';
+        response = await callLLMVision(config, enrichedPrompt, userMsg, {
+          base64: body.imageBase64,
+          mediaType: body.imageMimeType || 'image/png',
+        });
+      } else if (body.fileContent) {
+        // Text file — inject content into prompt
+        const fileCtx = `\n\n--- FILE: ${body.fileName || 'file'} ---\n${String(body.fileContent).slice(0, 40000)}\n--- END FILE ---`;
+        response = await callLLM(config, enrichedPrompt + fileCtx, body.message);
+      } else {
+        response = await callLLM(config, enrichedPrompt, body.message);
+      }
+
+      sendJSON(res, 200, { response });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
   // POST /api/ask — single-turn non-streaming chat
   router.post('/api/ask', async (req, res) => {
     try {
