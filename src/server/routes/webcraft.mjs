@@ -851,56 +851,112 @@ ${prevContext ? `Recent files generated (for consistency):\n${prevContext}\n\n` 
     let syntaxError = null;
     const fileTokensIn = countTokens(fileSys) + countTokens(filePrompt);
 
-    try {
-      // Collect full LLM output first, then stream it to the client in small chunks.
-      // This gives real word-by-word animation even with non-streaming providers (NHA/Liara).
-      let rawOutput = '';
-      await callLLMStream(config, fileSys, filePrompt, (chunk) => {
-        rawOutput += chunk;
-      }, { max_tokens: maxTokens });
+    // Retry loop — up to 2 attempts per file
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        // Stream chunks to browser in real-time during generation
+        let rawOutput = '';
+        await callLLMStream(config, fileSys, filePrompt, (chunk) => {
+          rawOutput += chunk;
+          // Real-time streaming to browser
+          emit({ type: 'file_chunk', name: fileSpec.name, chunk, fi: fi + 1, total: filePlan.length });
+        }, { max_tokens: maxTokens });
 
-      // Strip markdown fences if LLM wrapped the output
-      rawOutput = rawOutput
-        .replace(/^```[\w]*\n/, '').replace(/\n```$/, '')
-        .replace(/^```[\w]*\r\n/, '').replace(/\r\n```$/, '').trim();
+        // Strip markdown fences if LLM wrapped the output
+        rawOutput = rawOutput
+          .replace(/^```[\w]*\n/, '').replace(/\n```$/, '')
+          .replace(/^```[\w]*\r\n/, '').replace(/\r\n```$/, '').trim();
 
-      // Continuation: if the file appears truncated, ask the model to continue
-      if (isFileTruncated(rawOutput, fileSpec.name)) {
-        const contPrompt = `Continue writing the file ${fileSpec.name} exactly from where it was cut off. Output ONLY the continuation (no repetition of what was already written, no explanation):
+        // Continuation loop — up to 3 rounds if file appears truncated
+        for (let contRound = 0; contRound < 3 && isFileTruncated(rawOutput, fileSpec.name); contRound++) {
+          emit({ type: 'file_chunk', name: fileSpec.name, chunk: `\n/* ... continuing (${contRound + 1}) ... */\n`, fi: fi + 1, total: filePlan.length });
+          const contPrompt = `The file ${fileSpec.name} was truncated. Continue EXACTLY from the last line. Output ONLY the remaining code (no repetition, no explanation):
 
-${rawOutput.slice(-800)}`;
-        let continuation = '';
-        await callLLMStream(config, fileSys, contPrompt, (chunk) => {
-          continuation += chunk;
-        }, { max_tokens: Math.min(maxTokens, 4096) });
-        continuation = continuation
+LAST 600 CHARS OF WHAT WAS WRITTEN:
+${rawOutput.slice(-600)}
+
+Continue from here:`;
+          let continuation = '';
+          await callLLMStream(config, fileSys, contPrompt, (chunk) => {
+            continuation += chunk;
+            emit({ type: 'file_chunk', name: fileSpec.name, chunk, fi: fi + 1, total: filePlan.length });
+          }, { max_tokens: Math.min(maxTokens, 8192) });
+          continuation = continuation
+            .replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
+          if (continuation.length > 20) {
+            rawOutput = rawOutput + '\n' + continuation;
+          } else {
+            break; // continuation too short — likely done
+          }
+        }
+
+        fileContent = rawOutput;
+        syntaxError = null;
+
+        const fileTokensOut = countTokens(fileContent);
+        totalTokensIn += fileTokensIn;
+        totalTokensOut += fileTokensOut;
+
+        // Quick syntax check for JS/TS files
+        if (fileSpec.name.endsWith('.js') || fileSpec.name.endsWith('.mjs')) {
+          try { new Function(fileContent); } catch (e) { syntaxError = e.message.replace(/\n.*/s, ''); }
+        }
+        // HTML completeness check
+        if (fileSpec.name.endsWith('.html') && !fileContent.includes('</html>')) {
+          syntaxError = 'Missing </html> closing tag';
+        }
+
+        const abs = path.join(projectDir, fileSpec.name);
+        ensureDir(path.dirname(abs));
+        fs.writeFileSync(abs, fileContent, 'utf-8');
+        generatedFiles.push({ name: fileSpec.name, content: fileContent });
+        emit({ type: 'file_done', name: fileSpec.name, fi: fi + 1, total: filePlan.length, syntaxError, tokOut: fileTokensOut, cumTokIn: totalTokensIn, cumTokOut: totalTokensOut });
+        break; // success — exit retry loop
+
+      } catch (e) {
+        if (attempt === 0) {
+          emit({ type: 'file_chunk', name: fileSpec.name, chunk: `\n/* Retry: ${e.message.slice(0, 100)} */\n`, fi: fi + 1, total: filePlan.length });
+          continue; // retry once
+        }
+        emit({ type: 'file_error', name: fileSpec.name, error: e.message });
+      }
+    }
+  }
+
+  // ── Post-generation integrity check ──────────────────────────────────────
+  const brokenFiles = generatedFiles.filter((f) => {
+    if (!f.content || f.content.length < 20) return true;
+    if (f.name.endsWith('.html') && !f.content.includes('</html>')) return true;
+    if ((f.name.endsWith('.js') || f.name.endsWith('.mjs'))) {
+      try { new Function(f.content); } catch { return true; }
+    }
+    if (f.name.endsWith('.json')) {
+      try { JSON.parse(f.content); } catch { return true; }
+    }
+    return isFileTruncated(f.content, f.name);
+  });
+
+  if (brokenFiles.length > 0 && brokenFiles.length <= 10) {
+    emit({ type: 'phase', phase: 'autofix', msg: `Post-generation fix: ${brokenFiles.length} file(s) need repair...` });
+    for (const broken of brokenFiles) {
+      try {
+        emit({ type: 'status', msg: `Regenerating ${broken.name}...` });
+        let fixedContent = '';
+        const fixPrompt = `Regenerate this file COMPLETELY. It was truncated or has errors.\n\nFile: ${broken.name}\nProject: ${projectName}\nDescription: ${description}\nFull file list: ${allFileNames}\n\nOutput the COMPLETE file content only, no explanation.`;
+        await callLLMStream(config, fileSys, fixPrompt, (chunk) => {
+          fixedContent += chunk;
+        }, { max_tokens: 16384 });
+        fixedContent = fixedContent
           .replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
-        rawOutput = rawOutput + '\n' + continuation;
+        if (fixedContent.length > broken.content.length) {
+          broken.content = fixedContent;
+          const abs = path.join(projectDir, broken.name);
+          fs.writeFileSync(abs, fixedContent, 'utf-8');
+          emit({ type: 'status', msg: `Fixed ${broken.name} (${fixedContent.length} chars)` });
+        }
+      } catch (e) {
+        emit({ type: 'status', msg: `Could not fix ${broken.name}: ${e.message.slice(0, 100)}` });
       }
-
-      fileContent = rawOutput;
-
-      // Stream the final content to the browser in small chunks for animation
-      await emitTextAsStream(fileContent, (chunk) => {
-        emit({ type: 'file_chunk', name: fileSpec.name, chunk, fi: fi + 1, total: filePlan.length });
-      });
-
-      const fileTokensOut = countTokens(fileContent);
-      totalTokensIn += fileTokensIn;
-      totalTokensOut += fileTokensOut;
-
-      // Quick syntax check for JS/TS files
-      if (fileSpec.name.endsWith('.js') || fileSpec.name.endsWith('.mjs')) {
-        try { new Function(fileContent); } catch (e) { syntaxError = e.message.replace(/\n.*/s, ''); }
-      }
-
-      const abs = path.join(projectDir, fileSpec.name);
-      ensureDir(path.dirname(abs));
-      fs.writeFileSync(abs, fileContent, 'utf-8');
-      generatedFiles.push({ name: fileSpec.name, content: fileContent });
-      emit({ type: 'file_done', name: fileSpec.name, fi: fi + 1, total: filePlan.length, syntaxError, tokOut: fileTokensOut, cumTokIn: totalTokensIn, cumTokOut: totalTokensOut });
-    } catch (e) {
-      emit({ type: 'file_error', name: fileSpec.name, error: e.message });
     }
   }
 
