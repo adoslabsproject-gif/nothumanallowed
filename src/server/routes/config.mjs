@@ -94,44 +94,25 @@ export function register(router) {
         newVersion = pkg.version || '';
       } catch { /* ignore */ }
 
+      // Restart ops daemon if running (so Telegram/Discord reconnect with new code)
+      try {
+        const { isRunning, stopDaemon } = await import('../../services/ops-daemon.mjs');
+        if (isRunning()) {
+          await stopDaemon();
+          const { execSync: ex2 } = await import('child_process');
+          try { ex2('nha ops start', { timeout: 10_000, stdio: 'ignore' }); } catch {}
+        }
+      } catch {}
+
       sendJSON(res, 200, {
         success: true,
-        message: newVersion ? `Updated to v${newVersion}` : 'Update completed',
+        message: newVersion ? `Updated to v${newVersion}! Restart the server to apply.` : 'Update completed',
         newVersion,
-        restart: true,
+        restart: false, // Do NOT auto-restart — it never works reliably
+        needsManualRestart: true,
         stdout: stdout.trim(),
         stderr: stderr.trim()
       });
-
-      // Restart daemon (Telegram/Discord) + self-restart UI server
-      setTimeout(async () => {
-        try {
-          const { execSync } = await import('child_process');
-
-          // Restart ops daemon if running (so Telegram/Discord reconnect with new code)
-          try {
-            const { isRunning, stopDaemon } = await import('../../services/ops-daemon.mjs');
-            if (isRunning()) {
-              await stopDaemon();
-              execSync('nha ops start', { timeout: 10_000, stdio: 'ignore' });
-            }
-          } catch { /* daemon restart is best-effort */ }
-
-          // Self-restart: write a temp script, run it with nohup, then exit.
-          // This survives parent death on macOS/Linux/Windows.
-          let port = '3847';
-          try { port = String(req.socket?.localPort || 3847); } catch {}
-          const os = await import('os');
-          const tmpScript = path.join(os.default.tmpdir(), '.nha-restart.sh');
-          fs.writeFileSync(tmpScript, `#!/bin/sh\nsleep 3\nnha ui --port ${port}\n`, { mode: 0o755 });
-          execSync(`nohup ${tmpScript} > /dev/null 2>&1 &`, {
-            timeout: 3000,
-            stdio: 'ignore',
-            shell: true,
-          });
-        } catch { /* ignore errors */ }
-        process.exit(0);
-      }, 1500);
     } catch (e) {
       const isPermission = e.message?.includes('EACCES') || e.message?.includes('permission denied');
       sendJSON(res, 200, {
