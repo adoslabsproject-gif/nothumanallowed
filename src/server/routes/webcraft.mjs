@@ -1031,46 +1031,40 @@ RULES:
 
 // ── Generation pipeline (SSE) ─────────────────────────────────────────────────
 
-const FILE_PLAN_SYSTEM = `You are the lead architect of a 200-person engineering team. Design an ENTERPRISE-GRADE file structure.
-Output ONLY a JSON array: [{"name":"path/to/file.ext","purpose":"detailed description","tokens":N}]
-where "tokens" is your estimate of content tokens (200-600 small, 600-1500 medium, 1500-3000 large).
-CRITICAL: No single file should exceed 3000 tokens. Split large files into smaller modules.
+const FILE_PLAN_SYSTEM = `You are a senior architect. Design a MINIMAL but COMPLETE working website.
+Output ONLY a JSON array: [{"name":"path/file.ext","purpose":"description","tokens":N}]
 
-MANDATORY STRUCTURE (every project MUST have):
-- package.json (with ALL dependencies: express, helmet, cors, compression, morgan, bcryptjs, jsonwebtoken, express-rate-limit, cookie-parser, dotenv)
-- .env.example (all env vars documented)
-- README.md (setup guide, API docs, architecture overview)
-- server.js (Express with full middleware stack)
-- routes/ (separate file per resource — auth.js, api.js, pages.js)
-- middleware/ (auth.js, error.js, validate.js, rateLimiter.js)
-- models/ (per-entity files with validation)
-- controllers/ (business logic separated from routes)
-- utils/ (jwt.js, hash.js, logger.js, helpers.js)
-- config/ (database.js, constants.js)
-- public/index.html (hero, features, testimonials, pricing, CTA, footer — complete landing page)
-- public/login.html (login + register forms with validation)
-- public/dashboard.html (protected page with real UI)
-- public/css/variables.css (CSS custom properties: colors, fonts, spacing, breakpoints)
-- public/css/reset.css (modern CSS reset)
-- public/css/layout.css (grid/flexbox layouts, nav, hero, sections)
-- public/css/components.css (buttons, cards, forms, modals, toasts, badges)
-- public/css/animations.css (keyframes, transitions, scroll animations)
-- public/css/responsive.css (media queries, mobile nav)
-- public/js/app.js (SPA router, init, dark mode toggle)
-- public/js/auth.js (login/register/logout, token management)
-- public/js/api.js (fetch wrapper with auth headers, error handling)
-- public/js/ui.js (toasts, modals, loading spinners, form validation)
-- public/js/animations.js (intersection observer, scroll effects)
+CRITICAL RULES:
+- Generate 8-15 files MAXIMUM — every file must be COMPLETE and WORKING
+- Each file should be 100-300 lines — substantial but not truncated
+- Token estimate per file: 500-2000 tokens (no file should need more than 2500)
+- The generated site must work IMMEDIATELY when you run "node server.js"
+- Users can add more features later via chat — start with a solid foundation
 
-RULES:
-- Generate 30-50 files — many small files are better than few large ones
-- NEVER generate a file larger than 200 lines. Split into components/partials instead
-- HTML pages: use <script src="js/page.js"> and <link href="css/page.css"> — NOT inline
-- CSS: one file per concern (max 150 lines each), NOT one giant file
-- JS: one file per feature (max 150 lines each)
-- Token estimates must be realistic: CSS files 1500-3000, JS files 1000-2000, HTML pages 2000-4000
-- Use relative paths only
-- No explanation, no markdown, ONLY the JSON array.`;
+REQUIRED FILES:
+1. package.json — dependencies (express, helmet, cors, compression, morgan, bcryptjs, jsonwebtoken, dotenv, cookie-parser, express-rate-limit)
+2. .env.example — environment variables
+3. server.js — Express server with ALL middleware, routes, and static serving
+4. public/index.html — COMPLETE landing page (hero, features, footer — all CSS inline in <style>, all JS inline in <script>)
+5. public/login.html — Login + register page (complete with inline CSS/JS, form validation, API calls)
+6. public/css/style.css — ONE main stylesheet (variables, reset, layout, components, responsive — everything in one file)
+7. public/js/app.js — Main JS (SPA routing, auth, API client, dark mode, toasts, form validation)
+8. middleware/auth.js — JWT authentication middleware
+9. routes/auth.js — Auth routes (register, login, logout, refresh)
+10. models/user.js — User model with JSON file storage
+
+OPTIONAL (only if the project type requires them):
+- routes/api.js — REST API routes for the specific project
+- public/dashboard.html — Protected dashboard page
+- Additional pages specific to the project type
+
+DO NOT generate:
+- Separate CSS files per component (put everything in style.css)
+- Separate JS files per feature (put everything in app.js)
+- README.md, .gitignore (not essential for a working site)
+- Animation/responsive separate files
+
+Output ONLY the JSON array, no explanation.`;
 
 // Token counter — approximate based on character count (1 token ≈ 4 chars)
 function countTokens(text) {
@@ -1197,20 +1191,36 @@ function _isSeverelyTruncated(content, filename) {
 }
 
 async function runGenerate(config, projectName, description, blocks, authFields, emit, abortSignal) {
-  const blocksDesc = Object.entries(blocks)
-    .filter(([, enabled]) => enabled)
-    .map(([key]) => key)
-    .join(', ');
+  // Blocks → write to memory.md as TODO features (NOT generated now)
+  const enabledBlocks = Object.entries(blocks).filter(([, enabled]) => enabled).map(([key]) => key);
   const authDesc = blocks.auth
     ? `Auth fields: ${authFields.map((f) => `${f.label}(${f.type}${f.required ? ',required' : ''})`).join(', ')}`
     : '';
 
+  // Save blocks as planned features in memory.md
+  SkillStore.ensureDefaults(projectName, config);
+  if (enabledBlocks.length > 0) {
+    const ctxDir = SkillStore.dir(projectName);
+    const memPath = path.join(ctxDir, 'memory.md');
+    const blockInstructions = `# ${projectName} — Project Memory
+
+## Planned Features (ask the AI agent to implement these one by one)
+${enabledBlocks.includes('auth') ? `- [ ] **Authentication** (register/login/JWT) — ${authDesc || 'email + password'}\n` : ''}${enabledBlocks.includes('cookieBanner') ? '- [ ] **GDPR Cookie Banner** — consent modal, localStorage tracking\n' : ''}${enabledBlocks.includes('securityMiddleware') ? '- [ ] **Security Middleware** — helmet CSP, rate limiting, CORS\n' : ''}${enabledBlocks.includes('emailVerification') ? '- [ ] **Email Verification** — send verification link, confirm endpoint\n' : ''}
+## How to implement
+Ask the AI in chat: "Add authentication" or "Add cookie banner" — the agent will modify your code.
+
+## Architecture Decisions
+_Add notes here as you build._
+`;
+    fs.writeFileSync(memPath, blockInstructions, 'utf-8');
+  }
+
   const planPrompt = `Project: ${projectName}
 Description: ${description}
-${blocksDesc ? `Required blocks: ${blocksDesc}` : ''}
-${authDesc}
 
-Design a COMPLETE production-ready file structure. Include ALL files needed for a fully working site: server, routes, middleware, models, public HTML/CSS/JS pages, config files, README. Minimum 20 files.`;
+Design a MINIMAL but COMPLETE file structure for a working website.
+Focus on the core: a beautiful landing page, server, and main CSS/JS.
+The user will add features like auth, cookie banner, etc. later via chat.`;
 
   // Emit immediately so the browser connection stays alive and the UI shows activity
   emit({ type: 'processing', msg: 'Planning file structure...' });
@@ -1290,9 +1300,9 @@ Design a COMPLETE production-ready file structure. Include ALL files needed for 
       })
       .join('\n\n');
 
-    // max_tokens scaled to file size — smaller files = less truncation risk
+    // max_tokens — generous for fewer, more complete files
     const estimatedTokens = fileSpec.tokens || 1500;
-    const maxTokens = Math.min(Math.max(estimatedTokens * 2, 2000), 8192);
+    const maxTokens = Math.min(Math.max(estimatedTokens * 3, 3000), 12000);
 
     const fileSys = `You are a team of 200 senior full-stack developers generating ENTERPRISE-GRADE production code.
 
@@ -1332,8 +1342,6 @@ FRONTEND STANDARDS:
 
     const filePrompt = `Project: ${projectName}
 Description: ${description}
-${blocksDesc ? `Enabled blocks: ${blocksDesc}` : ''}
-${authDesc}
 Full project file list: ${allFileNames}
 
 NOW GENERATE: ${fileSpec.name}
