@@ -436,5 +436,24 @@ export async function startServer({ port = 3847, host = '127.0.0.1', noBrowser =
 
   if (!noBrowser) openBrowser(`http://localhost:${port}`);
 
+  // Cleanup sandbox processes on server shutdown
+  const cleanup = async () => {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      for (let p = 4000; p <= 4010; p++) {
+        try {
+          const { stdout } = await execAsync(`lsof -ti:${p} 2>/dev/null || fuser ${p}/tcp 2>/dev/null`, { timeout: 2000 });
+          const pids = stdout.trim().split(/\s+/).filter(Boolean);
+          for (const pid of pids) { try { process.kill(parseInt(pid), 'SIGKILL'); } catch {} }
+        } catch {}
+      }
+    } catch {}
+    process.exit(0);
+  };
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
+
   return server;
 }
