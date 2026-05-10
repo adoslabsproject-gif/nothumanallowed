@@ -61,24 +61,81 @@ function interpolateObj(obj, ctx) {
 async function executeNode(node, nodeDef, ctx, config) {
   const cfg = interpolateObj(node.config ?? {}, ctx);
 
-  // AI nodes
+  // ── AI nodes ──
   if (nodeDef.type === 'ai') {
+    if (node.defId === 'ai_code') {
+      // Code node — execute JS with `input` variable
+      try {
+        const fn = new Function('input', 'output', 'ctx', cfg.code || 'return input;');
+        const result = fn(ctx.output || '', ctx.output || '', ctx);
+        return String(result ?? '');
+      } catch (e) { throw new Error(`Code error: ${e.message}`); }
+    }
     const prompt = cfg.prompt || `Process this: ${ctx.output || ''}`;
-    const systemPrompt = cfg.systemPrompt || 'You are a helpful AI assistant. Process the input and return a concise result.';
+    const agentName = cfg.agent || '';
+    const systemPrompt = agentName
+      ? `You are ${agentName}, a specialist AI agent. Process the input and return a concise result.`
+      : 'You are a helpful AI assistant. Process the input and return a concise result.';
     const result = await callLLM(config, systemPrompt, prompt);
     return result?.content || result || '';
   }
 
-  // Action nodes — map to executeTool actions
+  // ── Logic nodes ──
+  if (nodeDef.type === 'logic') {
+    if (node.defId === 'logic_if') {
+      try {
+        const fn = new Function('output', 'input', 'ctx', `return Boolean(${cfg.condition || 'false'});`);
+        const result = fn(ctx.output || '', ctx.output || '', ctx);
+        return JSON.stringify({ __branch: result ? 'true' : 'false', value: ctx.output || '' });
+      } catch (e) { throw new Error(`Condition error: ${e.message}`); }
+    }
+    if (node.defId === 'logic_switch') {
+      const expr = cfg.expression || ctx.output || '';
+      const cases = (cfg.cases || '').split(',').map((c) => c.trim());
+      const matched = cases.find((c) => expr.toLowerCase().includes(c.toLowerCase()));
+      return JSON.stringify({ __branch: matched || 'default', value: ctx.output || '' });
+    }
+    if (node.defId === 'logic_loop') {
+      const sep = cfg.separator === ',' ? ',' : '\n';
+      const items = (ctx.output || '').split(sep).filter(Boolean);
+      return JSON.stringify({ __loop: true, items, count: items.length });
+    }
+    if (node.defId === 'logic_merge') {
+      // Merge collects from ctx.__mergeInputs (set by the executor)
+      const inputs = ctx.__mergeInputs || [ctx.output || ''];
+      if (cfg.mode === 'json_array') return JSON.stringify(inputs);
+      if (cfg.mode === 'first_non_empty') return inputs.find((i) => i && i.trim()) || '';
+      return inputs.join('\n');
+    }
+    if (node.defId === 'logic_delay') {
+      const ms = Math.min(parseInt(cfg.seconds || '1') * 1000, 60_000);
+      await new Promise((r) => setTimeout(r, ms));
+      return ctx.output || '';
+    }
+    if (node.defId === 'logic_error') {
+      // Error handler wraps previous node execution — handled in runWorkflow
+      return ctx.output || cfg.fallback || '';
+    }
+    return ctx.output || '';
+  }
+
+  // ── Action nodes ──
   const ACTION_MAP = {
-    action_email:    ['gmail_send',       { to: cfg.to, subject: cfg.subject || 'NHA Workflow', body: cfg.body || ctx.output }],
-    action_slack:    ['slack_message',    { channel: cfg.channel || '#general', text: cfg.text || ctx.output }],
-    action_calendar: ['calendar_create',  { title: cfg.title || ctx.output, date: cfg.date || new Date().toISOString().split('T')[0], time: cfg.time || '09:00', duration: cfg.duration || '60' }],
-    action_task:     ['task_create',      { title: cfg.title || ctx.output, priority: cfg.priority || 'medium' }],
-    action_drive:    ['drive_upload',     { name: cfg.name || 'workflow-output.txt', content: cfg.content || ctx.output }],
-    action_notion:   ['notion_page',      { title: cfg.title || 'Workflow Output', content: cfg.content || ctx.output }],
-    action_github:   ['github_issue',     { repo: cfg.repo, title: cfg.title || ctx.output, body: cfg.body || '' }],
-    action_webhook:  ['fetch_url',        { url: cfg.url, method: cfg.method || 'POST', body: cfg.body || ctx.output }],
+    action_email:      ['gmail_send',       { to: cfg.to, subject: cfg.subject || 'NHA Workflow', body: cfg.body || ctx.output }],
+    action_slack:      ['slack_message',    { channel: cfg.channel || '#general', text: cfg.text || ctx.output }],
+    action_calendar:   ['calendar_create',  { title: cfg.title || ctx.output, date: cfg.date || new Date().toISOString().split('T')[0], time: cfg.time || '09:00', duration: cfg.duration || '60' }],
+    action_task:       ['task_create',      { title: cfg.title || ctx.output, priority: cfg.priority || 'medium' }],
+    action_drive:      ['drive_upload',     { name: cfg.name || 'workflow-output.txt', content: cfg.content || ctx.output }],
+    action_notion:     ['notion_page',      { title: cfg.title || 'Workflow Output', content: cfg.content || ctx.output }],
+    action_github:     ['github_issue',     { repo: cfg.repo, title: cfg.title || ctx.output, body: cfg.body || '' }],
+    action_webhook:    ['fetch_url',        { url: cfg.url, method: cfg.method || 'POST', body: cfg.body || ctx.output }],
+    action_browser:    ['browser_open',     { url: cfg.url || ctx.output }],
+    action_file_read:  ['file_read',        { path: cfg.path }],
+    action_file_write: ['file_write',       { path: cfg.path, content: cfg.content || ctx.output }],
+    action_contact:    ['contact_search',   { query: cfg.query || ctx.output }],
+    action_screen:     ['screen_capture',   {}],
+    action_maps:       ['maps_directions',  { from: cfg.from, to: cfg.to }],
+    action_notify:     ['notify_remind',    { message: cfg.message || ctx.output, channel: cfg.channel || 'system' }],
   };
 
   const mapped = ACTION_MAP[node.defId];
@@ -91,7 +148,7 @@ async function executeNode(node, nodeDef, ctx, config) {
     }
   }
 
-  // Trigger nodes produce no output themselves (they're the entry point)
+  // Trigger nodes
   if (nodeDef.type === 'trigger') {
     return ctx.output || cfg.input || '';
   }
@@ -108,19 +165,25 @@ async function runWorkflow(wf, initialInput, config) {
   const nodeMap = Object.fromEntries(wf.nodes.map((n) => [n.id, n]));
   const defMap = Object.fromEntries((wf.nodeDefs || []).map((d) => [d.id, d]));
 
-  // Build adjacency: from → to
+  // Build adjacency: from → [{to, fromPort}]
   const next = {};
   for (const e of wf.edges ?? []) {
     if (!next[e.from]) next[e.from] = [];
-    next[e.from].push(e.to);
+    next[e.from].push({ to: e.to, port: e.fromPort || 'default' });
   }
 
-  // Find start node (trigger, or first with no incoming edges)
+  // Check if next node is an error handler
+  const isErrorHandler = (nodeId) => {
+    const n = nodeMap[nodeId];
+    return n?.defId === 'logic_error';
+  };
+
+  // Find start nodes
   const hasIncoming = new Set((wf.edges ?? []).map((e) => e.to));
   const startCandidates = wf.nodes.filter((n) => !hasIncoming.has(n.id));
-  if (startCandidates.length === 0) return [{ nodeId: '__error', output: 'No start node found.' }];
+  if (startCandidates.length === 0) return [{ nodeId: '__error', nodeLabel: 'Error', nodeIcon: '❌', output: 'No start node found.' }];
 
-  // BFS execution
+  // BFS execution with branching support
   const queue = startCandidates.map((n) => ({ nodeId: n.id, ctx: { output: initialInput || '', input: initialInput || '' } }));
   const visited = new Set();
 
@@ -136,18 +199,75 @@ async function runWorkflow(wf, initialInput, config) {
 
     let output = '';
     let error = null;
-    try {
-      output = await executeNode(node, nodeDef, ctx, config);
-    } catch (e) {
-      error = e.message;
-      output = '';
+
+    // Error handler: wrap with retry
+    const maxRetries = node.defId === 'logic_error' ? parseInt(node.config?.retries || '0') : 0;
+    let attempt = 0;
+    while (attempt <= maxRetries) {
+      try {
+        output = await executeNode(node, nodeDef, ctx, config);
+        error = null;
+        break;
+      } catch (e) {
+        error = e.message;
+        output = node.config?.fallback || '';
+        attempt++;
+        if (attempt <= maxRetries) {
+          steps.push({ nodeId, nodeLabel: nodeDef.label, nodeIcon: '🔄', output: `Retry ${attempt}/${maxRetries}: ${e.message}`, error: null });
+        }
+      }
     }
 
-    steps.push({ nodeId, nodeLabel: nodeDef.label, nodeIcon: nodeDef.icon, output, error });
+    steps.push({ nodeId, nodeLabel: nodeDef.label, nodeIcon: nodeDef.icon, output: output?.slice?.(0, 2000) || '', error });
 
-    const nextCtx = { ...ctx, output, [`${nodeDef.id}_output`]: output };
-    for (const toId of next[nodeId] ?? []) {
-      queue.push({ nodeId: toId, ctx: nextCtx });
+    // If error and no error handler downstream, stop this branch
+    if (error) {
+      const hasHandler = (next[nodeId] ?? []).some((n) => isErrorHandler(n.to));
+      if (!hasHandler) continue;
+    }
+
+    // Determine which downstream nodes to execute based on branching
+    const downstream = next[nodeId] ?? [];
+    let branch = null;
+    try {
+      const parsed = JSON.parse(output || '{}');
+      if (parsed.__branch) branch = parsed.__branch;
+      if (parsed.__loop && Array.isArray(parsed.items)) {
+        // Loop: execute downstream for each item
+        for (const item of parsed.items) {
+          const loopCtx = { ...ctx, output: item, loopItem: item };
+          for (const { to: toId } of downstream) {
+            // Don't mark as visited — allow loop iterations
+            const toNode = nodeMap[toId];
+            if (!toNode) continue;
+            const toDef = defMap[toNode.defId];
+            if (!toDef) continue;
+            try {
+              const loopOut = await executeNode(toNode, toDef, loopCtx, config);
+              steps.push({ nodeId: toId, nodeLabel: `${toDef.label} [${item.slice(0, 20)}]`, nodeIcon: toDef.icon, output: loopOut?.slice?.(0, 2000) || '', error: null });
+            } catch (e) {
+              steps.push({ nodeId: toId, nodeLabel: `${toDef.label} [${item.slice(0, 20)}]`, nodeIcon: toDef.icon, output: '', error: e.message });
+            }
+          }
+        }
+        continue; // Loop handles its own downstream
+      }
+    } catch { /* not JSON — no branching */ }
+
+    const nextCtx = { ...ctx, output: output || '', [`${node.defId}_output`]: output || '' };
+
+    if (branch) {
+      // Branching: only follow edges that match the branch port
+      for (const { to: toId, port } of downstream) {
+        if (port === branch || port === 'default') {
+          queue.push({ nodeId: toId, ctx: nextCtx });
+        }
+      }
+    } else {
+      // Normal: follow all downstream edges
+      for (const { to: toId } of downstream) {
+        queue.push({ nodeId: toId, ctx: nextCtx });
+      }
     }
   }
 
