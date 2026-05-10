@@ -24,13 +24,26 @@ export function register(router) {
 
   router.get('/api/github', async (req, res) => {
     try {
-      const { listNotificationsRaw } = await import('../../services/github.mjs');
+      const gh = await import('../../services/github.mjs');
       const config = loadConfig();
-      const notifications = await listNotificationsRaw(config);
-      sendJSON(res, 200, { notifications: Array.isArray(notifications) ? notifications : [] });
+      // Fetch user info + notifications + repos in parallel
+      const [userResp, notifications, repos] = await Promise.all([
+        gh.ghFetch ? gh.ghFetch(config, '/user').catch(() => null) : Promise.resolve(null),
+        gh.listNotificationsRaw(config).catch(() => []),
+        gh.listUserRepos ? gh.listUserRepos(config).catch(() => []) : Promise.resolve([]),
+      ]);
+      const user = userResp ? {
+        login: userResp.login,
+        name: userResp.name,
+        avatar: userResp.avatar_url,
+        repos: Array.isArray(repos) ? repos.slice(0, 20).map((r) => ({
+          full_name: r.full_name, description: r.description, open_issues: r.open_issues_count, private: r.private,
+        })) : [],
+      } : null;
+      sendJSON(res, 200, { user, notifications: Array.isArray(notifications) ? notifications : [] });
     } catch (e) {
       if (e.message?.includes('token') || e.message?.includes('not configured') || e.message?.includes('401')) {
-        return sendJSON(res, 200, { notifications: [], error: 'GitHub token not configured or expired. Run: nha config set github-token YOUR_PAT' });
+        return sendJSON(res, 200, { notifications: [], error: 'GitHub token not configured or expired.' });
       }
       sendJSON(res, 200, { notifications: [], error: e.message });
     }

@@ -9,7 +9,7 @@ const GITHUB_API = 'https://api.github.com';
 /**
  * Authenticated fetch to GitHub API.
  */
-async function ghFetch(config, urlPath, options = {}) {
+export async function ghFetch(config, urlPath, options = {}) {
   const token = config.github?.token;
   if (!token) throw new Error('GitHub token not configured. Run: nha config set github-token YOUR_PAT');
 
