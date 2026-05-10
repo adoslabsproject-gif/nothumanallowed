@@ -38,6 +38,92 @@ function deleteWorkflow(id) {
   if (fs.existsSync(p)) fs.unlinkSync(p);
 }
 
+/** Seed example workflows on first run */
+function seedExamples() {
+  ensureDir();
+  const marker = path.join(WORKFLOWS_DIR, '.examples-seeded');
+  if (fs.existsSync(marker)) return;
+
+  const examples = [
+    {
+      id: 'ex_email_digest', name: '📧 Daily Email Digest',
+      enabled: false,
+      nodes: [
+        { id: 'n1', defId: 'trigger_cron', x: 40, y: 80, config: { schedule: '0 8 * * *' } },
+        { id: 'n2', defId: 'ai_summarize', x: 200, y: 80, config: { prompt: 'Summarize the last 10 unread emails concisely: {{output}}' } },
+        { id: 'n3', defId: 'action_slack', x: 400, y: 40, config: { channel: '#general', text: '📧 Morning Digest:\n{{output}}' } },
+        { id: 'n4', defId: 'action_notify', x: 400, y: 140, config: { message: 'Email digest ready', channel: 'system' } },
+      ],
+      edges: [{ from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' }, { from: 'n2', to: 'n4' }],
+    },
+    {
+      id: 'ex_smart_router', name: '🔀 Smart Email Router',
+      enabled: false,
+      nodes: [
+        { id: 'n1', defId: 'trigger_email', x: 40, y: 100, config: { filter: 'is:unread' } },
+        { id: 'n2', defId: 'ai_classify', x: 200, y: 100, config: { categories: 'urgent, meeting, newsletter, spam', prompt: 'Classify this email: {{output}}' } },
+        { id: 'n3', defId: 'logic_if', x: 380, y: 100, config: { condition: 'output.includes("urgent")' } },
+        { id: 'n4', defId: 'action_notify', x: 560, y: 40, config: { message: '🚨 Urgent email: {{output}}', channel: 'telegram' } },
+        { id: 'n5', defId: 'action_task', x: 560, y: 160, config: { title: 'Review: {{output}}', priority: 'low' } },
+      ],
+      edges: [
+        { from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' },
+        { from: 'n3', to: 'n4', fromPort: 'true' },
+        { from: 'n3', to: 'n5', fromPort: 'false' },
+      ],
+    },
+    {
+      id: 'ex_content_pipeline', name: '📝 Content Pipeline',
+      enabled: false,
+      nodes: [
+        { id: 'n1', defId: 'trigger_manual', x: 40, y: 100, config: { input: 'Write a blog post about AI agents' } },
+        { id: 'n2', defId: 'ai_agent', x: 200, y: 100, config: { agent: 'quill', prompt: 'Write a professional blog post about: {{output}}' } },
+        { id: 'n3', defId: 'ai_translate', x: 400, y: 40, config: { lang: 'Italian', prompt: '{{output}}' } },
+        { id: 'n4', defId: 'action_drive', x: 600, y: 40, config: { name: 'blog-it.md', content: '{{output}}' } },
+        { id: 'n5', defId: 'action_drive', x: 400, y: 160, config: { name: 'blog-en.md', content: '{{output}}' } },
+      ],
+      edges: [{ from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' }, { from: 'n2', to: 'n5' }, { from: 'n3', to: 'n4' }],
+    },
+    {
+      id: 'ex_meeting_prep', name: '📅 Meeting Prep Automation',
+      enabled: false,
+      nodes: [
+        { id: 'n1', defId: 'trigger_cron', x: 40, y: 100, config: { schedule: '0 7 * * 1-5' } },
+        { id: 'n2', defId: 'ai_agent', x: 200, y: 100, config: { agent: 'herald', prompt: 'List my meetings for today with details' } },
+        { id: 'n3', defId: 'logic_if', x: 380, y: 100, config: { condition: 'output.length > 20' } },
+        { id: 'n4', defId: 'ai_summarize', x: 540, y: 40, config: { prompt: 'Prepare a brief for each meeting. Include talking points: {{output}}' } },
+        { id: 'n5', defId: 'action_email', x: 720, y: 40, config: { to: 'me', subject: '📅 Meeting Prep — Today', body: '{{output}}' } },
+      ],
+      edges: [
+        { from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' },
+        { from: 'n3', to: 'n4', fromPort: 'true' },
+      ],
+    },
+    {
+      id: 'ex_web_monitor', name: '🌐 Website Monitor + Alert',
+      enabled: false,
+      nodes: [
+        { id: 'n1', defId: 'trigger_cron', x: 40, y: 100, config: { schedule: '*/30 * * * *' } },
+        { id: 'n2', defId: 'action_webhook', x: 200, y: 100, config: { url: 'https://nothumanallowed.com', method: 'GET' } },
+        { id: 'n3', defId: 'logic_if', x: 380, y: 100, config: { condition: 'output.includes("Error") || output.length < 100' } },
+        { id: 'n4', defId: 'action_notify', x: 560, y: 40, config: { message: '🚨 Website down or error detected!', channel: 'telegram' } },
+        { id: 'n5', defId: 'logic_error', x: 560, y: 160, config: { retries: '2', fallback: 'Check failed — site may be unreachable' } },
+      ],
+      edges: [
+        { from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' },
+        { from: 'n3', to: 'n4', fromPort: 'true' },
+        { from: 'n3', to: 'n5', fromPort: 'false' },
+      ],
+    },
+  ];
+
+  for (const wf of examples) {
+    const p = path.join(WORKFLOWS_DIR, `${wf.id}.json`);
+    if (!fs.existsSync(p)) fs.writeFileSync(p, JSON.stringify(wf, null, 2));
+  }
+  fs.writeFileSync(marker, new Date().toISOString());
+}
+
 /** Substitute {{varName}} placeholders in a string using a context map */
 function interpolate(str, ctx) {
   if (typeof str !== 'string') return str;
@@ -278,6 +364,7 @@ export function register(router) {
   // GET /api/workflows — list all workflows
   router.get('/api/workflows', async (req, res) => {
     try {
+      seedExamples();
       sendJSON(res, 200, { workflows: listWorkflows() });
     } catch (e) {
       sendError(res, 500, e.message);

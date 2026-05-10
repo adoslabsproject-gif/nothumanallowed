@@ -1033,7 +1033,8 @@ RULES:
 
 const FILE_PLAN_SYSTEM = `You are the lead architect of a 200-person engineering team. Design an ENTERPRISE-GRADE file structure.
 Output ONLY a JSON array: [{"name":"path/to/file.ext","purpose":"detailed description","tokens":N}]
-where "tokens" is your estimate of content tokens (300-800 small, 1000-2500 medium, 2500-5000 large).
+where "tokens" is your estimate of content tokens (200-600 small, 600-1500 medium, 1500-3000 large).
+CRITICAL: No single file should exceed 3000 tokens. Split large files into smaller modules.
 
 MANDATORY STRUCTURE (every project MUST have):
 - package.json (with ALL dependencies: express, helmet, cors, compression, morgan, bcryptjs, jsonwebtoken, express-rate-limit, cookie-parser, dotenv)
@@ -1062,7 +1063,11 @@ MANDATORY STRUCTURE (every project MUST have):
 - public/js/animations.js (intersection observer, scroll effects)
 
 RULES:
-- Generate 25-45 files — real enterprise projects have many files
+- Generate 30-50 files — many small files are better than few large ones
+- NEVER generate a file larger than 200 lines. Split into components/partials instead
+- HTML pages: use <script src="js/page.js"> and <link href="css/page.css"> — NOT inline
+- CSS: one file per concern (max 150 lines each), NOT one giant file
+- JS: one file per feature (max 150 lines each)
 - Token estimates must be realistic: CSS files 1500-3000, JS files 1000-2000, HTML pages 2000-4000
 - Use relative paths only
 - No explanation, no markdown, ONLY the JSON array.`;
@@ -1285,9 +1290,9 @@ Design a COMPLETE production-ready file structure. Include ALL files needed for 
       })
       .join('\n\n');
 
-    // Generous max_tokens — enterprise files are large
-    const estimatedTokens = fileSpec.tokens || 2000;
-    const maxTokens = Math.min(Math.max(estimatedTokens * 3, 4000), 16384);
+    // max_tokens scaled to file size — smaller files = less truncation risk
+    const estimatedTokens = fileSpec.tokens || 1500;
+    const maxTokens = Math.min(Math.max(estimatedTokens * 2, 2000), 8192);
 
     const fileSys = `You are a team of 200 senior full-stack developers generating ENTERPRISE-GRADE production code.
 
@@ -1321,7 +1326,9 @@ FRONTEND STANDARDS:
 - Accessible: aria-labels, focus styles, keyboard navigation, alt text
 - Professional typography: system font stack, proper hierarchy (clamp() for fluid sizes)
 - CSS Grid/Flexbox layouts — no floats
-- At minimum 500 lines for main CSS files, 200+ lines for page JS files`;
+- Each file must be COMPLETE and SELF-CONTAINED — no truncation
+- Maximum 200 lines per file. If more content needed, split into separate files
+- HTML: external CSS/JS via link/script tags, NOT inline styles/scripts exceeding 20 lines`;
 
     const filePrompt = `Project: ${projectName}
 Description: ${description}
