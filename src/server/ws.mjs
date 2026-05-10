@@ -22,7 +22,7 @@ let wssTerminal = null;
 
 export function setupWebSocket(server) {
   // ── Main WS — daemon events + version ──
-  wss = new WebSocketServer({ server, path: '/api' });
+  wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', async (ws) => {
     const { VERSION } = await import('../constants.mjs');
@@ -40,7 +40,7 @@ export function setupWebSocket(server) {
   });
 
   // ── Terminal WS — interactive shell ──
-  wssTerminal = new WebSocketServer({ server, path: '/api/terminal' });
+  wssTerminal = new WebSocketServer({ server, path: '/ws/terminal' });
 
   wssTerminal.on('connection', (ws, req) => {
     // Parse project from query: /api/terminal?cwd=ProjectName

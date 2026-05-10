@@ -1542,15 +1542,13 @@ Continue from here:`;
   };
   fs.writeFileSync(ProjectStore.metaPath(projectName), JSON.stringify(meta, null, 2), 'utf-8');
 
-  // Initialize skill context files (memory.md, skills.md, provider.md)
-  SkillStore.ensureDefaults(projectName, config);
-  const ctxDir = SkillStore.dir(projectName);
-
-  // Generate detailed skills.md with project context knowledge structure (first time only)
-  const skillsFile = path.join(ctxDir, 'skills.md');
-  const skillsContent = fs.existsSync(skillsFile) ? fs.readFileSync(skillsFile, 'utf-8') : '';
-  if (skillsContent.length < 100) {
-    const detailedSkills = `# ${projectName} — Skills & Knowledge Structure
+  // Write changes log
+  {
+    const logCtxDir = SkillStore.dir(projectName);
+    const skillsFile = path.join(logCtxDir, 'skills.md');
+    const skillsContent = fs.existsSync(skillsFile) ? fs.readFileSync(skillsFile, 'utf-8') : '';
+    if (skillsContent.length < 100) {
+      const detailedSkills = `# ${projectName} — Skills & Knowledge Structure
 
 ## Context Discovery Strategy
 
@@ -1588,14 +1586,14 @@ Agents score context relevance based on:
 
 This approach ensures agents have the right context without being overwhelmed by irrelevant information.
 `;
-    fs.writeFileSync(skillsFile, detailedSkills, 'utf-8');
+      fs.writeFileSync(skillsFile, detailedSkills, 'utf-8');
+    }
+    const logProvider = config.llm?.provider || 'nha';
+    const logModel = config.llm?.model || '';
+    const logFile = path.join(logCtxDir, 'changes.log.md');
+    const logEntry = `## ${new Date().toISOString().slice(0, 10)} — Initial generation\n- Generated ${generatedFiles.length} files\n- Tokens in: ${totalTokensIn} / out: ${totalTokensOut}\n- Description: ${description}\n- Provider: ${logProvider} (${logModel || 'default'})\n`;
+    fs.writeFileSync(logFile, (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf-8') : '') + logEntry, 'utf-8');
   }
-
-  const provider = config.llm?.provider || 'nha';
-  const model = config.llm?.model || '';
-  const logFile = path.join(ctxDir, 'changes.log.md');
-  const logEntry = `## ${new Date().toISOString().slice(0, 10)} — Initial generation\n- Generated ${generatedFiles.length} files\n- Tokens in: ${totalTokensIn} / out: ${totalTokensOut}\n- Description: ${description}\n- Provider: ${provider} (${model || 'default'})\n`;
-  fs.writeFileSync(logFile, (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf-8') : '') + logEntry, 'utf-8');
 
   emit({ type: 'done', tokIn: totalTokensIn, tokOut: totalTokensOut });
 }
