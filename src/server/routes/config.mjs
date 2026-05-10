@@ -106,7 +106,7 @@ export function register(router) {
       // Restart daemon (Telegram/Discord) + self-restart UI server
       setTimeout(async () => {
         try {
-          const { spawn, execSync } = await import('child_process');
+          const { execSync } = await import('child_process');
 
           // Restart ops daemon if running (so Telegram/Discord reconnect with new code)
           try {
@@ -117,22 +117,20 @@ export function register(router) {
             }
           } catch { /* daemon restart is best-effort */ }
 
-          // Find the nha binary in PATH (points to the newly installed version)
-          let nhaBin = 'nha';
-          try {
-            nhaBin = execSync('which nha', { encoding: 'utf-8', timeout: 3000 }).trim() || 'nha';
-          } catch { /* fallback to bare 'nha' */ }
-
-          const child = spawn(nhaBin, ['ui'], {
+          // Self-restart: launch a shell script that waits for us to die, then starts nha ui.
+          // This avoids the port-in-use race condition.
+          // Detect current port from the server's address
+          let port = '3847';
+          try { port = String(req.socket?.localPort || 3847); } catch {}
+          const { spawn } = await import('child_process');
+          const restartScript = `sleep 2 && nha ui --port ${port}`;
+          const child = spawn('sh', ['-c', restartScript], {
             detached: true,
             stdio: 'ignore',
             env: { ...process.env, NHA_RESTARTED: '1' },
-            shell: true,
           });
           child.unref();
-          // Give the child process time to bind the port before we die
-          await new Promise((r) => setTimeout(r, 2000));
-        } catch { /* ignore spawn errors */ }
+        } catch { /* ignore errors */ }
         process.exit(0);
       }, 1500);
     } catch (e) {
