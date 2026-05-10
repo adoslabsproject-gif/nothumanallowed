@@ -475,168 +475,259 @@ const ChatStore = {
  * Uses structured SSE events: { type: 'text', token } | { type: 'tool', ... } | { type: 'done', changed }
  */
 async function runWebCraftAgent(config, projectName, message, attachments, emit) {
+  const MAX_STEPS = 8; // max agentic loop iterations
   const dir = ProjectStore.dir(projectName);
   if (!fs.existsSync(dir)) { emit({ type: 'error', msg: 'Project not found' }); return; }
 
-  // Ensure context files always exist
   SkillStore.ensureDefaults(projectName, config);
 
-  const files = _listProjectFiles(dir);
-  const skillCtx = SkillStore.context(projectName);
-
-  const fileIndex = files.map((f) => `- ${f}`).join('\n');
   const today = new Date().toISOString().slice(0, 10);
   const LANG_MAP = { en:'English',it:'Italian',es:'Spanish',fr:'French',de:'German',pt:'Portuguese' };
   const language = LANG_MAP[(config?.language||'it').slice(0,2)] || 'Italian';
 
-  // Build context: include files mentioned in the message + key project files
-  const mentionedFiles = files.filter((f) => message.toLowerCase().includes(f.toLowerCase().split('/').pop() ?? ''));
-  // Always include key structural files
-  const keyFiles = files.filter((f) => /^(server|app|index)\.(js|mjs|ts)$/.test(f) || f === 'package.json' || f.includes('routes/index'));
-  const contextFiles = [...new Set([...mentionedFiles, ...keyFiles, ...files.slice(0, 12)])].slice(0, 15);
-  const fileContents = contextFiles.map((rel) => {
-    try {
-      const content = fs.readFileSync(path.join(dir, rel), 'utf-8');
-      return `### FILE: ${rel}\n\`\`\`\n${content.slice(0, 8000)}\n\`\`\``;
-    } catch { return ''; }
-  }).filter(Boolean).join('\n\n');
-
   const toolSpec = `
-AVAILABLE TOOLS (use XML tags exactly as shown):
+AVAILABLE TOOLS (use exactly ONE tool per <tool> tag):
 
-1. Read a file:
-<tool>{"op":"read","path":"filename.js"}</tool>
+1. Read a file (to see its current content before editing):
+<tool>{"op":"read","path":"relative/path.js"}</tool>
 
-2. Edit a file (replace a snippet):
-<tool>{"op":"edit","path":"filename.js","old":"EXACT_EXISTING_CODE","new":"REPLACEMENT_CODE"}</tool>
+2. Edit a file (surgical replacement of exact code):
+<tool>{"op":"edit","path":"relative/path.js","old":"EXACT_EXISTING_CODE","new":"REPLACEMENT_CODE"}</tool>
 
-3. Write a complete file (full content):
-<tool>{"op":"write","path":"filename.js","content":"FULL_FILE_CONTENT"}</tool>
+3. Write/create a file (complete content):
+<tool>{"op":"write","path":"relative/path.js","content":"FULL_FILE_CONTENT"}</tool>
+
+4. Check syntax of a JS file:
+<tool>{"op":"check","path":"relative/path.js"}</tool>
+
+WORKFLOW — follow this for every change:
+1. Read the file(s) you need to modify
+2. Make your changes with edit or write
+3. Use check to verify JS files have no syntax errors
+4. If check fails, read the file again and fix
+5. When ALL changes are complete and verified, output: <done/>
 
 RULES:
-- Always use edit for small targeted changes (preferred — faster and safer)
-- Use write only when creating a new file or doing a complete rewrite
-- "old" must be an EXACT verbatim match of the existing code — no paraphrasing
-- Never apply a tool to a file outside the project scope
-- After each tool use, continue explaining what you did
+- "old" must be an EXACT verbatim copy from the file — copy-paste, no paraphrasing
+- Use edit for targeted changes, write for new files or complete rewrites
+- ALWAYS read before edit if you haven't seen the file content yet
+- ALWAYS check JS files after modifications
+- Output <done/> when you are completely finished — this is MANDATORY
 `;
 
-  // Load memory.md and skills.md for context
-  const ctxDir = SkillStore.dir(projectName);
-  let skillContext = '';
-  try {
-    const memPath = path.join(ctxDir, 'memory.md');
-    const skillsPath = path.join(ctxDir, 'skills.md');
-    const providerPath = path.join(ctxDir, `${config.llm?.provider || 'nha'}.md`);
+  // Build system prompt with fresh file list each step
+  function buildSystemPrompt() {
+    const files = _listProjectFiles(dir);
+    const fileIndex = files.map((f) => `- ${f}`).join('\n');
+    const skillCtx = SkillStore.context(projectName);
+    const ctxDir = SkillStore.dir(projectName);
+    let skillContext = '';
+    try {
+      for (const name of ['memory.md', 'skills.md', `${config.llm?.provider || 'nha'}.md`]) {
+        const p = path.join(ctxDir, name);
+        if (fs.existsSync(p)) skillContext += `\n### ${name}:\n${fs.readFileSync(p, 'utf-8')}\n`;
+      }
+    } catch {}
 
-    if (fs.existsSync(memPath)) {
-      const memContent = fs.readFileSync(memPath, 'utf-8');
-      skillContext += `\n### MEMORY:\n${memContent}\n`;
-    }
-    if (fs.existsSync(skillsPath)) {
-      const skillsContent = fs.readFileSync(skillsPath, 'utf-8');
-      skillContext += `\n### SKILLS:\n${skillsContent}\n`;
-    }
-    if (fs.existsSync(providerPath)) {
-      const providerContent = fs.readFileSync(providerPath, 'utf-8');
-      skillContext += `\n### MODEL INFO:\n${providerContent}\n`;
-    }
-  } catch {}
+    // Key files: load full content for server, package.json, index
+    const keyFiles = files.filter((f) =>
+      /^(server|app|index)\.(js|mjs|ts)$/.test(f) || f === 'package.json' || f.includes('routes/index')
+    );
+    const mentionedFiles = files.filter((f) =>
+      message.toLowerCase().includes((f.split('/').pop() || '').toLowerCase())
+    );
+    const contextFiles = [...new Set([...mentionedFiles, ...keyFiles])].slice(0, 10);
+    const fileContents = contextFiles.map((rel) => {
+      try {
+        const content = fs.readFileSync(path.join(dir, rel), 'utf-8');
+        return `### FILE: ${rel}\n\`\`\`\n${content}\n\`\`\``;
+      } catch { return ''; }
+    }).filter(Boolean).join('\n\n');
 
-  const systemPrompt = [
-    `You are WebCraft Agent — a team of 200 senior developers working as one entity. Today is ${today}. Respond in ${language}.`,
-    `\nYou have FULL control of the project IDE. You read files, edit them surgically, and write new ones.`,
-    `\nYour edits MUST be enterprise-grade: security, error handling, responsive design, accessibility.`,
-    `\nWhen the user asks for changes, you MUST use tools to implement them — never just explain. ACT, don't talk.`,
-    `\nAfter each tool use, briefly explain what changed and why.`,
-    `\n\n## PROJECT: ${projectName}`,
-    `\n## FILES:\n${fileIndex}`,
-    skillContext,
-    skillCtx ? `\n\n## ADDITIONAL CONTEXT:\n${skillCtx}` : '',
-    attachments?.length ? `\n\n## ATTACHMENTS: ${attachments.map((a) => a.name).join(', ')}` : '',
-    `\n\n## CURRENT FILE CONTENTS:\n${fileContents}`,
-    `\n\n${toolSpec}`,
-  ].join('');
+    return [
+      `You are WebCraft Agent — an elite AI coding assistant. Today: ${today}. Language: ${language}.`,
+      `\nYou control the project IDE. You MUST use tools to implement changes — never just explain.`,
+      `\nYour workflow: read → plan → edit/write → check → verify → done.`,
+      `\nAfter EVERY tool use, you will receive the result. Based on the result, decide what to do next.`,
+      `\nWhen finished, output <done/> to signal completion.`,
+      `\n\n## PROJECT: ${projectName}`,
+      `\n## FILE TREE:\n${fileIndex}`,
+      skillContext,
+      skillCtx ? `\n\n## PROJECT KNOWLEDGE:\n${skillCtx}` : '',
+      attachments?.length ? `\n\n## ATTACHMENTS: ${attachments.map((a) => a.name).join(', ')}` : '',
+      fileContents ? `\n\n## LOADED FILES:\n${fileContents}` : '',
+      `\n\n${toolSpec}`,
+    ].join('');
+  }
 
-  // Prepare user content (text + images if any)
+  // Prepare user content
   const userContent = attachments?.length
     ? _buildMultimodalContent(message, attachments)
     : message;
 
-  let fullResponse = '';
+  // ── Agentic loop ───────────────────────────────────────────────────────────
   let hasChanges = false;
+  const modifiedFiles = new Set();
+  let conversationHistory = [
+    { role: 'user', content: userContent },
+  ];
 
-  await callLLMStream(config, systemPrompt, userContent, (token) => {
-    fullResponse += token;
-    // Suppress raw <tool> blocks from text stream — only emit visible text
-    const visibleToken = token.replace(/<tool>[\s\S]*?<\/tool>/g, '');
-    if (visibleToken) emit({ type: 'text', token: visibleToken });
-  }, { max_tokens: 16384 });
+  for (let step = 0; step < MAX_STEPS; step++) {
+    const systemPrompt = buildSystemPrompt();
+    emit({ type: 'step', step: step + 1, max: MAX_STEPS });
 
-  // ── Execute all tool calls found in the response ───────────────────────────
-  const toolRegex = /<tool>([\s\S]*?)<\/tool>/g;
-  let match;
-  while ((match = toolRegex.exec(fullResponse)) !== null) {
-    let toolCall;
-    try { toolCall = JSON.parse(match[1].trim()); } catch {
-      emit({ type: 'tool', op: 'parse_error', path: '', result: 'json_parse_failed' });
-      continue;
-    }
+    // Build user message from conversation history
+    // callLLMStream takes a single string, so we concatenate the conversation
+    let stepResponse = '';
+    const userMsg = conversationHistory.map((m) =>
+      m.role === 'user' ? m.content : `[ASSISTANT RESPONSE]\n${m.content.slice(0, 6000)}`
+    ).join('\n\n---\n\n');
 
-    const { op, path: relPath, old: oldStr, new: newStr, content } = toolCall;
-    if (!relPath || !_isSafePath(relPath)) {
-      emit({ type: 'tool', op, path: relPath ?? '', result: 'unsafe_path' });
-      continue;
-    }
+    await callLLMStream(config, systemPrompt, userMsg, (token) => {
+      stepResponse += token;
+      // Stream visible text (suppress tool tags)
+      const visible = token.replace(/<tool>[\s\S]*?<\/tool>/g, '').replace(/<done\s*\/>/g, '');
+      if (visible) emit({ type: 'text', token: visible });
+    }, { max_tokens: 16384 });
 
-    if (op === 'read') {
-      const src = ProjectStore.readFile(projectName, relPath);
-      emit({ type: 'tool', op: 'read', path: relPath, result: src !== null ? 'ok' : 'not_found' });
+    // Check if agent signaled completion
+    const isDone = stepResponse.includes('<done/>') || stepResponse.includes('<done />');
 
-    } else if (op === 'edit') {
-      const src = ProjectStore.readFile(projectName, relPath);
-      if (src === null) {
-        emit({ type: 'tool', op: 'edit', path: relPath, result: 'file_not_found' });
-      } else if (!src.includes(oldStr)) {
-        // Fallback: try LLM-assisted repair
-        const repaired = await _attemptEditRepair(config, relPath, src, oldStr, newStr);
-        if (repaired) {
-          ProjectStore.writeFile(projectName, relPath, repaired);
-          hasChanges = true;
-          emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok_repaired', oldSnippet: oldStr.slice(0, 300), newSnippet: newStr.slice(0, 300) });
-        } else {
-          emit({ type: 'tool', op: 'edit', path: relPath, result: 'old_not_found', oldSnippet: oldStr.slice(0, 200) });
+    // Extract and execute ALL tool calls from this step
+    const toolRegex = /<tool>([\s\S]*?)<\/tool>/g;
+    let match;
+    const toolResults = [];
+
+    while ((match = toolRegex.exec(stepResponse)) !== null) {
+      let toolCall;
+      try {
+        // Fix common JSON issues from LLM
+        let raw = match[1].trim();
+        raw = raw.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+        toolCall = JSON.parse(raw);
+      } catch {
+        toolResults.push({ op: 'error', result: 'JSON parse failed' });
+        emit({ type: 'tool', op: 'parse_error', path: '', result: 'json_parse_failed' });
+        continue;
+      }
+
+      const { op, path: relPath, old: oldStr, new: newStr, content } = toolCall;
+      if (!relPath || !_isSafePath(relPath)) {
+        toolResults.push({ op, path: relPath, result: 'unsafe_path' });
+        emit({ type: 'tool', op, path: relPath ?? '', result: 'unsafe_path' });
+        continue;
+      }
+
+      if (op === 'read') {
+        const src = ProjectStore.readFile(projectName, relPath);
+        const result = src !== null ? 'ok' : 'not_found';
+        toolResults.push({ op: 'read', path: relPath, result, content: src?.slice(0, 12000) });
+        emit({ type: 'tool', op: 'read', path: relPath, result });
+
+      } else if (op === 'check') {
+        const src = ProjectStore.readFile(projectName, relPath);
+        let checkResult = 'ok';
+        if (!src) { checkResult = 'file_not_found'; }
+        else if (relPath.endsWith('.js') || relPath.endsWith('.mjs')) {
+          try { new Function(src); } catch (e) { checkResult = `syntax_error: ${e.message.replace(/\n.*/s, '')}`; }
+        } else if (relPath.endsWith('.json')) {
+          try { JSON.parse(src); } catch (e) { checkResult = `json_error: ${e.message}`; }
+        } else if (relPath.endsWith('.html')) {
+          checkResult = src.includes('</html>') ? 'ok' : 'missing_closing_html_tag';
         }
-      } else {
-        const newSrc = src.replace(oldStr, newStr ?? '');
-        ProjectStore.writeFile(projectName, relPath, newSrc);
-        hasChanges = true;
-        emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 300), newSnippet: newStr?.slice(0, 300) ?? '' });
-      }
+        toolResults.push({ op: 'check', path: relPath, result: checkResult });
+        emit({ type: 'tool', op: 'check', path: relPath, result: checkResult });
 
-    } else if (op === 'write') {
-      if (content === undefined) {
-        emit({ type: 'tool', op: 'write', path: relPath, result: 'missing_content' });
-      } else {
-        ProjectStore.writeFile(projectName, relPath, content);
-        hasChanges = true;
-        emit({ type: 'tool', op: 'write', path: relPath, result: 'ok' });
+      } else if (op === 'edit') {
+        const src = ProjectStore.readFile(projectName, relPath);
+        if (src === null) {
+          toolResults.push({ op: 'edit', path: relPath, result: 'file_not_found' });
+          emit({ type: 'tool', op: 'edit', path: relPath, result: 'file_not_found' });
+        } else if (!src.includes(oldStr)) {
+          const repaired = await _attemptEditRepair(config, relPath, src, oldStr, newStr);
+          if (repaired) {
+            ProjectStore.writeFile(projectName, relPath, repaired);
+            hasChanges = true;
+            modifiedFiles.add(relPath);
+            toolResults.push({ op: 'edit', path: relPath, result: 'ok_repaired' });
+            emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok_repaired', oldSnippet: oldStr.slice(0, 300), newSnippet: newStr?.slice(0, 300) });
+          } else {
+            toolResults.push({ op: 'edit', path: relPath, result: 'old_not_found', hint: 'Use read to see current content, then retry with exact text' });
+            emit({ type: 'tool', op: 'edit', path: relPath, result: 'old_not_found', oldSnippet: oldStr.slice(0, 200) });
+          }
+        } else {
+          const newSrc = src.replace(oldStr, newStr ?? '');
+          ProjectStore.writeFile(projectName, relPath, newSrc);
+          hasChanges = true;
+          modifiedFiles.add(relPath);
+          toolResults.push({ op: 'edit', path: relPath, result: 'ok' });
+          emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 300), newSnippet: newStr?.slice(0, 300) ?? '' });
+        }
+
+      } else if (op === 'write') {
+        if (content === undefined) {
+          toolResults.push({ op: 'write', path: relPath, result: 'missing_content' });
+          emit({ type: 'tool', op: 'write', path: relPath, result: 'missing_content' });
+        } else {
+          ProjectStore.writeFile(projectName, relPath, content);
+          hasChanges = true;
+          modifiedFiles.add(relPath);
+          toolResults.push({ op: 'write', path: relPath, result: 'ok' });
+          emit({ type: 'tool', op: 'write', path: relPath, result: 'ok' });
+        }
       }
+    }
+
+    // If agent said done or no tools were called, break
+    if (isDone || toolResults.length === 0) break;
+
+    // Build tool results feedback for next iteration
+    const feedbackParts = toolResults.map((r) => {
+      let msg = `[${r.op}] ${r.path || ''}: ${r.result}`;
+      if (r.op === 'read' && r.content) msg += `\n\`\`\`\n${r.content}\n\`\`\``;
+      if (r.hint) msg += ` — ${r.hint}`;
+      return msg;
+    });
+
+    // Add assistant response + tool results to conversation
+    conversationHistory.push({ role: 'assistant', content: stepResponse });
+    conversationHistory.push({ role: 'user', content: `TOOL RESULTS:\n${feedbackParts.join('\n\n')}\n\nContinue your work. When done, output <done/>` });
+
+    // Trim conversation to avoid context overflow (keep first user msg + last 4 exchanges)
+    if (conversationHistory.length > 10) {
+      conversationHistory = [conversationHistory[0], ...conversationHistory.slice(-6)];
     }
   }
 
-  // Log chat interaction to changes.log.md
+  // ── Post-edit: syntax check all modified JS files ──────────────────────────
+  const syntaxErrors = [];
+  for (const relPath of modifiedFiles) {
+    if (relPath.endsWith('.js') || relPath.endsWith('.mjs')) {
+      const src = ProjectStore.readFile(projectName, relPath);
+      if (src) {
+        try { new Function(src); } catch (e) {
+          syntaxErrors.push({ file: relPath, error: e.message.replace(/\n.*/s, '') });
+        }
+      }
+    }
+  }
+  if (syntaxErrors.length > 0) {
+    emit({ type: 'syntax_errors', errors: syntaxErrors });
+  }
+
+  // Log chat interaction
   if (hasChanges) {
     try {
-      const ctxDir = SkillStore.dir(projectName);
-      const logFile = path.join(ctxDir, 'changes.log.md');
-      const timestamp = new Date().toISOString();
-      const logEntry = `\n## ${timestamp.slice(0, 16).replace('T', ' ')} — Chat modification\n- User: ${message.slice(0, 100)}${message.length > 100 ? '...' : ''}\n- Files modified: ${fullResponse.match(/<tool>[\s\S]*?"op":"(write|edit)"[\s\S]*?"path":"([^"]+)"[\s\S]*?<\/tool>/g)?.map(m => m.match(/"path":"([^"]+)"/)?.[1]).filter(Boolean).join(', ') || 'none'}\n`;
-      fs.writeFileSync(logFile, (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf-8') : '') + logEntry, 'utf-8');
+      const logFile = path.join(SkillStore.dir(projectName), 'changes.log.md');
+      const ts = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      const entry = `\n## ${ts} — Chat modification\n- User: ${message.slice(0, 100)}${message.length > 100 ? '...' : ''}\n- Files: ${[...modifiedFiles].join(', ')}\n`;
+      fs.writeFileSync(logFile, (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf-8') : '') + entry, 'utf-8');
     } catch {}
   }
 
-  emit({ type: 'done', changed: hasChanges });
+  // Notify about modified files so frontend can reload them
+  emit({ type: 'files_changed', files: [...modifiedFiles] });
+  emit({ type: 'done', changed: hasChanges, syntaxErrors: syntaxErrors.length });
 }
 
 // ── Generation pipeline (SSE) ─────────────────────────────────────────────────
