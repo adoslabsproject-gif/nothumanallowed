@@ -103,18 +103,26 @@ export function register(router) {
         stderr: stderr.trim()
       });
 
-      // Self-restart: spawn new process with same args, then exit
-      // Delay to allow HTTP response to flush
+      // Self-restart: resolve the NEW nha binary from npm global, spawn it, then exit.
+      // Must use the fresh binary path (not process.argv which points to the OLD code).
       setTimeout(async () => {
         try {
-          const { spawn } = await import('child_process');
-          const args = process.argv.slice(1);
-          const child = spawn(process.argv[0], args, {
+          const { spawn, execSync } = await import('child_process');
+          // Find the nha binary in PATH (points to the newly installed version)
+          let nhaBin = 'nha';
+          try {
+            nhaBin = execSync('which nha', { encoding: 'utf-8', timeout: 3000 }).trim() || 'nha';
+          } catch { /* fallback to bare 'nha' */ }
+
+          const child = spawn(nhaBin, ['ui'], {
             detached: true,
             stdio: 'ignore',
-            env: process.env,
+            env: { ...process.env, NHA_RESTARTED: '1' },
+            shell: true,
           });
           child.unref();
+          // Give the child process time to bind the port before we die
+          await new Promise((r) => setTimeout(r, 2000));
         } catch { /* ignore spawn errors */ }
         process.exit(0);
       }, 1500);
