@@ -117,19 +117,18 @@ export function register(router) {
             }
           } catch { /* daemon restart is best-effort */ }
 
-          // Self-restart: launch a shell script that waits for us to die, then starts nha ui.
-          // This avoids the port-in-use race condition.
-          // Detect current port from the server's address
+          // Self-restart: write a temp script, run it with nohup, then exit.
+          // This survives parent death on macOS/Linux/Windows.
           let port = '3847';
           try { port = String(req.socket?.localPort || 3847); } catch {}
-          const { spawn } = await import('child_process');
-          const restartScript = `sleep 2 && nha ui --port ${port}`;
-          const child = spawn('sh', ['-c', restartScript], {
-            detached: true,
+          const os = await import('os');
+          const tmpScript = path.join(os.default.tmpdir(), '.nha-restart.sh');
+          fs.writeFileSync(tmpScript, `#!/bin/sh\nsleep 3\nnha ui --port ${port}\n`, { mode: 0o755 });
+          execSync(`nohup ${tmpScript} > /dev/null 2>&1 &`, {
+            timeout: 3000,
             stdio: 'ignore',
-            env: { ...process.env, NHA_RESTARTED: '1' },
+            shell: true,
           });
-          child.unref();
         } catch { /* ignore errors */ }
         process.exit(0);
       }, 1500);
