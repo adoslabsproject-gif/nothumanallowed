@@ -74,10 +74,12 @@ class SandboxManager {
    * @param {string} projectDir
    * @param {(event: object) => void} emit
    */
-  async start(projectName, projectDir, emit) {
+  async start(projectName, projectDir, emit, _attempt = 1) {
+    const MAX_RETRIES = 3;
+
     // Kill any existing sandbox
     if (this.isRunning()) {
-      emit({ type: 'status', msg: 'Stopping previous sandbox...' });
+      emit({ type: 'phase', phase: 'cleanup', msg: 'Stopping previous sandbox...' });
       await this.stop();
     }
 
@@ -86,7 +88,8 @@ class SandboxManager {
       return;
     }
 
-    // ── Inject shims so user projects run without real DB / Redis ──────────
+    // ── Phase 1: Shims ────────────────────────────────────────────────────
+    emit({ type: 'phase', phase: 'shims', msg: 'Injecting runtime shims (pg, redis, mongoose, helmet...)' });
     const shimDir = path.join(projectDir, '.nha-shims');
     ensureDir(shimDir);
     _writeShims(shimDir);
@@ -96,34 +99,36 @@ class SandboxManager {
       emit({ type: 'error', msg: 'No entry point found (server.js / app.js / index.js).' });
       return;
     }
+    emit({ type: 'status', msg: `Entry point: ${entryFile}` });
 
-    // ── Install dependencies ────────────────────────────────────────────────
+    // ── Phase 2: Dependencies ─────────────────────────────────────────────
     if (fs.existsSync(path.join(projectDir, 'package.json'))) {
-      emit({ type: 'status', msg: 'Installing dependencies (npm install)...' });
+      emit({ type: 'phase', phase: 'deps', msg: 'Installing dependencies...' });
       try {
-        await execAsync('npm install --prefer-offline --no-audit --no-fund', {
+        const { stdout } = await execAsync('npm install --prefer-offline --no-audit --no-fund 2>&1', {
           cwd: projectDir,
           timeout: 120_000,
           env: { ...process.env, NODE_ENV: 'development' },
         });
-        emit({ type: 'status', msg: 'Dependencies installed.' });
+        const added = stdout.match(/added (\d+) package/)?.[1] || '0';
+        emit({ type: 'status', msg: `Dependencies installed (${added} packages)` });
       } catch (e) {
-        emit({ type: 'warn', msg: `npm install warning: ${e.message.slice(0, 200)}` });
+        emit({ type: 'warn', msg: `npm install warning: ${e.message.slice(0, 300)}` });
       }
     }
 
-    // ── Find a free port ────────────────────────────────────────────────────
+    // ── Phase 3: Start server ─────────────────────────────────────────────
     const port = await _findFreePort(4000, 4999);
     if (!port) {
       emit({ type: 'error', msg: 'No free ports available in range 4000-4999.' });
       return;
     }
 
-    emit({ type: 'status', msg: `Starting on port ${port}...` });
-
-    // Patch entry file to use our shims and bind to the found port
+    emit({ type: 'phase', phase: 'start', msg: `Starting server on port ${port}...` });
     const patchedEntry = _patchEntry(projectDir, entryFile, shimDir, port);
 
+    // Capture stderr for missing module detection
+    let stderrBuf = '';
     const proc = spawn('node', [patchedEntry], {
       cwd: projectDir,
       env: {
@@ -149,22 +154,62 @@ class SandboxManager {
 
     proc.stderr.on('data', (d) => {
       const line = d.toString().trim();
+      stderrBuf += d.toString();
       if (line) emit({ type: 'log', msg: `[stderr] ${line}` });
     });
 
-    proc.once('exit', (code) => {
-      if (this._sandbox?.proc === proc) this._sandbox = null;
-      emit({ type: 'exit', code: code ?? -1 });
+    // Wait for exit or healthy
+    const exitPromise = new Promise((resolve) => {
+      proc.once('exit', (code) => {
+        if (this._sandbox?.proc === proc) this._sandbox = null;
+        resolve(code ?? -1);
+      });
     });
 
-    // Healthcheck: wait up to 15s for the process to bind the port
-    const healthy = await _waitForPort(port, 15_000);
-    if (healthy && this._sandbox) {
-      this._sandbox.healthy = true;
+    const healthy = await Promise.race([
+      _waitForPort(port, 15_000).then((h) => h ? 'healthy' : 'timeout'),
+      exitPromise.then((code) => ({ exitCode: code })),
+    ]);
+
+    if (healthy === 'healthy') {
+      if (this._sandbox) this._sandbox.healthy = true;
+      emit({ type: 'phase', phase: 'ready', msg: `Server running on port ${port}` });
       emit({ type: 'ready', port });
-    } else if (!healthy) {
-      emit({ type: 'warn', msg: 'Sandbox started but port not yet bound — may still be loading.' });
+      return;
     }
+
+    if (healthy === 'timeout') {
+      emit({ type: 'warn', msg: 'Server started but port not yet bound — may still be loading.' });
+      return;
+    }
+
+    // ── Crash handling — auto-fix missing modules ─────────────────────────
+    const exitCode = typeof healthy === 'object' ? healthy.exitCode : -1;
+    emit({ type: 'status', msg: `Process exited with code ${exitCode}` });
+
+    // Extract missing module name from stderr
+    const missingMatch = stderrBuf.match(/Cannot find module ['"]([^'"]+)['"]/);
+    if (missingMatch && _attempt < MAX_RETRIES) {
+      const missingMod = missingMatch[1];
+      // Skip shim-able or built-in modules
+      if (!missingMod.startsWith('.') && !missingMod.startsWith('/') && !missingMod.startsWith('node:')) {
+        const pkgName = missingMod.startsWith('@') ? missingMod.split('/').slice(0, 2).join('/') : missingMod.split('/')[0];
+        emit({ type: 'phase', phase: 'autofix', msg: `Missing module "${pkgName}" — installing...` });
+        try {
+          await execAsync(`npm install --save ${pkgName} --no-audit --no-fund`, {
+            cwd: projectDir,
+            timeout: 60_000,
+            env: { ...process.env, NODE_ENV: 'development' },
+          });
+          emit({ type: 'status', msg: `Installed ${pkgName} — retrying (attempt ${_attempt + 1}/${MAX_RETRIES})...` });
+          return this.start(projectName, projectDir, emit, _attempt + 1);
+        } catch (installErr) {
+          emit({ type: 'warn', msg: `Failed to install ${pkgName}: ${installErr.message.slice(0, 200)}` });
+        }
+      }
+    }
+
+    emit({ type: 'error', msg: _attempt >= MAX_RETRIES ? `Failed after ${MAX_RETRIES} attempts` : 'Server crashed on startup' });
   }
 }
 
