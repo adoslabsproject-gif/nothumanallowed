@@ -1624,6 +1624,56 @@ Continue from here:`;
     }
   }
 
+  // ── Cross-reference check: verify HTML src/href point to existing files ────
+  if (!abortSignal?.aborted) {
+    const allFileNames = new Set(generatedFiles.map((f) => f.name));
+    let refsFixed = 0;
+    for (const f of generatedFiles) {
+      if (!f.name.endsWith('.html')) continue;
+      let modified = false;
+      let html = f.content;
+
+      // Find all src="..." and href="..." references to local files
+      const refRegex = /(?:src|href)=["']([^"']*?\.(?:js|css|mjs))["']/gi;
+      let match;
+      while ((match = refRegex.exec(html)) !== null) {
+        const ref = match[1];
+        if (ref.startsWith('http') || ref.startsWith('//') || ref.startsWith('data:')) continue;
+
+        // Resolve relative path from HTML file location
+        const htmlDir = path.dirname(f.name);
+        const refPath = ref.startsWith('/') ? ref.slice(1) : path.join(htmlDir, ref).replace(/\\/g, '/');
+        const publicRef = refPath.startsWith('public/') ? refPath : `public/${refPath}`;
+
+        // Check if file exists in generated files
+        if (!allFileNames.has(refPath) && !allFileNames.has(publicRef) && !allFileNames.has(ref)) {
+          // Try to find the actual file by name
+          const baseName = path.basename(ref);
+          const actualFile = generatedFiles.find((g) => g.name.endsWith('/' + baseName) || g.name === baseName);
+          if (actualFile) {
+            // Fix the reference
+            const correctRef = actualFile.name.startsWith('public/') ? actualFile.name.slice(7) : actualFile.name;
+            html = html.replace(match[0], match[0].replace(ref, correctRef));
+            modified = true;
+            refsFixed++;
+            emit({ type: 'status', msg: `Fixed reference: ${ref} → ${correctRef} in ${f.name}` });
+          } else {
+            emit({ type: 'status', msg: `Warning: ${f.name} references missing file: ${ref}` });
+          }
+        }
+      }
+
+      if (modified) {
+        f.content = html;
+        const abs = path.join(projectDir, f.name);
+        fs.writeFileSync(abs, html, 'utf-8');
+      }
+    }
+    if (refsFixed > 0) {
+      emit({ type: 'status', msg: `Auto-fixed ${refsFixed} broken file reference(s)` });
+    }
+  }
+
   // Save project metadata
   const meta = {
     description,
@@ -1893,6 +1943,28 @@ export function register(router) {
             severity: 'warning',
             message: 'Missing </html> closing tag',
           });
+        }
+        // Check references to local files
+        const refRegex = /(?:src|href)=["']([^"']*?\.(?:js|css|mjs))["']/gi;
+        let refMatch;
+        const lines = content.split('\n');
+        while ((refMatch = refRegex.exec(content)) !== null) {
+          const ref = refMatch[1];
+          if (ref.startsWith('http') || ref.startsWith('//') || ref.startsWith('data:')) continue;
+          const htmlDir = path.dirname(relPath);
+          const refPath = ref.startsWith('/') ? ref.slice(1) : path.join(htmlDir, ref).replace(/\\/g, '/');
+          const publicRef = refPath.startsWith('public/') ? refPath : `public/${refPath}`;
+          const fileExists = ProjectStore.readFile(projectName, refPath) !== null
+            || ProjectStore.readFile(projectName, publicRef) !== null
+            || ProjectStore.readFile(projectName, ref) !== null;
+          if (!fileExists) {
+            const lineNum = content.slice(0, refMatch.index).split('\n').length;
+            diagnostics.push({
+              from: { line: lineNum, col: 0 },
+              severity: 'error',
+              message: `Referenced file not found: ${ref}`,
+            });
+          }
         }
       }
 
