@@ -632,6 +632,11 @@ RULES:
           try { new Function(src); } catch (e) { checkResult = `syntax_error: ${e.message.replace(/\n.*/s, '')}`; }
         } else if (relPath.endsWith('.json')) {
           try { JSON.parse(src); } catch (e) { checkResult = `json_error: ${e.message}`; }
+        } else if (relPath.endsWith('.css')) {
+          // Basic CSS validation: balanced braces
+          const opens = (src.match(/\{/g) || []).length;
+          const closes = (src.match(/\}/g) || []).length;
+          if (opens !== closes) checkResult = `css_error: unbalanced braces (${opens} open, ${closes} close)`;
         } else if (relPath.endsWith('.html')) {
           checkResult = src.includes('</html>') ? 'ok' : 'missing_closing_html_tag';
         }
@@ -727,6 +732,54 @@ RULES:
 
   // Notify about modified files so frontend can reload them
   emit({ type: 'files_changed', files: [...modifiedFiles] });
+
+  // ── Auto-restart sandbox if running and files changed ──────────────────────
+  if (hasChanges && sandbox.isRunning()) {
+    emit({ type: 'sandbox_restart', msg: 'Restarting sandbox to verify changes...' });
+    try {
+      await sandbox.stop();
+      const projectDir = ProjectStore.dir(projectName);
+      // Quick restart — capture stderr for 5s to detect crash
+      const port = await _findFreePort(4000, 4999);
+      if (port) {
+        const shimDir = path.join(projectDir, '.nha-shims');
+        ensureDir(shimDir);
+        _writeShims(shimDir);
+        const entryFile = _detectEntry(projectDir);
+        if (entryFile) {
+          const patchedEntry = _patchEntry(projectDir, entryFile, shimDir, port);
+          const proc = spawn('node', [patchedEntry], {
+            cwd: projectDir,
+            env: { ...process.env, PORT: String(port), NODE_ENV: 'development', NHA_SANDBOX: '1' },
+            detached: false,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          sandbox._sandbox = { proc, port, projectName, startedAt: new Date(), healthy: false };
+
+          let crashErr = '';
+          proc.stderr.on('data', (d) => { crashErr += d.toString(); });
+          proc.stdout.on('data', (d) => {
+            if (/listen|running|started|ready|port/i.test(d.toString())) {
+              sandbox._sandbox.healthy = true;
+            }
+          });
+
+          const healthy = await _waitForPort(port, 8000);
+          if (healthy) {
+            sandbox._sandbox.healthy = true;
+            emit({ type: 'sandbox_ready', port });
+          } else if (crashErr) {
+            // Extract error for the user
+            const errLine = crashErr.split('\n').find((l) => l.includes('Error')) || crashErr.slice(0, 200);
+            emit({ type: 'sandbox_error', msg: errLine });
+          }
+        }
+      }
+    } catch (e) {
+      emit({ type: 'sandbox_error', msg: e.message?.slice(0, 200) });
+    }
+  }
+
   emit({ type: 'done', changed: hasChanges, syntaxErrors: syntaxErrors.length });
 }
 
@@ -902,11 +955,12 @@ Design a COMPLETE production-ready file structure. Include ALL files needed for 
     const fileSpec = filePlan[fi];
     emit({ type: 'file_start', name: fileSpec.name, fi: fi + 1, total: filePlan.length });
 
-    // Include last 6 generated files as context for consistency
-    const prevContext = generatedFiles.slice(-6)
+    // Include last 8 generated files — key files get full content
+    const prevContext = generatedFiles.slice(-8)
       .map((f) => {
         const ext = f.name.split('.').pop();
-        const maxSnippet = ext === 'json' ? 800 : ext === 'css' ? 2000 : 1600;
+        const isKey = /^(server|app|index)\.(js|mjs)$/.test(f.name) || f.name === 'package.json';
+        const maxSnippet = isKey ? 16000 : ext === 'json' ? 1200 : ext === 'css' ? 4000 : ext === 'html' ? 4000 : 3000;
         const snippet = f.content.slice(0, maxSnippet);
         return `### ${f.name}\n\`\`\`\n${snippet}${f.content.length > maxSnippet ? '\n... (truncated)' : ''}\n\`\`\``;
       })
@@ -1046,6 +1100,11 @@ Continue from here:`;
     }
     if (f.name.endsWith('.json')) {
       try { JSON.parse(f.content); } catch { return true; }
+    }
+    if (f.name.endsWith('.css')) {
+      const opens = (f.content.match(/\{/g) || []).length;
+      const closes = (f.content.match(/\}/g) || []).length;
+      if (opens !== closes) return true;
     }
     return isFileTruncated(f.content, f.name);
   });
