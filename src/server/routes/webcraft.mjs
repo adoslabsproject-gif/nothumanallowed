@@ -118,10 +118,23 @@ class SandboxManager {
     }
 
     // ── Phase 3: Start server ─────────────────────────────────────────────
-    // Kill orphan sandbox processes from previous runs (survive server restart)
+    // Kill orphan sandbox processes on ports 4000-4010 (survive server restart)
     try {
-      await execAsync('pkill -f "NHA_SANDBOX=1" 2>/dev/null || true', { timeout: 3000 });
-      await new Promise((r) => setTimeout(r, 500)); // wait for port release
+      if (process.platform === 'win32') {
+        for (let p = 4000; p <= 4010; p++) {
+          try { await execAsync(`for /f "tokens=5" %a in ('netstat -ano ^| findstr :${p} ^| findstr LISTENING') do taskkill /F /PID %a`, { timeout: 3000 }); } catch {}
+        }
+      } else {
+        // Try lsof first, then fuser
+        for (let p = 4000; p <= 4010; p++) {
+          try {
+            const { stdout } = await execAsync(`lsof -ti:${p} 2>/dev/null || fuser ${p}/tcp 2>/dev/null`, { timeout: 2000 });
+            const pids = stdout.trim().split(/\s+/).filter(Boolean);
+            for (const pid of pids) { try { process.kill(parseInt(pid), 'SIGKILL'); } catch {} }
+          } catch {}
+        }
+      }
+      await new Promise((r) => setTimeout(r, 800));
     } catch {}
     const port = await _findFreePort(4000, 4999);
     if (!port) {
