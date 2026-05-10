@@ -86,12 +86,19 @@ export function register(router) {
         env: { ...process.env, NODE_ENV: 'production' },
       });
 
-      // Read the newly installed version from disk
+      // Get the installed version from npm output or registry
       let newVersion = '';
       try {
-        const pkgPath = path.resolve(__dirname, '..', '..', '..', 'package.json');
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-        newVersion = pkg.version || '';
+        // Extract version from npm install output (e.g. "+ nothumanallowed@14.4.18")
+        const verMatch = stdout.match(/nothumanallowed@(\d+\.\d+\.\d+)/);
+        if (verMatch) {
+          newVersion = verMatch[1];
+        } else {
+          // Fallback: check registry
+          const regResp = await fetch('https://registry.npmjs.org/nothumanallowed/latest');
+          const regData = await regResp.json();
+          newVersion = regData.version || '';
+        }
       } catch { /* ignore */ }
 
       // Restart ops daemon if running (so Telegram/Discord reconnect with new code)
