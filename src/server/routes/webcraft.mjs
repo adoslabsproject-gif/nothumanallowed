@@ -19,7 +19,7 @@ import { createServer } from 'net';
 import { promisify } from 'util';
 import { sendJSON, sendError, parseBody, sendSSE } from '../index.mjs';
 import { loadConfig }   from '../../config.mjs';
-import { callLLM, callLLMStream } from '../../services/llm.mjs';
+import { callLLM, callLLMStream, fixQwen3BPE } from '../../services/llm.mjs';
 import { NHA_DIR } from '../../constants.mjs';
 
 const execAsync = promisify(exec);
@@ -443,11 +443,34 @@ RULES:
 - After each tool use, continue explaining what you did
 `;
 
+  // Load memory.md and skills.md for context
+  const ctxDir = SkillStore.dir(projectName);
+  let skillContext = '';
+  try {
+    const memPath = path.join(ctxDir, 'memory.md');
+    const skillsPath = path.join(ctxDir, 'skills.md');
+    const providerPath = path.join(ctxDir, `${config.llm?.provider || 'nha'}.md`);
+
+    if (fs.existsSync(memPath)) {
+      const memContent = fs.readFileSync(memPath, 'utf-8');
+      skillContext += `\n### MEMORY:\n${memContent}\n`;
+    }
+    if (fs.existsSync(skillsPath)) {
+      const skillsContent = fs.readFileSync(skillsPath, 'utf-8');
+      skillContext += `\n### SKILLS:\n${skillsContent}\n`;
+    }
+    if (fs.existsSync(providerPath)) {
+      const providerContent = fs.readFileSync(providerPath, 'utf-8');
+      skillContext += `\n### MODEL INFO:\n${providerContent}\n`;
+    }
+  } catch {}
+
   const systemPrompt = [
     `You are WebCraft Agent, an expert full-stack developer. Today is ${today}. Respond in ${language}.`,
     `\n\n## PROJECT: ${projectName}`,
     `\n## FILES:\n${fileIndex}`,
-    skillCtx ? `\n\n## CONTEXT (Skills/Memory):\n${skillCtx}` : '',
+    skillContext,
+    skillCtx ? `\n\n## ADDITIONAL CONTEXT:\n${skillCtx}` : '',
     attachments?.length ? `\n\n## ATTACHMENTS: ${attachments.map((a) => a.name).join(', ')}` : '',
     `\n\n## CURRENT FILE CONTENTS:\n${fileContents}`,
     `\n\n${toolSpec}`,
@@ -521,17 +544,85 @@ RULES:
     }
   }
 
+  // Log chat interaction to changes.log.md
+  if (hasChanges) {
+    try {
+      const ctxDir = SkillStore.dir(projectName);
+      const logFile = path.join(ctxDir, 'changes.log.md');
+      const timestamp = new Date().toISOString();
+      const logEntry = `\n## ${timestamp.slice(0, 16).replace('T', ' ')} — Chat modification\n- User: ${message.slice(0, 100)}${message.length > 100 ? '...' : ''}\n- Files modified: ${fullResponse.match(/<tool>[\s\S]*?"op":"(write|edit)"[\s\S]*?"path":"([^"]+)"[\s\S]*?<\/tool>/g)?.map(m => m.match(/"path":"([^"]+)"/)?.[1]).filter(Boolean).join(', ') || 'none'}\n`;
+      fs.writeFileSync(logFile, (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf-8') : '') + logEntry, 'utf-8');
+    } catch {}
+  }
+
   emit({ type: 'done', changed: hasChanges });
 }
 
 // ── Generation pipeline (SSE) ─────────────────────────────────────────────────
 
-const FILE_PLAN_SYSTEM = `You are an expert full-stack web developer. Your job is to design the complete file structure for a web project.
-Output ONLY a JSON array of file objects: [{"name":"filename","purpose":"brief purpose"}]
-Rules:
-- Include ALL necessary files: HTML, CSS, JS, server, package.json, .env.example, README.md
-- Use relative paths (e.g. "public/styles.css", "routes/auth.js")
+const FILE_PLAN_SYSTEM = `You are a senior full-stack architect. Design a COMPLETE, PRODUCTION-READY file structure for a web project.
+Output ONLY a JSON array: [{"name":"path/to/file.ext","purpose":"what this file does","tokens":N}]
+where "tokens" is your estimate of how many tokens the file content will need (200-800 for small files, 800-2000 for medium, 2000-4000 for large).
+
+MANDATORY rules:
+- Generate 20-40 files minimum for any real project — a complete site requires many files
+- Split large concerns into separate files (separate route files, separate component files, separate util files)
+- Always include: package.json, server.js (or index.js), .env.example, README.md
+- For full-stack projects: routes/, middleware/, models/, controllers/ directories with individual files per resource
+- For frontend: separate CSS files per section (hero, navbar, footer, components), separate JS modules
+- Use relative paths only (e.g. "routes/auth.js", "public/js/app.js", "public/css/main.css")
 - No explanation, no markdown, ONLY the JSON array.`;
+
+// Token counter — approximate based on character count (1 token ≈ 4 chars)
+function countTokens(text) {
+  return Math.ceil((text || '').length / 4);
+}
+
+/**
+ * Simulated streaming: for providers that return full text at once (NHA/Liara),
+ * we split the text into ~20-char chunks and emit them with setImmediate gaps
+ * so the browser receives a real byte-by-byte stream over SSE.
+ */
+async function emitTextAsStream(text, onChunk) {
+  const CHUNK_SIZE = 20;
+  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+    onChunk(text.slice(i, i + CHUNK_SIZE));
+    await new Promise((r) => setImmediate(r));
+  }
+}
+
+/**
+ * Detects if an LLM output appears to be truncated / incomplete.
+ * Returns true if the file likely needs a continuation call.
+ */
+function isFileTruncated(content, filename) {
+  if (!content || content.length < 10) return true;
+  const trimmed = content.trimEnd();
+  const ext = filename.split('.').pop()?.toLowerCase();
+
+  // Common truncation signs: ends mid-statement without closing bracket/brace
+  if (ext === 'js' || ext === 'mjs' || ext === 'ts') {
+    // Balanced braces check (fast approximation)
+    const open = (trimmed.match(/\{/g) || []).length;
+    const close = (trimmed.match(/\}/g) || []).length;
+    if (open > close + 2) return true;
+    // Last meaningful line should not end with an operator or comma
+    const lastLine = trimmed.split('\n').pop()?.trim() ?? '';
+    if (/[,({=+\-*/<>|&]$/.test(lastLine)) return true;
+  }
+  if (ext === 'css') {
+    const open = (trimmed.match(/\{/g) || []).length;
+    const close = (trimmed.match(/\}/g) || []).length;
+    if (open > close + 1) return true;
+  }
+  if (ext === 'html') {
+    if (!trimmed.includes('</html>') && !trimmed.includes('</body>')) return true;
+  }
+  if (ext === 'json') {
+    try { JSON.parse(trimmed); } catch { return true; }
+  }
+  return false;
+}
 
 async function runGenerate(config, projectName, description, blocks, authFields, emit) {
   const blocksDesc = Object.entries(blocks)
@@ -546,12 +637,24 @@ async function runGenerate(config, projectName, description, blocks, authFields,
 Description: ${description}
 ${blocksDesc ? `Required blocks: ${blocksDesc}` : ''}
 ${authDesc}
-Design a complete file structure for this project.`;
 
-  // Round 1: plan files
+Design a COMPLETE production-ready file structure. Include ALL files needed for a fully working site: server, routes, middleware, models, public HTML/CSS/JS pages, config files, README. Minimum 20 files.`;
+
+  // Emit immediately so the browser connection stays alive and the UI shows activity
+  emit({ type: 'processing', msg: 'Planning file structure...' });
+
+  // Round 1: plan files — stream so the client gets bytes immediately
   let filePlan = [];
+  let planTokensIn = countTokens(FILE_PLAN_SYSTEM) + countTokens(planPrompt);
+  let planTokensOut = 0;
   try {
-    const planRaw = await callLLM(config, FILE_PLAN_SYSTEM, planPrompt, { max_tokens: 1500 });
+    let planRaw = '';
+    await callLLMStream(config, FILE_PLAN_SYSTEM, planPrompt, (chunk) => {
+      planRaw += chunk;
+      planTokensOut += countTokens(chunk);
+      // Emit heartbeat tokens so browser doesn't timeout
+      emit({ type: 'planning', chunk });
+    }, { max_tokens: 4096 });
     const clean = planRaw.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
       .replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim();
     const arr = JSON.parse(clean.match(/\[[\s\S]*\]/)?.[0] ?? clean);
@@ -559,13 +662,34 @@ Design a complete file structure for this project.`;
   } catch {}
 
   if (filePlan.length === 0) {
-    // Minimal fallback structure
+    // Comprehensive fallback structure for a full-stack web project
     filePlan = [
-      { name: 'index.html', purpose: 'Main HTML page' },
-      { name: 'styles.css', purpose: 'CSS styles' },
-      { name: 'app.js', purpose: 'Application logic' },
-      { name: 'server.js', purpose: 'Express server' },
-      { name: 'package.json', purpose: 'Node.js package manifest' },
+      { name: 'package.json', purpose: 'Node.js dependencies and scripts', tokens: 300 },
+      { name: '.env.example', purpose: 'Environment variables template', tokens: 200 },
+      { name: 'README.md', purpose: 'Project documentation', tokens: 400 },
+      { name: 'server.js', purpose: 'Express server entry point with middleware setup', tokens: 1500 },
+      { name: 'routes/index.js', purpose: 'Main router — mounts all sub-routers', tokens: 300 },
+      { name: 'routes/auth.js', purpose: 'Auth routes: register, login, logout, refresh', tokens: 1200 },
+      { name: 'routes/api.js', purpose: 'REST API routes', tokens: 800 },
+      { name: 'middleware/auth.js', purpose: 'JWT authentication middleware', tokens: 600 },
+      { name: 'middleware/error.js', purpose: 'Global error handler', tokens: 400 },
+      { name: 'middleware/validate.js', purpose: 'Request validation middleware', tokens: 500 },
+      { name: 'models/user.js', purpose: 'User model (SQLite/JSON storage)', tokens: 600 },
+      { name: 'controllers/authController.js', purpose: 'Auth business logic', tokens: 1200 },
+      { name: 'utils/jwt.js', purpose: 'JWT sign/verify helpers', tokens: 400 },
+      { name: 'utils/hash.js', purpose: 'Password hashing utilities (bcrypt)', tokens: 300 },
+      { name: 'config/database.js', purpose: 'Database connection and setup', tokens: 500 },
+      { name: 'public/index.html', purpose: 'Main landing page', tokens: 2000 },
+      { name: 'public/dashboard.html', purpose: 'User dashboard page', tokens: 1500 },
+      { name: 'public/login.html', purpose: 'Login/register page', tokens: 1200 },
+      { name: 'public/css/main.css', purpose: 'Global styles, variables, reset', tokens: 1500 },
+      { name: 'public/css/components.css', purpose: 'Reusable component styles (cards, buttons, forms)', tokens: 1200 },
+      { name: 'public/css/layout.css', purpose: 'Layout styles: nav, hero, sections, footer', tokens: 1000 },
+      { name: 'public/css/animations.css', purpose: 'Animations and transitions', tokens: 600 },
+      { name: 'public/js/app.js', purpose: 'Main frontend JS — router, init', tokens: 800 },
+      { name: 'public/js/auth.js', purpose: 'Frontend auth logic — login, register, token storage', tokens: 800 },
+      { name: 'public/js/api.js', purpose: 'API client wrapper with fetch', tokens: 500 },
+      { name: 'public/js/ui.js', purpose: 'UI helpers — toasts, modals, loaders', tokens: 600 },
     ];
   }
 
@@ -573,43 +697,93 @@ Design a complete file structure for this project.`;
 
   const projectDir = ensureDir(ProjectStore.dir(projectName));
   const generatedFiles = [];
+  let totalTokensIn = planTokensIn;
+  let totalTokensOut = planTokensOut;
 
-  // Round 2: generate each file
+  const allFileNames = filePlan.map((f) => f.name).join(', ');
+
+  // Round 2: generate each file with streaming
   for (let fi = 0; fi < filePlan.length; fi++) {
     const fileSpec = filePlan[fi];
     emit({ type: 'file_start', name: fileSpec.name, fi: fi + 1, total: filePlan.length });
 
-    const allFileNames = filePlan.map((f) => f.name).join(', ');
-    const prevContext = generatedFiles.slice(-3)
-      .map((f) => `### ${f.name} (excerpt)\n${f.content.slice(0, 800)}`)
+    // Include last 4 generated files as context (truncated to avoid token overflow)
+    const prevContext = generatedFiles.slice(-4)
+      .map((f) => {
+        const ext = f.name.split('.').pop();
+        const snippet = f.content.slice(0, ext === 'json' ? 600 : 1200);
+        return `### ${f.name}\n\`\`\`\n${snippet}${f.content.length > 1200 ? '\n... (truncated)' : ''}\n\`\`\``;
+      })
       .join('\n\n');
 
-    const fileSys = `You are an expert full-stack web developer generating production-quality code.
-Output ONLY the complete file content — no explanation, no markdown fences, no comments about what you're doing.
-Write real, working, modern code. Do NOT use placeholder text like "TODO" or "// add code here".`;
+    // Estimate appropriate max_tokens for this file
+    const estimatedTokens = fileSpec.tokens || 2000;
+    const maxTokens = Math.min(Math.max(estimatedTokens * 2, 2000), 8192);
+
+    const fileSys = `You are a senior full-stack developer generating a COMPLETE, PRODUCTION-READY file.
+CRITICAL RULES:
+- Output ONLY the raw file content — zero explanations, zero markdown fences, zero "here is the file:" preamble
+- Write COMPLETE, WORKING code — no TODOs, no placeholders, no "add your code here" comments
+- Every function must be fully implemented with real logic
+- Use modern patterns: async/await, ES6+, proper error handling
+- CSS must include responsive design (mobile-first), dark/light variables, smooth animations
+- HTML must be complete with proper meta tags, semantic structure, accessible markup
+- JS must handle all edge cases, show loading states, handle errors gracefully`;
 
     const filePrompt = `Project: ${projectName}
 Description: ${description}
-${blocksDesc ? `Required blocks: ${blocksDesc}` : ''}
+${blocksDesc ? `Enabled blocks: ${blocksDesc}` : ''}
 ${authDesc}
-All files in project: ${allFileNames}
+Full project file list: ${allFileNames}
 
-Generate COMPLETE content for: ${fileSpec.name}
+NOW GENERATE: ${fileSpec.name}
 Purpose: ${fileSpec.purpose}
-${prevContext ? `\n--- Recent files for context ---\n${prevContext}` : ''}
 
-Output ONLY the complete file content.`;
+${prevContext ? `Recent files generated (for consistency):\n${prevContext}\n\n` : ''}Output ONLY the complete file content, starting immediately with the first line of the file.`;
 
     let fileContent = '';
     let syntaxError = null;
+    const fileTokensIn = countTokens(fileSys) + countTokens(filePrompt);
 
     try {
+      // Collect full LLM output first, then stream it to the client in small chunks.
+      // This gives real word-by-word animation even with non-streaming providers (NHA/Liara).
+      let rawOutput = '';
       await callLLMStream(config, fileSys, filePrompt, (chunk) => {
-        fileContent += chunk;
-        emit({ type: 'file_chunk', name: fileSpec.name, chunk, fi: fi + 1, total: filePlan.length });
-      }, { max_tokens: 4096 });
+        rawOutput += chunk;
+      }, { max_tokens: maxTokens });
 
-      // Quick syntax check for JS files
+      // Strip markdown fences if LLM wrapped the output
+      rawOutput = rawOutput
+        .replace(/^```[\w]*\n/, '').replace(/\n```$/, '')
+        .replace(/^```[\w]*\r\n/, '').replace(/\r\n```$/, '').trim();
+
+      // Continuation: if the file appears truncated, ask the model to continue
+      if (isFileTruncated(rawOutput, fileSpec.name)) {
+        const contPrompt = `Continue writing the file ${fileSpec.name} exactly from where it was cut off. Output ONLY the continuation (no repetition of what was already written, no explanation):
+
+${rawOutput.slice(-800)}`;
+        let continuation = '';
+        await callLLMStream(config, fileSys, contPrompt, (chunk) => {
+          continuation += chunk;
+        }, { max_tokens: Math.min(maxTokens, 4096) });
+        continuation = continuation
+          .replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
+        rawOutput = rawOutput + '\n' + continuation;
+      }
+
+      fileContent = rawOutput;
+
+      // Stream the final content to the browser in small chunks for animation
+      await emitTextAsStream(fileContent, (chunk) => {
+        emit({ type: 'file_chunk', name: fileSpec.name, chunk, fi: fi + 1, total: filePlan.length });
+      });
+
+      const fileTokensOut = countTokens(fileContent);
+      totalTokensIn += fileTokensIn;
+      totalTokensOut += fileTokensOut;
+
+      // Quick syntax check for JS/TS files
       if (fileSpec.name.endsWith('.js') || fileSpec.name.endsWith('.mjs')) {
         try { new Function(fileContent); } catch (e) { syntaxError = e.message.replace(/\n.*/s, ''); }
       }
@@ -618,7 +792,7 @@ Output ONLY the complete file content.`;
       ensureDir(path.dirname(abs));
       fs.writeFileSync(abs, fileContent, 'utf-8');
       generatedFiles.push({ name: fileSpec.name, content: fileContent });
-      emit({ type: 'file_done', name: fileSpec.name, fi: fi + 1, total: filePlan.length, syntaxError });
+      emit({ type: 'file_done', name: fileSpec.name, fi: fi + 1, total: filePlan.length, syntaxError, tokOut: fileTokensOut });
     } catch (e) {
       emit({ type: 'file_error', name: fileSpec.name, error: e.message });
     }
@@ -640,13 +814,83 @@ Output ONLY the complete file content.`;
   if (!fs.existsSync(memFile)) {
     fs.writeFileSync(memFile, `# ${projectName} — Project Memory\n\n_Add architectural decisions, preferences, and notes here._\n`, 'utf-8');
   }
+
+  // Generate skills.md with project context knowledge structure
+  const skillsFile = path.join(ctxDir, 'skills.md');
+  if (!fs.existsSync(skillsFile)) {
+    const skillsContent = `# ${projectName} — Skills & Knowledge Structure
+
+## Context Discovery Strategy
+
+This project uses a hierarchical knowledge discovery system:
+
+### 1. **Immediate Context** (Always Loaded)
+- \`memory.md\` — Core architectural decisions and preferences
+- \`changes.log.md\` — Recent development history
+- Project metadata (tech stack, dependencies)
+
+### 2. **On-Demand Context** (Loaded When Needed)
+- **File-specific context**: When editing specific files, load related documentation
+- **Feature-specific context**: Load relevant docs when working on specific features
+- **Error-specific context**: Load debugging guides when errors occur
+
+### 3. **Smart Context Loading**
+Instead of loading everything at once, agents:
+1. **Start with core context** (memory.md + recent changes)
+2. **Analyze the task** to determine what additional context is needed
+3. **Load specific context** files based on the task type
+4. **Cache loaded context** for the duration of the conversation
+
+### 4. **Context File Structure**
+- \`docs/\` — Feature documentation and guides
+- \`specs/\` — Technical specifications and requirements
+- \`examples/\` — Code examples and patterns
+- \`troubleshooting/\` — Common issues and solutions
+
+### 5. **Context Relevance Scoring**
+Agents score context relevance based on:
+- **Keywords** in user requests
+- **File paths** being modified
+- **Error messages** encountered
+- **Recent changes** in the codebase
+
+This approach ensures agents have the right context without being overwhelmed by irrelevant information.
+`;
+    fs.writeFileSync(skillsFile, skillsContent, 'utf-8');
+  }
+  // Initialize provider-specific file (liara.md, claude.md, etc.)
+  const provider = config.llm?.provider || 'nha';
+  const model = config.llm?.model || '';
+  const providerFile = path.join(ctxDir, `${provider}.md`);
+  if (!fs.existsSync(providerFile)) {
+    const providerContent = `# ${provider.toUpperCase()} Model Configuration
+
+## Current Model: ${model || 'Default'}
+
+### Model Characteristics
+- **Provider**: ${provider}
+- **Model**: ${model || 'Default model for this provider'}
+- **Context Window**: Varies by model
+- **Strengths**: Add specific strengths of this model
+- **Limitations**: Add specific limitations to be aware of
+
+### Best Practices for This Model
+- Write specific coding patterns this model excels at
+- Note any formatting preferences
+- Document prompt engineering tips that work well
+
+### Configuration Notes
+- Add any specific configuration notes for this provider
+- Document any rate limits or special considerations
+`;
+    fs.writeFileSync(providerFile, providerContent, 'utf-8');
+  }
+
   const logFile = path.join(ctxDir, 'changes.log.md');
-  const logEntry = `## ${new Date().toISOString().slice(0, 10)} — Initial generation\n- Generated ${generatedFiles.length} files\n- Description: ${description}\n`;
+  const logEntry = `## ${new Date().toISOString().slice(0, 10)} — Initial generation\n- Generated ${generatedFiles.length} files\n- Tokens in: ${totalTokensIn} / out: ${totalTokensOut}\n- Description: ${description}\n- Provider: ${provider} (${model || 'default'})\n`;
   fs.writeFileSync(logFile, (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf-8') : '') + logEntry, 'utf-8');
 
-  const inputTokensEst = Math.round(filePlan.length * 800);
-  const outputTokensEst = generatedFiles.reduce((sum, f) => sum + Math.ceil(f.content.length / 4), 0);
-  emit({ type: 'done', tokIn: inputTokensEst, tokOut: outputTokensEst });
+  emit({ type: 'done', tokIn: totalTokensIn, tokOut: totalTokensOut });
 }
 
 // ── ZIP download ──────────────────────────────────────────────────────────────

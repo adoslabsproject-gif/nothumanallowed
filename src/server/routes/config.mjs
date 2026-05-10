@@ -35,12 +35,98 @@ export function register(router) {
   // GET /api/version/check
   router.get('/api/version/check', async (_req, res) => {
     try {
+      // Read installed version from disk (not from in-memory constant) so that
+      // after npm-update the check reflects the newly installed version
+      let installedVersion = VERSION;
+      try {
+        const pkgPath = path.resolve(__dirname, '..', '..', '..', 'package.json');
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (pkg.version) installedVersion = pkg.version;
+      } catch { /* fallback to in-memory VERSION */ }
+
       const r = await fetch('https://registry.npmjs.org/nothumanallowed/latest');
       const data = await r.json();
-      const upd = data.version !== VERSION;
-      sendJSON(res, 200, { current: VERSION, latest: data.version, hasUpdate: upd, updateAvailable: upd });
+      const upd = data.version !== installedVersion;
+      sendJSON(res, 200, { current: installedVersion, latest: data.version, hasUpdate: upd, updateAvailable: upd });
     } catch {
       sendJSON(res, 200, { current: VERSION, latest: VERSION, hasUpdate: false, updateAvailable: false });
+    }
+  });
+
+  // POST /api/npm-update
+  router.post('/api/npm-update', async (req, res) => {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+
+      // Detect the package manager and global prefix to handle permissions correctly
+      let cmd = 'npm install -g nothumanallowed@latest';
+
+      // On macOS/Linux, check if we need special handling for permission
+      if (process.platform !== 'win32') {
+        try {
+          // Check if npm global dir is writable by current user
+          const { stdout: prefix } = await execAsync('npm config get prefix', { timeout: 5000 });
+          const globalDir = prefix.trim();
+          await fs.promises.access(path.join(globalDir, 'lib'), fs.constants.W_OK);
+        } catch {
+          // Global dir not writable — return error with clear instructions
+          sendJSON(res, 200, {
+            success: false,
+            error: 'EACCES: permission denied',
+            message: 'Permission denied. Run: sudo npm install -g nothumanallowed@latest'
+          });
+          return;
+        }
+      }
+
+      const { stdout, stderr } = await execAsync(cmd, {
+        timeout: 120_000,
+        env: { ...process.env, NODE_ENV: 'production' },
+      });
+
+      // Read the newly installed version from disk
+      let newVersion = '';
+      try {
+        const pkgPath = path.resolve(__dirname, '..', '..', '..', 'package.json');
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        newVersion = pkg.version || '';
+      } catch { /* ignore */ }
+
+      sendJSON(res, 200, {
+        success: true,
+        message: newVersion ? `Updated to v${newVersion}` : 'Update completed',
+        newVersion,
+        restart: true,
+        stdout: stdout.trim(),
+        stderr: stderr.trim()
+      });
+
+      // Self-restart: spawn new process with same args, then exit
+      // Delay to allow HTTP response to flush
+      setTimeout(async () => {
+        try {
+          const { spawn } = await import('child_process');
+          const args = process.argv.slice(1);
+          const child = spawn(process.argv[0], args, {
+            detached: true,
+            stdio: 'ignore',
+            env: process.env,
+          });
+          child.unref();
+        } catch { /* ignore spawn errors */ }
+        process.exit(0);
+      }, 1500);
+    } catch (e) {
+      const isPermission = e.message?.includes('EACCES') || e.message?.includes('permission denied');
+      sendJSON(res, 200, {
+        success: false,
+        error: isPermission ? 'EACCES: permission denied' : e.message,
+        message: isPermission
+          ? 'Permission denied. Run: sudo npm install -g nothumanallowed@latest'
+          : 'Update failed. Try running: npm install -g nothumanallowed@latest'
+      });
     }
   });
 
@@ -128,7 +214,7 @@ export function register(router) {
       const encodedLoc = encodeURIComponent(loc);
       const r = await fetch(
         `https://wttr.in/${encodedLoc}?format=j1`,
-        { headers: { 'User-Agent': 'nha-ui/1.0' }, signal: AbortSignal.timeout(8000) }
+        { headers: { 'User-Agent': 'nha-ui/1.0' }, signal: AbortSignal.timeout(15000) }
       );
       if (!r.ok) return sendError(res, 502, `Weather service error: ${r.status}`);
       const w = await r.json();
@@ -151,8 +237,19 @@ export function register(router) {
   // POST /api/update-npm — run npm install -g nothumanallowed@latest
   router.post('/api/update-npm', async (_req, res) => {
     const { exec } = await import('child_process');
-    exec('npm install -g nothumanallowed@latest', { timeout: 60000 }, (err, stdout, stderr) => {
-      if (err) return sendError(res, 500, stderr || err.message);
+    exec('npm install -g nothumanallowed@latest', { timeout: 120000 }, (err, stdout, stderr) => {
+      if (err) {
+        const msg = (stderr || err.message || '');
+        // Permission denied — retry with sudo (Linux/VM)
+        if (msg.includes('EACCES') || msg.includes('permission denied')) {
+          exec('sudo npm install -g nothumanallowed@latest', { timeout: 120000 }, (err2, stdout2, stderr2) => {
+            if (err2) return sendError(res, 500, stderr2 || err2.message);
+            sendJSON(res, 200, { ok: true, output: stdout2, sudo: true });
+          });
+          return;
+        }
+        return sendError(res, 500, msg);
+      }
       sendJSON(res, 200, { ok: true, output: stdout });
     });
   });

@@ -209,6 +209,74 @@ async function buildRouter() {
   return router;
 }
 
+// ── Google OAuth Enterprise Middleware ──────────────────────────────────────
+
+function isGoogleAPIRoute(pathname) {
+  const googleRoutes = [
+    '/api/email/read',
+    '/api/email/send',
+    '/api/email/mark-read',
+    '/api/email/mark-all-read',
+    '/api/calendar',
+    '/api/calendar/upcoming',
+    '/api/drive',
+    '/api/google-auth'
+  ];
+  return googleRoutes.some(route => pathname.startsWith(route));
+}
+
+async function validateGoogleOAuth(req) {
+  try {
+    const { loadConfig } = await import('../config.mjs');
+    const config = loadConfig();
+
+    if (!config.google?.clientId && !config.google?.tokens?.access_token) {
+      return {
+        status: 401,
+        body: {
+          error: 'Google OAuth not configured',
+          authRequired: true,
+          message: 'Gmail and Calendar require authentication. Setup OAuth to continue.',
+          setupInstructions: [
+            'Go to Google Cloud Console: https://console.cloud.google.com/apis/credentials',
+            'Create OAuth 2.0 Client ID (Desktop Application)',
+            'Enable Gmail API and Calendar API',
+            'Run: nha config set google-client-id YOUR_CLIENT_ID',
+            'Run: nha config set google-client-secret YOUR_CLIENT_SECRET',
+            'Run: nha google auth'
+          ]
+        }
+      };
+    }
+
+    if (config.google?.tokens?.access_token) {
+      // Check if token is expired (basic heuristic)
+      const expiryTime = config.google.tokens.expiry_date;
+      if (expiryTime && Date.now() > expiryTime) {
+        return {
+          status: 401,
+          body: {
+            error: 'Google OAuth token expired',
+            authRequired: true,
+            message: 'Your Google authentication has expired. Please re-authenticate.',
+            action: 'Run: nha google auth'
+          }
+        };
+      }
+    }
+
+    return null; // OAuth is valid
+  } catch (e) {
+    return {
+      status: 500,
+      body: {
+        error: 'OAuth validation failed',
+        message: e.message
+      }
+    };
+  }
+}
+
 // ── Main request handler ─────────────────────────────────────────────────────
 
 let _router = null; // initialized in startServer()
@@ -238,6 +306,9 @@ async function handleRequest(req, res) {
       if (match) {
         req.params = match.params;
         req.query = Object.fromEntries(url.searchParams);
+
+        // OAuth validation is handled inside individual route handlers
+
         await match.handler(req, res);
         logRequest(method, pathname, res.statusCode || 200, Date.now() - start);
         return;
@@ -290,18 +361,70 @@ async function handleRequest(req, res) {
 export async function startServer({ port = 3847, host = '127.0.0.1', noBrowser = false } = {}) {
   _router = await buildRouter();
   const { setupWebSocket } = await import('./ws.mjs');
+  const { execSync } = await import('child_process');
+
+  // Kill any existing process on the port before binding
+  try {
+    const pids = execSync(`lsof -ti tcp:${port} 2>/dev/null || true`).toString().trim();
+    if (pids) {
+      pids.split('\n').filter(Boolean).forEach((p) => {
+        try { process.kill(parseInt(p), 'SIGTERM'); } catch {}
+      });
+      await new Promise((r) => setTimeout(r, 900));
+    }
+  } catch {}
 
   const server = http.createServer(handleRequest);
-  setupWebSocket(server);
 
+  // Attach WebSocket AFTER HTTP server is listening to avoid WS error events
   await new Promise((resolve, reject) => {
-    server.listen(port, host, (err) => err ? reject(err) : resolve());
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      server.removeListener('error', reject);
+      resolve(undefined);
+    });
   });
 
-  const G = '\x1b[0;32m', NC = '\x1b[0m', D = '\x1b[2m', BOLD = '\x1b[1m';
+  setupWebSocket(server);
+
+  const G = '\x1b[0;32m', NC = '\x1b[0m', D = '\x1b[2m', BOLD = '\x1b[1m', Y = '\x1b[33m', R = '\x1b[31m';
   const { VERSION } = await import('../constants.mjs');
   console.log(`\n  ${BOLD}${G}NHA${NC} ${D}v${VERSION}${NC}`);
   console.log(`  ${G}✓${NC} Server running on ${G}http://${host}:${port}${NC}`);
+  if (host === '0.0.0.0') {
+    try {
+      const os = await import('os');
+      const nets = os.default.networkInterfaces();
+      for (const iface of Object.values(nets)) {
+        for (const info of iface || []) {
+          if (info.family === 'IPv4' && !info.internal) {
+            console.log(`  ${G}✓${NC} LAN: ${G}http://${info.address}:${port}${NC}`);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // ENTERPRISE STARTUP DIAGNOSTIC: Check Google OAuth configuration
+  try {
+    const { loadConfig } = await import('../config.mjs');
+    const config = loadConfig();
+    const hasClientId = !!(config.google?.clientId);
+    const hasTokens = !!(config.google?.tokens?.access_token);
+
+    if (!hasClientId && !hasTokens) {
+      console.log(`  ${R}⚠${NC} ${D}Google OAuth: Not configured - Gmail/Calendar unavailable${NC}`);
+      console.log(`  ${D}  Setup: nha google auth${NC}`);
+    } else if (hasClientId && !hasTokens) {
+      console.log(`  ${Y}⚠${NC} ${D}Google OAuth: Client configured, authentication required${NC}`);
+      console.log(`  ${D}  Authenticate: nha google auth${NC}`);
+    } else if (hasTokens) {
+      console.log(`  ${G}✓${NC} ${D}Google OAuth: Authenticated and ready${NC}`);
+    }
+  } catch (e) {
+    console.log(`  ${R}⚠${NC} ${D}Google OAuth: Configuration check failed - ${e.message}${NC}`);
+  }
+
   console.log(`  ${D}Press Ctrl+C to stop${NC}\n`);
 
   // Telemetry ping — fire and forget

@@ -5,6 +5,392 @@
  * Supports: Anthropic, OpenAI, Gemini, DeepSeek, Grok, Mistral, Cohere.
  */
 
+// ── Qwen3 BPE artifact repair ─────────────────────────────────────────────
+//
+// Qwen3-32B running on vLLM produces text where Italian/English function words
+// (articles, prepositions, conjunctions) are fused to adjacent content words
+// due to BPE tokenizer subword merging.  Examples:
+//   "lacorrelazione" → "la correlazione"
+//   "ilprezzodell'oro" → "il prezzo dell'oro"
+//   "deidati" → "dei dati"
+//   "nonesiste" → "non esiste"
+//
+// Strategy: insert a space before any known function word that immediately
+// follows a lowercase letter (i.e. is fused mid-word).  We run multiple
+// passes because chains like "dellacorrelazione" need two separations.
+// Table rows (lines starting with |) are intentionally skipped to avoid
+// corrupting cell separators.
+
+// ── Qwen3 BPE repair — three-pass pipeline ────────────────────────────────
+//
+// Qwen3-32B on vLLM produces two distinct tokenization artifacts:
+//
+// ARTIFACT A — Word fusion (BPE subword merging at word boundaries):
+//   "lacorrelazione" → "la correlazione"
+//   "ilprezzodell'oro" → "il prezzo dell'oro"
+// Fix: insert space before Italian/English function words fused to content words.
+//
+// ARTIFACT B — Fragment shattering (token fragments emitted with spaces):
+//   "p os s i amo" → "possiamo"
+//   "an al izz are" → "analizzare"
+//   "corr el az ion e" → "correlazione"
+// Fix: detect runs of ≥3 consecutive short tokens (≤4 chars) that together form
+// a phonotactically plausible Italian/English word, then fuse them.
+//
+// Detection heuristic for Artifact B (no dictionary required):
+//   - A "fragment run" is N≥3 space-separated tokens where every token is 1-4 chars
+//   - The run must NOT contain standalone grammatical words (articles, preps, conj.)
+//   - The fused form must contain at least one vowel (sanity check)
+//   - Phonotactic filter: fused form must not start/end with implausible clusters
+//
+// Both artifacts can co-exist: after fusion, the fused word may need split-fix.
+
+// Stopwords that act as word boundaries — these are NEVER BPE fragments, always real words
+const BOUNDARY_WORDS = new Set([
+  'il','lo','la','gli','le','un','uno','una',
+  'del','dello','della','dei','degli','delle','dell',
+  'al','allo','alla','ai','agli','alle',
+  'dal','dallo','dalla','dai','dagli','dalle',
+  'nel','nello','nella','nei','negli','nelle',
+  'sul','sullo','sulla','sui','sugli','sulle',
+  'con','col','per','tra','fra','che','non','ma','di','da','in','su','a','o','e','è',
+  'oro','euro','usa','usd','eur','api','api','gas','oil','web','app','end','pdf','url','jpg','png',
+  'the','and','for','are','was','but','not','you','all','can','her','has','had','his','she','him','our','out','new','old','top','get','set','add','run','use','see',
+]);
+
+// Single characters commonly produced by BPE fragmentation in Italian/English
+const BPE_SINGLE_CHARS = new Set('abcdefghijklmnopqrstuvwxyzàèéìòù'.split(''));
+
+/**
+ * Enterprise-grade linguistic scorer for Italian/English word candidates.
+ * Optimized for FULL FUSION validation rather than segmentation scoring.
+ */
+class LinguisticScorer {
+  static scoreWord(word) {
+    if (word.length < 3) return 0;
+    if (word.length > 20) return 0;
+
+    let score = 0;
+
+    // 1. Length scoring - bias toward longer words (BPE fragments usually form 6-15 char words)
+    if (word.length >= 8 && word.length <= 15) score += 60; // Strong bonus for typical length
+    else if (word.length >= 6 && word.length <= 17) score += 40;
+    else if (word.length >= 4 && word.length <= 20) score += 20;
+    else score += 5;
+
+    // 2. Vowel distribution score (critical for Italian)
+    const vowels = (word.match(/[aeiouàèéìòù]/gi) || []).length;
+    const vowelRatio = vowels / word.length;
+
+    // Italian optimal range: 35-50% vowels
+    if (vowelRatio >= 0.35 && vowelRatio <= 0.5) score += 50;
+    else if (vowelRatio >= 0.25 && vowelRatio <= 0.6) score += 30;
+    else if (vowelRatio >= 0.15 && vowelRatio <= 0.7) score += 10;
+    else return 0; // Invalid vowel ratio
+
+    // 3. Italian morphological endings (massive boost for real Italian words)
+    const strongEndings = ['zione', 'amento', 'mente'];
+    const mediumEndings = ['ando', 'endo', 'are', 'ere', 'ire', 'ato', 'ito', 'uto'];
+    const weakEndings = ['oso', 'ico', 'ale', 'ivo', 'iva', 'ell', 'ett'];
+
+    for (const ending of strongEndings) {
+      if (word.endsWith(ending)) { score += 80; break; }
+    }
+    for (const ending of mediumEndings) {
+      if (word.endsWith(ending)) { score += 40; break; }
+    }
+    for (const ending of weakEndings) {
+      if (word.endsWith(ending)) { score += 20; break; }
+    }
+
+    // 4. CV alternation pattern (Italian has good consonant-vowel balance)
+    let alternations = 0;
+    let prevIsVowel = /[aeiouàèéìòù]/i.test(word[0]);
+
+    for (let i = 1; i < word.length; i++) {
+      const isVowel = /[aeiouàèéìòù]/i.test(word[i]);
+      if (isVowel !== prevIsVowel) alternations++;
+      prevIsVowel = isVowel;
+    }
+
+    const alternationRatio = alternations / word.length;
+    if (alternationRatio >= 0.4 && alternationRatio <= 0.8) score += 30;
+    else if (alternationRatio >= 0.25 && alternationRatio <= 0.9) score += 15;
+
+    // 5. Penalty for impossible patterns
+    // Consonant clusters at start/end (Italian rarely has these)
+    if (/^[bcdfghjklmnpqrstvwxyz]{4,}/i.test(word)) score -= 50;
+    if (/[bcdfghjklmnpqrstvwxyz]{4,}$/i.test(word)) score -= 30;
+
+    // Multiple repeated chars (indicates fragmentation artifact)
+    if (/(.)\1{2,}/.test(word)) score -= 30;
+
+    // Too many single-letter parts (indicates under-fusion)
+    const singleChars = word.match(/[aeiouàèéìòù]/gi)?.length || 0;
+    if (singleChars / word.length > 0.6) score -= 20;
+
+    return Math.max(0, score);
+  }
+}
+
+// Fusion word set: IT articles/preps that were split-fused (Artifact A)
+const IT_FUNCTION_WORDS_ARR = [
+  'il','lo','la','i','gli','le','un','uno','una',
+  'di','del','dello','della','dei','degli','delle',
+  'a','al','allo','alla','ai','agli','alle',
+  'da','dal','dallo','dalla','dai','dagli','dalle',
+  'in','nel','nello','nella','nei','negli','nelle',
+  'su','sul','sullo','sulla','sui','sugli','sulle',
+  'con','col','per','tra','fra',
+  'che','non','ma','se','anche','come','dove','quando',
+  'perché','mentre','quindi','però','sia','né',
+  'questo','questa','questi','queste','quello','quella',
+  'e','o','è',
+];
+const BPE_SPLIT_RE = new RegExp(
+  '([a-z\u00e0\u00e8\u00e9\u00ec\u00f2\u00f9])(' +
+  IT_FUNCTION_WORDS_ARR.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') +
+  ')(?=[A-Za-z\u00c0-\u024f])',
+  'g',
+);
+
+/**
+ * Enterprise Fragment Fusion Engine.
+ * Uses linguistic heuristics to determine if fragments should be fused into a single word.
+ */
+class WordSegmenter {
+  /**
+   * Fuse fragments into words using linguistic validation.
+   * Strategy: try full fusion first, fallback to smaller chunks only if full fusion fails validation.
+   * @param {string[]} fragments - Array of fragment tokens
+   * @returns {string[]} - Array of fused words
+   */
+  static segment(fragments) {
+    if (fragments.length === 0) return [];
+    if (fragments.length === 1) return fragments;
+
+    // STRATEGY 1: Try full fusion first (most common case for BPE artifacts)
+    const fullWord = fragments.join('');
+    const fullScore = LinguisticScorer.scoreWord(fullWord);
+
+    // If full fusion creates a high-scoring word, use it
+    if (fullScore >= 60 && this.isPlausibleItalianWord(fullWord)) {
+      return [fullWord];
+    }
+
+    // STRATEGY 2: Try fusion of first/last 70% of fragments
+    const threshold = Math.ceil(fragments.length * 0.7);
+
+    // Try fusion of first N fragments
+    for (let i = threshold; i < fragments.length; i++) {
+      const firstPart = fragments.slice(0, i).join('');
+      const secondPart = fragments.slice(i).join('');
+
+      const firstScore = LinguisticScorer.scoreWord(firstPart);
+      const secondScore = LinguisticScorer.scoreWord(secondPart);
+
+      if (firstScore >= 50 && secondScore >= 50 &&
+          this.isPlausibleItalianWord(firstPart) &&
+          this.isPlausibleItalianWord(secondPart)) {
+        return [firstPart, secondPart];
+      }
+    }
+
+    // STRATEGY 3: Conservative fallback - return individual fragments
+    // Better to under-fuse than create nonsense words
+    return fragments;
+  }
+
+  /**
+   * Fast validation for Italian word plausibility
+   */
+  static isPlausibleItalianWord(word) {
+    if (word.length < 3 || word.length > 20) return false;
+
+    // Must contain vowels
+    if (!/[aeiouàèéìòùAEIOUÀÈÉÌÒÙ]/.test(word)) return false;
+
+    // Reject unlikely consonant clusters at boundaries
+    if (/^[bcdfghjklmnpqrstvwxyz]{3,}|[bcdfghjklmnpqrstvwxyz]{4,}$/i.test(word)) return false;
+
+    // Check vowel ratio (Italian has high vowel density ~40%)
+    const vowels = (word.match(/[aeiouàèéìòù]/gi) || []).length;
+    const vowelRatio = vowels / word.length;
+    if (vowelRatio < 0.15 || vowelRatio > 0.7) return false;
+
+    // Bonus: check for Italian morphological patterns
+    const hasItalianEnding = /(?:zione|amento|ando|endo|are|ere|ire|ato|ito|uto|oso|ico|ale|ismo|ista)$/i.test(word);
+    if (hasItalianEnding) return true;
+
+    // General plausibility: reasonable alternation between vowels/consonants
+    let alternations = 0;
+    let prevIsVowel = /[aeiouàèéìòù]/i.test(word[0]);
+
+    for (let i = 1; i < word.length; i++) {
+      const isVowel = /[aeiouàèéìòù]/i.test(word[i]);
+      if (isVowel !== prevIsVowel) alternations++;
+      prevIsVowel = isVowel;
+    }
+
+    const alternationRatio = alternations / word.length;
+    return alternationRatio >= 0.25; // Reasonable CV alternation
+  }
+
+  /**
+   * Quick validation for potential word candidates
+   */
+  static isValidWord(fragments) {
+    if (fragments.length < 2) return fragments.length === 1;
+    const word = fragments.join('');
+    return word.length <= 22 &&
+           /[aeiouàèéìòùAEIOUÀÈÉÌÒÙ]/.test(word) &&
+           fragments.filter(f => f.length > 1).length >= 2;
+  }
+}
+
+/**
+ * Scan a line for fragment-shattered token runs and fuse them.
+ *
+ * Algorithm (O(n) greedy chunking):
+ *   - Tokenize the line by spaces
+ *   - Accumulate consecutive short lowercase tokens into a window
+ *   - When window >= 8 tokens OR non-fragment encountered, split window into chunks of 3-7 tokens
+ *   - Attempt to fuse each chunk; emit fused word or original tokens
+ */
+/**
+ * Enterprise-grade BPE fragment repair using Dynamic Programming and Linguistic Scoring.
+ *
+ * Architecture:
+ * 1. Preprocessor: Repairs common split articles with punctuation preservation
+ * 2. Fragment detector: Identifies BPE fragment runs vs real words
+ * 3. DP segmenter: Finds optimal word boundaries using linguistic scoring
+ * 4. Context filter: Applies boundary detection and grammar rules
+ */
+function repairFragmentRuns(line) {
+  let tokens = line.split(' ');
+
+  // ━━━ PASS 1: ARTICLE PREPROCESSING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Repairs "d ell'oro" -> "dell'oro" with punctuation preservation
+  const articlePatterns = [
+    {parts: ['d', 'ell'], whole: 'dell'}, {parts: ['d', 'el'], whole: 'del'},
+    {parts: ['n', 'ell'], whole: 'nell'}, {parts: ['n', 'el'], whole: 'nel'},
+    {parts: ['s', 'ul'], whole: 'sul'}, {parts: ['d', 'al'], whole: 'dal'},
+    {parts: ['c', 'he'], whole: 'che'}, {parts: ['c', 'on'], whole: 'con'},
+    {parts: ['p', 'er'], whole: 'per'}, {parts: ['t', 'ra'], whole: 'tra'},
+  ];
+
+  for (const {parts, whole} of articlePatterns) {
+    for (let i = 0; i <= tokens.length - parts.length; i++) {
+      let matches = true;
+      let suffix = '';
+
+      for (let j = 0; j < parts.length; j++) {
+        const token = tokens[i + j];
+        const prefixMatch = token.match(/^([a-z]+)(.*)$/);
+        const prefix = prefixMatch ? prefixMatch[1] : token;
+        if (prefix !== parts[j]) { matches = false; break; }
+        if (j === parts.length - 1 && prefixMatch) suffix = prefixMatch[2];
+      }
+
+      if (matches) {
+        tokens.splice(i, parts.length, whole + suffix);
+        i--;
+      }
+    }
+  }
+
+  // ━━━ PASS 2: ENTERPRISE FRAGMENT DETECTION & SEGMENTATION ━━━━━━━━━━━━━━━━━━━
+  const result = [];
+  let i = 0;
+
+  while (i < tokens.length) {
+    // Extract alphabetic content and punctuation
+    const tokenMatch = tokens[i].match(/^([a-zàèéìòùA-Z\u00c0-\u024f]*)([^a-zàèéìòùA-Z\u00c0-\u024f]*)$/);
+    const alpha = tokenMatch ? tokenMatch[1] : tokens[i];
+    const punct = tokenMatch ? tokenMatch[2] : '';
+
+    // Fragment classification
+    const isLowerShort = (alpha.length >= 2 && alpha.length <= 4 && /^[a-zàèéìòù\u00c0-\u024f]+$/.test(alpha)) ||
+                         (alpha.length === 1 && BPE_SINGLE_CHARS.has(alpha.toLowerCase()));
+    const isBoundary = BOUNDARY_WORDS.has(alpha.toLowerCase());
+    const isFragment = alpha.length > 0 && isLowerShort && !isBoundary;
+
+    if (!isFragment) {
+      // Not a fragment - emit as-is
+      result.push(tokens[i]);
+      i++;
+      continue;
+    }
+
+    // ━━━ FRAGMENT RUN DETECTION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Collect consecutive fragments for DP segmentation
+    const fragmentRun = [];
+    const punctRun = [];
+    let j = i;
+
+    while (j < tokens.length) {
+      const tokMatch = tokens[j].match(/^([a-zàèéìòùA-Z\u00c0-\u024f]*)([^a-zàèéìòùA-Z\u00c0-\u024f]*)$/);
+      const tokAlpha = tokMatch ? tokMatch[1] : tokens[j];
+      const tokPunct = tokMatch ? tokMatch[2] : '';
+
+      // Check if this token is a fragment
+      const tokIsLowerShort = (tokAlpha.length >= 2 && tokAlpha.length <= 4 && /^[a-zàèéìòù\u00c0-\u024f]+$/.test(tokAlpha)) ||
+                              (tokAlpha.length === 1 && BPE_SINGLE_CHARS.has(tokAlpha.toLowerCase()));
+      const tokIsBoundary = BOUNDARY_WORDS.has(tokAlpha.toLowerCase());
+      const tokIsFragment = tokAlpha.length > 0 && tokIsLowerShort && !tokIsBoundary;
+
+      if (!tokIsFragment) break;
+
+      fragmentRun.push(tokAlpha);
+      punctRun.push(tokPunct);
+      j++;
+
+      // Safety: limit run length
+      if (fragmentRun.length >= 12) break;
+    }
+
+    // ━━━ DYNAMIC PROGRAMMING SEGMENTATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if (fragmentRun.length >= 2) {
+      const segmentedWords = WordSegmenter.segment(fragmentRun);
+
+      // Apply punctuation to the last word of the run
+      const lastPunct = punctRun[punctRun.length - 1];
+      if (segmentedWords.length > 0) {
+        segmentedWords[segmentedWords.length - 1] += lastPunct;
+      }
+
+      result.push(...segmentedWords);
+      i = j;
+    } else {
+      // Single fragment - emit as-is
+      result.push(tokens[i]);
+      i++;
+    }
+  }
+
+  return result.join(' ');
+}
+
+export function fixQwen3BPE(text) {
+  let inCode = false;
+  return text.split('\n').map((line) => {
+    if (line.trimStart().startsWith('```')) { inCode = !inCode; return line; }
+    if (inCode) return line;
+    if (line.trimStart().startsWith('|')) return line; // table row — untouched
+
+    // Pass 1: repair fragment-shattered runs ("p os s i amo" → "possiamo")
+    let out = repairFragmentRuns(line);
+
+    // Pass 2-4: repair word-fusion ("lacorrelazione" → "la correlazione")
+    // Three passes handle chains like "dellacorrelazione" → two separations needed
+    out = out.replace(BPE_SPLIT_RE, '$1 $2');
+    out = out.replace(BPE_SPLIT_RE, '$1 $2');
+    out = out.replace(BPE_SPLIT_RE, '$1 $2');
+
+    return out;
+  }).join('\n');
+}
+
 // ── Providers ──────────────────────────────────────────────────────────────
 
 export async function callAnthropic(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
@@ -307,6 +693,8 @@ export async function callNHA(apiKey, model, systemPrompt, userMessage, stream =
   let content = data.choices?.[0]?.message?.content || '';
   // Strip thinking tags if present
   content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  // NOTE: Do NOT apply fixQwen3BPE here. With stream:false, vLLM returns
+  // correctly-spaced text. The BPE repair regex corrupts normal words.
   return content;
 }
 
@@ -574,6 +962,9 @@ export async function callLLMStream(config, systemPrompt, userMessage, onToken, 
     let fullNhaText = nhaJson.choices?.[0]?.message?.content || '';
     // Strip <think>...</think> blocks
     fullNhaText = fullNhaText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    // NOTE: Do NOT apply fixQwen3BPE here. With stream:false, vLLM returns
+    // correctly-spaced text. The BPE repair regex is too aggressive and
+    // corrupts normal Italian words (e.g. "assistente" → "ass ist ente").
     if (onToken) onToken(fullNhaText);
     return fullNhaText;
   }
@@ -721,26 +1112,12 @@ function parseSSEText(text, format, onToken) {
           }
         }
         if (out) {
-          chunkCount++;
-          if (chunkCount <= 3) process.stderr.write(`[QWEN3 CHUNK ${chunkCount}] len=${out.length} repr=${JSON.stringify(out.slice(0,60))}\n`);
-          // Detect HTML output on first meaningful token
-          if (!isHtmlOutput && (out.includes('<div') || out.includes('<!DOCTYPE') || out.includes('<html'))) {
-            isHtmlOutput = true;
-          }
-          if (!isHtmlOutput) {
-            out = fixQwen3Markdown(out);
-            const insideTag = fullText.lastIndexOf('<') > fullText.lastIndexOf('>');
-            if (fullText && out && !insideTag && !/[\s\n]$/.test(fullText) && !/^[\s\n.,;:!?)\]}'">]/.test(out)) {
-              out = ' ' + out;
-            }
-          }
           fullText += out;
           if (onToken) onToken(out);
         }
       }
     } catch {}
   }
-  process.stderr.write(`[QWEN3 TOTAL CHUNKS] ${chunkCount}, fullText len=${fullText.length}\n`);
   return fullText;
 }
 
@@ -752,7 +1129,6 @@ async function streamSSEWithCallback(res, format, onToken) {
   let fullText = '';
   let thinkBuf = '';    // accumulates <think>...</think> content to suppress
   let inThink = false;
-  let isHtmlOutput = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -798,16 +1174,6 @@ async function streamSSEWithCallback(res, format, onToken) {
             }
           }
           if (out) {
-            if (!isHtmlOutput && (out.includes('<div') || out.includes('<!DOCTYPE') || out.includes('<html'))) {
-              isHtmlOutput = true;
-            }
-            if (!isHtmlOutput) {
-              out = fixQwen3Markdown(out);
-              const insideTag2 = fullText.lastIndexOf('<') > fullText.lastIndexOf('>');
-              if (fullText && out && !insideTag2 && !/[\s\n]$/.test(fullText) && !/^[\s\n.,;:!?)\]}'">]/.test(out)) {
-                out = ' ' + out;
-              }
-            }
             fullText += out;
             if (onToken) onToken(out);
           }

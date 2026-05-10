@@ -348,6 +348,25 @@ export function setSyncStatus(accountId, status, error) {
     .run(status, error || null, accountId);
 }
 
+export function ensureGoogleAccount(data) {
+  const db = getDb();
+  const existing = db.prepare('SELECT * FROM email_accounts WHERE id = ? OR (type = ? AND email_address = ?)').get(data.id, 'google', data.email_address);
+  if (existing) {
+    return existing;
+  }
+
+  const id = data.id || 'google';
+  db.prepare(`
+    INSERT OR REPLACE INTO email_accounts (id, type, email_address, display_name, from_name, imap_host, imap_port, sort_order, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, 'google', data.email_address, data.display_name, data.display_name,
+    data.imap_host, data.imap_port || 993, data.sort_order || 0, data.is_active || 1);
+
+  // Seed system labels for new Google account
+  seedSystemLabels(db);
+  return db.prepare('SELECT * FROM email_accounts WHERE id = ?').get(id);
+}
+
 // ── FOLDER CRUD ────────────────────────────────────────────────────────────
 
 export function upsertFolder(accountId, path, name, folderType, uidValidity, lastUid) {
@@ -464,6 +483,18 @@ export function messageExists(accountId, folderPath, uid) {
 export function insertMessage(data) {
   const db = getDb();
   const id = data.id || randomUUID();
+
+  // Validate required fields for foreign key constraints
+  if (!data.account_id) {
+    throw new Error('account_id is required for insertMessage');
+  }
+
+  // Check if account exists
+  const account = db.prepare('SELECT id FROM email_accounts WHERE id = ?').get(data.account_id);
+  if (!account) {
+    throw new Error(`Account ${data.account_id} does not exist`);
+  }
+
   db.prepare(`
     INSERT OR IGNORE INTO email_messages
       (id, account_id, folder_id, imap_folder_path, uid, message_id, in_reply_to, references_list,
@@ -489,6 +520,18 @@ export function insertMessage(data) {
   const isRead = data.imap_seen ? 1 : 0;
   db.prepare('INSERT OR IGNORE INTO email_message_state (message_id, is_read, is_starred) VALUES (?, ?, 0)').run(id, isRead);
   return id;
+}
+
+// Alias for Gmail API integration
+export function saveMessage(accountId, data) {
+  return insertMessage({
+    ...data,
+    account_id: accountId,
+    folder_id: data.folder_id || null,
+    imap_folder_path: data.imap_folder_path || 'INBOX',
+    uid: data.uid || Date.now(), // Fake UID for Gmail API messages
+    source: data.source || 'gmail_api'
+  });
 }
 
 export function insertAttachments(messageId, attachments) {
@@ -522,28 +565,69 @@ export function getMessageLabels(messageId) {
 
 // ── MESSAGE QUERIES ────────────────────────────────────────────────────────
 
-export function listMessages(accountId, labelId, limit, offset, search) {
+export function listMessages(accountId, labelId, limit, offset, search, folder) {
   const db = getDb();
   let where = 'm.account_id = ? AND m.permanently_deleted = 0';
   const params = [accountId];
 
   if (labelId) {
-    // Also include messages saved with matching imap_folder_path in case label link was missing
-    const lbl = db.prepare('SELECT system_type FROM email_labels WHERE id = ?').get(labelId);
-    const folderFallback = lbl?.system_type ? lbl.system_type.charAt(0).toUpperCase() + lbl.system_type.slice(1) : null;
-    if (folderFallback) {
-      where += ' AND (EXISTS (SELECT 1 FROM email_message_labels j WHERE j.message_id = m.id AND j.label_id = ?) OR m.imap_folder_path = ?)';
-      params.push(labelId, folderFallback);
-    } else {
+    let labelFilterApplied = false;
+    try {
+      const lbl = db.prepare('SELECT system_type FROM email_labels WHERE id = ?').get(labelId);
+      if (lbl?.system_type) {
+        // System label — find matching folders by folder_type and name patterns
+        const knownNames = {
+          inbox: ['inbox'],
+          sent: ['sent', 'sent messages', 'sent items', 'posta inviata', 'inviati', 'inviata'],
+          drafts: ['drafts', 'draft', 'bozze'],
+          spam: ['spam', 'junk', 'junk e-mail', 'posta indesiderata'],
+          trash: ['trash', 'cestino', 'deleted', 'deleted messages', 'deleted items'],
+          starred: ['starred'],
+          archived: ['archived', 'archive', 'all mail'],
+        };
+        const names = knownNames[lbl.system_type] || [lbl.system_type];
+
+        // For inbox, use exact path match to avoid INBOX.Sent etc.
+        let folderIds = [];
+        if (lbl.system_type === 'inbox') {
+          const exact = db.prepare('SELECT id FROM email_folders WHERE account_id = ? AND UPPER(path) = ?').get(accountId, 'INBOX');
+          if (exact) folderIds = [exact.id];
+        }
+        // For other types, match by folder_type or name LIKE
+        if (folderIds.length === 0) {
+          const nameConditions = names.map(() => 'LOWER(f.path) LIKE ? OR LOWER(f.name) LIKE ?').join(' OR ');
+          const sql = `SELECT id FROM email_folders f WHERE f.account_id = ? AND (f.folder_type = ? OR ${nameConditions})`;
+          const sqlParams = [accountId, lbl.system_type, ...names.flatMap(n => [`%${n}%`, `%${n}%`])];
+          folderIds = db.prepare(sql).all(...sqlParams).map(f => f.id);
+        }
+
+        if (folderIds.length > 0) {
+          const ph = folderIds.map(() => '?').join(',');
+          where += ` AND (m.folder_id IN (${ph}) OR EXISTS (SELECT 1 FROM email_message_labels j WHERE j.message_id = m.id AND j.label_id = ?))`;
+          params.push(...folderIds, labelId);
+          labelFilterApplied = true;
+        }
+      }
+    } catch { /* email_folders table might not exist on older DBs */ }
+
+    if (!labelFilterApplied) {
+      // Fallback: use message_labels join only
       where += ' AND EXISTS (SELECT 1 FROM email_message_labels j WHERE j.message_id = m.id AND j.label_id = ?)';
       params.push(labelId);
     }
+  } else if (folder) {
+    where += ' AND m.imap_folder_path = ?';
+    params.push(folder.toUpperCase());
   }
   if (search) {
-    where += ' AND (m.subject LIKE ? OR m.from_address LIKE ? OR m.from_name LIKE ? OR m.body_preview LIKE ?)';
+    where += ' AND (m.subject LIKE ? OR m.from_address LIKE ? OR m.from_name LIKE ? OR m.body_preview LIKE ? OR m.body_text LIKE ?)';
     const q = `%${search}%`;
-    params.push(q, q, q, q);
+    params.push(q, q, q, q, q);
   }
+
+  const countWhere = where;
+  const countParams = [...params];
+
   params.push(limit || 50, offset || 0);
 
   const rows = db.prepare(`
@@ -558,7 +642,7 @@ export function listMessages(accountId, labelId, limit, offset, search) {
     LIMIT ? OFFSET ?
   `).all(...params);
 
-  const total = db.prepare(`SELECT COUNT(*) as cnt FROM email_messages m WHERE ${where.replace('LIMIT ? OFFSET ?', '')}`).get(...params.slice(0, -2));
+  const total = db.prepare(`SELECT COUNT(*) as cnt FROM email_messages m WHERE ${countWhere}`).get(...countParams);
 
   return { messages: rows, total: total?.cnt || 0 };
 }

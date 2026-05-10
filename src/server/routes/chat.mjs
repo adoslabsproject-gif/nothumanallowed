@@ -334,6 +334,17 @@ export function register(router) {
               .replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '')
               .replace(/<[^>]+>/g, ' ').replace(/\s{3,}/g, '\n').trim().slice(0, 6000);
           }
+
+          // ── Canvas result — emit dedicated SSE event so the UI panel opens ──
+          if (resultStr.includes('[CANVAS_RENDER]')) {
+            const canvasMarker = resultStr.match(/\[CANVAS_RENDER\]([\s\S]*?)\[\/CANVAS_RENDER\]/);
+            if (canvasMarker) {
+              sse('canvas', { markers: canvasMarker[0] });
+            }
+            // Replace the raw HTML blob with a short placeholder so synthesis LLM doesn't see it
+            resultStr = 'Canvas rendered successfully in the panel.';
+          }
+
           toolResults.push({ action, result: resultStr });
           sse('tool', { action, status: 'done', result: resultStr.slice(0, 500) });
         } catch (e) {

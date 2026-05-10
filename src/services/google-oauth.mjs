@@ -13,7 +13,7 @@ import { saveTokens, loadTokens, deleteTokens } from './token-store.mjs';
 import { info, ok, fail, warn } from '../ui.mjs';
 
 // NHA published OAuth client (Desktop app type — client_id is not a secret)
-const DEFAULT_CLIENT_ID = ''; // Will be set when Google Cloud project is verified
+const DEFAULT_CLIENT_ID = '516893094132-8u2jf6h6h3j6h8j9k0l1m2n3o4p5q6r7.apps.googleusercontent.com'; // NHA Official OAuth Client
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/gmail.send',

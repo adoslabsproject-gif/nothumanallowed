@@ -148,10 +148,12 @@ function stripQuotedReplies(text) {
   return text.split('\n').filter(l => !l.startsWith('>')).join('\n').trim();
 }
 
-export async function syncFolder(accountId, folderPath, fullResync, limitMessages = 0) {
+export async function syncFolder(accountId, folderPath, fullResync, limitMessages = 0, folderType = null) {
   const client = await getImapClient(accountId);
   const db = getDb();
   const folderMeta = getFolder(accountId, folderPath);
+  // Use passed folderType or existing metadata (fixes first-sync creating folders as 'custom')
+  const resolvedFolderType = folderType || resolvedFolderType;
 
   // Open mailbox to get uidValidity BEFORE getMailboxLock
   const lock = await client.getMailboxLock(folderPath);
@@ -271,7 +273,7 @@ export async function syncFolder(accountId, folderPath, fullResync, limitMessage
       const hash = contentHash(msgId || '', fromAddr || '', hdr.internalDate);
 
       const folderRec = upsertFolder(accountId, folderPath, folderPath,
-        folderMeta?.folder_type || 'custom', currentUidValidity, newLastUid);
+        resolvedFolderType, currentUidValidity, newLastUid);
 
       const msgDbId = insertMessage({
         account_id: accountId,
@@ -313,7 +315,7 @@ export async function syncFolder(accountId, folderPath, fullResync, limitMessage
     }
 
     upsertFolder(accountId, folderPath, folderPath,
-      folderMeta?.folder_type || 'custom', currentUidValidity, newLastUid);
+      resolvedFolderType, currentUidValidity, newLastUid);
 
     updateLabelCounts(accountId);
     return { synced, lastUid: newLastUid, total: totalMessages };
@@ -339,7 +341,7 @@ export async function syncAccount(accountId, opts = {}) {
     for (const f of toSync) {
       try {
         const limit = opts.full ? 0 : FIRST_SYNC_LIMIT;
-        const result = await syncFolder(accountId, f.path, false, limit);
+        const result = await syncFolder(accountId, f.path, false, limit, f.folderType);
         totalSynced += result.synced;
         console.log(`[email:sync] ${f.path}: ${result.synced} new messages (total on server: ${result.total})`);
       } catch (err) {

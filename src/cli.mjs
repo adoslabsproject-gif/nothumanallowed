@@ -57,7 +57,7 @@ export async function main(argv) {
       if (result?.updateAvailable) {
         console.log('');
         warn(`New NHA version available: ${result.current} → ${result.latest}`);
-        info('Run "npm update -g nothumanallowed" to upgrade.');
+        info('Run "nha update" to upgrade (includes npm self-update).');
       }
     }).catch(() => {});
   }
@@ -142,7 +142,13 @@ export async function main(argv) {
       return cmdConfig(args);
 
     case 'update':
-      return runUpdate();
+      await runUpdate();
+      // Also self-update the npm package
+      return cmdSelfUpdate();
+
+    case 'upgrade':
+    case 'self-update':
+      return cmdSelfUpdate();
 
     case 'doctor':
       return cmdDoctor();
@@ -171,6 +177,56 @@ export async function main(argv) {
       return spawnCore('legion', [cmd, ...args]);
     }
   }
+}
+
+// ── nha upgrade / self-update ──────────────────────────────────────────────
+async function cmdSelfUpdate() {
+  const { execSync } = await import('child_process');
+
+  info('Checking for npm package updates...');
+  const npmCheck = await checkNpmVersion();
+  if (!npmCheck?.updateAvailable) {
+    ok(`NHA v${VERSION} is already the latest version.`);
+    return;
+  }
+
+  info(`Updating: ${npmCheck.current} → ${npmCheck.latest}`);
+
+  // Try without sudo first, then with sudo if needed (Linux/VM)
+  const cmds = [
+    'npm install -g nothumanallowed@latest',
+    'sudo npm install -g nothumanallowed@latest',
+  ];
+
+  for (const cmd of cmds) {
+    try {
+      const usingSudo = cmd.startsWith('sudo');
+      if (usingSudo) info('Retrying with sudo...');
+      const output = execSync(cmd, { encoding: 'utf-8', timeout: 120_000, stdio: ['inherit', 'pipe', 'pipe'] });
+      if (output.includes('nothumanallowed@')) {
+        ok(`Updated to v${npmCheck.latest}!`);
+        console.log('');
+        info('Restart the UI to apply: kill the process and run "nha ui" again.');
+        if (usingSudo) info('(sudo was required on this system)');
+        return;
+      }
+    } catch (e) {
+      const msg = e.stderr || e.message || '';
+      // EACCES = permission denied, try sudo next
+      if (msg.includes('EACCES') || msg.includes('permission denied')) continue;
+      // Other error — report and stop
+      fail(`Update failed: ${msg.slice(0, 200)}`);
+      console.log('');
+      info('Try manually: sudo npm install -g nothumanallowed@latest');
+      return;
+    }
+  }
+
+  fail('Update failed — could not install even with sudo.');
+  console.log('');
+  info('Try manually:');
+  info('  sudo npm install -g nothumanallowed@latest');
+  info('Or fix npm permissions: https://docs.npmjs.com/resolving-eacces-permissions-errors');
 }
 
 // ── nha responder ─────────────────────────────────────────────────────────
@@ -723,7 +779,8 @@ function cmdHelp() {
   console.log(`  ${C}Configuration${NC}`);
   console.log(`    config                Show current config`);
   console.log(`    config set <k> <v>    Set a config value`);
-  console.log(`    update                Update agents & core files`);
+  console.log(`    update                Update agents, core files & npm package`);
+  console.log(`    upgrade               Update npm package only (alias: self-update)`);
   console.log(`    doctor                Health check`);
   console.log(`    mcp                   Start MCP server (Claude Code, Cursor)\n`);
 

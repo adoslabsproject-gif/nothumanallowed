@@ -13,9 +13,9 @@ export function register(router) {
 
   router.get('/api/github/repos', async (_req, res) => {
     try {
-      const { listRepos } = await import('../../services/github.mjs');
+      const { listUserRepos } = await import('../../services/github.mjs');
       const config = loadConfig();
-      sendJSON(res, 200, { repos: await listRepos(config) });
+      sendJSON(res, 200, { repos: await listUserRepos(config) });
     } catch (e) {
       if (e.message?.includes('token') || e.message?.includes('not configured')) return sendJSON(res, 200, { repos: [], authRequired: true });
       sendError(res, 500, e.message);
@@ -24,12 +24,15 @@ export function register(router) {
 
   router.get('/api/github', async (req, res) => {
     try {
-      const { getNotifications } = await import('../../services/github.mjs');
+      const { listNotificationsRaw } = await import('../../services/github.mjs');
       const config = loadConfig();
-      sendJSON(res, 200, { notifications: await getNotifications(config) });
+      const notifications = await listNotificationsRaw(config);
+      sendJSON(res, 200, { notifications: Array.isArray(notifications) ? notifications : [] });
     } catch (e) {
-      if (e.message?.includes('token') || e.message?.includes('not configured')) return sendJSON(res, 200, { notifications: [], authRequired: true });
-      sendError(res, 500, e.message);
+      if (e.message?.includes('token') || e.message?.includes('not configured') || e.message?.includes('401')) {
+        return sendJSON(res, 200, { notifications: [], error: 'GitHub token not configured or expired. Run: nha config set github-token YOUR_PAT' });
+      }
+      sendJSON(res, 200, { notifications: [], error: e.message });
     }
   });
 
@@ -59,10 +62,9 @@ export function register(router) {
 
   router.post('/api/github/mark-read', async (req, res) => {
     try {
-      const { markNotificationRead } = await import('../../services/github.mjs');
-      const body = await parseBody(req);
+      const { markNotificationsRead } = await import('../../services/github.mjs');
       const config = loadConfig();
-      await markNotificationRead(config, body.id);
+      await markNotificationsRead(config);
       sendJSON(res, 200, { ok: true });
     } catch (e) { sendError(res, 500, e.message); }
   });
