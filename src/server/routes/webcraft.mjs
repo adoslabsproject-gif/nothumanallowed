@@ -142,12 +142,15 @@ class SandboxManager {
     });
 
     this._sandbox = { proc, port, projectName, startedAt: new Date(), healthy: false };
+    let readyEmitted = false;
 
     proc.stdout.on('data', (d) => {
       const line = d.toString().trim();
       if (line) emit({ type: 'log', msg: line });
-      if (/listen|running|started|ready|port/i.test(line)) {
+      if (!readyEmitted && /listen|running|started|ready|port/i.test(line)) {
+        readyEmitted = true;
         if (this._sandbox) this._sandbox.healthy = true;
+        emit({ type: 'phase', phase: 'ready', msg: `Server running on port ${port}` });
         emit({ type: 'ready', port });
       }
     });
@@ -172,13 +175,18 @@ class SandboxManager {
     ]);
 
     if (healthy === 'healthy') {
-      if (this._sandbox) this._sandbox.healthy = true;
-      emit({ type: 'phase', phase: 'ready', msg: `Server running on port ${port}` });
-      emit({ type: 'ready', port });
+      if (!readyEmitted) {
+        readyEmitted = true;
+        if (this._sandbox) this._sandbox.healthy = true;
+        emit({ type: 'phase', phase: 'ready', msg: `Server running on port ${port}` });
+        emit({ type: 'ready', port });
+      }
       return;
     }
 
+    // If ready was already emitted by stdout, ignore timeout
     if (healthy === 'timeout') {
+      if (readyEmitted) return;
       emit({ type: 'warn', msg: 'Server started but port not yet bound — may still be loading.' });
       return;
     }
