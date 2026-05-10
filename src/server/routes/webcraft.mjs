@@ -2100,6 +2100,73 @@ export function register(router) {
     } catch (e) { sendError(res, 500, e.message); }
   });
 
+  // ── Full project scan — lint ALL files at once ───────────────────────────
+  router.post('/api/studio/webcraft/scan', async (req, res) => {
+    try {
+      const { projectName } = await parseBody(req);
+      if (!projectName) return sendError(res, 400, 'projectName required');
+      const dir = ProjectStore.dir(projectName);
+      if (!fs.existsSync(dir)) return sendJSON(res, 200, { issues: [] });
+
+      const files = _listProjectFiles(dir);
+      const issues = [];
+      const allFileNames = new Set(files);
+
+      for (const relPath of files) {
+        const content = ProjectStore.readFile(projectName, relPath);
+        if (!content) continue;
+        const ext = relPath.split('.').pop()?.toLowerCase();
+
+        // JS syntax check
+        if (ext === 'js' || ext === 'mjs') {
+          try { new Function(content); } catch (e) {
+            issues.push({ file: relPath, severity: 'error', message: `Syntax: ${e.message.replace(/\n.*/s, '')}` });
+          }
+        }
+
+        // JSON parse check
+        if (ext === 'json') {
+          try { JSON.parse(content); } catch (e) {
+            issues.push({ file: relPath, severity: 'error', message: `JSON: ${e.message}` });
+          }
+        }
+
+        // CSS brace balance
+        if (ext === 'css') {
+          const o = (content.match(/\{/g) || []).length, c = (content.match(/\}/g) || []).length;
+          if (o !== c) issues.push({ file: relPath, severity: 'warning', message: `Unbalanced braces: ${o} open, ${c} close` });
+        }
+
+        // HTML closing tag + reference check
+        if (ext === 'html' || ext === 'htm') {
+          if (!content.includes('</html>')) {
+            issues.push({ file: relPath, severity: 'warning', message: 'Missing </html>' });
+          }
+          // Check file references
+          const refRegex = /(?:src|href)=["']([^"']*?\.(?:js|css|mjs))["']/gi;
+          let m;
+          while ((m = refRegex.exec(content)) !== null) {
+            const ref = m[1];
+            if (ref.startsWith('http') || ref.startsWith('//') || ref.startsWith('data:')) continue;
+            const htmlDir = path.dirname(relPath);
+            const refPath = ref.startsWith('/') ? ref.slice(1) : path.join(htmlDir, ref).replace(/\\/g, '/');
+            const publicRef = refPath.startsWith('public/') ? refPath : `public/${refPath}`;
+            if (!allFileNames.has(refPath) && !allFileNames.has(publicRef) && !allFileNames.has(ref)) {
+              issues.push({ file: relPath, severity: 'error', message: `Missing file: ${ref}` });
+            }
+          }
+        }
+
+        // Truncation check
+        if (isFileTruncated(content, relPath)) {
+          issues.push({ file: relPath, severity: 'warning', message: 'File appears truncated' });
+        }
+      }
+
+      sendJSON(res, 200, { issues, scanned: files.length });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
   // ── Syntax check ──────────────────────────────────────────────────────────
   router.post('/api/studio/webcraft/syntax-check', async (req, res) => {
     try {
