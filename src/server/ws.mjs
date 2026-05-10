@@ -22,7 +22,7 @@ let wssTerminal = null;
 
 export function setupWebSocket(server) {
   // ── Main WS — daemon events + version ──
-  wss = new WebSocketServer({ server, path: '/ws' });
+  wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', async (ws) => {
     const { VERSION } = await import('../constants.mjs');
@@ -40,7 +40,19 @@ export function setupWebSocket(server) {
   });
 
   // ── Terminal WS — interactive shell ──
-  wssTerminal = new WebSocketServer({ server, path: '/ws/terminal' });
+  wssTerminal = new WebSocketServer({ noServer: true });
+
+  // ── Manual upgrade handling — prevents conflicts with HTTP handler ──
+  server.on('upgrade', (req, socket, head) => {
+    const pathname = new URL(req.url || '', 'http://localhost').pathname;
+    if (pathname === '/ws') {
+      wss.handleUpgrade(req, socket, head, (ws) => { wss.emit('connection', ws, req); });
+    } else if (pathname.startsWith('/ws/terminal')) {
+      wssTerminal.handleUpgrade(req, socket, head, (ws) => { wssTerminal.emit('connection', ws, req); });
+    } else {
+      socket.destroy();
+    }
+  });
 
   wssTerminal.on('connection', (ws, req) => {
     // Parse project from query: /api/terminal?cwd=ProjectName
