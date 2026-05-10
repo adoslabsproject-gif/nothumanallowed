@@ -1172,6 +1172,10 @@ Continue from here:`;
   }
 
   // ── Post-generation integrity check ──────────────────────────────────────
+  if (abortSignal?.aborted) {
+    emit({ type: 'done', tokIn: totalTokensIn, tokOut: totalTokensOut });
+    return;
+  }
   const brokenFiles = generatedFiles.filter((f) => {
     if (!f.content || f.content.length < 20) return true;
     if (f.name.endsWith('.html') && !f.content.includes('</html>')) return true;
