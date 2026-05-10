@@ -466,13 +466,15 @@ async function runWebCraftAgent(config, projectName, message, attachments, emit)
   const LANG_MAP = { en:'English',it:'Italian',es:'Spanish',fr:'French',de:'German',pt:'Portuguese' };
   const language = LANG_MAP[(config?.language||'it').slice(0,2)] || 'Italian';
 
-  // Build context: include files mentioned in the message or all files if ≤ 8
+  // Build context: include files mentioned in the message + key project files
   const mentionedFiles = files.filter((f) => message.toLowerCase().includes(f.toLowerCase().split('/').pop() ?? ''));
-  const contextFiles = mentionedFiles.length > 0 ? mentionedFiles : files.slice(0, 8);
+  // Always include key structural files
+  const keyFiles = files.filter((f) => /^(server|app|index)\.(js|mjs|ts)$/.test(f) || f === 'package.json' || f.includes('routes/index'));
+  const contextFiles = [...new Set([...mentionedFiles, ...keyFiles, ...files.slice(0, 12)])].slice(0, 15);
   const fileContents = contextFiles.map((rel) => {
     try {
       const content = fs.readFileSync(path.join(dir, rel), 'utf-8');
-      return `### FILE: ${rel}\n\`\`\`\n${content.slice(0, 6000)}\n\`\`\``;
+      return `### FILE: ${rel}\n\`\`\`\n${content.slice(0, 8000)}\n\`\`\``;
     } catch { return ''; }
   }).filter(Boolean).join('\n\n');
 
@@ -519,7 +521,11 @@ RULES:
   } catch {}
 
   const systemPrompt = [
-    `You are WebCraft Agent, an expert full-stack developer. Today is ${today}. Respond in ${language}.`,
+    `You are WebCraft Agent — a team of 200 senior developers working as one entity. Today is ${today}. Respond in ${language}.`,
+    `\nYou have FULL control of the project IDE. You read files, edit them surgically, and write new ones.`,
+    `\nYour edits MUST be enterprise-grade: security, error handling, responsive design, accessibility.`,
+    `\nWhen the user asks for changes, you MUST use tools to implement them — never just explain. ACT, don't talk.`,
+    `\nAfter each tool use, briefly explain what changed and why.`,
     `\n\n## PROJECT: ${projectName}`,
     `\n## FILES:\n${fileIndex}`,
     skillContext,
@@ -527,7 +533,6 @@ RULES:
     attachments?.length ? `\n\n## ATTACHMENTS: ${attachments.map((a) => a.name).join(', ')}` : '',
     `\n\n## CURRENT FILE CONTENTS:\n${fileContents}`,
     `\n\n${toolSpec}`,
-    `\n\nIMPORTANT: Be precise, surgical, and explain every change.`,
   ].join('');
 
   // Prepare user content (text + images if any)
@@ -543,7 +548,7 @@ RULES:
     // Suppress raw <tool> blocks from text stream — only emit visible text
     const visibleToken = token.replace(/<tool>[\s\S]*?<\/tool>/g, '');
     if (visibleToken) emit({ type: 'text', token: visibleToken });
-  }, { max_tokens: 8192 });
+  }, { max_tokens: 16384 });
 
   // ── Execute all tool calls found in the response ───────────────────────────
   const toolRegex = /<tool>([\s\S]*?)<\/tool>/g;
@@ -613,17 +618,40 @@ RULES:
 
 // ── Generation pipeline (SSE) ─────────────────────────────────────────────────
 
-const FILE_PLAN_SYSTEM = `You are a senior full-stack architect. Design a COMPLETE, PRODUCTION-READY file structure for a web project.
-Output ONLY a JSON array: [{"name":"path/to/file.ext","purpose":"what this file does","tokens":N}]
-where "tokens" is your estimate of how many tokens the file content will need (200-800 for small files, 800-2000 for medium, 2000-4000 for large).
+const FILE_PLAN_SYSTEM = `You are the lead architect of a 200-person engineering team. Design an ENTERPRISE-GRADE file structure.
+Output ONLY a JSON array: [{"name":"path/to/file.ext","purpose":"detailed description","tokens":N}]
+where "tokens" is your estimate of content tokens (300-800 small, 1000-2500 medium, 2500-5000 large).
 
-MANDATORY rules:
-- Generate 20-40 files minimum for any real project — a complete site requires many files
-- Split large concerns into separate files (separate route files, separate component files, separate util files)
-- Always include: package.json, server.js (or index.js), .env.example, README.md
-- For full-stack projects: routes/, middleware/, models/, controllers/ directories with individual files per resource
-- For frontend: separate CSS files per section (hero, navbar, footer, components), separate JS modules
-- Use relative paths only (e.g. "routes/auth.js", "public/js/app.js", "public/css/main.css")
+MANDATORY STRUCTURE (every project MUST have):
+- package.json (with ALL dependencies: express, helmet, cors, compression, morgan, bcryptjs, jsonwebtoken, express-rate-limit, cookie-parser, dotenv)
+- .env.example (all env vars documented)
+- README.md (setup guide, API docs, architecture overview)
+- server.js (Express with full middleware stack)
+- routes/ (separate file per resource — auth.js, api.js, pages.js)
+- middleware/ (auth.js, error.js, validate.js, rateLimiter.js)
+- models/ (per-entity files with validation)
+- controllers/ (business logic separated from routes)
+- utils/ (jwt.js, hash.js, logger.js, helpers.js)
+- config/ (database.js, constants.js)
+- public/index.html (hero, features, testimonials, pricing, CTA, footer — complete landing page)
+- public/login.html (login + register forms with validation)
+- public/dashboard.html (protected page with real UI)
+- public/css/variables.css (CSS custom properties: colors, fonts, spacing, breakpoints)
+- public/css/reset.css (modern CSS reset)
+- public/css/layout.css (grid/flexbox layouts, nav, hero, sections)
+- public/css/components.css (buttons, cards, forms, modals, toasts, badges)
+- public/css/animations.css (keyframes, transitions, scroll animations)
+- public/css/responsive.css (media queries, mobile nav)
+- public/js/app.js (SPA router, init, dark mode toggle)
+- public/js/auth.js (login/register/logout, token management)
+- public/js/api.js (fetch wrapper with auth headers, error handling)
+- public/js/ui.js (toasts, modals, loading spinners, form validation)
+- public/js/animations.js (intersection observer, scroll effects)
+
+RULES:
+- Generate 25-45 files — real enterprise projects have many files
+- Token estimates must be realistic: CSS files 1500-3000, JS files 1000-2000, HTML pages 2000-4000
+- Use relative paths only
 - No explanation, no markdown, ONLY the JSON array.`;
 
 // Token counter — approximate based on character count (1 token ≈ 4 chars)
@@ -760,28 +788,53 @@ Design a COMPLETE production-ready file structure. Include ALL files needed for 
     const fileSpec = filePlan[fi];
     emit({ type: 'file_start', name: fileSpec.name, fi: fi + 1, total: filePlan.length });
 
-    // Include last 4 generated files as context (truncated to avoid token overflow)
-    const prevContext = generatedFiles.slice(-4)
+    // Include last 6 generated files as context for consistency
+    const prevContext = generatedFiles.slice(-6)
       .map((f) => {
         const ext = f.name.split('.').pop();
-        const snippet = f.content.slice(0, ext === 'json' ? 600 : 1200);
-        return `### ${f.name}\n\`\`\`\n${snippet}${f.content.length > 1200 ? '\n... (truncated)' : ''}\n\`\`\``;
+        const maxSnippet = ext === 'json' ? 800 : ext === 'css' ? 2000 : 1600;
+        const snippet = f.content.slice(0, maxSnippet);
+        return `### ${f.name}\n\`\`\`\n${snippet}${f.content.length > maxSnippet ? '\n... (truncated)' : ''}\n\`\`\``;
       })
       .join('\n\n');
 
-    // Estimate appropriate max_tokens for this file
+    // Generous max_tokens — enterprise files are large
     const estimatedTokens = fileSpec.tokens || 2000;
-    const maxTokens = Math.min(Math.max(estimatedTokens * 2, 2000), 8192);
+    const maxTokens = Math.min(Math.max(estimatedTokens * 3, 4000), 16384);
 
-    const fileSys = `You are a senior full-stack developer generating a COMPLETE, PRODUCTION-READY file.
-CRITICAL RULES:
-- Output ONLY the raw file content — zero explanations, zero markdown fences, zero "here is the file:" preamble
-- Write COMPLETE, WORKING code — no TODOs, no placeholders, no "add your code here" comments
-- Every function must be fully implemented with real logic
-- Use modern patterns: async/await, ES6+, proper error handling
-- CSS must include responsive design (mobile-first), dark/light variables, smooth animations
-- HTML must be complete with proper meta tags, semantic structure, accessible markup
-- JS must handle all edge cases, show loading states, handle errors gracefully`;
+    const fileSys = `You are a team of 200 senior full-stack developers generating ENTERPRISE-GRADE production code.
+
+OUTPUT FORMAT: Raw file content ONLY — zero explanations, zero markdown fences, zero preamble.
+
+CODE STANDARDS (MANDATORY — every file):
+- COMPLETE, WORKING code — no TODOs, no placeholders, no "add your code here"
+- Every function FULLY implemented with real business logic
+- Modern ES6+: async/await, const/let, destructuring, template literals, optional chaining
+- Comprehensive error handling: try/catch with meaningful error messages, proper HTTP status codes
+
+BACKEND STANDARDS:
+- Express: helmet(), cors(), compression(), express-rate-limit, morgan('combined')
+- JWT auth with refresh tokens, bcrypt password hashing (10+ rounds)
+- Input validation on EVERY route (validate body, params, query)
+- Centralized error handler middleware with structured JSON errors
+- Environment variables via process.env (never hardcoded secrets)
+- Security headers: X-Content-Type-Options, X-Frame-Options, HSTS
+- Rate limiting per route (auth routes stricter)
+- Request logging with timestamps
+
+FRONTEND STANDARDS:
+- Semantic HTML5: header, nav, main, section, article, footer
+- Mobile-first responsive CSS with CSS custom properties (--primary, --bg, --text, etc.)
+- Dark/light mode support via prefers-color-scheme AND manual toggle
+- Smooth transitions (0.2-0.3s ease), hover states on ALL interactive elements
+- Loading spinners/skeletons for async operations
+- Toast notifications for success/error feedback
+- Form validation with inline error messages
+- Intersection Observer for scroll animations
+- Accessible: aria-labels, focus styles, keyboard navigation, alt text
+- Professional typography: system font stack, proper hierarchy (clamp() for fluid sizes)
+- CSS Grid/Flexbox layouts — no floats
+- At minimum 500 lines for main CSS files, 200+ lines for page JS files`;
 
     const filePrompt = `Project: ${projectName}
 Description: ${description}
