@@ -1128,6 +1128,17 @@ export function register(router) {
     } catch (e) { sendError(res, 500, e.message); }
   });
 
+  // ── File write (from IDE editor) ──────────────────────────────────────────
+  router.post('/api/studio/webcraft/file/write', async (req, res) => {
+    try {
+      const { projectName, path: relPath, content } = await parseBody(req, 10_485_760);
+      if (!projectName || !relPath || content === undefined) return sendError(res, 400, 'projectName, path, content required');
+      if (!_isSafePath(relPath)) return sendError(res, 400, 'unsafe path');
+      ProjectStore.writeFile(projectName, relPath, content);
+      sendJSON(res, 200, { ok: true });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
   // ── Sandbox start — SSE ───────────────────────────────────────────────────
   router.post('/api/studio/webcraft/sandbox/start', async (req, res) => {
     const { projectName } = await parseBody(req);
