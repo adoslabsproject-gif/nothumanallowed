@@ -55,63 +55,112 @@ export function setupWebSocket(server) {
   });
 
   wssTerminal.on('connection', (ws, req) => {
-    // Parse project from query: /api/terminal?cwd=ProjectName
     const url = new URL(req.url || '', 'http://localhost');
     const cwdParam = url.searchParams.get('cwd') || '';
     let cwd;
     if (cwdParam && !cwdParam.includes('/') && !cwdParam.includes('\\')) {
-      // Project name → resolve to webcraft dir
       cwd = path.join(NHA_DIR, 'webcraft', cwdParam);
     } else if (cwdParam) {
       cwd = cwdParam;
     } else {
       cwd = path.join(NHA_DIR, 'webcraft');
     }
-    // Security: ensure cwd is under NHA_DIR or home
     const home = os.homedir();
     if (!cwd.startsWith(NHA_DIR) && !cwd.startsWith(home)) cwd = home;
     if (!fs.existsSync(cwd)) cwd = home;
 
-    const shell = process.platform === 'win32' ? 'cmd.exe' : (process.env.SHELL || '/bin/sh');
-    const shellArgs = process.platform === 'win32' ? [] : ['-i']; // interactive
+    // Command runner mode — user sends commands, we exec them and return output
+    let currentCwd = cwd;
+    let cmdBuffer = '';
 
-    const proc = spawn(shell, shellArgs, {
-      cwd,
-      env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    const send = (text) => { if (ws.readyState === 1) ws.send(text); };
 
-    // Shell stdout → WS
-    proc.stdout.on('data', (data) => {
-      if (ws.readyState === 1) ws.send(data);
-    });
+    send(`\x1b[32mNHA Terminal\x1b[0m\r\n`);
+    send(`\x1b[90m${currentCwd}\x1b[0m\r\n`);
+    send(`\x1b[36m$ \x1b[0m`);
 
-    // Shell stderr → WS
-    proc.stderr.on('data', (data) => {
-      if (ws.readyState === 1) ws.send(data);
-    });
-
-    // WS → Shell stdin
     ws.on('message', (data) => {
-      if (proc.stdin.writable) proc.stdin.write(data);
+      const char = data.toString();
+
+      // Handle special keys
+      if (char === '\r' || char === '\n') {
+        send('\r\n');
+        const cmd = cmdBuffer.trim();
+        cmdBuffer = '';
+
+        if (!cmd) {
+          send(`\x1b[36m$ \x1b[0m`);
+          return;
+        }
+
+        // Built-in: cd
+        if (cmd.startsWith('cd ')) {
+          const target = cmd.slice(3).trim().replace('~', home);
+          const newCwd = path.resolve(currentCwd, target);
+          if (fs.existsSync(newCwd) && fs.statSync(newCwd).isDirectory()) {
+            currentCwd = newCwd;
+            send(`\x1b[90m${currentCwd}\x1b[0m\r\n`);
+          } else {
+            send(`\x1b[31mcd: no such directory: ${target}\x1b[0m\r\n`);
+          }
+          send(`\x1b[36m$ \x1b[0m`);
+          return;
+        }
+
+        // Built-in: clear
+        if (cmd === 'clear' || cmd === 'cls') {
+          send('\x1b[2J\x1b[H');
+          send(`\x1b[90m${currentCwd}\x1b[0m\r\n`);
+          send(`\x1b[36m$ \x1b[0m`);
+          return;
+        }
+
+        // Execute command
+        const { exec } = require('child_process');
+        const child = exec(cmd, {
+          cwd: currentCwd,
+          timeout: 30_000,
+          env: { ...process.env, TERM: 'xterm-256color', NODE_ENV: 'development' },
+          maxBuffer: 1024 * 1024,
+        });
+
+        child.stdout?.on('data', (d) => {
+          send(d.toString().replace(/\n/g, '\r\n'));
+        });
+        child.stderr?.on('data', (d) => {
+          send(`\x1b[31m${d.toString().replace(/\n/g, '\r\n')}\x1b[0m`);
+        });
+        child.on('exit', (code) => {
+          if (code !== 0 && code !== null) {
+            send(`\x1b[90m[exit code: ${code}]\x1b[0m\r\n`);
+          }
+          send(`\x1b[90m${currentCwd}\x1b[0m\r\n`);
+          send(`\x1b[36m$ \x1b[0m`);
+        });
+        child.on('error', (err) => {
+          send(`\x1b[31m${err.message}\x1b[0m\r\n`);
+          send(`\x1b[36m$ \x1b[0m`);
+        });
+      } else if (char === '\x7f' || char === '\b') {
+        // Backspace
+        if (cmdBuffer.length > 0) {
+          cmdBuffer = cmdBuffer.slice(0, -1);
+          send('\b \b');
+        }
+      } else if (char === '\x03') {
+        // Ctrl+C
+        cmdBuffer = '';
+        send('^C\r\n');
+        send(`\x1b[36m$ \x1b[0m`);
+      } else if (char.charCodeAt(0) >= 32) {
+        // Normal character
+        cmdBuffer += char;
+        send(char);
+      }
     });
 
-    // Cleanup
-    proc.on('exit', () => {
-      if (ws.readyState === 1) ws.send('\r\n[shell exited]\r\n');
-      ws.close();
-    });
-
-    ws.on('close', () => {
-      try { proc.kill(); } catch {}
-    });
-
-    ws.on('error', () => {
-      try { proc.kill(); } catch {}
-    });
-
-    // Welcome message
-    ws.send(`\x1b[32mNHA Terminal\x1b[0m — ${cwd}\r\n`);
+    ws.on('close', () => {});
+    ws.on('error', () => {});
   });
 }
 

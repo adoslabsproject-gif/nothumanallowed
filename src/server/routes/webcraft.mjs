@@ -381,23 +381,95 @@ const SkillStore = {
     if (fs.existsSync(abs)) fs.unlinkSync(abs);
   },
 
-  /** Ensure memory.md, skills.md, and provider.md always exist for a project. */
+  /** Ensure memory.md, skills.md, and provider.md always exist with useful content. */
   ensureDefaults(projectName, config) {
     const dir = ensureDir(this.dir(projectName));
     const provider = config?.llm?.provider || 'nha';
     const model = config?.llm?.model || '';
+    const projectDir = path.join(NHA_DIR, 'webcraft', projectName);
+
+    // Scan project files for auto-generating context
+    let fileList = '';
+    try {
+      const files = fs.readdirSync(projectDir, { recursive: true })
+        .filter((f) => !String(f).includes('node_modules') && !String(f).startsWith('.nha-') && !String(f).startsWith('.'));
+      fileList = files.slice(0, 30).join(', ');
+    } catch {}
+
+    const needsWrite = (filePath, minLen = 150) => {
+      if (!fs.existsSync(filePath)) return true;
+      return fs.readFileSync(filePath, 'utf-8').length < minLen;
+    };
 
     const memFile = path.join(dir, 'memory.md');
-    if (!fs.existsSync(memFile)) {
-      fs.writeFileSync(memFile, `# ${projectName} — Project Memory\n\n_Architectural decisions, preferences, and notes._\n`, 'utf-8');
+    if (needsWrite(memFile)) {
+      fs.writeFileSync(memFile, `# ${projectName} — Project Memory
+
+## Project Files
+${fileList || '_No files generated yet_'}
+
+## Architecture
+- Express.js server with middleware stack
+- Vanilla HTML/CSS/JS frontend
+- JSON file storage (no external DB)
+
+## Development Notes
+_The AI agent updates this file as you build. Ask it to add features one by one._
+_Example: "Add user authentication" or "Add a contact form"_
+
+## Completed Features
+_None yet — start building!_
+`, 'utf-8');
     }
+
     const skillsFile = path.join(dir, 'skills.md');
-    if (!fs.existsSync(skillsFile)) {
-      fs.writeFileSync(skillsFile, `# ${projectName} — Skills\n\n_Coding patterns, best practices, and conventions for this project._\n`, 'utf-8');
+    if (needsWrite(skillsFile)) {
+      fs.writeFileSync(skillsFile, `# ${projectName} — Skills & Conventions
+
+## Code Style
+- Modern ES6+: const/let, arrow functions, async/await, template literals
+- Express routes: router.get/post/put/delete with error handling
+- CSS: custom properties (--primary, --bg), mobile-first, flexbox/grid
+- HTML: semantic tags, accessible (aria-labels, focus styles)
+
+## File Structure
+- server.js — main entry, middleware, routes
+- public/ — static HTML/CSS/JS
+- routes/ — Express route handlers
+- middleware/ — auth, validation, error handling
+- models/ — data models with JSON storage
+
+## Patterns
+- Always validate input on server side
+- Use try/catch for async operations
+- Return proper HTTP status codes (200, 201, 400, 401, 404, 500)
+- CSS variables for theming, transitions for hover states
+`, 'utf-8');
     }
+
     const providerFile = path.join(dir, `${provider}.md`);
-    if (!fs.existsSync(providerFile)) {
-      fs.writeFileSync(providerFile, `# ${provider.toUpperCase()} — ${model || 'Default'}\n\n_Model-specific notes, prompt tips, and configuration._\n`, 'utf-8');
+    if (needsWrite(providerFile)) {
+      fs.writeFileSync(providerFile, `# ${provider.toUpperCase()} — ${model || 'Default'}
+
+## Project: ${projectName}
+
+## Instructions for Code Generation
+- Generate COMPLETE files — never truncate
+- Use external CSS/JS via link/script tags
+- Every function must be fully implemented — no TODOs or placeholders
+- Handle errors gracefully with try/catch
+- Mobile-first responsive design
+- Dark mode support via CSS custom properties
+
+## Available Tools
+read, edit, write, rename, delete, check, lint, search, list, run, sandbox, diff
+
+## Workflow
+1. Read files before editing
+2. Make surgical edits (not full rewrites unless needed)
+3. Check/lint after modifications
+4. Restart sandbox to verify
+`, 'utf-8');
     }
   },
 
