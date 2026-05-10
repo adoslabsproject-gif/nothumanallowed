@@ -200,14 +200,34 @@ export async function main(argv) {
       return cmdHelp();
 
     default: {
-      // Check if a plugin handles this command before falling through to Legion
+      // Check if a plugin handles this command before falling through
       const pluginMatch = await findPluginForCommand(cmd);
       if (pluginMatch && pluginMatch.plugin.run) {
         const { cmdPlugin: runPlugin } = await import('./commands/plugin.mjs');
         return runPlugin(['run', cmd, ...args]);
       }
-      // Try as Legion command passthrough
-      return spawnCore('legion', [cmd, ...args]);
+      // Try as Legion command passthrough (only if legion is installed)
+      try {
+        const { LEGION_FILE } = await import('./constants.mjs');
+        const { existsSync } = await import('fs');
+        if (existsSync(LEGION_FILE)) {
+          return spawnCore('legion', [cmd, ...args]);
+        }
+      } catch {}
+      // Unknown command — show helpful error
+      fail(`Unknown command: ${cmd}`);
+      console.log('');
+      info('Common commands:');
+      console.log('  nha chat              Chat with AI');
+      console.log('  nha ui                Open web UI');
+      console.log('  nha start             Start ops daemon (Telegram/Discord)');
+      console.log('  nha stop              Stop ops daemon');
+      console.log('  nha restart           Restart ops daemon');
+      console.log('  nha status            Check daemon status');
+      console.log('  nha update            Update agents + npm package');
+      console.log('  nha config set <k> <v>  Set configuration');
+      console.log('  nha help              Full command list');
+      return;
     }
   }
 }
