@@ -50,18 +50,37 @@ export async function cmdUI(args) {
         console.log(`  \x1b[33m!\x1b[0m Killed previous process on port ${port} (PID ${pid})`);
       }
     } else {
-      // Unix/Mac: lsof to find and kill
-      const out = execSync(`lsof -ti:${port} 2>/dev/null`, { encoding: 'utf-8', timeout: 3000 }).trim();
-      if (out) {
-        const pids = out.split('\n').filter((p) => p && p !== String(process.pid));
-        for (const pid of pids) {
-          try { process.kill(parseInt(pid), 'SIGTERM'); } catch {}
+      // Unix/Mac: try lsof first, then fuser, then ss+kill as fallbacks
+      let killed = false;
+      // Method 1: lsof
+      try {
+        const out = execSync(`lsof -ti:${port} 2>/dev/null`, { encoding: 'utf-8', timeout: 3000 }).trim();
+        if (out) {
+          const pids = out.split('\n').filter((p) => p && p !== String(process.pid));
+          for (const pid of pids) { try { process.kill(parseInt(pid), 'SIGTERM'); } catch {} }
+          if (pids.length > 0) { killed = true; console.log(`  \x1b[33m!\x1b[0m Killed previous process on port ${port} (PID ${pids.join(', ')})`); }
         }
-        if (pids.length > 0) {
-          console.log(`  \x1b[33m!\x1b[0m Killed previous process on port ${port} (PID ${pids.join(', ')})`);
-          await new Promise((r) => setTimeout(r, 500)); // wait for port to free
-        }
+      } catch {}
+      // Method 2: fuser (Linux without lsof)
+      if (!killed) {
+        try {
+          execSync(`fuser -k ${port}/tcp 2>/dev/null`, { timeout: 3000, stdio: 'ignore' });
+          killed = true;
+          console.log(`  \x1b[33m!\x1b[0m Killed previous process on port ${port} (via fuser)`);
+        } catch {}
       }
+      // Method 3: ss + kill (minimal Linux)
+      if (!killed) {
+        try {
+          const out = execSync(`ss -tlnp 2>/dev/null | grep :${port}`, { encoding: 'utf-8', timeout: 3000 }).trim();
+          const pidMatch = out.match(/pid=(\d+)/);
+          if (pidMatch) {
+            try { process.kill(parseInt(pidMatch[1]), 'SIGTERM'); killed = true; } catch {}
+            if (killed) console.log(`  \x1b[33m!\x1b[0m Killed previous process on port ${port} (PID ${pidMatch[1]})`);
+          }
+        } catch {}
+      }
+      if (killed) await new Promise((r) => setTimeout(r, 500));
     }
   } catch { /* port is free */ }
 
