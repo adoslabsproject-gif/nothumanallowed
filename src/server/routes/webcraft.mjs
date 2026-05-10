@@ -488,31 +488,67 @@ async function runWebCraftAgent(config, projectName, message, attachments, emit)
   const toolSpec = `
 AVAILABLE TOOLS (use exactly ONE tool per <tool> tag):
 
-1. Read a file (to see its current content before editing):
+── FILE OPERATIONS ──
+
+1. read — Read a file's content:
 <tool>{"op":"read","path":"relative/path.js"}</tool>
 
-2. Edit a file (surgical replacement of exact code):
-<tool>{"op":"edit","path":"relative/path.js","old":"EXACT_EXISTING_CODE","new":"REPLACEMENT_CODE"}</tool>
+2. edit — Surgical replacement (EXACT match required):
+<tool>{"op":"edit","path":"relative/path.js","old":"EXACT_CODE_TO_REPLACE","new":"REPLACEMENT_CODE"}</tool>
 
-3. Write/create a file (complete content):
+3. write — Write/create a file (full content):
 <tool>{"op":"write","path":"relative/path.js","content":"FULL_FILE_CONTENT"}</tool>
 
-4. Check syntax of a JS file:
+4. rename — Rename or move a file:
+<tool>{"op":"rename","path":"old/path.js","newPath":"new/path.js"}</tool>
+
+5. delete — Delete a file:
+<tool>{"op":"delete","path":"relative/path.js"}</tool>
+
+── VERIFICATION ──
+
+6. check — Syntax check (JS/JSON/CSS/HTML):
 <tool>{"op":"check","path":"relative/path.js"}</tool>
+
+7. lint — Full diagnostics with line numbers:
+<tool>{"op":"lint","path":"relative/path.js"}</tool>
+
+8. search — Grep/find text in project files:
+<tool>{"op":"search","query":"searchPattern","glob":"*.js"}</tool>
+
+9. list — List all project files with sizes:
+<tool>{"op":"list"}</tool>
+
+── EXECUTION ──
+
+10. run — Execute a shell command in the project directory:
+<tool>{"op":"run","cmd":"npm install express"}</tool>
+<tool>{"op":"run","cmd":"npm test"}</tool>
+<tool>{"op":"run","cmd":"node -e \\"console.log(1+1)\\""}</tool>
+
+11. sandbox — Restart the sandbox server to test changes:
+<tool>{"op":"sandbox"}</tool>
+
+── DIFF ──
+
+12. diff — Show diff between current file and last snapshot:
+<tool>{"op":"diff","path":"relative/path.js"}</tool>
 
 WORKFLOW — follow this for every change:
 1. Read the file(s) you need to modify
 2. Make your changes with edit or write
-3. Use check to verify JS files have no syntax errors
-4. If check fails, read the file again and fix
+3. Use check or lint to verify — fix any errors
+4. Use sandbox to restart and verify the app works
 5. When ALL changes are complete and verified, output: <done/>
 
 RULES:
-- "old" must be an EXACT verbatim copy from the file — copy-paste, no paraphrasing
+- "old" in edit must be EXACT verbatim code — copy-paste from read output
 - Use edit for targeted changes, write for new files or complete rewrites
-- ALWAYS read before edit if you haven't seen the file content yet
-- ALWAYS check JS files after modifications
-- Output <done/> when you are completely finished — this is MANDATORY
+- ALWAYS read before edit if you haven't seen the file content
+- ALWAYS check/lint after modifications
+- Use run for npm install, npm test, or any shell command
+- Use search to find code patterns across the project
+- Output <done/> when you are completely finished — MANDATORY
 `;
 
   // Build system prompt with fresh file list each step
@@ -611,19 +647,24 @@ RULES:
         continue;
       }
 
-      const { op, path: relPath, old: oldStr, new: newStr, content } = toolCall;
-      if (!relPath || !_isSafePath(relPath)) {
+      const { op, path: relPath, old: oldStr, new: newStr, content, newPath, query, glob: globPat, cmd } = toolCall;
+
+      // Path validation (skip for path-less ops)
+      const needsPath = !['list', 'search', 'sandbox', 'run'].includes(op);
+      if (needsPath && (!relPath || !_isSafePath(relPath))) {
         toolResults.push({ op, path: relPath, result: 'unsafe_path' });
         emit({ type: 'tool', op, path: relPath ?? '', result: 'unsafe_path' });
         continue;
       }
 
+      // ── read ──
       if (op === 'read') {
         const src = ProjectStore.readFile(projectName, relPath);
         const result = src !== null ? 'ok' : 'not_found';
-        toolResults.push({ op: 'read', path: relPath, result, content: src?.slice(0, 12000) });
+        toolResults.push({ op: 'read', path: relPath, result, content: src?.slice(0, 16000) });
         emit({ type: 'tool', op: 'read', path: relPath, result });
 
+      // ── check ──
       } else if (op === 'check') {
         const src = ProjectStore.readFile(projectName, relPath);
         let checkResult = 'ok';
@@ -633,7 +674,6 @@ RULES:
         } else if (relPath.endsWith('.json')) {
           try { JSON.parse(src); } catch (e) { checkResult = `json_error: ${e.message}`; }
         } else if (relPath.endsWith('.css')) {
-          // Basic CSS validation: balanced braces
           const opens = (src.match(/\{/g) || []).length;
           const closes = (src.match(/\}/g) || []).length;
           if (opens !== closes) checkResult = `css_error: unbalanced braces (${opens} open, ${closes} close)`;
@@ -643,6 +683,38 @@ RULES:
         toolResults.push({ op: 'check', path: relPath, result: checkResult });
         emit({ type: 'tool', op: 'check', path: relPath, result: checkResult });
 
+      // ── lint (full diagnostics with line numbers) ──
+      } else if (op === 'lint') {
+        const src = ProjectStore.readFile(projectName, relPath);
+        if (!src) {
+          toolResults.push({ op: 'lint', path: relPath, result: 'file_not_found' });
+          emit({ type: 'tool', op: 'lint', path: relPath, result: 'file_not_found' });
+        } else {
+          const diags = [];
+          const ext = relPath.split('.').pop()?.toLowerCase();
+          if (ext === 'js' || ext === 'mjs') {
+            try { new Function(src); } catch (e) {
+              diags.push({ line: 1, message: e.message.replace(/\n.*/s, ''), severity: 'error' });
+            }
+          }
+          if (ext === 'json') {
+            try { JSON.parse(src); } catch (e) {
+              diags.push({ line: 1, message: e.message, severity: 'error' });
+            }
+          }
+          if (ext === 'css') {
+            const o = (src.match(/\{/g) || []).length, c = (src.match(/\}/g) || []).length;
+            if (o !== c) diags.push({ line: src.split('\n').length, message: `Unbalanced braces: ${o} open, ${c} close`, severity: 'warning' });
+          }
+          if (ext === 'html' && !src.includes('</html>')) {
+            diags.push({ line: src.split('\n').length, message: 'Missing </html>', severity: 'warning' });
+          }
+          const result = diags.length === 0 ? 'ok' : diags.map((d) => `L${d.line}: [${d.severity}] ${d.message}`).join('\n');
+          toolResults.push({ op: 'lint', path: relPath, result });
+          emit({ type: 'tool', op: 'lint', path: relPath, result });
+        }
+
+      // ── edit ──
       } else if (op === 'edit') {
         const src = ProjectStore.readFile(projectName, relPath);
         if (src === null) {
@@ -669,6 +741,7 @@ RULES:
           emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 300), newSnippet: newStr?.slice(0, 300) ?? '' });
         }
 
+      // ── write ──
       } else if (op === 'write') {
         if (content === undefined) {
           toolResults.push({ op: 'write', path: relPath, result: 'missing_content' });
@@ -680,6 +753,179 @@ RULES:
           toolResults.push({ op: 'write', path: relPath, result: 'ok' });
           emit({ type: 'tool', op: 'write', path: relPath, result: 'ok' });
         }
+
+      // ── rename ──
+      } else if (op === 'rename') {
+        if (!newPath || !_isSafePath(newPath)) {
+          toolResults.push({ op: 'rename', path: relPath, result: 'invalid_newPath' });
+          emit({ type: 'tool', op: 'rename', path: relPath, result: 'invalid_newPath' });
+        } else {
+          const oldAbs = path.join(dir, relPath);
+          const newAbs = path.join(dir, newPath);
+          if (!fs.existsSync(oldAbs)) {
+            toolResults.push({ op: 'rename', path: relPath, result: 'file_not_found' });
+            emit({ type: 'tool', op: 'rename', path: relPath, result: 'file_not_found' });
+          } else {
+            ensureDir(path.dirname(newAbs));
+            fs.renameSync(oldAbs, newAbs);
+            hasChanges = true;
+            modifiedFiles.add(newPath);
+            toolResults.push({ op: 'rename', path: relPath, result: `ok → ${newPath}` });
+            emit({ type: 'tool', op: 'rename', path: relPath, result: 'ok' });
+          }
+        }
+
+      // ── delete ──
+      } else if (op === 'delete') {
+        const abs = path.join(dir, relPath);
+        if (!fs.existsSync(abs)) {
+          toolResults.push({ op: 'delete', path: relPath, result: 'file_not_found' });
+          emit({ type: 'tool', op: 'delete', path: relPath, result: 'file_not_found' });
+        } else {
+          fs.unlinkSync(abs);
+          hasChanges = true;
+          toolResults.push({ op: 'delete', path: relPath, result: 'ok' });
+          emit({ type: 'tool', op: 'delete', path: relPath, result: 'ok' });
+        }
+
+      // ── search (grep) ──
+      } else if (op === 'search') {
+        const matches = ProjectStore.grep(projectName, query || '', globPat);
+        const resultText = matches.length === 0 ? 'no_matches'
+          : matches.slice(0, 30).map((m) => `${m.file}:${m.lineNum}: ${m.line}`).join('\n');
+        toolResults.push({ op: 'search', result: resultText, content: resultText });
+        emit({ type: 'tool', op: 'search', path: query || '', result: `${matches.length} matches` });
+
+      // ── list ──
+      } else if (op === 'list') {
+        const allFiles = _listProjectFiles(dir);
+        const listing = allFiles.map((f) => {
+          try {
+            const stat = fs.statSync(path.join(dir, f));
+            return `${f} (${stat.size} B)`;
+          } catch { return f; }
+        }).join('\n');
+        toolResults.push({ op: 'list', result: listing, content: listing });
+        emit({ type: 'tool', op: 'list', path: '', result: `${allFiles.length} files` });
+
+      // ── run (shell command) ──
+      } else if (op === 'run') {
+        if (!cmd) {
+          toolResults.push({ op: 'run', result: 'missing cmd' });
+          emit({ type: 'tool', op: 'run', path: '', result: 'missing_cmd' });
+        } else {
+          // Security: block dangerous commands
+          const blocked = /rm\s+-rf|rmdir|format|mkfs|dd\s+if|shutdown|reboot|kill\s+-9\s+1\b/i;
+          if (blocked.test(cmd)) {
+            toolResults.push({ op: 'run', result: 'blocked: dangerous command' });
+            emit({ type: 'tool', op: 'run', path: cmd, result: 'blocked' });
+          } else {
+            try {
+              const { stdout, stderr } = await execAsync(cmd, {
+                cwd: dir,
+                timeout: 30_000,
+                env: { ...process.env, NODE_ENV: 'development' },
+              });
+              const output = (stdout + (stderr ? `\n[stderr] ${stderr}` : '')).slice(0, 8000);
+              toolResults.push({ op: 'run', result: output || '(no output)', content: output });
+              emit({ type: 'tool', op: 'run', path: cmd, result: 'ok' });
+            } catch (e) {
+              const errMsg = (e.stderr || e.message || '').slice(0, 2000);
+              toolResults.push({ op: 'run', result: `error: ${errMsg}`, content: errMsg });
+              emit({ type: 'tool', op: 'run', path: cmd, result: 'error' });
+            }
+          }
+        }
+
+      // ── sandbox (restart) ──
+      } else if (op === 'sandbox') {
+        if (sandbox.isRunning()) {
+          await sandbox.stop();
+        }
+        try {
+          const projectDir = ProjectStore.dir(projectName);
+          const port = await _findFreePort(4000, 4999);
+          if (port) {
+            const shimDir = path.join(projectDir, '.nha-shims');
+            ensureDir(shimDir);
+            _writeShims(shimDir);
+            const entryFile = _detectEntry(projectDir);
+            if (entryFile) {
+              const patchedEntry = _patchEntry(projectDir, entryFile, shimDir, port);
+              const proc = spawn('node', [patchedEntry], {
+                cwd: projectDir,
+                env: { ...process.env, PORT: String(port), NODE_ENV: 'development', NHA_SANDBOX: '1' },
+                detached: false, stdio: ['ignore', 'pipe', 'pipe'],
+              });
+              sandbox._sandbox = { proc, port, projectName, startedAt: new Date(), healthy: false };
+              let sandboxStderr = '';
+              proc.stderr.on('data', (d) => { sandboxStderr += d.toString(); });
+              proc.stdout.on('data', (d) => {
+                if (/listen|running|started|ready|port/i.test(d.toString())) sandbox._sandbox.healthy = true;
+              });
+              const healthy = await _waitForPort(port, 10_000);
+              if (healthy) {
+                sandbox._sandbox.healthy = true;
+                toolResults.push({ op: 'sandbox', result: `ok: running on port ${port}` });
+                emit({ type: 'tool', op: 'sandbox', path: '', result: `port:${port}` });
+                emit({ type: 'sandbox_ready', port });
+              } else {
+                const errLine = sandboxStderr.split('\n').find((l) => l.includes('Error')) || 'startup timeout';
+                toolResults.push({ op: 'sandbox', result: `error: ${errLine.slice(0, 500)}`, content: errLine });
+                emit({ type: 'tool', op: 'sandbox', path: '', result: 'error' });
+              }
+            } else {
+              toolResults.push({ op: 'sandbox', result: 'no entry point found' });
+              emit({ type: 'tool', op: 'sandbox', path: '', result: 'no_entry' });
+            }
+          }
+        } catch (e) {
+          toolResults.push({ op: 'sandbox', result: `error: ${e.message?.slice(0, 200)}` });
+          emit({ type: 'tool', op: 'sandbox', path: '', result: 'error' });
+        }
+
+      // ── diff ──
+      } else if (op === 'diff') {
+        const current = ProjectStore.readFile(projectName, relPath);
+        // Load last snapshot
+        const snapshots = SnapshotStore.list(projectName);
+        if (!current) {
+          toolResults.push({ op: 'diff', path: relPath, result: 'file_not_found' });
+          emit({ type: 'tool', op: 'diff', path: relPath, result: 'file_not_found' });
+        } else if (snapshots.length === 0) {
+          toolResults.push({ op: 'diff', path: relPath, result: 'no snapshots available' });
+          emit({ type: 'tool', op: 'diff', path: relPath, result: 'no_snapshots' });
+        } else {
+          const lastSnap = snapshots[0];
+          const snapDir = SnapshotStore.dir(projectName);
+          try {
+            const snapData = JSON.parse(fs.readFileSync(path.join(snapDir, `${lastSnap.ts}.json`), 'utf-8'));
+            const oldFile = snapData.files?.find((f) => f.name === relPath);
+            const oldContent = oldFile?.content || '';
+            // Simple line diff
+            const oldLines = oldContent.split('\n');
+            const newLines = current.split('\n');
+            const diffs = [];
+            const maxLen = Math.max(oldLines.length, newLines.length);
+            for (let i = 0; i < maxLen; i++) {
+              if (oldLines[i] !== newLines[i]) {
+                if (oldLines[i] !== undefined) diffs.push(`- L${i + 1}: ${oldLines[i]}`);
+                if (newLines[i] !== undefined) diffs.push(`+ L${i + 1}: ${newLines[i]}`);
+              }
+            }
+            const diffText = diffs.length === 0 ? 'no changes' : diffs.slice(0, 100).join('\n');
+            toolResults.push({ op: 'diff', path: relPath, result: diffText, content: diffText });
+            emit({ type: 'tool', op: 'diff', path: relPath, result: `${diffs.length} changes` });
+          } catch {
+            toolResults.push({ op: 'diff', path: relPath, result: 'snapshot read error' });
+            emit({ type: 'tool', op: 'diff', path: relPath, result: 'error' });
+          }
+        }
+
+      // ── unknown op ──
+      } else {
+        toolResults.push({ op, path: relPath, result: `unknown_op: ${op}` });
+        emit({ type: 'tool', op, path: relPath ?? '', result: 'unknown_op' });
       }
     }
 
