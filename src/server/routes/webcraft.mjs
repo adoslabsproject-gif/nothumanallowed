@@ -827,19 +827,6 @@ function countTokens(text) {
 }
 
 /**
- * Simulated streaming: for providers that return full text at once (NHA/Liara),
- * we split the text into ~20-char chunks and emit them with setImmediate gaps
- * so the browser receives a real byte-by-byte stream over SSE.
- */
-async function emitTextAsStream(text, onChunk) {
-  const CHUNK_SIZE = 20;
-  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
-    onChunk(text.slice(i, i + CHUNK_SIZE));
-    await new Promise((r) => setImmediate(r));
-  }
-}
-
-/**
  * Detects if an LLM output appears to be truncated / incomplete.
  * Returns true if the file likely needs a continuation call.
  */
@@ -932,7 +919,33 @@ function repairTruncation(content, filename) {
   return result;
 }
 
-async function runGenerate(config, projectName, description, blocks, authFields, emit) {
+/** Severe truncation = needs LLM continuation. Minor diffs handled by repairTruncation(). */
+function _isSeverelyTruncated(content, filename) {
+  if (!content || content.length < 10) return true;
+  const trimmed = content.trimEnd();
+  const ext = filename.split('.').pop()?.toLowerCase();
+  // Last line ends mid-expression (clear cut-off)
+  const lastLine = trimmed.split('\n').pop()?.trim() ?? '';
+  if (/[,({=+\-*/<>|&:]$/.test(lastLine) && lastLine.length > 3) return true;
+  // Large brace imbalance (>3) — repairTruncation can't reliably fix this
+  if (ext === 'js' || ext === 'mjs' || ext === 'ts') {
+    const diff = (trimmed.match(/\{/g) || []).length - (trimmed.match(/\}/g) || []).length;
+    if (diff > 3) return true;
+  }
+  if (ext === 'css') {
+    const diff = (trimmed.match(/\{/g) || []).length - (trimmed.match(/\}/g) || []).length;
+    if (diff > 3) return true;
+  }
+  // HTML completely missing closing tags (not just </html> — entire sections missing)
+  if (ext === 'html' && !trimmed.includes('</body>') && !trimmed.includes('</html>') && trimmed.length > 500) {
+    // Check if it ends mid-tag
+    const lastAngle = trimmed.lastIndexOf('<');
+    if (lastAngle > trimmed.lastIndexOf('>')) return true; // mid-tag
+  }
+  return false;
+}
+
+async function runGenerate(config, projectName, description, blocks, authFields, emit, abortSignal) {
   const blocksDesc = Object.entries(blocks)
     .filter(([, enabled]) => enabled)
     .map(([key]) => key)
@@ -1079,6 +1092,12 @@ ${prevContext ? `Recent files generated (for consistency):\n${prevContext}\n\n` 
     let syntaxError = null;
     const fileTokensIn = countTokens(fileSys) + countTokens(filePrompt);
 
+    // Check abort before each file
+    if (abortSignal?.aborted) {
+      emit({ type: 'status', msg: 'Generation stopped by user.' });
+      break;
+    }
+
     // Retry loop — up to 2 attempts per file
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -1095,8 +1114,8 @@ ${prevContext ? `Recent files generated (for consistency):\n${prevContext}\n\n` 
           .replace(/^```[\w]*\n/, '').replace(/\n```$/, '')
           .replace(/^```[\w]*\r\n/, '').replace(/\r\n```$/, '').trim();
 
-        // Continuation loop — up to 3 rounds if file appears truncated
-        for (let contRound = 0; contRound < 3 && isFileTruncated(rawOutput, fileSpec.name); contRound++) {
+        // Continuation loop — only for SEVERE truncation (>3 missing braces or mid-line cut)
+        for (let contRound = 0; contRound < 2 && !abortSignal?.aborted && _isSeverelyTruncated(rawOutput, fileSpec.name); contRound++) {
           emit({ type: 'file_chunk', name: fileSpec.name, chunk: `\n/* ... continuing (${contRound + 1}) ... */\n`, fi: fi + 1, total: filePlan.length });
           const contPrompt = `The file ${fileSpec.name} was truncated. Continue EXACTLY from the last line. Output ONLY the remaining code (no repetition, no explanation):
 
@@ -1325,10 +1344,14 @@ export function register(router) {
     if (!projectName || !description) return sendError(res, 400, 'projectName and description required');
 
     const sse = sendSSE(res);
+    // Abort signal: triggered when client disconnects (user clicks Stop)
+    const ac = new AbortController();
+    req.on('close', () => ac.abort());
+    res.on('close', () => ac.abort());
     try {
-      await runGenerate(config, projectName, description, blocks, authFields, sse.send);
+      await runGenerate(config, projectName, description, blocks, authFields, sse.send, ac.signal);
     } catch (e) {
-      sse.send({ type: 'error', msg: e.message });
+      if (e.name !== 'AbortError') sse.send({ type: 'error', msg: e.message });
     }
     sse.end();
   });
