@@ -38,6 +38,33 @@ export async function cmdUI(args) {
 
   const host = explicitHost || '127.0.0.1';
 
+  // Kill any existing process on this port (prevents EADDRINUSE)
+  try {
+    const { execSync } = await import('child_process');
+    if (process.platform === 'win32') {
+      // Windows: find PID on port and kill it
+      const out = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf-8', timeout: 3000 }).trim();
+      const pid = out.split(/\s+/).pop();
+      if (pid && pid !== String(process.pid)) {
+        execSync(`taskkill /F /PID ${pid}`, { timeout: 3000, stdio: 'ignore' });
+        console.log(`  \x1b[33m!\x1b[0m Killed previous process on port ${port} (PID ${pid})`);
+      }
+    } else {
+      // Unix/Mac: lsof to find and kill
+      const out = execSync(`lsof -ti:${port} 2>/dev/null`, { encoding: 'utf-8', timeout: 3000 }).trim();
+      if (out) {
+        const pids = out.split('\n').filter((p) => p && p !== String(process.pid));
+        for (const pid of pids) {
+          try { process.kill(parseInt(pid), 'SIGTERM'); } catch {}
+        }
+        if (pids.length > 0) {
+          console.log(`  \x1b[33m!\x1b[0m Killed previous process on port ${port} (PID ${pids.join(', ')})`);
+          await new Promise((r) => setTimeout(r, 500)); // wait for port to free
+        }
+      }
+    }
+  } catch { /* port is free */ }
+
   // Auto-start ops daemon (Telegram + cron) if not already running
   if (!isRunning()) {
     const result = startDaemon();
