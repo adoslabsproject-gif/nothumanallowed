@@ -848,20 +848,17 @@ function isFileTruncated(content, filename) {
   const trimmed = content.trimEnd();
   const ext = filename.split('.').pop()?.toLowerCase();
 
-  // Common truncation signs: ends mid-statement without closing bracket/brace
   if (ext === 'js' || ext === 'mjs' || ext === 'ts') {
-    // Balanced braces check (fast approximation)
     const open = (trimmed.match(/\{/g) || []).length;
     const close = (trimmed.match(/\}/g) || []).length;
-    if (open > close + 2) return true;
-    // Last meaningful line should not end with an operator or comma
+    if (open > close) return true; // ANY unbalanced brace = truncated
     const lastLine = trimmed.split('\n').pop()?.trim() ?? '';
     if (/[,({=+\-*/<>|&]$/.test(lastLine)) return true;
   }
   if (ext === 'css') {
     const open = (trimmed.match(/\{/g) || []).length;
     const close = (trimmed.match(/\}/g) || []).length;
-    if (open > close + 1) return true;
+    if (open > close) return true;
   }
   if (ext === 'html') {
     if (!trimmed.includes('</html>') && !trimmed.includes('</body>')) return true;
@@ -870,6 +867,69 @@ function isFileTruncated(content, filename) {
     try { JSON.parse(trimmed); } catch { return true; }
   }
   return false;
+}
+
+/**
+ * Deterministic repair of common truncation artifacts.
+ * Adds missing closing braces, tags, etc. WITHOUT calling the LLM.
+ */
+function repairTruncation(content, filename) {
+  if (!content) return content;
+  const ext = filename.split('.').pop()?.toLowerCase();
+  let result = content.trimEnd();
+
+  if (ext === 'js' || ext === 'mjs' || ext === 'ts') {
+    // Balance curly braces
+    const open = (result.match(/\{/g) || []).length;
+    const close = (result.match(/\}/g) || []).length;
+    const missing = open - close;
+    if (missing > 0 && missing <= 10) {
+      result += '\n' + '}\n'.repeat(missing);
+    }
+    // Balance parentheses
+    const openP = (result.match(/\(/g) || []).length;
+    const closeP = (result.match(/\)/g) || []).length;
+    const missingP = openP - closeP;
+    if (missingP > 0 && missingP <= 5) {
+      // Find last line and append
+      const lines = result.split('\n');
+      const lastIdx = lines.length - 1;
+      lines[lastIdx] = lines[lastIdx] + ')'.repeat(missingP) + ';';
+      result = lines.join('\n');
+    }
+  }
+
+  if (ext === 'css') {
+    const open = (result.match(/\{/g) || []).length;
+    const close = (result.match(/\}/g) || []).length;
+    const missing = open - close;
+    if (missing > 0 && missing <= 10) {
+      result += '\n' + '}\n'.repeat(missing);
+    }
+  }
+
+  if (ext === 'html' || ext === 'htm') {
+    if (!result.includes('</body>')) result += '\n</body>';
+    if (!result.includes('</html>')) result += '\n</html>';
+  }
+
+  if (ext === 'json') {
+    // Try to fix unclosed JSON
+    try { JSON.parse(result); } catch {
+      // Count brackets
+      const openB = (result.match(/\[/g) || []).length;
+      const closeB = (result.match(/\]/g) || []).length;
+      const openC = (result.match(/\{/g) || []).length;
+      const closeC = (result.match(/\}/g) || []).length;
+      // Remove trailing comma if present
+      result = result.replace(/,\s*$/, '');
+      // Add missing closers
+      if (openB > closeB) result += '\n' + ']'.repeat(openB - closeB);
+      if (openC > closeC) result += '\n' + '}'.repeat(openC - closeC);
+    }
+  }
+
+  return result;
 }
 
 async function runGenerate(config, projectName, description, blocks, authFields, emit) {
@@ -1058,7 +1118,8 @@ Continue from here:`;
           }
         }
 
-        fileContent = rawOutput;
+        // Deterministic repair of truncation artifacts (missing braces, tags)
+        fileContent = repairTruncation(rawOutput, fileSpec.name);
         syntaxError = null;
 
         const fileTokensOut = countTokens(fileContent);
@@ -1109,10 +1170,27 @@ Continue from here:`;
     return isFileTruncated(f.content, f.name);
   });
 
-  if (brokenFiles.length > 0 && brokenFiles.length <= 10) {
+  if (brokenFiles.length > 0) {
     emit({ type: 'phase', phase: 'autofix', msg: `Post-generation fix: ${brokenFiles.length} file(s) need repair...` });
     for (const broken of brokenFiles) {
       try {
+        // Step 1: Try deterministic repair first (fast, no LLM call)
+        const deterministicFix = repairTruncation(broken.content, broken.name);
+        let isFixed = false;
+        if (deterministicFix !== broken.content) {
+          // Verify the fix actually resolved the issue
+          if (!isFileTruncated(deterministicFix, broken.name)) {
+            emit({ type: 'status', msg: `Auto-fixed ${broken.name} (deterministic repair)` });
+            broken.content = deterministicFix;
+            const abs = path.join(projectDir, broken.name);
+            fs.writeFileSync(abs, deterministicFix, 'utf-8');
+            isFixed = true;
+          }
+        }
+        if (isFixed) continue;
+
+        // Step 2: If deterministic repair wasn't enough, regenerate with LLM
+        if (brokenFiles.length > 15) continue; // don't LLM-regenerate too many files
         emit({ type: 'status', msg: `Regenerating ${broken.name}...` });
         let fixedContent = '';
         const fixPrompt = `Regenerate this file COMPLETELY. It was truncated or has errors.\n\nFile: ${broken.name}\nProject: ${projectName}\nDescription: ${description}\nFull file list: ${allFileNames}\n\nOutput the COMPLETE file content only, no explanation.`;
@@ -1121,7 +1199,8 @@ Continue from here:`;
         }, { max_tokens: 16384 });
         fixedContent = fixedContent
           .replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
-        if (fixedContent.length > broken.content.length) {
+        fixedContent = repairTruncation(fixedContent, broken.name); // repair the regenerated content too
+        if (fixedContent.length > 50) {
           broken.content = fixedContent;
           const abs = path.join(projectDir, broken.name);
           fs.writeFileSync(abs, fixedContent, 'utf-8');
