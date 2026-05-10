@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
+import { execFile } from 'child_process';
 import { NHA_DIR } from '../constants.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -115,30 +115,21 @@ export function setupWebSocket(server) {
           return;
         }
 
-        // Execute command
-        const { exec } = require('child_process');
-        const child = exec(cmd, {
+        // Execute command — fully isolated from parent process stdio
+        const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
+        const shellArg = process.platform === 'win32' ? '/c' : '-c';
+        const child = execFile(shell, [shellArg, cmd], {
           cwd: currentCwd,
           timeout: 30_000,
-          env: { ...process.env, TERM: 'xterm-256color', NODE_ENV: 'development' },
+          env: { ...process.env, TERM: 'dumb', NODE_ENV: 'development' },
           maxBuffer: 1024 * 1024,
-        });
-
-        child.stdout?.on('data', (d) => {
-          send(d.toString().replace(/\n/g, '\r\n'));
-        });
-        child.stderr?.on('data', (d) => {
-          send(`\x1b[31m${d.toString().replace(/\n/g, '\r\n')}\x1b[0m`);
-        });
-        child.on('exit', (code) => {
-          if (code !== 0 && code !== null) {
-            send(`\x1b[90m[exit code: ${code}]\x1b[0m\r\n`);
-          }
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }, (err, stdout, stderr) => {
+          if (stdout) send(stdout.replace(/\n/g, '\r\n'));
+          if (stderr) send(`\x1b[31m${stderr.replace(/\n/g, '\r\n')}\x1b[0m`);
+          if (err && err.killed) send(`\x1b[31m[timeout]\x1b[0m\r\n`);
+          else if (err && !stdout && !stderr) send(`\x1b[31m${err.message}\x1b[0m\r\n`);
           send(`\x1b[90m${currentCwd}\x1b[0m\r\n`);
-          send(`\x1b[36m$ \x1b[0m`);
-        });
-        child.on('error', (err) => {
-          send(`\x1b[31m${err.message}\x1b[0m\r\n`);
           send(`\x1b[36m$ \x1b[0m`);
         });
       } else if (char === '\x7f' || char === '\b') {
