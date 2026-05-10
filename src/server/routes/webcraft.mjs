@@ -792,7 +792,7 @@ ${rawOutput.slice(-800)}`;
       ensureDir(path.dirname(abs));
       fs.writeFileSync(abs, fileContent, 'utf-8');
       generatedFiles.push({ name: fileSpec.name, content: fileContent });
-      emit({ type: 'file_done', name: fileSpec.name, fi: fi + 1, total: filePlan.length, syntaxError, tokOut: fileTokensOut });
+      emit({ type: 'file_done', name: fileSpec.name, fi: fi + 1, total: filePlan.length, syntaxError, tokOut: fileTokensOut, cumTokIn: totalTokensIn, cumTokOut: totalTokensOut });
     } catch (e) {
       emit({ type: 'file_error', name: fileSpec.name, error: e.message });
     }
