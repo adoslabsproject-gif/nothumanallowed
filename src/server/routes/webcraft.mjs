@@ -1939,6 +1939,36 @@ export function register(router) {
     sendJSON(res, 200, sandbox.status());
   });
 
+  // ── Sandbox runtime errors (reported by injected script in iframe) ────────
+  const sandboxErrors = [];
+  router.post('/api/studio/webcraft/sandbox/errors', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      if (body.error) {
+        sandboxErrors.push({
+          ts: new Date().toISOString(),
+          message: String(body.error).slice(0, 500),
+          source: String(body.source || '').slice(0, 200),
+          line: body.line || 0,
+          col: body.col || 0,
+          stack: String(body.stack || '').slice(0, 1000),
+        });
+        // Keep only last 20 errors
+        if (sandboxErrors.length > 20) sandboxErrors.splice(0, sandboxErrors.length - 20);
+      }
+      sendJSON(res, 200, { ok: true });
+    } catch { sendJSON(res, 200, { ok: true }); }
+  });
+
+  router.get('/api/studio/webcraft/sandbox/errors', (_req, res) => {
+    sendJSON(res, 200, { errors: sandboxErrors.slice(-10) });
+  });
+
+  router.delete('/api/studio/webcraft/sandbox/errors', (_req, res) => {
+    sandboxErrors.length = 0;
+    sendJSON(res, 200, { ok: true });
+  });
+
   // ── WebCraft Agent chat — SSE ─────────────────────────────────────────────
   router.post('/api/studio/webcraft/agent', async (req, res) => {
     const body = await parseBody(req, 10_485_760);
@@ -2053,16 +2083,37 @@ function _detectEntry(dir) {
 }
 
 function _patchEntry(projectDir, entryFile, shimDir, port) {
-  // Write a launcher that injects shims and then requires the actual entry
   const launcherPath = path.join(projectDir, '.nha-launcher.js');
   const entryAbs = path.join(projectDir, entryFile).replace(/\\/g, '/');
   const shimAbs = path.join(shimDir, 'index.js').replace(/\\/g, '/');
+
+  // Error reporter script — injected into HTML pages to catch runtime errors
+  const nhaHost = `http://127.0.0.1:${process.env.NHA_UI_PORT || 3847}`;
+  const errorScript = `<script>
+(function(){var h="${nhaHost}";window.onerror=function(m,s,l,c,e){fetch(h+"/api/studio/webcraft/sandbox/errors",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({error:m,source:s,line:l,col:c,stack:e?e.stack:""})}).catch(function(){});};window.addEventListener("unhandledrejection",function(e){fetch(h+"/api/studio/webcraft/sandbox/errors",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({error:"Unhandled: "+(e.reason?e.reason.message||e.reason:"unknown"),stack:e.reason?e.reason.stack:""})}).catch(function(){});});})();
+</script>`;
+
+  // Write error reporter script file
+  fs.writeFileSync(path.join(shimDir, 'error-reporter.html'), errorScript, 'utf-8');
+
   const launcher = [
     `// NHA WebCraft Sandbox Launcher — auto-generated`,
     `process.env.PORT = '${port}';`,
     `process.env.NODE_ENV = 'development';`,
-    `// Inject shims before loading user code`,
     `require('${shimAbs}');`,
+    `// Inject error reporter into HTML responses`,
+    `const _nhaErrScript = require('fs').readFileSync('${path.join(shimDir, 'error-reporter.html').replace(/\\/g, '/')}', 'utf-8');`,
+    `const _origWrite = require('http').ServerResponse.prototype.write;`,
+    `const _origEnd = require('http').ServerResponse.prototype.end;`,
+    `function _inject(chunk) {`,
+    `  if (typeof chunk === 'string' && chunk.includes('</head>')) return chunk.replace('</head>', _nhaErrScript + '</head>');`,
+    `  if (Buffer.isBuffer(chunk)) { var s = chunk.toString(); if (s.includes('</head>')) return Buffer.from(s.replace('</head>', _nhaErrScript + '</head>')); }`,
+    `  return chunk;`,
+    `}`,
+    `require('http').ServerResponse.prototype.end = function(chunk, enc, cb) {`,
+    `  if (this.getHeader && (this.getHeader('content-type')||'').includes('html')) { arguments[0] = _inject(chunk); delete this._headers['content-length']; }`,
+    `  return _origEnd.apply(this, arguments);`,
+    `};`,
     `require('${entryAbs}');`,
   ].join('\n');
   fs.writeFileSync(launcherPath, launcher, 'utf-8');
