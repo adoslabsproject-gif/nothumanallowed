@@ -1711,11 +1711,24 @@ export function register(router) {
   router.post('/api/studio/webcraft/generate', async (req, res) => {
     const body = await parseBody(req, 1_048_576);
     const config = loadConfig();
-    const { projectName, description, blocks = {}, authFields = [] } = body;
+    let { projectName, description, blocks = {}, authFields = [] } = body;
     if (!projectName || !description) return sendError(res, 400, 'projectName and description required');
 
+    // Prevent overwriting existing projects — add (1), (2), etc.
+    const baseName = projectName;
+    let suffix = 0;
+    while (fs.existsSync(ProjectStore.dir(projectName))) {
+      // Check if directory has actual project files (not just .nha-context)
+      const files = fs.readdirSync(ProjectStore.dir(projectName)).filter((f) => !f.startsWith('.nha-'));
+      if (files.length === 0) break; // empty project dir — safe to reuse
+      suffix++;
+      projectName = `${baseName} (${suffix})`;
+    }
+
     const sse = sendSSE(res);
-    // Abort signal: triggered when client disconnects (user clicks Stop)
+    // Notify frontend of the final project name (may differ from input)
+    if (suffix > 0) sse.send({ type: 'project_renamed', name: projectName });
+
     const ac = new AbortController();
     req.on('close', () => ac.abort());
     res.on('close', () => ac.abort());
