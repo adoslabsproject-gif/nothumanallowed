@@ -118,6 +118,11 @@ class SandboxManager {
     }
 
     // ── Phase 3: Start server ─────────────────────────────────────────────
+    // Kill orphan sandbox processes from previous runs (survive server restart)
+    try {
+      await execAsync('pkill -f "NHA_SANDBOX=1" 2>/dev/null || true', { timeout: 3000 });
+      await new Promise((r) => setTimeout(r, 500)); // wait for port release
+    } catch {}
     const port = await _findFreePort(4000, 4999);
     if (!port) {
       emit({ type: 'error', msg: 'No free ports available in range 4000-4999.' });
