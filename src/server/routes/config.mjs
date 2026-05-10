@@ -103,11 +103,20 @@ export function register(router) {
         stderr: stderr.trim()
       });
 
-      // Self-restart: resolve the NEW nha binary from npm global, spawn it, then exit.
-      // Must use the fresh binary path (not process.argv which points to the OLD code).
+      // Restart daemon (Telegram/Discord) + self-restart UI server
       setTimeout(async () => {
         try {
           const { spawn, execSync } = await import('child_process');
+
+          // Restart ops daemon if running (so Telegram/Discord reconnect with new code)
+          try {
+            const { isRunning, stopDaemon } = await import('../../services/ops-daemon.mjs');
+            if (isRunning()) {
+              await stopDaemon();
+              execSync('nha ops start', { timeout: 10_000, stdio: 'ignore' });
+            }
+          } catch { /* daemon restart is best-effort */ }
+
           // Find the nha binary in PATH (points to the newly installed version)
           let nhaBin = 'nha';
           try {

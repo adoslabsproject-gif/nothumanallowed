@@ -161,6 +161,39 @@ export async function main(argv) {
     case '-v':
       return cmdVersion();
 
+    case 'start': {
+      // Alias: nha start → nha ops start
+      const { cmdOps } = await import('./commands/ops.mjs');
+      return cmdOps(['start', ...args]);
+    }
+    case 'stop': {
+      // Alias: nha stop → nha ops stop
+      const { cmdOps: cmdOpsStop } = await import('./commands/ops.mjs');
+      return cmdOpsStop(['stop', ...args]);
+    }
+    case 'restart': {
+      // nha restart → stop + start
+      const { cmdOps: cmdOpsRestart } = await import('./commands/ops.mjs');
+      await cmdOpsRestart(['stop']);
+      return cmdOpsRestart(['start', ...args]);
+    }
+    case 'status': {
+      // Alias: nha status → nha ops status
+      const { cmdOps: cmdOpsStatus } = await import('./commands/ops.mjs');
+      return cmdOpsStatus(['status']);
+    }
+    case 'telegram':
+    case 'discord': {
+      // Alias: nha telegram → nha responder start (with info)
+      info(`The ${cmd} connector runs inside the ops daemon.`);
+      info('Commands:');
+      console.log(`  nha ops start          Start the daemon (includes ${cmd})`);
+      console.log(`  nha ops stop           Stop the daemon`);
+      console.log(`  nha ops status         Check status`);
+      console.log(`  nha config set ${cmd === 'telegram' ? 'telegram-bot-token' : 'discord-bot-token'} YOUR_TOKEN`);
+      return;
+    }
+
     case 'help':
     case '--help':
     case '-h':
@@ -205,9 +238,23 @@ async function cmdSelfUpdate() {
       const output = execSync(cmd, { encoding: 'utf-8', timeout: 120_000, stdio: ['inherit', 'pipe', 'pipe'] });
       if (output.includes('nothumanallowed@')) {
         ok(`Updated to v${npmCheck.latest}!`);
-        console.log('');
-        info('Restart the UI to apply: kill the process and run "nha ui" again.');
         if (usingSudo) info('(sudo was required on this system)');
+        // Auto-restart daemon if it was running (so Telegram/Discord reconnect)
+        try {
+          const { isRunning, stopDaemon } = await import('./services/ops-daemon.mjs');
+          if (isRunning()) {
+            info('Restarting ops daemon...');
+            await stopDaemon();
+            // Use the NEW nha binary to restart
+            const { execSync: execRestart } = await import('child_process');
+            try {
+              execRestart('nha ops start', { timeout: 10_000, stdio: 'inherit' });
+              ok('Ops daemon restarted (Telegram/Discord reconnected).');
+            } catch {
+              warn('Could not auto-restart daemon. Run: nha ops start');
+            }
+          }
+        } catch {}
         return;
       }
     } catch (e) {
