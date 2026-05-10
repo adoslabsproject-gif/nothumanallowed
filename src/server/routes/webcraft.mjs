@@ -381,6 +381,26 @@ const SkillStore = {
     if (fs.existsSync(abs)) fs.unlinkSync(abs);
   },
 
+  /** Ensure memory.md, skills.md, and provider.md always exist for a project. */
+  ensureDefaults(projectName, config) {
+    const dir = ensureDir(this.dir(projectName));
+    const provider = config?.llm?.provider || 'nha';
+    const model = config?.llm?.model || '';
+
+    const memFile = path.join(dir, 'memory.md');
+    if (!fs.existsSync(memFile)) {
+      fs.writeFileSync(memFile, `# ${projectName} — Project Memory\n\n_Architectural decisions, preferences, and notes._\n`, 'utf-8');
+    }
+    const skillsFile = path.join(dir, 'skills.md');
+    if (!fs.existsSync(skillsFile)) {
+      fs.writeFileSync(skillsFile, `# ${projectName} — Skills\n\n_Coding patterns, best practices, and conventions for this project._\n`, 'utf-8');
+    }
+    const providerFile = path.join(dir, `${provider}.md`);
+    if (!fs.existsSync(providerFile)) {
+      fs.writeFileSync(providerFile, `# ${provider.toUpperCase()} — ${model || 'Default'}\n\n_Model-specific notes, prompt tips, and configuration._\n`, 'utf-8');
+    }
+  },
+
   context(projectName) {
     const skills = this.list(projectName);
     if (skills.length === 0) return '';
@@ -457,6 +477,9 @@ const ChatStore = {
 async function runWebCraftAgent(config, projectName, message, attachments, emit) {
   const dir = ProjectStore.dir(projectName);
   if (!fs.existsSync(dir)) { emit({ type: 'error', msg: 'Project not found' }); return; }
+
+  // Ensure context files always exist
+  SkillStore.ensureDefaults(projectName, config);
 
   const files = _listProjectFiles(dir);
   const skillCtx = SkillStore.context(projectName);
@@ -970,17 +993,15 @@ Continue from here:`;
   };
   fs.writeFileSync(ProjectStore.metaPath(projectName), JSON.stringify(meta, null, 2), 'utf-8');
 
-  // Initialize skill context files
-  const ctxDir = ensureDir(SkillStore.dir(projectName));
-  const memFile = path.join(ctxDir, 'memory.md');
-  if (!fs.existsSync(memFile)) {
-    fs.writeFileSync(memFile, `# ${projectName} — Project Memory\n\n_Add architectural decisions, preferences, and notes here._\n`, 'utf-8');
-  }
+  // Initialize skill context files (memory.md, skills.md, provider.md)
+  SkillStore.ensureDefaults(projectName, config);
+  const ctxDir = SkillStore.dir(projectName);
 
-  // Generate skills.md with project context knowledge structure
+  // Generate detailed skills.md with project context knowledge structure (first time only)
   const skillsFile = path.join(ctxDir, 'skills.md');
-  if (!fs.existsSync(skillsFile)) {
-    const skillsContent = `# ${projectName} — Skills & Knowledge Structure
+  const skillsContent = fs.existsSync(skillsFile) ? fs.readFileSync(skillsFile, 'utf-8') : '';
+  if (skillsContent.length < 100) {
+    const detailedSkills = `# ${projectName} — Skills & Knowledge Structure
 
 ## Context Discovery Strategy
 
@@ -1018,36 +1039,11 @@ Agents score context relevance based on:
 
 This approach ensures agents have the right context without being overwhelmed by irrelevant information.
 `;
-    fs.writeFileSync(skillsFile, skillsContent, 'utf-8');
+    fs.writeFileSync(skillsFile, detailedSkills, 'utf-8');
   }
-  // Initialize provider-specific file (liara.md, claude.md, etc.)
+
   const provider = config.llm?.provider || 'nha';
   const model = config.llm?.model || '';
-  const providerFile = path.join(ctxDir, `${provider}.md`);
-  if (!fs.existsSync(providerFile)) {
-    const providerContent = `# ${provider.toUpperCase()} Model Configuration
-
-## Current Model: ${model || 'Default'}
-
-### Model Characteristics
-- **Provider**: ${provider}
-- **Model**: ${model || 'Default model for this provider'}
-- **Context Window**: Varies by model
-- **Strengths**: Add specific strengths of this model
-- **Limitations**: Add specific limitations to be aware of
-
-### Best Practices for This Model
-- Write specific coding patterns this model excels at
-- Note any formatting preferences
-- Document prompt engineering tips that work well
-
-### Configuration Notes
-- Add any specific configuration notes for this provider
-- Document any rate limits or special considerations
-`;
-    fs.writeFileSync(providerFile, providerContent, 'utf-8');
-  }
-
   const logFile = path.join(ctxDir, 'changes.log.md');
   const logEntry = `## ${new Date().toISOString().slice(0, 10)} — Initial generation\n- Generated ${generatedFiles.length} files\n- Tokens in: ${totalTokensIn} / out: ${totalTokensOut}\n- Description: ${description}\n- Provider: ${provider} (${model || 'default'})\n`;
   fs.writeFileSync(logFile, (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf-8') : '') + logEntry, 'utf-8');
@@ -1160,6 +1156,8 @@ export function register(router) {
   // ── Skills get ────────────────────────────────────────────────────────────
   router.get(/^\/api\/studio\/webcraft\/skills\/(?<name>[^/?]+)(?:\?|$)/, (req, res) => {
     const projectName = decodeURIComponent(req.params.name ?? '');
+    // Always ensure defaults exist when loading skills
+    SkillStore.ensureDefaults(projectName, loadConfig());
     sendJSON(res, 200, { skills: SkillStore.list(projectName) });
   });
 
