@@ -1197,23 +1197,59 @@ async function runGenerate(config, projectName, description, blocks, authFields,
     ? `Auth fields: ${authFields.map((f) => `${f.label}(${f.type}${f.required ? ',required' : ''})`).join(', ')}`
     : '';
 
-  // Save blocks as planned features in memory.md
+  // Save project context — always write memory.md with instructions + TODO features
   SkillStore.ensureDefaults(projectName, config);
-  if (enabledBlocks.length > 0) {
-    const ctxDir = SkillStore.dir(projectName);
-    const memPath = path.join(ctxDir, 'memory.md');
-    const blockInstructions = `# ${projectName} — Project Memory
+  const ctxDir = SkillStore.dir(projectName);
+  const memPath = path.join(ctxDir, 'memory.md');
+  const blockTodos = [
+    enabledBlocks.includes('auth') ? `- [ ] **Authentication** (register/login/JWT) — ${authDesc || 'email + password'}` : '',
+    enabledBlocks.includes('cookieBanner') ? '- [ ] **GDPR Cookie Banner** — consent modal, localStorage tracking' : '',
+    enabledBlocks.includes('securityMiddleware') ? '- [ ] **Security Middleware** — helmet CSP, rate limiting, CORS' : '',
+    enabledBlocks.includes('emailVerification') ? '- [ ] **Email Verification** — send verification link, confirm endpoint' : '',
+  ].filter(Boolean);
+  const memContent = `# ${projectName} — Project Memory
 
-## Planned Features (ask the AI agent to implement these one by one)
-${enabledBlocks.includes('auth') ? `- [ ] **Authentication** (register/login/JWT) — ${authDesc || 'email + password'}\n` : ''}${enabledBlocks.includes('cookieBanner') ? '- [ ] **GDPR Cookie Banner** — consent modal, localStorage tracking\n' : ''}${enabledBlocks.includes('securityMiddleware') ? '- [ ] **Security Middleware** — helmet CSP, rate limiting, CORS\n' : ''}${enabledBlocks.includes('emailVerification') ? '- [ ] **Email Verification** — send verification link, confirm endpoint\n' : ''}
-## How to implement
-Ask the AI in chat: "Add authentication" or "Add cookie banner" — the agent will modify your code.
+## Description
+${description}
+
+## Planned Features
+${blockTodos.length > 0 ? blockTodos.join('\n') : '_(No features selected — add them via chat)_'}
+
+## How to Build (step by step)
+1. **Start with the generated base** — the site works immediately
+2. **Ask the AI agent** to add features one by one: "Add authentication", "Add a contact form"
+3. **Refine the design** in chat: "Make the hero section more modern", "Add dark mode"
+4. **Add security** when ready: "Add cookie consent banner", "Harden security headers"
+5. **Test with Sandbox** — click ▶ Sandbox to preview your site live
+6. **Download ZIP** when done — deploy anywhere
 
 ## Architecture Decisions
-_Add notes here as you build._
+_The agent will update this section as you build._
 `;
-    fs.writeFileSync(memPath, blockInstructions, 'utf-8');
-  }
+  fs.writeFileSync(memPath, memContent, 'utf-8');
+
+  // Write anthropic.md / provider.md with useful context
+  const provider = config.llm?.provider || 'nha';
+  const model = config.llm?.model || '';
+  const providerPath = path.join(ctxDir, `${provider}.md`);
+  const providerContent = `# ${provider.toUpperCase()} — ${model || 'Default'}
+
+## Project: ${projectName}
+## Description: ${description}
+
+## Code Style
+- Modern ES6+: async/await, const/let, arrow functions
+- Express.js backend with middleware stack
+- Vanilla HTML/CSS/JS frontend (no framework)
+- Mobile-first responsive CSS
+- Accessible HTML with semantic tags
+
+## Important
+- Always generate COMPLETE files — no truncation
+- Use external CSS/JS files, avoid inline scripts >20 lines
+- Every function must be fully implemented
+`;
+  fs.writeFileSync(providerPath, providerContent, 'utf-8');
 
   const planPrompt = `Project: ${projectName}
 Description: ${description}
