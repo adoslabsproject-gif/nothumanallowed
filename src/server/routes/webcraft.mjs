@@ -1438,6 +1438,68 @@ export function register(router) {
     } catch (e) { sendError(res, 500, e.message); }
   });
 
+  // ── Diagnostics (lint) — returns errors/warnings for a file ───────────────
+  router.post('/api/studio/webcraft/lint', async (req, res) => {
+    try {
+      const { projectName, path: relPath } = await parseBody(req);
+      if (!projectName || !relPath) return sendError(res, 400, 'projectName and path required');
+      const content = ProjectStore.readFile(projectName, relPath);
+      if (content === null) return sendJSON(res, 200, { diagnostics: [] });
+
+      const diagnostics = [];
+      const ext = relPath.split('.').pop()?.toLowerCase();
+
+      if (ext === 'js' || ext === 'mjs' || ext === 'jsx') {
+        try { new Function(content); } catch (e) {
+          const match = e.message.match(/^(.*?)$/m);
+          const lineMatch = e.message.match(/:(\d+):(\d+)/);
+          diagnostics.push({
+            from: lineMatch ? { line: parseInt(lineMatch[1]), col: parseInt(lineMatch[2]) } : { line: 1, col: 0 },
+            severity: 'error',
+            message: match?.[1] || e.message,
+          });
+        }
+      }
+
+      if (ext === 'json') {
+        try { JSON.parse(content); } catch (e) {
+          const posMatch = e.message.match(/position (\d+)/);
+          const pos = posMatch ? parseInt(posMatch[1]) : 0;
+          const lines = content.slice(0, pos).split('\n');
+          diagnostics.push({
+            from: { line: lines.length, col: (lines[lines.length - 1] || '').length },
+            severity: 'error',
+            message: e.message,
+          });
+        }
+      }
+
+      if (ext === 'css') {
+        const opens = (content.match(/\{/g) || []).length;
+        const closes = (content.match(/\}/g) || []).length;
+        if (opens !== closes) {
+          diagnostics.push({
+            from: { line: content.split('\n').length, col: 0 },
+            severity: 'warning',
+            message: `Unbalanced braces: ${opens} open, ${closes} close`,
+          });
+        }
+      }
+
+      if (ext === 'html' || ext === 'htm') {
+        if (!content.includes('</html>')) {
+          diagnostics.push({
+            from: { line: content.split('\n').length, col: 0 },
+            severity: 'warning',
+            message: 'Missing </html> closing tag',
+          });
+        }
+      }
+
+      sendJSON(res, 200, { diagnostics });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
   // ── File write (from IDE editor) ──────────────────────────────────────────
   router.post('/api/studio/webcraft/file/write', async (req, res) => {
     try {
