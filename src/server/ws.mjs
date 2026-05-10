@@ -4,6 +4,7 @@
  */
 
 import { createRequire } from 'module';
+import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
@@ -57,9 +58,7 @@ export function setupWebSocket(server) {
     // Security: ensure cwd is under NHA_DIR or home
     const home = os.homedir();
     if (!cwd.startsWith(NHA_DIR) && !cwd.startsWith(home)) cwd = home;
-    // Ensure dir exists
-    const fs = await import('fs');
-    if (!fs.default.existsSync(cwd)) cwd = home;
+    if (!fs.existsSync(cwd)) cwd = home;
 
     const shell = process.platform === 'win32' ? 'cmd.exe' : (process.env.SHELL || '/bin/sh');
     const shellArgs = process.platform === 'win32' ? [] : ['-i']; // interactive
