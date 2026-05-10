@@ -217,7 +217,9 @@ class SandboxManager {
       }
     }
 
-    emit({ type: 'error', msg: _attempt >= MAX_RETRIES ? `Failed after ${MAX_RETRIES} attempts` : 'Server crashed on startup' });
+    // Show the actual error from stderr
+    const errDetail = stderrBuf.split('\n').find((l) => l.includes('Error') || l.includes('error')) || stderrBuf.slice(0, 300);
+    emit({ type: 'error', msg: _attempt >= MAX_RETRIES ? `Failed after ${MAX_RETRIES} attempts: ${errDetail}` : `Crash: ${errDetail || 'Server crashed on startup'}` });
   }
 }
 
@@ -2039,7 +2041,7 @@ function _patchEntry(projectDir, entryFile, shimDir, port) {
   const shimAbs = path.join(shimDir, 'index.js').replace(/\\/g, '/');
   const launcher = [
     `// NHA WebCraft Sandbox Launcher — auto-generated`,
-    `process.env.PORT = process.env.PORT || '${port}';`,
+    `process.env.PORT = '${port}';`,
     `process.env.NODE_ENV = 'development';`,
     `// Inject shims before loading user code`,
     `require('${shimAbs}');`,
