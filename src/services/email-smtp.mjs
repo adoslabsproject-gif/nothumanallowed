@@ -18,9 +18,9 @@ function threadId(messageId) {
   return createHash('sha1').update(messageId).digest('hex');
 }
 
-function getTransporter(creds) {
+function getTransporter(creds, secureOverride) {
   const port = parseInt(creds.smtp_port, 10) || 587;
-  const isSecure = port === 465;
+  const isSecure = typeof secureOverride === 'boolean' ? secureOverride : (port === 465);
   return createTransport({
     host: creds.smtp_host,
     port,
@@ -31,6 +31,53 @@ function getTransporter(creds) {
     socketTimeout: 20000,
     tls: { rejectUnauthorized: false },
   });
+}
+
+// Dry-run SMTP test used by Settings UI. Verifies auth, optionally sends a
+// real "Hello from NHA" message to the configured address. Same TLS-mode
+// auto-fallback pattern as IMAP.
+export async function testSmtpConnection(creds, { sendTest = false } = {}) {
+  if (!creds?.smtp_host) throw new Error('smtp_host required');
+  if (!creds?.username || !creds?.password) throw new Error('Username and password required');
+  const port = parseInt(creds.smtp_port, 10) || 587;
+  const firstSecure = port === 465;
+  const trySend = async (secure) => {
+    const t = getTransporter(creds, secure);
+    try {
+      await t.verify();
+      let sendInfo = null;
+      if (sendTest) {
+        const to = creds.email_address || creds.username;
+        const from = creds.from_name ? `${creds.from_name} <${creds.email_address || creds.username}>` : (creds.email_address || creds.username);
+        sendInfo = await t.sendMail({
+          from,
+          to,
+          subject: 'NHA — Email di prova',
+          text: `Questo è un messaggio di prova inviato da NotHumanAllowed (${new Date().toISOString()}).\n\nSe lo vedi, la configurazione SMTP è corretta.`,
+          html: `<p>Questo è un messaggio di prova inviato da <strong>NotHumanAllowed</strong> (${new Date().toISOString()}).</p><p>Se lo vedi, la configurazione SMTP è corretta.</p>`,
+        });
+      }
+      try { t.close(); } catch {}
+      return { ok: true, secure, sent: !!sendInfo, messageId: sendInfo?.messageId || null };
+    } catch (err) {
+      try { t.close(); } catch {}
+      throw err;
+    }
+  };
+  try {
+    return await trySend(firstSecure);
+  } catch (err) {
+    const looksTls = /greeting|tls|ssl|wrong version number|protocol|handshake/i.test(err.message || '');
+    if (looksTls) {
+      try {
+        const r = await trySend(!firstSecure);
+        return { ...r, message: `Fallback TLS=${!firstSecure} (heuristic was wrong for this server)` };
+      } catch (err2) {
+        throw new Error(`SMTP test failed (both TLS modes): ${err.message} / ${err2.message}`);
+      }
+    }
+    throw err;
+  }
 }
 
 /**

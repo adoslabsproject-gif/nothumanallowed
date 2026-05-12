@@ -17,6 +17,7 @@ const DEFAULT_CONFIG = {
     geminiKey: '',
     deepseekKey: '',
     grokKey: '',
+    groqKey: '',
     mistralKey: '',
     cohereKey: '',
     model: '',
@@ -144,6 +145,37 @@ export function loadConfig() {
           merged[key] = value;
         }
       }
+      // Auto-migration: previous versions of setConfigValue silently saved
+      // unknown keys (e.g. "groqkey" without hyphen, "openaikey") at the root
+      // of the config instead of inside llm.*. Promote any orphaned *key/*Key
+      // field at root into the corresponding llm.<name>Key bucket.
+      const PROVIDER_KEYS = ['api', 'openai', 'gemini', 'deepseek', 'grok', 'groq', 'mistral', 'cohere'];
+      let migrated = false;
+      if (!merged.llm) merged.llm = {};
+      for (const provider of PROVIDER_KEYS) {
+        const targetField = provider === 'api' ? 'apiKey' : `${provider}Key`;
+        // Possible orphan field names at root
+        const candidates = [
+          `${provider}key`,            // groqkey
+          `${provider}Key`,            // groqKey
+          `${provider}_key`,           // groq_key
+          `${provider}-key`,           // groq-key (rare at root)
+        ];
+        for (const cand of candidates) {
+          if (merged[cand] && !merged.llm[targetField]) {
+            merged.llm[targetField] = merged[cand];
+            delete merged[cand];
+            migrated = true;
+          } else if (merged[cand]) {
+            // llm.* already set, just clean up the orphan to avoid future confusion
+            delete merged[cand];
+            migrated = true;
+          }
+        }
+      }
+      if (migrated) {
+        try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), 'utf-8'); } catch { /* read-only fs */ }
+      }
       return merged;
     } catch {
       return structuredClone(DEFAULT_CONFIG);
@@ -214,6 +246,7 @@ export function saveConfig(config) {
  * @returns {boolean} true if key was valid
  */
 export function setConfigValue(key, value) {
+  // loadConfig() auto-migrates legacy root-level groqkey/groqKey into llm.groqKey
   const config = loadConfig();
   const parts = key.split('.');
 
@@ -224,14 +257,39 @@ export function setConfigValue(key, value) {
     'apikey': 'llm.apiKey',
     'key': 'llm.apiKey',
     'llm-key': 'llm.apiKey',
+    // All keys: hyphen, lowercase-no-hyphen, camelCase, underscore — all aliases.
     'openai-key': 'llm.openaiKey',
+    'openaikey':  'llm.openaiKey',
+    'openaiKey':  'llm.openaiKey',
+    'openai_key': 'llm.openaiKey',
     'gemini-key': 'llm.geminiKey',
-    'deepseek-key': 'llm.deepseekKey',
-    'grok-key': 'llm.grokKey',
-    'groq-key': 'llm.groqKey',
-    'groqKey': 'llm.groqKey',
-    'mistral-key': 'llm.mistralKey',
-    'cohere-key': 'llm.cohereKey',
+    'geminikey':  'llm.geminiKey',
+    'geminiKey':  'llm.geminiKey',
+    'gemini_key': 'llm.geminiKey',
+    'google-key': 'llm.geminiKey',    // semantic alias (Gemini = Google)
+    'deepseek-key':  'llm.deepseekKey',
+    'deepseekkey':   'llm.deepseekKey',
+    'deepseekKey':   'llm.deepseekKey',
+    'deepseek_key':  'llm.deepseekKey',
+    'grok-key':  'llm.grokKey',
+    'grokkey':   'llm.grokKey',
+    'grokKey':   'llm.grokKey',
+    'grok_key':  'llm.grokKey',
+    'xai-key':   'llm.grokKey',       // semantic alias (Grok = X.AI)
+    'groq-key':  'llm.groqKey',
+    'groqkey':   'llm.groqKey',        // lowercase no-hyphen (user typing fast)
+    'groqKey':   'llm.groqKey',
+    'groq_key':  'llm.groqKey',
+    'whisper-key': 'llm.groqKey',     // semantic alias — Groq is for Whisper voice
+    'voice-key':   'llm.groqKey',
+    'mistral-key':  'llm.mistralKey',
+    'mistralkey':   'llm.mistralKey',
+    'mistralKey':   'llm.mistralKey',
+    'mistral_key':  'llm.mistralKey',
+    'cohere-key':   'llm.cohereKey',
+    'coherekey':    'llm.cohereKey',
+    'cohereKey':    'llm.cohereKey',
+    'cohere_key':   'llm.cohereKey',
     'model': 'llm.model',
     'timeout': 'llm.timeout',
     'verbose': 'features.verbose',
@@ -248,8 +306,11 @@ export function setConfigValue(key, value) {
     'microsoft-tenant': 'microsoft.tenantId',
     'microsoft-tenant-id': 'microsoft.tenantId',
     'plan-time': 'ops.planTime',
+    'planTime':  'ops.planTime',         // camelCase variant from WebUI Settings
     'summary-time': 'ops.summaryTime',
+    'summaryTime':  'ops.summaryTime',   // camelCase variant from WebUI Settings
     'meeting-alert': 'ops.meetingAlertMinutes',
+    'meetingAlert':  'ops.meetingAlertMinutes', // camelCase variant from WebUI Settings
     'telegram-webhook': 'ops.webhooks.telegram',
     'discord-webhook': 'ops.webhooks.discord',
     'plugin-autorun': 'plugins.autoRun',
@@ -260,6 +321,14 @@ export function setConfigValue(key, value) {
     'telegram-bot-token': 'responder.telegram.token',
     'discord-bot-token': 'responder.discord.token',
     'responder-auto-route': 'responder.autoRoute',
+    // Telegram bot persona — what name the bot uses when replying. If empty,
+    // falls back to the internal agent name (HERALD/ATHENA/...). Most users
+    // want a single consistent identity like "Agata" or "Jarvis".
+    'bot-name':         'responder.telegram.botName',
+    'botname':          'responder.telegram.botName',
+    'telegram-bot-name': 'responder.telegram.botName',
+    'persona-name':     'responder.telegram.botName',
+    'persona-mode':     'responder.telegram.personaMode',  // persona | persona-only | persona+role | agent
     'proactive': 'ops.proactive.enabled',
     'proactive-email': 'ops.proactive.emailFollowUp',
     'proactive-meeting': 'ops.proactive.meetingPrep',
@@ -291,7 +360,35 @@ export function setConfigValue(key, value) {
     'thinking': 'thinking',
     'extended-thinking': 'thinking',
     'language': 'language',
+    'lang':     'language',  // short form used by WebUI Settings dropdown
   };
+
+  // Top-level "object sections" — keys whose value is the entire section object,
+  // not a scalar. The WebUI saves these by sending the full bag (e.g. profile = {
+  // name, email, phone, ... }) so that one form click persists all fields. We
+  // merge (not overwrite) to avoid wiping unrelated keys a future UI may not know.
+  const OBJECT_SECTIONS = {
+    profile: 'profile',
+  };
+  if (OBJECT_SECTIONS[key] && value && typeof value === 'object' && !Array.isArray(value)) {
+    const targetPath = OBJECT_SECTIONS[key];
+    if (!config[targetPath] || typeof config[targetPath] !== 'object') config[targetPath] = {};
+    Object.assign(config[targetPath], value);
+    saveConfig(config);
+    return true;
+  }
+
+  // Reject keys we don't recognize and that aren't dotted paths into config.
+  // Previously a typo like "groqkey" (no hyphen) silently stored the value
+  // under config.groqkey at root level — invisible to the rest of the code.
+  // Now we fail loudly so the user sees what's wrong.
+  if (!aliases[key] && !key.includes('.')) {
+    const close = Object.keys(aliases).filter(a => a.toLowerCase().replace(/[-_]/g, '').includes(key.toLowerCase().replace(/[-_]/g, '')));
+    if (close.length > 0) {
+      console.error(`Unknown config key "${key}". Did you mean: ${close.slice(0, 4).join(', ')}?`);
+    }
+    return false;
+  }
 
   const resolved = aliases[key] || key;
   const resolvedParts = resolved.split('.');
@@ -318,17 +415,22 @@ export function setConfigValue(key, value) {
     obj[lastKey] = value === 'true' || value === '1' || value === 'yes';
   } else if (typeof existing === 'number') {
     obj[lastKey] = Number(value);
-  } else if (Array.isArray(existing)) {
-    // Parse comma-separated values or JSON array
-    try {
-      const parsed = JSON.parse(value);
-      obj[lastKey] = Array.isArray(parsed) ? parsed : [parsed];
-    } catch {
-      obj[lastKey] = value.split(',').map(v => {
-        const trimmed = v.trim();
-        const num = Number(trimmed);
-        return !isNaN(num) && trimmed !== '' ? num : trimmed;
-      }).filter(Boolean);
+  } else if (Array.isArray(existing) || Array.isArray(value)) {
+    // Already an array from the WebUI? Persist as-is. CLI users send strings,
+    // so fall back to comma-split / JSON parsing for backward compatibility.
+    if (Array.isArray(value)) {
+      obj[lastKey] = value;
+    } else {
+      try {
+        const parsed = JSON.parse(value);
+        obj[lastKey] = Array.isArray(parsed) ? parsed : [parsed];
+      } catch {
+        obj[lastKey] = String(value).split(',').map(v => {
+          const trimmed = v.trim();
+          const num = Number(trimmed);
+          return !isNaN(num) && trimmed !== '' ? num : trimmed;
+        }).filter(Boolean);
+      }
     }
   } else {
     obj[lastKey] = value;

@@ -33,101 +33,237 @@ export function register(router) {
   });
 
   // GET /api/version/check
+  //
+  // Returns three version signals so the UI can distinguish three states:
+  //   - runtime:   what this LIVE process loaded into memory at startup
+  //   - installed: what's currently on disk in package.json (post-npm-install)
+  //   - latest:    what npm registry advertises as latest
+  //
+  // The classic "I just ran npm install but the UI still shows the old version"
+  // happens because the long-running server still holds the OLD version in
+  // memory while the disk has the NEW one. needsRestart flags exactly this.
   router.get('/api/version/check', async (_req, res) => {
+    let installedVersion = VERSION;
     try {
-      // Read installed version from disk (not from in-memory constant) so that
-      // after npm-update the check reflects the newly installed version
-      let installedVersion = VERSION;
-      try {
-        const pkgPath = path.resolve(__dirname, '..', '..', '..', 'package.json');
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-        if (pkg.version) installedVersion = pkg.version;
-      } catch { /* fallback to in-memory VERSION */ }
+      const pkgPath = path.resolve(__dirname, '..', '..', '..', 'package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      if (pkg.version) installedVersion = pkg.version;
+    } catch { /* fallback to in-memory VERSION */ }
 
-      const r = await fetch('https://registry.npmjs.org/nothumanallowed/latest');
+    const needsRestart = installedVersion !== VERSION;
+
+    try {
+      const r = await fetch('https://registry.npmjs.org/nothumanallowed/latest', {
+        signal: AbortSignal.timeout(5_000),
+      });
       const data = await r.json();
-      const upd = data.version !== installedVersion;
-      sendJSON(res, 200, { current: installedVersion, latest: data.version, hasUpdate: upd, updateAvailable: upd });
+      const latest = data.version;
+      const hasUpdate = latest !== installedVersion;
+      sendJSON(res, 200, {
+        current: installedVersion,
+        runtime: VERSION,
+        installed: installedVersion,
+        latest,
+        hasUpdate,
+        updateAvailable: hasUpdate,
+        needsRestart,
+        restartHint: needsRestart
+          ? `Server in esecuzione: v${VERSION}. Pacchetto installato sul disco: v${installedVersion}. Riavvia "nha ui" per attivare la nuova versione.`
+          : null,
+      });
     } catch {
-      sendJSON(res, 200, { current: VERSION, latest: VERSION, hasUpdate: false, updateAvailable: false });
+      sendJSON(res, 200, {
+        current: installedVersion,
+        runtime: VERSION,
+        installed: installedVersion,
+        latest: installedVersion,
+        hasUpdate: false,
+        updateAvailable: false,
+        needsRestart,
+        restartHint: needsRestart
+          ? `Server in esecuzione: v${VERSION}. Pacchetto installato sul disco: v${installedVersion}. Riavvia "nha ui" per attivare la nuova versione.`
+          : null,
+      });
     }
   });
 
   // POST /api/npm-update
+  //
+  // Two-phase update:
+  //   1. Sync part: run `npm install -g nothumanallowed@latest --prefer-online`
+  //      with cache bypass. Bypass is critical — without --prefer-online, npm
+  //      can install the same version it had cached locally and the user sees
+  //      "nothing changed" (the classic stale-manifest trap).
+  //   2. Async part: spawn a DETACHED helper that watches our PID, waits until
+  //      we exit, sleeps 1 s so the port frees, then re-spawns this process
+  //      with the SAME argv. The newly installed code runs because node will
+  //      re-read the entry script from disk on the next invocation.
+  //
+  // The response is sent BEFORE the parent exits, so the client knows what
+  // version to expect and can poll /api/health for the restart to complete.
   router.post('/api/npm-update', async (req, res) => {
     try {
-      const { exec } = await import('child_process');
+      const { exec, spawn } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
 
-      // Detect the package manager and global prefix to handle permissions correctly
-      let cmd = 'npm install -g nothumanallowed@latest';
-
-      // On macOS/Linux, check if we need special handling for permission
+      // Permission preflight on POSIX
       if (process.platform !== 'win32') {
         try {
-          // Check if npm global dir is writable by current user
           const { stdout: prefix } = await execAsync('npm config get prefix', { timeout: 5000 });
           const globalDir = prefix.trim();
           await fs.promises.access(path.join(globalDir, 'lib'), fs.constants.W_OK);
         } catch {
-          // Global dir not writable — return error with clear instructions
           sendJSON(res, 200, {
             success: false,
             error: 'EACCES: permission denied',
-            message: 'Permission denied. Run: sudo npm install -g nothumanallowed@latest'
+            message: 'Permission denied. Run: sudo npm install -g nothumanallowed@latest --prefer-online',
           });
           return;
         }
       }
 
+      // Clean the metadata cache first — defeats the stale-cache trap that
+      // makes `npm install -g <pkg>` silently install an older version.
+      try { await execAsync('npm cache clean --force', { timeout: 10_000 }); } catch { /* non-fatal */ }
+
+      const cmd = 'npm install -g nothumanallowed@latest --registry=https://registry.npmjs.org/ --prefer-online --no-fund --no-audit';
       const { stdout, stderr } = await execAsync(cmd, {
         timeout: 120_000,
         env: { ...process.env, NODE_ENV: 'production' },
       });
 
-      // Get the installed version from npm output or registry
+      // Resolve the version that actually landed on disk
       let newVersion = '';
       try {
-        // Extract version from npm install output (e.g. "+ nothumanallowed@14.4.18")
         const verMatch = stdout.match(/nothumanallowed@(\d+\.\d+\.\d+)/);
         if (verMatch) {
           newVersion = verMatch[1];
         } else {
-          // Fallback: check registry
           const regResp = await fetch('https://registry.npmjs.org/nothumanallowed/latest');
           const regData = await regResp.json();
           newVersion = regData.version || '';
         }
       } catch { /* ignore */ }
 
-      // Restart ops daemon if running (so Telegram/Discord reconnect with new code)
+      // Remember if the ops daemon (Telegram/Discord bot) was running so the
+      // newly-spawned server can restart it. Without this, a VM user who
+      // controls everything via Telegram would lose the bot until they ran
+      // `nha ops start` manually.
+      let daemonWasRunning = false;
       try {
         const { isRunning, stopDaemon } = await import('../../services/ops-daemon.mjs');
         if (isRunning()) {
+          daemonWasRunning = true;
           await stopDaemon();
-          const { execSync: ex2 } = await import('child_process');
-          try { ex2('nha ops start', { timeout: 10_000, stdio: 'ignore' }); } catch {}
         }
-      } catch {}
+      } catch { /* ignore */ }
 
+      // Send the response NOW, before we kick off the restart. The client
+      // needs this payload to know what version to wait for during polling.
       sendJSON(res, 200, {
         success: true,
-        message: newVersion ? `Updated to v${newVersion}! Restart the server to apply.` : 'Update completed',
+        message: newVersion ? `Updated to v${newVersion}. Restarting server...` : 'Update completed. Restarting...',
         newVersion,
-        restart: false, // Do NOT auto-restart — it never works reliably
-        needsManualRestart: true,
-        stdout: stdout.trim(),
-        stderr: stderr.trim()
+        restart: true,
+        restarting: true,
+        needsManualRestart: false,
+        stdout: stdout.trim().slice(-2000),
+        stderr: stderr.trim().slice(-2000),
       });
+
+      // ── Schedule the self-restart ──
+      const parentPid = process.pid;
+      const respawnNode = process.execPath;
+      const respawnArgs = process.argv.slice(1);
+      const home = os.homedir();
+      const nhaDir = path.join(home, '.nha');
+      if (!fs.existsSync(nhaDir)) fs.mkdirSync(nhaDir, { recursive: true });
+
+      // Write the restart marker BEFORE spawning the helper. The new server
+      // reads this on boot to know:
+      //   - the update happened (so it can show "Updated to v…" on first load)
+      //   - whether the ops daemon (Telegram bot) was running and must be restarted
+      const markerPath = path.join(nhaDir, 'last-restart.json');
+      try {
+        fs.writeFileSync(
+          markerPath,
+          JSON.stringify({
+            at: new Date().toISOString(),
+            fromVersion: VERSION,
+            toVersion: newVersion,
+            daemonWasRunning,
+            parentPid,
+          }, null, 2),
+        );
+      } catch { /* non-fatal */ }
+
+      // Open log file for the detached child — if anything goes wrong on boot
+      // we want the user to be able to read why instead of staring at a black
+      // screen. Append mode so previous restart logs survive.
+      const logPath = path.join(nhaDir, 'server.log');
+      let logFd;
+      try {
+        logFd = fs.openSync(logPath, 'a');
+        fs.writeSync(logFd, `\n[${new Date().toISOString()}] === Restart helper spawning. Parent PID: ${parentPid}. Target version: ${newVersion} ===\n`);
+      } catch { /* will fall back to 'ignore' */ }
+
+      setTimeout(() => {
+        try {
+          if (process.platform === 'win32') {
+            // Windows: PowerShell waits for the parent to die, frees the port,
+            // then starts node hidden. Output is redirected to server.log.
+            const psScript = [
+              `try { Wait-Process -Id ${parentPid} -Timeout 30 } catch {};`,
+              `Start-Sleep -Milliseconds 1500;`,
+              `$logPath = "${logPath.replace(/\\/g, '\\\\')}";`,
+              `Start-Process -FilePath "${respawnNode.replace(/\\/g, '\\\\')}"`,
+              ` -ArgumentList ${JSON.stringify(respawnArgs).replace(/"/g, '\\"')}`,
+              ` -RedirectStandardOutput $logPath -RedirectStandardError $logPath`,
+              ` -WindowStyle Hidden`,
+            ].join('').replace(/\s+/g, ' ').trim();
+            spawn('powershell.exe', ['-NoProfile', '-Command', psScript], {
+              detached: true,
+              stdio: 'ignore',
+              windowsHide: true,
+            }).unref();
+          } else {
+            // POSIX: poll for parent death (max ~12s), then wait an extra 2s
+            // for TIME_WAIT to clear on the listen socket, then exec node
+            // with stdio redirected to the log file.
+            const escArg = a => `'${a.replace(/'/g, `'\\''`)}'`;
+            const escapedArgs = respawnArgs.map(escArg).join(' ');
+            const escapedNode = escArg(respawnNode);
+            const escapedLog = escArg(logPath);
+            const sh = `
+              i=0
+              while kill -0 ${parentPid} 2>/dev/null && [ $i -lt 60 ]; do
+                sleep 0.2
+                i=$((i+1))
+              done
+              # Extra wait: lets TIME_WAIT on the listen socket release and
+              # gives the kernel a moment to fully reap the parent.
+              sleep 2
+              exec ${escapedNode} ${escapedArgs} >> ${escapedLog} 2>&1
+            `;
+            const childStdio = logFd ? ['ignore', logFd, logFd] : 'ignore';
+            spawn('sh', ['-c', sh], {
+              detached: true,
+              stdio: childStdio,
+            }).unref();
+          }
+        } catch { /* spawn failed — user will need to restart manually */ }
+
+        setTimeout(() => process.exit(0), 200);
+      }, 600);
     } catch (e) {
       const isPermission = e.message?.includes('EACCES') || e.message?.includes('permission denied');
       sendJSON(res, 200, {
         success: false,
         error: isPermission ? 'EACCES: permission denied' : e.message,
         message: isPermission
-          ? 'Permission denied. Run: sudo npm install -g nothumanallowed@latest'
-          : 'Update failed. Try running: npm install -g nothumanallowed@latest'
+          ? 'Permission denied. Run: sudo npm install -g nothumanallowed@latest --prefer-online'
+          : `Update failed: ${e.message}. Try manually: npm cache clean --force && npm install -g nothumanallowed@latest --prefer-online`,
       });
     }
   });
@@ -156,8 +292,12 @@ export function register(router) {
         hasGeminiKey: !!(config.llm?.geminiKey),
         hasDeepseekKey: !!(config.llm?.deepseekKey),
         hasGrokKey:   !!(config.llm?.grokKey),
+        hasGroqKey:   !!(config.llm?.groqKey),
         hasMistralKey: !!(config.llm?.mistralKey),
         hasCohereKey: !!(config.llm?.cohereKey),
+        hasGithubToken: !!(config.github?.token),
+        hasNotionToken: !!(config.notion?.token),
+        hasSlackToken:  !!(config.slack?.token),
         // Google / Microsoft — use token-store (encrypted) as source of truth
         hasGoogle:    !!((() => { try { return getAuthenticatedProviders().google; } catch { return config.google?.accessToken || config.google?.refreshToken; } })()),
         hasMicrosoft: !!((() => { try { return getAuthenticatedProviders().microsoft; } catch { return config.microsoft?.accessToken || config.microsoft?.refreshToken; } })()),

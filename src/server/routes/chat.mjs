@@ -16,7 +16,8 @@ import {
 } from '../../services/conversations.mjs';
 import { callLLMStream, callLLM, callLLMVision, parseAgentFile } from '../../services/llm.mjs';
 import { buildMemoryContext } from '../../services/memory.mjs';
-import { parseActions, executeTool, buildSystemPrompt } from '../../services/tool-executor.mjs';
+import { parseActions, executeTool, buildSystemPrompt, stripOrphanFences } from '../../services/tool-executor.mjs';
+import { detectLanguage, tryDirectActionAll } from '../../services/message-responder.mjs';
 
 // Migrate on import (once)
 migrateOldHistory();
@@ -200,11 +201,22 @@ export function register(router) {
     try { const m = buildMemoryContext('chat', effectiveMsg); if (m) enrichedPrompt = enrichedPrompt + m; } catch {}
     try { const ic = await getImapAccountsContext(); if (ic) enrichedPrompt += ic; } catch {}
 
-    // Inject language instruction — always respects user's lang setting
+    // Inject language instruction — detect from the user's message first;
+    // fall back to config.language only when detection is inconclusive (very
+    // short messages, codes, etc.). Detected language is authoritative
+    // because users routinely interact in their natural language regardless
+    // of the dropdown setting.
     const LANG_MAP = { it:'Italian', en:'English', es:'Spanish', fr:'French', de:'German', pt:'Portuguese', nl:'Dutch', pl:'Polish', ru:'Russian', zh:'Chinese', ja:'Japanese', ko:'Korean', ar:'Arabic', hi:'Hindi', tr:'Turkish', sv:'Swedish', da:'Danish', fi:'Finnish', cs:'Czech' };
-    const userLang = LANG_MAP[(config?.language || config?.lang || 'en').slice(0,2)] || 'English';
-    if (!enrichedPrompt.toLowerCase().includes('respond in') && !enrichedPrompt.toLowerCase().includes('rispondi in')) {
-      enrichedPrompt += `\n\nIMPORTANT: Always respond in ${userLang}.`;
+    const settingLang = LANG_MAP[(config?.language || config?.lang || 'en').slice(0,2)] || 'English';
+    const detectedFromMsg = detectLanguage(effectiveMsg);
+    const userLang = detectedFromMsg || settingLang;
+    // Prepend the language directive at the TOP of the system prompt — many
+    // models give the highest weight to early instructions. Also append a
+    // reinforcement at the end. Belt and suspenders for language stickiness.
+    const langHeader = `[LANGUAGE — HIGHEST PRIORITY]\nRespond ENTIRELY in ${userLang}. From the very first word to the last word, every sentence must be in ${userLang}. Never start in English then switch — that includes intro fillers like "Let me…", "I'll…", "Sure,…". If you find yourself about to write in English, stop and write the same sentence in ${userLang} instead.\n\n`;
+    enrichedPrompt = langHeader + enrichedPrompt;
+    if (!enrichedPrompt.toLowerCase().endsWith('respond in ' + userLang.toLowerCase() + '.')) {
+      enrichedPrompt += `\n\nIMPORTANT: Output language is ${userLang}. Do NOT switch languages mid-response.`;
     }
 
     // Rolling context window
@@ -227,7 +239,11 @@ export function register(router) {
     for (const t of rawHistory.slice(-RECENT)) {
       parts.push(`${t.role === 'user' ? '[User]' : '[Assistant]'} ${t.content.slice(0, 2000)}`);
     }
-    parts.push(`[User] ${effectiveMsg}`);
+    // Prefix the last user turn with an explicit per-message language tag.
+    // System prompts can lose effectiveness over long conversations; the
+    // per-turn tag is the closest hint to the model's first generated token
+    // and is the most reliable trigger for the right language.
+    parts.push(`[User · respond in ${userLang}] ${effectiveMsg}`);
     const userMessage = parts.join('\n\n');
 
     // Attachments — handle non-streaming
@@ -251,6 +267,32 @@ export function register(router) {
     }, 3000);
 
     try {
+      // ── Deterministic direct-action dispatcher (LLM-NLU + server execute) ──
+      // Same architecture used by Telegram/Discord. Before invoking the chat
+      // LLM, classify the message: if it maps to a state-changing tool
+      // (calendar/email/task/file/drive/slack/notion/github/...), execute it
+      // deterministically server-side and stream the result. No more "the
+      // model said done but didn't call the tool".
+      const direct = await tryDirectActionAll(msg, config, {
+        auditKey: `chat:${body.conversationId || 'anon'}`,
+      });
+      if (direct) {
+        if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+        sse('tool', { action: direct.action, status: 'done', result: (direct.message || '').slice(0, 240) });
+        sse('token', { content: direct.message });
+        // Persist to conversation
+        if (body.conversationId) {
+          try {
+            const conv = loadConversation(body.conversationId);
+            if (conv) addMessages(conv, msg, direct.message);
+          } catch {}
+        }
+        sse('done', { content: direct.message });
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+
       let fullResponse = '';
       fullResponse = await callLLMStream(config, enrichedPrompt, userMessage, (chunk) => {
         clearInterval(heartbeatInterval);
@@ -275,17 +317,89 @@ export function register(router) {
           a.params = { url: 'https://' + a.params.query.trim() };
         }
       }
-      // Auto-detect email reading intent — force imap_list if LLM didn't emit the tool
+      // Auto-detect email reading intent — force the right IMAP tool if the
+      // LLM didn't emit one. Semantic keywords (offerta/RFQ/preventivo/...)
+      // trigger `imap_search` across all synced messages with each variant,
+      // because users almost never want "just the 5 latest" — they want
+      // "everything matching X". Generic "leggi le email" still falls back
+      // to imap_list. Multi-language: it/en/de/fr/es.
+      const lower = msg.toLowerCase();
       const wantsReadEmail = /\b(leggi|read|mostra|lista|ultime?|recenti?|email|mail|inbox|posta)\b.*\b(email|mail|messag|inbox|posta)\b|\b(email|mail)\b.*\b(leggi|read|mostra|lista|ultime?|recenti?)\b/i.test(msg);
-      if (wantsReadEmail && !actions.some(a => a.action?.startsWith('imap_') || a.action === 'list_emails')) {
+      // Semantic intent → quote / offer / proposal / order requests
+      const QUOTE_KEYWORDS = {
+        offerta:    ['offerta', 'richiesta offerta', 'richiesta di offerta', 'preventivo', 'quotazione', 'rdo', 'rda'],
+        quote:      ['quote', 'quotation', 'rfq', 'rfp', 'request for quote', 'request for proposal', 'price request', 'pricing'],
+        order:      ['ordine', 'order', 'po ', 'purchase order', 'commessa', 'bestellung', 'commande'],
+        invoice:    ['fattura', 'invoice', 'rechnung', 'facture'],
+        proposal:   ['proposta', 'proposal', 'angebot', 'devis'],
+      };
+      let semanticBag = null;
+      if (/\b(offert|preventiv|quotaz|rdo\b|rda\b|quotation|rfq|rfp|request\s+for\s+(quote|proposal|pricing)|price\s+request|pricing|angebot|devis|proposta|proposal)/i.test(lower)) {
+        semanticBag = 'offerta';
+      } else if (/\b(ordin|order|purchase\s+order|po\s+\d|commessa|bestellung|commande)/i.test(lower)) {
+        semanticBag = 'order';
+      } else if (/\b(fattur|invoice|rechnung|facture)/i.test(lower)) {
+        semanticBag = 'invoice';
+      } else if (/\b(propost|proposal|angebot|devis)/i.test(lower)) {
+        semanticBag = 'proposal';
+      }
+
+      // "allegato / attachment / PDF" → user wants to read the content of
+      // an attachment of a specific email. We extract identifier tokens from
+      // the message (capitalized phrases, alphanumeric codes with dots/slashes
+      // like "NCSARMEMAIL.08/05", PO numbers, etc.) and search the local DB
+      // for matching subjects, then chain imap_read + imap_attachment_read
+      // server-side. This bypasses the LLM's habit of saying "Let me read..."
+      // without actually emitting the tool.
+      const wantsReadAttachment = /\b(allegato|attachment|allegata|allegat[oi]|pdf|documento\s+allegato|file\s+allegato|enclosed|attached)\b/i.test(msg);
+
+      if ((wantsReadEmail || semanticBag || wantsReadAttachment) && !actions.some(a => a.action?.startsWith('imap_') || a.action === 'list_emails')) {
         try {
           const { listAccounts: _la } = await import('../../services/email-db.mjs');
           const imapAccs = _la();
           if (imapAccs.length > 0) {
             const firstAcc = imapAccs[0];
-            const limitMatch = msg.match(/\b(\d+)\b/);
-            const limit = limitMatch ? Math.min(parseInt(limitMatch[1]), 20) : 5;
-            actions.push({ action: 'imap_list', params: { accountId: firstAcc.id, limit } });
+            if (wantsReadAttachment) {
+              // Extract subject identifiers from the user message. Heuristic:
+              // - Quoted substrings ("..." or «...»)
+              // - Alphanumeric codes ≥4 chars with dot/slash/dash (PO/RDA codes)
+              // - Capitalized multi-word phrases ("Purchase Order", "Tagliando BMW")
+              // - Standalone uppercase tokens ≥4 chars (NCSARMEMAIL)
+              const ids = new Set();
+              const quoted = msg.match(/["«""']([^"«»""'\n]{3,80})["»""']/g) || [];
+              quoted.forEach(q => ids.add(q.replace(/^["«""']|["»""']$/g, '').trim()));
+              const codes = msg.match(/\b[A-Z0-9][A-Z0-9._/\-]{3,}\b/g) || [];
+              codes.forEach(c => ids.add(c));
+              const phrases = msg.match(/\b([A-Z][a-zà-ÿ]+(?:\s+[A-Za-zà-ÿ0-9]+){1,3})\b/g) || [];
+              phrases.filter(p => p.length >= 6).forEach(p => ids.add(p));
+              const tokens = [...ids].slice(0, 5);
+              if (tokens.length === 0) {
+                // No specific identifier — fall back to a broad list of recent
+                // messages with attachments.
+                actions.push({ action: 'imap_list', params: { accountId: firstAcc.id, limit: 30 } });
+              } else {
+                for (const q of tokens) {
+                  actions.push({ action: 'imap_search', params: { accountId: firstAcc.id, query: q, limit: 10 } });
+                }
+              }
+            } else if (semanticBag) {
+              // Push one imap_search per keyword variant in the bag. The
+              // synthesis step will dedupe overlapping hits.
+              const bag = QUOTE_KEYWORDS[semanticBag] || [];
+              const variants = [
+                ...(QUOTE_KEYWORDS.offerta || []).slice(0, 3),
+                ...(QUOTE_KEYWORDS.quote   || []).slice(0, 3),
+                ...bag,
+              ];
+              const unique = [...new Set(variants)].slice(0, 6);
+              for (const q of unique) {
+                actions.push({ action: 'imap_search', params: { accountId: firstAcc.id, query: q, limit: 50 } });
+              }
+            } else {
+              const limitMatch = msg.match(/\b(\d+)\b/);
+              const limit = limitMatch ? Math.min(parseInt(limitMatch[1]), 50) : 20;
+              actions.push({ action: 'imap_list', params: { accountId: firstAcc.id, limit } });
+            }
           }
         } catch { /* fallback to LLM response */ }
       }
@@ -353,6 +467,75 @@ export function register(router) {
         }
       }
 
+      // ── Auto-chain: search → read → attachment_read ──────────────────────
+      // When the user wants to read an attachment of a specific email, the
+      // model often emits the first search but then gets stuck saying "Let
+      // me read the full email" without actually emitting the follow-up
+      // tool. We chain them server-side: parse the imap_search results,
+      // pick the best subject match, fetch it with imap_read, then read
+      // the first attachment if wantsReadAttachment is on.
+      if (wantsReadAttachment) {
+        try {
+          // Collect candidate messages from all imap_search results we already
+          // executed in this turn. Format of imap_search output:
+          //   [id_xxx] [UNREAD] From: name | Subject | date\n  preview...
+          const candidates = new Map(); // id → { id, subject }
+          for (const tr of toolResults) {
+            if (tr.action !== 'imap_search' || typeof tr.result !== 'string') continue;
+            const lineRe = /\[([a-zA-Z0-9_-]{6,})\][^\n]*?\|\s*([^|]{2,200})\s*\|/g;
+            let m;
+            while ((m = lineRe.exec(tr.result)) !== null) {
+              if (!candidates.has(m[1])) candidates.set(m[1], { id: m[1], subject: m[2].trim() });
+            }
+          }
+          if (candidates.size > 0) {
+            // Rank by token-overlap with the identifiers we extracted from
+            // the user message.
+            const norm = (s) => String(s || '').toLowerCase()
+              .normalize('NFD').replace(/[̀-ͯ]/g, '')
+              .replace(/[^a-z0-9\s./_-]/g, ' ')
+              .split(/\s+/).filter(t => t.length > 2);
+            const userTokens = norm(msg);
+            const ranked = [...candidates.values()].map(c => {
+              const subjTokens = new Set(norm(c.subject));
+              const score = userTokens.filter(t => subjTokens.has(t)).length;
+              return { ...c, score };
+            }).sort((a, b) => b.score - a.score);
+            const best = ranked[0];
+            if (best && best.score >= 1) {
+              sse('tool', { action: 'imap_read', status: 'executing' });
+              try {
+                const readResult = await executeTool('imap_read', { messageId: best.id }, config);
+                toolResults.push({ action: 'imap_read', result: readResult });
+                sse('tool', { action: 'imap_read', status: 'done', result: String(readResult).slice(0, 500) });
+                // If the read result lists at least one attachment, fetch it.
+                const attMatch = String(readResult).match(/ATTACHMENTS \(\d+\)/);
+                if (attMatch) {
+                  sse('tool', { action: 'imap_attachment_read', status: 'executing' });
+                  try {
+                    const attResult = await executeTool('imap_attachment_read', { messageId: best.id, index: 1 }, config);
+                    toolResults.push({ action: 'imap_attachment_read', result: attResult });
+                    sse('tool', { action: 'imap_attachment_read', status: 'done', result: String(attResult).slice(0, 500) });
+                  } catch (e) {
+                    toolResults.push({ action: 'imap_attachment_read', result: `Error: ${e.message}` });
+                    sse('tool', { action: 'imap_attachment_read', status: 'error', error: e.message });
+                  }
+                }
+              } catch (e) {
+                toolResults.push({ action: 'imap_read', result: `Error: ${e.message}` });
+                sse('tool', { action: 'imap_read', status: 'error', error: e.message });
+              }
+            }
+          }
+        } catch { /* chain best-effort — fall through to synthesis */ }
+      }
+
+      // Capture the pre-synthesis prose (what the model said in Round 1).
+      // We will combine this with the synthesis output so the user keeps
+      // BOTH — currently the UI was overwriting Round 1 with Round 2 alone,
+      // which made long prose disappear and leave only "Let me read…".
+      const round1Prose = fullResponse;
+
       // Synthesis round if tools ran
       if (toolResults.length > 0) {
         // Strip raw JSON from tool results — present as clean prose summaries
@@ -380,27 +563,93 @@ export function register(router) {
           }
         };
         const toolContext = toolResults.map(t => `[${t.action} result]:\n${cleanResult(t.action, t.result)}`).join('\n\n---\n\n');
-        const synthesisPrompt = `${enrichedPrompt}\n\n## DATA FROM TOOLS:\n${toolContext}\n\n## STRICT OUTPUT RULES:\n- Write ONLY plain prose or markdown (headers, bullets, bold)\n- NEVER use \`\`\`json, \`\`\`data, or any fenced code block containing data\n- NEVER output raw JSON, arrays, or objects\n- Format numbers/prices as plain text (e.g. "Bitcoin: $103,000")\n- Be concise and human-readable`;
-        const synthesisMsg = `${effectiveMsg}\n\nAnswer using ONLY the data above. Plain text/markdown only — zero JSON, zero code blocks.`;
+        const synthesisPrompt = `${enrichedPrompt}\n\n## DATA FROM TOOLS (already executed — do NOT plan to call them again):\n${toolContext}\n\n## STRICT OUTPUT RULES:\n- LANGUAGE: respond ENTIRELY in ${userLang}. Do not switch languages mid-answer, do not mix English and ${userLang}.\n- The tools above HAVE ALREADY RUN. Their output is the ground truth.\n- NEVER say "Let me read…", "I'll search…", "I will fetch…", "leggerò", "cercherò", "ti dirò" — those tools are already done.\n- Answer the user's question DIRECTLY using the data above. If a specific detail (delivery date, item, total, etc.) is in the data, quote it verbatim.\n- If the data does not contain the answer, state plainly what is missing — do not announce intent to look further.\n- Write ONLY plain prose or markdown (headers, bullets, bold). NEVER use \`\`\`json or any fenced code block.\n- Format numbers/prices as plain text. Be concise and human-readable.`;
+        const synthesisMsg = `[LANGUAGE: respond entirely in ${userLang}, every sentence] ${effectiveMsg}\n\nThe tools have already been executed and their results are in the system prompt. Answer the question DIRECTLY using that data. Do NOT announce further actions ("Let me…", "I'll…", "leggerò", "cercherò"). Plain prose/markdown — zero JSON, zero code blocks. EVERY sentence must be in ${userLang}.`;
         sse('tool_synthesis', {});
-        fullResponse = '';
-        fullResponse = await callLLMStream(config, synthesisPrompt, synthesisMsg, (chunk) => {
-          sse('token', { content: chunk });
-        });
+        // Keep the pre-synthesis prose around. If the synthesis call returns
+        // empty (provider error, content filter, model bailed), we fall back
+        // to "first-round prose + raw tool output" so the user never sees a
+        // blank message and can still read what the tools returned.
+        const preSynthesis = fullResponse;
+        let synthesized = '';
+        try {
+          synthesized = await callLLMStream(config, synthesisPrompt, synthesisMsg, (chunk) => {
+            sse('token', { content: chunk });
+          });
+        } catch (synthErr) {
+          sse('error', { message: `Synthesis failed: ${synthErr.message}` });
+        }
+        if (synthesized && synthesized.trim()) {
+          fullResponse = synthesized;
+        } else {
+          // Fallback: stream the raw tool context so the user gets the data
+          // even when the LLM round failed silently.
+          const fallback = (preSynthesis && preSynthesis.trim() ? preSynthesis.trim() + '\n\n' : '') +
+            toolResults.map(t => `**${t.action}**\n${cleanResult(t.action, t.result)}`).join('\n\n');
+          sse('token', { content: fallback });
+          fullResponse = fallback;
+        }
       }
 
-      // Persist to conversation
+      // Strip orphan tool-fence blocks that the LLM may have emitted as
+      // a "no-more-tools" marker (e.g. empty ```json ``` or '''json ''').
+      // They leaked into the chat panel as visible noise.
+      //
+      // Also combine Round 1 prose with synthesis output when a synthesis
+      // round actually happened, so the user sees BOTH the model's intro
+      // ("Leggerò l'email…") AND the synthesized result, instead of one
+      // overwriting the other.
+      const round1Clean = stripOrphanFences(round1Prose || '');
+      const synthClean  = stripOrphanFences(fullResponse || '');
+      let cleanFullResponse;
+      if (toolResults.length > 0 && round1Clean && synthClean && round1Clean !== synthClean) {
+        cleanFullResponse = `${round1Clean}\n\n${synthClean}`;
+      } else {
+        cleanFullResponse = synthClean || round1Clean;
+      }
+
+      // Persist to conversation. Honour retry/edit flags so the tree forks
+      // correctly instead of duplicating the user message in the active path.
+      //   - isRetry: add the new response as a sibling of the last assistant
+      //     under the same user node (no new user node).
+      //   - isEdit:  add the new user message as a sibling of an existing
+      //     user node, then chain the assistant under the new branch.
+      //   - default: addMessages (creates user+assistant pair).
       if (body.conversationId) {
         try {
           const conv = loadConversation(body.conversationId);
           if (conv) {
-            addMessages(conv, msg, fullResponse);
+            if (body.isRetry) {
+              // Find the most recent user node in the active path — that's
+              // the parent we're regenerating from.
+              const path = getHistory(conv, 100);
+              const lastUser = [...path].reverse().find(n => n.role === 'user');
+              if (lastUser?.id) {
+                addRetryResponse(conv, lastUser.id, cleanFullResponse);
+              } else {
+                addMessages(conv, msg, cleanFullResponse);
+              }
+            } else if (body.isEdit && typeof body.editFromIdx === 'number') {
+              // Active path is a flat list; index editFromIdx in the UI maps
+              // 1:1 to the same index in the active path. Branch from there.
+              const path = getHistory(conv, 100);
+              const target = path[body.editFromIdx];
+              if (target?.id && target.role === 'user') {
+                const newUserId = editMessage(conv, target.id, msg);
+                if (newUserId) addRetryResponse(conv, newUserId, cleanFullResponse);
+                else addMessages(conv, msg, cleanFullResponse);
+              } else {
+                addMessages(conv, msg, cleanFullResponse);
+              }
+            } else {
+              addMessages(conv, msg, cleanFullResponse);
+            }
           }
         } catch {}
       }
 
       if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
-      sse('done', { content: fullResponse });
+      sse('done', { content: cleanFullResponse });
       res.write('data: [DONE]\n\n');
       res.end();
     } catch (e) {
@@ -420,8 +669,23 @@ export function register(router) {
       let enrichedPrompt = chatSystemPrompt;
       try { const ic = await getImapAccountsContext(); if (ic) enrichedPrompt += ic; } catch {}
       const LANG_MAP = { it:'Italian', en:'English', es:'Spanish', fr:'French', de:'German', pt:'Portuguese', nl:'Dutch', pl:'Polish', ru:'Russian', zh:'Chinese', ja:'Japanese', ko:'Korean', ar:'Arabic', hi:'Hindi', tr:'Turkish', sv:'Swedish', da:'Danish', fi:'Finnish', cs:'Czech' };
-      const userLang = LANG_MAP[(config?.language || config?.lang || 'en').slice(0,2)] || 'English';
-      enrichedPrompt += `\n\nIMPORTANT: Always respond in ${userLang}.`;
+      const settingLang = LANG_MAP[(config?.language || config?.lang || 'en').slice(0,2)] || 'English';
+      const detectedFromMsg = detectLanguage(body.message);
+      const userLang = detectedFromMsg || settingLang;
+      enrichedPrompt += `\n\nIMPORTANT: The user wrote their message in ${userLang}. Respond in ${userLang}.`;
+
+      // Direct-action pre-step — but ONLY when there's no attachment. With
+      // a PDF/image, the user wants the model to *read* the file; we don't
+      // want to short-circuit that into a tool call. With pure-text /api/chat
+      // (non-streaming), same dispatcher as the streaming variant.
+      if (!body.pdfBase64 && !body.imageBase64 && !body.fileContent) {
+        const direct = await tryDirectActionAll(body.message, config, {
+          auditKey: `chat-ns:${body.conversationId || 'anon'}`,
+        });
+        if (direct) {
+          return sendJSON(res, 200, { response: direct.message });
+        }
+      }
 
       let response;
 

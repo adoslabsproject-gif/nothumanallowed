@@ -57,10 +57,22 @@ function notifyIdle(accountId, folder) {
   for (const h of idleHandlers) { try { h(accountId, folder); } catch {} }
 }
 
-function createImapClient(label, creds, accountId) {
+function createImapClient(label, creds, accountId, secureOverride, opts = {}) {
   const port = parseInt(creds.imap_port, 10) || 993;
-  const isSecure = port === 993 || port === 465;
-  const client = new ImapFlow({
+  // Default heuristic: 993/465 use implicit TLS, anything else uses STARTTLS.
+  // `secureOverride` lets the auto-fallback path force the opposite mode.
+  const isSecure = typeof secureOverride === 'boolean'
+    ? secureOverride
+    : (port === 993 || port === 465);
+  // TLS hardening configurable per attempt. The `legacy` flag drops the
+  // minimum TLS version to v1.0 — required by some old / self-hosted IMAP
+  // servers (mail.dimensione-server.it, postfix on legacy CentOS, etc.)
+  // that still refuse TLS 1.2+ ClientHello.
+  const tlsOpts = {
+    rejectUnauthorized: false,
+    ...(opts.legacy ? { minVersion: 'TLSv1', maxVersion: 'TLSv1.3' } : {}),
+  };
+  const clientOpts = {
     host: creds.imap_host,
     port,
     secure: isSecure,
@@ -68,8 +80,23 @@ function createImapClient(label, creds, accountId) {
     logger: false,
     clientInfo: { name: 'NHA-Mail', version: '1.0.0' },
     emitLogs: false,
-    tls: { rejectUnauthorized: false }, // always set — safe for self-signed certs too
-  });
+    // Generous timeouts — first sync from a slow server can take a while
+    // before it even responds with the greeting. The previous 10s was too
+    // tight for ISP-hosted mailservers with throttling on cold connections.
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 120000,
+    tls: tlsOpts,
+  };
+  // `plaintext` strategy: connect cleartext AND skip STARTTLS upgrade. For
+  // self-hosted servers that advertise STARTTLS but the upgrade itself is
+  // broken (the most common cause of "wrong version number" after a
+  // successful TCP connect on port 143).
+  if (opts.plaintext) {
+    clientOpts.disableAutoIdle = true;
+    clientOpts.disableSTARTTLS = true;
+  }
+  const client = new ImapFlow(clientOpts);
   client.on('error', (err) => {
     console.error(`[email:imap] ${label} error:`, err.message);
     if (accountId) syncClients.delete(accountId);
@@ -77,17 +104,200 @@ function createImapClient(label, creds, accountId) {
   return client;
 }
 
-export async function getImapClient(accountId) {
+// Raw TCP probe that just opens the socket and reads the first ~256 bytes of
+// whatever the server sends. No TLS handshake, no IMAP protocol. This is the
+// "smoking gun" diagnostic: if the server returns "* OK [CAPABILITY ... STARTTLS ...]"
+// we know STARTTLS is the right mode. If it returns binary garbage starting
+// with 0x16, that's a TLS handshake → we need implicit TLS. If it returns
+// nothing within timeout, the host/port is wrong or firewalled.
+export async function probeImapPort(host, port) {
+  const net = await import('net');
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port, timeout: 10000 });
+    let buf = Buffer.alloc(0);
+    const done = (verdict) => {
+      try { socket.destroy(); } catch {}
+      resolve(verdict);
+    };
+    socket.on('connect', () => {
+      // Some servers wait for client greeting before sending anything; we just
+      // wait up to 5 more seconds for the server banner.
+      setTimeout(() => {
+        if (buf.length === 0) done({ ok: true, banner: '', advice: 'tcp-open-silent', message: `Connessione TCP riuscita ma il server non ha inviato banner entro 5s. Probabilmente è un server che parla TLS implicito — prova porta 993.` });
+      }, 5000);
+    });
+    socket.on('data', (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      if (buf.length >= 200) {
+        const first = buf[0];
+        const text = buf.toString('utf8').slice(0, 200);
+        if (first === 0x16 || first === 0x15 || first === 0x14) {
+          done({ ok: true, banner: text.replace(/[^\x20-\x7e]/g, '·').slice(0, 100), advice: 'tls-implicit', message: `Il server risponde con un handshake TLS binario. Modalità corretta: TLS IMPLICITO (secure=true). Probabile porta sbagliata se hai messo 143 — prova 993.` });
+        } else if (/^\*\s+OK/i.test(text)) {
+          const hasStartTls = /STARTTLS/i.test(text);
+          done({ ok: true, banner: text.split('\r\n')[0], advice: hasStartTls ? 'starttls' : 'plaintext', message: hasStartTls ? `Server IMAP in chiaro che annuncia STARTTLS. Modalità corretta: STARTTLS (secure=false, upgrade automatico).` : `Server IMAP in CHIARO senza STARTTLS. ATTENZIONE: nessuna crittografia. Solo per LAN o test — usa "plaintext" se vuoi davvero proseguire.` });
+        } else {
+          done({ ok: true, banner: text.slice(0, 100), advice: 'unknown', message: `Risposta non riconosciuta dal server: ${text.slice(0, 80)}...` });
+        }
+      }
+    });
+    socket.on('error', (err) => done({ ok: false, error: err.message, advice: 'connect-error', message: `Impossibile connettersi: ${err.message}. Verifica host e porta.` }));
+    socket.on('timeout', () => done({ ok: false, error: 'timeout', advice: 'firewall', message: `Timeout (10s) — host o porta non raggiungibili. Possibili cause: firewall, host sbagliato, oppure il server è offline.` }));
+    socket.on('close', () => {
+      if (buf.length > 0) {
+        const text = buf.toString('utf8').slice(0, 200);
+        done({ ok: true, banner: text.slice(0, 100), advice: 'partial', message: `Risposta parziale dal server: ${text.slice(0, 80)}` });
+      }
+    });
+  });
+}
+
+// Match the most common "wrong TLS mode" failure modes from ImapFlow / node
+// tls. Errors can surface as cleartext OpenSSL output ("wrong version
+// number"), as ImapFlow strings ("Failed to receive greeting"), or as plain
+// socket errors when the server closed the connection mid-handshake.
+function _looksLikeTlsMismatch(err) {
+  const msg = (err && err.message ? err.message : String(err)).toLowerCase();
+  return /(greeting|tls|ssl|wrong\s*version|version\s*number|protocol|enotconn|econnreset|epipe|handshake|record_header|tlsany|alert|cert|disconnected|connection\s*closed)/i.test(msg);
+}
+
+// Per-account memory of which TLS mode worked last time. This avoids paying
+// the fallback cost on every sync once we've discovered the correct mode for
+// a given server, and ensures the cached `syncClients` entry stays usable.
+const lastGoodSecure = new Map();   // accountId → boolean
+
+// Per-account memory of the FULL working profile, not just secure flag.
+// Some servers need legacy TLS — we don't want to re-discover that every sync.
+const lastGoodProfile = new Map(); // accountId → { secure, legacy }
+
+export async function getImapClient(accountId, override) {
   const existing = syncClients.get(accountId);
-  if (existing?.usable) return existing;
+  if (existing?.usable && override === undefined) return existing;
   if (existing) { syncClients.delete(accountId); try { await existing.logout(); } catch {} }
 
   const creds = getAccountCredentials(accountId);
   if (!creds || !creds.imap_host) throw new Error(`No IMAP credentials for account ${accountId}`);
-  const client = createImapClient(`sync:${accountId.slice(0, 8)}`, creds, accountId);
-  await client.connect();
-  syncClients.set(accountId, client);
-  return client;
+  const label = `sync:${accountId.slice(0, 8)}`;
+
+  // Build the candidate list — up to 4 strategies, ordered most→least likely:
+  //   1. heuristic secure + modern TLS
+  //   2. opposite secure + modern TLS
+  //   3. heuristic secure + legacy TLS (TLSv1.0+)
+  //   4. opposite secure + legacy TLS
+  // If a remembered-good profile exists, prepend it so warm syncs are 1 attempt.
+  const port = parseInt(creds.imap_port, 10) || 993;
+  const heuristicSecure = port === 993 || port === 465;
+  let strategies;
+  if (typeof override === 'boolean') {
+    // Explicit override (used by the outer syncAccount retry): obey it
+    // exactly, but still try legacy TLS as a fallback within that mode.
+    strategies = [
+      { secure: override, legacy: false, plaintext: false, why: 'override-modern' },
+      { secure: override, legacy: true,  plaintext: false, why: 'override-legacy' },
+    ];
+  } else {
+    strategies = [
+      { secure: heuristicSecure,  legacy: false, plaintext: false, why: 'heuristic-modern' },
+      { secure: !heuristicSecure, legacy: false, plaintext: false, why: 'opposite-modern' },
+      { secure: heuristicSecure,  legacy: true,  plaintext: false, why: 'heuristic-legacy' },
+      { secure: !heuristicSecure, legacy: true,  plaintext: false, why: 'opposite-legacy' },
+      // Last-resort plaintext (no encryption): for servers that advertise
+      // STARTTLS but the upgrade is broken, OR for explicitly insecure
+      // LAN-only servers. Skipped on standard secure ports.
+      ...(heuristicSecure ? [] : [{ secure: false, legacy: false, plaintext: true, why: 'plaintext-no-tls' }]),
+    ];
+    const remembered = lastGoodProfile.get(accountId);
+    if (remembered) {
+      strategies = [
+        { secure: remembered.secure, legacy: !!remembered.legacy, plaintext: !!remembered.plaintext, why: 'remembered' },
+        ...strategies.filter(s => !(s.secure === remembered.secure && s.legacy === !!remembered.legacy && !!s.plaintext === !!remembered.plaintext)),
+      ];
+    }
+  }
+
+  const errors = [];
+  for (const s of strategies) {
+    const client = createImapClient(label, creds, accountId, s.secure, { legacy: s.legacy, plaintext: s.plaintext });
+    try {
+      await client.connect();
+      lastGoodProfile.set(accountId, { secure: s.secure, legacy: s.legacy, plaintext: s.plaintext });
+      if (s.why !== 'remembered' && s.why !== 'heuristic-modern') {
+        console.warn(`[email:imap] ${label} connected via ${s.why} (secure=${s.secure}, legacy=${s.legacy}, plaintext=${s.plaintext})`);
+      }
+      syncClients.set(accountId, client);
+      return client;
+    } catch (err) {
+      errors.push(`${s.why}: ${err.message.slice(0, 120)}`);
+      try { await client.logout(); } catch {}
+      // If the error is clearly NOT TLS-related (e.g. auth failure, DNS),
+      // stop trying — more TLS combos won't help.
+      if (!_looksLikeTlsMismatch(err) && !/timeout|hang/i.test(err.message)) {
+        throw err;
+      }
+    }
+  }
+  // Final attempt failed. Run a raw TCP probe so the user can see what the
+  // server actually replies (or whether the port is reachable at all), and
+  // include that diagnostic in the thrown error.
+  let diagnosis = '';
+  try {
+    const probe = await probeImapPort(creds.imap_host, port);
+    diagnosis = `\n\nDIAGNOSI: ${probe.message}${probe.banner ? ` (banner: "${probe.banner}")` : ''}`;
+  } catch (probeErr) {
+    diagnosis = `\n\nProbe diagnostico fallito: ${probeErr.message}`;
+  }
+  throw new Error(`IMAP connection failed after ${strategies.length} attempts on ${creds.imap_host}:${port}:\n${errors.join('\n')}${diagnosis}`);
+}
+
+// Dry-run connectivity test used by Settings UI (no DB writes, no persistent
+// client). Tries up to 4 TLS-mode combinations and returns the first that
+// works, along with which one. Errors include the full attempt log so the
+// user can paste it back to support if everything failed.
+export async function testImapConnection(creds) {
+  if (!creds?.imap_host) throw new Error('imap_host required');
+  if (!creds?.username || !creds?.password) throw new Error('Username and password required');
+  const port = parseInt(creds.imap_port, 10) || 993;
+  const heuristicSecure = port === 993 || port === 465;
+  const strategies = [
+    { secure: heuristicSecure,  legacy: false, plaintext: false, why: 'heuristic-modern' },
+    { secure: !heuristicSecure, legacy: false, plaintext: false, why: 'opposite-modern' },
+    { secure: heuristicSecure,  legacy: true,  plaintext: false, why: 'heuristic-legacy' },
+    { secure: !heuristicSecure, legacy: true,  plaintext: false, why: 'opposite-legacy' },
+    ...(heuristicSecure ? [] : [{ secure: false, legacy: false, plaintext: true, why: 'plaintext-no-tls' }]),
+  ];
+  const errors = [];
+  for (const s of strategies) {
+    const client = createImapClient('test', creds, null, s.secure, { legacy: s.legacy, plaintext: s.plaintext });
+    try {
+      await client.connect();
+      const list = await client.list();
+      try { await client.logout(); } catch {}
+      const mode = s.plaintext
+        ? 'plaintext (NESSUNA crittografia)'
+        : `${s.secure ? 'TLS implicito' : 'STARTTLS'}${s.legacy ? ' (legacy ≥TLSv1.0)' : ''}`;
+      return {
+        ok: true,
+        secure: s.secure,
+        legacy: s.legacy,
+        plaintext: s.plaintext,
+        folderCount: list.length,
+        message: `Connesso con modalità: ${mode}`,
+      };
+    } catch (err) {
+      errors.push(`• ${s.why}: ${err.message.slice(0, 160)}`);
+      try { await client.logout(); } catch {}
+      if (!_looksLikeTlsMismatch(err) && !/timeout|hang/i.test(err.message)) {
+        throw err;
+      }
+    }
+  }
+  // Probe in fallback so the user gets actionable info.
+  let diagnosis = '';
+  try {
+    const probe = await probeImapPort(creds.imap_host, port);
+    diagnosis = `\n\nDIAGNOSI: ${probe.message}${probe.banner ? ` (banner: "${probe.banner}")` : ''}`;
+  } catch {}
+  throw new Error(`IMAP test failed dopo ${strategies.length} tentativi su ${creds.imap_host}:${port}:\n${errors.join('\n')}${diagnosis}`);
 }
 
 export async function closeImapClient(accountId) {
@@ -324,12 +534,19 @@ export async function syncFolder(accountId, folderPath, fullResync, limitMessage
   }
 }
 
-// First sync: cap to last 200 messages per folder to avoid blocking for minutes
-const FIRST_SYNC_LIMIT = 200;
+// Download EVERY message on the server by default. Previously capped at 200
+// to keep first-sync fast, but that surprised users who expected an Outlook-
+// style "give me my whole mailbox". The sync still streams messages
+// incrementally (headers → bodies) so the UI keeps updating, and never
+// modifies the server — only the local SQLite mirror.
+const FIRST_SYNC_LIMIT = 0;
 
 export async function syncAccount(accountId, opts = {}) {
   setSyncStatus(accountId, 'syncing', null);
   try {
+    // getImapClient does the full 5-strategy TLS discovery internally and
+    // remembers the working profile, so the outer retry layer is no longer
+    // needed — by the time we get a client back, the connection is good.
     const folders = await listImapFolders(accountId);
     const priority = ['inbox', 'sent'];
     const toSync = [
@@ -340,7 +557,7 @@ export async function syncAccount(accountId, opts = {}) {
     let totalSynced = 0;
     for (const f of toSync) {
       try {
-        const limit = opts.full ? 0 : FIRST_SYNC_LIMIT;
+        const limit = opts.full === false ? 200 : FIRST_SYNC_LIMIT;
         const result = await syncFolder(accountId, f.path, false, limit, f.folderType);
         totalSynced += result.synced;
         console.log(`[email:sync] ${f.path}: ${result.synced} new messages (total on server: ${result.total})`);

@@ -416,6 +416,59 @@ export function register(router) {
     } catch (e) { sendError(res, 500, e.message); }
   });
 
+  // POST /api/imap/probe — raw TCP probe of host:port (no TLS, no IMAP).
+  // Returns what the server actually sends as the first ~256 bytes, plus a
+  // human-readable verdict ("server speaks STARTTLS", "server speaks
+  // implicit TLS", "port closed", etc.). Lets the user understand why an
+  // IMAP connection fails without needing to read OpenSSL errors.
+  router.post('/api/imap/probe', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      const host = body.imap_host || body.host;
+      const port = parseInt(body.imap_port || body.port, 10);
+      if (!host || !port) return sendError(res, 400, 'host and port required');
+      const { probeImapPort } = await import('../../services/email-imap.mjs');
+      const result = await probeImapPort(host, port);
+      sendJSON(res, 200, { host, port, ...result });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
+  // POST /api/imap/test — dry-run connection test (no DB writes).
+  // Body: { imap_host, imap_port, smtp_host, smtp_port, username, password,
+  //         email_address, from_name, sendTest? }
+  // Returns: { imap: {ok, secure, ...}, smtp: {ok, secure, sent, messageId, ...} }
+  // The UI uses this for the "Test connection" / "Send test email" buttons
+  // before persisting an account — same UX as Outlook / Thunderbird.
+  router.post('/api/imap/test', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      const creds = {
+        imap_host: body.imap_host,
+        imap_port: body.imap_port,
+        smtp_host: body.smtp_host,
+        smtp_port: body.smtp_port,
+        username: body.username,
+        password: body.password,
+        email_address: body.email_address,
+        from_name: body.from_name,
+      };
+      const out = { imap: null, smtp: null };
+      try {
+        const { testImapConnection } = await import('../../services/email-imap.mjs');
+        out.imap = await testImapConnection(creds);
+      } catch (e) {
+        out.imap = { ok: false, error: e.message };
+      }
+      try {
+        const { testSmtpConnection } = await import('../../services/email-smtp.mjs');
+        out.smtp = await testSmtpConnection(creds, { sendTest: !!body.sendTest });
+      } catch (e) {
+        out.smtp = { ok: false, error: e.message };
+      }
+      sendJSON(res, 200, out);
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
   // POST /api/imap/sync  (body: { accountId, force })
   router.post('/api/imap/sync', async (req, res) => {
     try {

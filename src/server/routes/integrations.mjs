@@ -102,22 +102,87 @@ export function register(router) {
     } catch (e) { sendError(res, 500, e.message); }
   });
 
-  // ── Slack ─────────────────────────────────────────────────────────────
+  // ── Slack (enterprise UI: rich channels, search, threads, reactions) ──
 
   router.get('/api/slack/channels', async (_req, res) => {
     try {
-      const { listChannels } = await import('../../services/slack.mjs');
+      const { listChannelsRich, getWorkspaceInfo } = await import('../../services/slack.mjs');
       const config = loadConfig();
-      sendJSON(res, 200, { channels: await listChannels(config) });
-    } catch (e) { sendError(res, 500, e.message); }
+      const [channels, workspace] = await Promise.all([
+        listChannelsRich(config, { maxResults: 200 }),
+        getWorkspaceInfo(config),
+      ]);
+      sendJSON(res, 200, { channels, workspace: workspace?.name || '', workspaceIcon: workspace?.icon || '' });
+    } catch (e) { sendJSON(res, 200, { channels: [], error: e.message }); }
   });
 
   router.get('/api/slack/messages', async (req, res) => {
     try {
-      const { getChannelMessages } = await import('../../services/slack.mjs');
+      const { listMessagesRich } = await import('../../services/slack.mjs');
       const config = loadConfig();
       const url = new URL(req.url, 'http://localhost');
-      sendJSON(res, 200, { messages: await getChannelMessages(config, url.searchParams.get('channel')) });
+      const channel = url.searchParams.get('channel');
+      const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+      if (!channel) return sendError(res, 400, 'channel param required');
+      sendJSON(res, 200, { messages: await listMessagesRich(config, channel, { limit }) });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
+  router.get('/api/slack/thread', async (req, res) => {
+    try {
+      const { getThreadReplies } = await import('../../services/slack.mjs');
+      const config = loadConfig();
+      const url = new URL(req.url, 'http://localhost');
+      const channel = url.searchParams.get('channel');
+      const ts = url.searchParams.get('ts');
+      if (!channel || !ts) return sendError(res, 400, 'channel and ts required');
+      sendJSON(res, 200, { messages: await getThreadReplies(config, channel, ts) });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
+  router.get('/api/slack/search', async (req, res) => {
+    try {
+      const { searchMessages } = await import('../../services/slack.mjs');
+      const config = loadConfig();
+      const url = new URL(req.url, 'http://localhost');
+      const q = url.searchParams.get('q') || '';
+      if (!q.trim()) return sendJSON(res, 200, { results: [] });
+      const count = parseInt(url.searchParams.get('count') || '20', 10);
+      sendJSON(res, 200, { results: await searchMessages(config, q, { count }) });
+    } catch (e) { sendJSON(res, 200, { results: [], error: e.message }); }
+  });
+
+  router.post('/api/slack/react', async (req, res) => {
+    try {
+      const { addReaction } = await import('../../services/slack.mjs');
+      const config = loadConfig();
+      const body = await parseBody(req);
+      if (!body.channel || !body.ts || !body.emoji) return sendError(res, 400, 'channel, ts, emoji required');
+      await addReaction(config, body.channel, body.ts, body.emoji);
+      sendJSON(res, 200, { ok: true });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
+  router.post('/api/slack/mark-read', async (req, res) => {
+    try {
+      const { markRead } = await import('../../services/slack.mjs');
+      const config = loadConfig();
+      const body = await parseBody(req);
+      if (!body.channel) return sendError(res, 400, 'channel required');
+      await markRead(config, body.channel, body.ts);
+      sendJSON(res, 200, { ok: true });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
+  router.post('/api/slack/dm', async (req, res) => {
+    try {
+      const { openDM, sendMessage } = await import('../../services/slack.mjs');
+      const config = loadConfig();
+      const body = await parseBody(req);
+      if (!body.user) return sendError(res, 400, 'user required (id or name or email)');
+      const channelId = await openDM(config, body.user);
+      if (body.text) await sendMessage(config, channelId, body.text);
+      sendJSON(res, 200, { ok: true, channelId });
     } catch (e) { sendError(res, 500, e.message); }
   });
 
@@ -308,7 +373,8 @@ export function register(router) {
       const body = await parseBody(req);
       const config = loadConfig();
       if (!body.channel || !body.text) return sendError(res, 400, 'channel and text required');
-      await sendMessage(config, body.channel, body.text);
+      // threadTs optional — if provided, the message is posted as a thread reply
+      await sendMessage(config, body.channel, body.text, body.threadTs || null);
       sendJSON(res, 200, { ok: true });
     } catch (e) { sendError(res, 500, e.message); }
   });

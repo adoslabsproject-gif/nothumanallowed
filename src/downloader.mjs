@@ -6,54 +6,82 @@ import crypto from 'crypto';
 import { fail } from './ui.mjs';
 
 /**
- * Download a file from URL to disk.
+ * Download a file from URL to disk, with automatic retry on transient errors.
+ *
+ * Retries on: timeouts, DNS failures, ECONNRESET, 5xx responses. Backs off
+ * exponentially (1s, 3s, 9s). Never retries on 4xx (semantic errors).
+ *
  * @param {string} url
  * @param {string} dest — absolute file path
  * @param {object} opts
- * @param {string} [opts.sha256] — expected hash (hex)
- * @param {number} [opts.timeout] — ms (default 30s)
+ * @param {string} [opts.sha256]    — expected hash (hex)
+ * @param {number} [opts.timeout]   — ms per attempt (default 30s)
+ * @param {number} [opts.retries]   — total attempts (default 3)
  * @returns {Promise<boolean>}
  */
 export async function download(url, dest, opts = {}) {
   const timeout = opts.timeout ?? 30_000;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
+  const maxAttempts = Math.max(1, opts.retries ?? 3);
+  const { VERSION } = await import('./constants.mjs').catch(() => ({ VERSION: 'dev' }));
 
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'nha-cli/1.0.0' },
-    });
-    clearTimeout(timer);
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': `nha-cli/${VERSION}` },
+      });
+      clearTimeout(timer);
 
-    if (!res.ok) {
-      fail(`HTTP ${res.status} downloading ${path.basename(dest)}`);
-      return false;
-    }
-
-    const buffer = Buffer.from(await res.arrayBuffer());
-
-    if (opts.sha256) {
-      const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-      if (hash !== opts.sha256) {
-        fail(`Integrity check failed for ${path.basename(dest)}`);
-        fail(`  Expected: ${opts.sha256}`);
-        fail(`  Got:      ${hash}`);
+      if (!res.ok) {
+        // 5xx → retry; 4xx → permanent failure, no retry
+        if (res.status >= 500 && attempt < maxAttempts) {
+          await _delay(_backoff(attempt));
+          continue;
+        }
+        fail(`HTTP ${res.status} downloading ${path.basename(dest)}`);
         return false;
       }
-    }
 
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, buffer);
-    return true;
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      fail(`Timeout downloading ${path.basename(dest)}`);
-    } else {
-      fail(`Failed to download ${path.basename(dest)}: ${err.message}`);
+      const buffer = Buffer.from(await res.arrayBuffer());
+
+      if (opts.sha256) {
+        const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+        if (hash !== opts.sha256) {
+          fail(`Integrity check failed for ${path.basename(dest)}`);
+          fail(`  Expected: ${opts.sha256}`);
+          fail(`  Got:      ${hash}`);
+          return false;
+        }
+      }
+
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, buffer);
+      return true;
+    } catch (err) {
+      lastErr = err;
+      const transient = err.name === 'AbortError'
+        || /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|ENETUNREACH|UND_ERR/i.test(err.message || '');
+      if (transient && attempt < maxAttempts) {
+        await _delay(_backoff(attempt));
+        continue;
+      }
+      break;
     }
-    return false;
   }
+  if (lastErr) {
+    if (lastErr.name === 'AbortError') fail(`Timeout downloading ${path.basename(dest)} after ${maxAttempts} attempts`);
+    else fail(`Failed to download ${path.basename(dest)}: ${lastErr.message}`);
+  }
+  return false;
+}
+
+function _delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+function _backoff(attempt) {
+  // 1s, 3s, 9s — capped at 30s
+  return Math.min(30_000, 1000 * Math.pow(3, attempt - 1));
 }
 
 /**

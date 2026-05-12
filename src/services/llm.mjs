@@ -713,6 +713,288 @@ export function getProviderCall(provider) {
   return PROVIDERS[provider] || null;
 }
 
+/**
+ * Call LLM with native tool_use (function calling) — supports Anthropic and OpenAI.
+ * Handles the full agentic loop: call → tool_use → tool_result → call → ... → end_turn.
+ *
+ * @param {object} config — NHA config with llm.provider, llm.apiKey, etc.
+ * @param {string} systemPrompt
+ * @param {Array} messages — conversation history [{role, content}]
+ * @param {Array} tools — tool definitions [{name, description, input_schema}]
+ * @param {Function} onText — callback for text tokens (text: string) => void
+ * @param {Function} onToolCall — callback when tool is called (name: string, input: object) => Promise<string> — must return the tool result
+ * @param {object} opts — { max_tokens, isAborted, maxTurns }
+ * @returns {Promise<{messages: Array, stopReason: string}>} — updated messages array
+ */
+export async function callLLMWithTools(config, systemPrompt, messages, tools, onText, onToolCall, opts = {}) {
+  const provider = config.llm?.provider || 'anthropic';
+  const model = config.llm?.model || null;
+  const apiKey = getApiKey(config, provider);
+  if (!apiKey) throw new Error(`No API key for ${provider}`);
+
+  // Anthropic native tool calling
+  if (provider === 'anthropic') {
+    return _callAnthropicWithTools(apiKey, model, systemPrompt, messages, tools, onText, onToolCall, opts);
+  }
+
+  // OpenAI native function calling
+  if (provider === 'openai') {
+    return _callOpenAIWithTools(apiKey, model, systemPrompt, messages, tools, onText, onToolCall, opts);
+  }
+
+  // Other providers: fallback to text-based tool calling (old system)
+  // The caller should handle this by checking the return value
+  return null;
+}
+
+async function _callAnthropicWithTools(apiKey, model, systemPrompt, messages, tools, onText, onToolCall, opts = {}) {
+  const maxTokens = opts.max_tokens || 16384;
+  const isAborted = opts.isAborted || (() => false);
+  const MAX_TURNS = opts.maxTurns || 8;
+
+  for (let turn = 0; turn < MAX_TURNS; turn++) {
+    if (isAborted()) break;
+
+    const body = {
+      model: model || 'claude-sonnet-4-20250514',
+      max_tokens: maxTokens,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages,
+      tools,
+      stream: true,
+    };
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Anthropic ${res.status}: ${err}`);
+    }
+
+    // Parse streaming response
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let assistantContent = [];
+    let currentText = '';
+    let currentToolUse = null;
+    let currentToolInput = '';
+    let stopReason = null;
+
+    while (true) {
+      if (isAborted()) { try { reader.cancel(); } catch {} break; }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const ev = JSON.parse(data);
+          if (ev.type === 'content_block_start') {
+            if (ev.content_block?.type === 'text') {
+              currentText = '';
+            } else if (ev.content_block?.type === 'tool_use') {
+              currentToolUse = { id: ev.content_block.id, name: ev.content_block.name };
+              currentToolInput = '';
+            }
+          } else if (ev.type === 'content_block_delta') {
+            if (ev.delta?.type === 'text_delta') {
+              currentText += ev.delta.text;
+              if (onText) onText(ev.delta.text);
+            } else if (ev.delta?.type === 'input_json_delta') {
+              currentToolInput += ev.delta.partial_json;
+            }
+          } else if (ev.type === 'content_block_stop') {
+            if (currentText) {
+              assistantContent.push({ type: 'text', text: currentText });
+              currentText = '';
+            }
+            if (currentToolUse) {
+              let input = {};
+              try { input = JSON.parse(currentToolInput); } catch {}
+              assistantContent.push({
+                type: 'tool_use',
+                id: currentToolUse.id,
+                name: currentToolUse.name,
+                input,
+              });
+              currentToolUse = null;
+              currentToolInput = '';
+            }
+          } else if (ev.type === 'message_delta') {
+            if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
+          }
+        } catch {}
+      }
+    }
+
+    // Add assistant message to conversation
+    messages.push({ role: 'assistant', content: assistantContent });
+
+    // If stop reason is end_turn (no more tool calls), we're done
+    if (stopReason === 'end_turn' || stopReason !== 'tool_use') break;
+
+    // Execute tool calls
+    const toolUseBlocks = assistantContent.filter(b => b.type === 'tool_use');
+    if (toolUseBlocks.length === 0) break;
+
+    const toolResults = [];
+    for (const toolBlock of toolUseBlocks) {
+      if (isAborted()) break;
+      const result = await onToolCall(toolBlock.name, toolBlock.input);
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: toolBlock.id,
+        content: typeof result === 'string' ? result : JSON.stringify(result),
+      });
+    }
+
+    // Add tool results to conversation
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  return { messages, stopReason: 'end' };
+}
+
+async function _callOpenAIWithTools(apiKey, model, systemPrompt, messages, tools, onText, onToolCall, opts = {}) {
+  const maxTokens = opts.max_tokens || 16384;
+  const isAborted = opts.isAborted || (() => false);
+  const MAX_TURNS = opts.maxTurns || 8;
+
+  // Convert Anthropic tool format to OpenAI function format
+  const openaiTools = tools.map(t => ({
+    type: 'function',
+    function: { name: t.name, description: t.description, parameters: t.input_schema },
+  }));
+
+  // Convert messages: Anthropic uses content arrays, OpenAI uses strings
+  const toOpenAI = (msgs) => {
+    const result = [{ role: 'system', content: systemPrompt }];
+    for (const m of msgs) {
+      if (m.role === 'user') {
+        if (Array.isArray(m.content)) {
+          // tool_result blocks
+          for (const block of m.content) {
+            if (block.type === 'tool_result') {
+              result.push({ role: 'tool', tool_call_id: block.tool_use_id, content: block.content || '' });
+            } else {
+              result.push({ role: 'user', content: typeof block === 'string' ? block : block.text || JSON.stringify(block) });
+            }
+          }
+        } else {
+          result.push({ role: 'user', content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) });
+        }
+      } else if (m.role === 'assistant') {
+        if (Array.isArray(m.content)) {
+          const textParts = m.content.filter(b => b.type === 'text').map(b => b.text).join('');
+          const toolCalls = m.content.filter(b => b.type === 'tool_use').map(b => ({
+            id: b.id, type: 'function', function: { name: b.name, arguments: JSON.stringify(b.input) },
+          }));
+          const msg = { role: 'assistant', content: textParts || null };
+          if (toolCalls.length > 0) msg.tool_calls = toolCalls;
+          result.push(msg);
+        } else {
+          result.push({ role: 'assistant', content: typeof m.content === 'string' ? m.content : '' });
+        }
+      }
+    }
+    return result;
+  };
+
+  for (let turn = 0; turn < MAX_TURNS; turn++) {
+    if (isAborted()) break;
+
+    const body = {
+      model: model || 'gpt-4o',
+      max_tokens: maxTokens,
+      messages: toOpenAI(messages),
+      tools: openaiTools,
+      stream: true,
+    };
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) { const err = await res.text(); throw new Error(`OpenAI ${res.status}: ${err}`); }
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let assistantContent = [];
+    let currentText = '';
+    let toolCalls = {};
+    let finishReason = null;
+
+    while (true) {
+      if (isAborted()) { try { reader.cancel(); } catch {} break; }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const ev = JSON.parse(data);
+          const delta = ev.choices?.[0]?.delta;
+          if (delta?.content) { currentText += delta.content; if (onText) onText(delta.content); }
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              if (!toolCalls[tc.index]) toolCalls[tc.index] = { id: tc.id || '', name: '', args: '' };
+              if (tc.id) toolCalls[tc.index].id = tc.id;
+              if (tc.function?.name) toolCalls[tc.index].name = tc.function.name;
+              if (tc.function?.arguments) toolCalls[tc.index].args += tc.function.arguments;
+            }
+          }
+          if (ev.choices?.[0]?.finish_reason) finishReason = ev.choices[0].finish_reason;
+        } catch {}
+      }
+    }
+
+    if (currentText) assistantContent.push({ type: 'text', text: currentText });
+    for (const tc of Object.values(toolCalls)) {
+      let input = {};
+      try { input = JSON.parse(tc.args); } catch {}
+      assistantContent.push({ type: 'tool_use', id: tc.id, name: tc.name, input });
+    }
+    messages.push({ role: 'assistant', content: assistantContent });
+
+    if (finishReason !== 'tool_calls' && Object.keys(toolCalls).length === 0) break;
+
+    const toolUseBlocks = assistantContent.filter(b => b.type === 'tool_use');
+    if (toolUseBlocks.length === 0) break;
+
+    const toolResults = [];
+    for (const toolBlock of toolUseBlocks) {
+      if (isAborted()) break;
+      const result = await onToolCall(toolBlock.name, toolBlock.input);
+      toolResults.push({ type: 'tool_result', tool_use_id: toolBlock.id, content: typeof result === 'string' ? result : JSON.stringify(result) });
+    }
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  return { messages, stopReason: 'end' };
+}
+
 export function getApiKey(config, provider) {
   // NHA Free (Liara) doesn't need an API key
   if (provider === 'nha') return 'nha-free-tier';

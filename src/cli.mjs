@@ -52,12 +52,21 @@ export async function main(argv) {
       }
     }).catch(() => {});
 
-    // npm version check (non-blocking)
+    // npm version check (non-blocking). The one-liner uses --prefer-online to
+    // bypass npm's metadata cache, which is the #1 reason `npm install -g`
+    // appears to "do nothing" — it had stale "latest" in the local cache.
+    // Every command separated by `&&` so users can copy-paste the whole line.
     checkNpmVersion().then(result => {
       if (result?.updateAvailable) {
         console.log('');
         warn(`New NHA version available: ${result.current} → ${result.latest}`);
-        info('Run "nha update" to upgrade (includes npm self-update).');
+        info(`Run "nha update" (recommended — auto-installs npm + agents)`);
+        info(`Or copy-paste this ENTIRE line (note: --prefer-online, not --pref-online):`);
+        info(`  npm cache clean --force && npm install -g nothumanallowed@${result.latest} --prefer-online && hash -r && nha version`);
+        info(`⚠ If you ran the install WITHOUT "hash -r" at the end and now get`);
+        info(`   "bash: ...node/vX.Y.Z/bin/nha: No such file", run:  hash -r`);
+        info(`   (or just close and reopen the terminal). It's a bash path cache issue,`);
+        info(`   not an install failure — your nha package is already updated.`);
       }
     }).catch(() => {});
   }
@@ -243,57 +252,93 @@ async function cmdSelfUpdate() {
     return;
   }
 
-  info(`Updating: ${npmCheck.current} → ${npmCheck.latest}`);
+  const target = npmCheck.latest;
+  info(`Updating: ${npmCheck.current} → ${target}`);
 
-  // Try without sudo first, then with sudo if needed (Linux/VM)
-  const cmds = [
-    'npm install -g nothumanallowed@latest',
-    'sudo npm install -g nothumanallowed@latest',
-  ];
-
-  for (const cmd of cmds) {
-    try {
-      const usingSudo = cmd.startsWith('sudo');
-      if (usingSudo) info('Retrying with sudo...');
-      const output = execSync(cmd, { encoding: 'utf-8', timeout: 120_000, stdio: ['inherit', 'pipe', 'pipe'] });
-      if (output.includes('nothumanallowed@')) {
-        ok(`Updated to v${npmCheck.latest}!`);
-        if (usingSudo) info('(sudo was required on this system)');
-        // Auto-restart daemon if it was running (so Telegram/Discord reconnect)
-        try {
-          const { isRunning, stopDaemon } = await import('./services/ops-daemon.mjs');
-          if (isRunning()) {
-            info('Restarting ops daemon...');
-            await stopDaemon();
-            // Use the NEW nha binary to restart
-            const { execSync: execRestart } = await import('child_process');
-            try {
-              execRestart('nha ops start', { timeout: 10_000, stdio: 'inherit' });
-              ok('Ops daemon restarted (Telegram/Discord reconnected).');
-            } catch {
-              warn('Could not auto-restart daemon. Run: nha ops start');
-            }
-          }
-        } catch {}
-        return;
-      }
-    } catch (e) {
-      const msg = e.stderr || e.message || '';
-      // EACCES = permission denied, try sudo next
-      if (msg.includes('EACCES') || msg.includes('permission denied')) continue;
-      // Other error — report and stop
-      fail(`Update failed: ${msg.slice(0, 200)}`);
-      console.log('');
-      info('Try manually: sudo npm install -g nothumanallowed@latest');
-      return;
+  // Step 1: Detect if we need sudo (check if global npm dir is writable)
+  let needsSudo = false;
+  try {
+    const globalDir = execSync('npm root -g 2>/dev/null', { encoding: 'utf-8', timeout: 5000 }).trim();
+    if (globalDir) {
+      try {
+        const fs2 = await import('fs');
+        fs2.default.accessSync(globalDir, fs2.constants.W_OK);
+      } catch { needsSudo = true; }
     }
-  }
+  } catch { needsSudo = true; }
 
-  fail('Update failed — could not install even with sudo.');
-  console.log('');
-  info('Try manually:');
-  info('  sudo npm install -g nothumanallowed@latest');
-  info('Or fix npm permissions: https://docs.npmjs.com/resolving-eacces-permissions-errors');
+  const sudo = needsSudo ? 'sudo ' : '';
+
+  // Step 2: Clean npm cache (the #1 cause of stale installs)
+  info('Cleaning npm cache...');
+  try { execSync(`${sudo}npm cache clean --force 2>/dev/null`, { timeout: 20000, stdio: 'ignore' }); } catch {}
+
+  // Step 3: Remove old package first (prevents stale symlinks)
+  info('Removing old version...');
+  try { execSync(`${sudo}npm uninstall -g nothumanallowed 2>/dev/null`, { timeout: 30000, stdio: 'ignore' }); } catch {}
+
+  // Step 4: Install exact version (NEVER use @latest — it can be stale)
+  info(`Installing v${target}...`);
+  const installCmd = `${sudo}npm install -g nothumanallowed@${target} --prefer-online --no-cache`;
+  try {
+    const output = execSync(installCmd, { encoding: 'utf-8', timeout: 120_000, stdio: ['inherit', 'pipe', 'pipe'] });
+
+    // Step 5: Verify the installation actually worked
+    let installedVersion = '';
+    try {
+      installedVersion = execSync('node -e "import(\'nothumanallowed/src/constants.mjs\').then(m=>console.log(m.VERSION)).catch(()=>{})" 2>/dev/null || true', { encoding: 'utf-8', timeout: 5000 }).trim();
+    } catch {}
+    if (!installedVersion) {
+      try {
+        const npmRoot = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000 }).trim();
+        const constFile = `${npmRoot}/nothumanallowed/src/constants.mjs`;
+        const fs2 = await import('fs');
+        if (fs2.default.existsSync(constFile)) {
+          const match = fs2.default.readFileSync(constFile, 'utf-8').match(/VERSION\s*=\s*'([^']+)'/);
+          if (match) installedVersion = match[1];
+        }
+      } catch {}
+    }
+
+    if (installedVersion === target) {
+      ok(`Updated to v${target}!`);
+    } else if (output.includes('nothumanallowed@')) {
+      ok(`Updated! (npm reports success)`);
+      if (installedVersion && installedVersion !== target) {
+        warn(`Installed version appears to be ${installedVersion} — try: hash -r && nha version`);
+      }
+    } else {
+      warn('Install completed but could not verify version.');
+    }
+
+    if (needsSudo) info('(sudo was required on this system)');
+
+    // Step 6: Auto-restart daemon if running
+    try {
+      const { isRunning, stopDaemon } = await import('./services/ops-daemon.mjs');
+      if (isRunning()) {
+        info('Restarting ops daemon...');
+        await stopDaemon();
+        try {
+          execSync(`${sudo}nha ops start`, { timeout: 10_000, stdio: 'inherit' });
+          ok('Ops daemon restarted.');
+        } catch { warn('Could not auto-restart daemon. Run: nha ops start'); }
+      }
+    } catch {}
+
+    // Step 7: Tell user to refresh shell
+    console.log('');
+    info('If "nha version" still shows the old version, run: hash -r');
+
+  } catch (e) {
+    const msg = e.stderr || e.stdout || e.message || '';
+    fail(`Update failed: ${msg.slice(0, 300)}`);
+    console.log('');
+    info('Try manually:');
+    info(`  ${sudo}npm cache clean --force`);
+    info(`  ${sudo}npm install -g nothumanallowed@${target}`);
+    info('  hash -r');
+  }
 }
 
 // ── nha responder ─────────────────────────────────────────────────────────
@@ -480,7 +525,7 @@ function cmdConfig(args) {
     if (!key || !value) {
       fail('Usage: nha config set <key> <value>');
       console.log('');
-      info('Keys: provider, key, openai-key, gemini-key, deepseek-key, grok-key, model, timeout');
+      info('Keys: provider, key, openai-key, gemini-key, deepseek-key, grok-key (X.AI), groq-key (voice/Whisper), mistral-key, cohere-key, model, timeout');
       info('      verbose, immersive, deliberation, rounds, convergence, tribunal, knowledge');
       info('      google-client-id, google-client-secret');
       info('      microsoft-client-id, microsoft-client-secret, microsoft-tenant');
@@ -512,7 +557,12 @@ function cmdConfig(args) {
   if (config.llm.openaiKey) console.log(`    OpenAI Key:   ${G}${config.llm.openaiKey.slice(0, 12)}...${NC}`);
   if (config.llm.geminiKey) console.log(`    Gemini Key:   ${G}${config.llm.geminiKey.slice(0, 12)}...${NC}`);
   if (config.llm.deepseekKey) console.log(`    DeepSeek Key: ${G}${config.llm.deepseekKey.slice(0, 12)}...${NC}`);
-  if (config.llm.grokKey) console.log(`    Grok Key:     ${G}${config.llm.grokKey.slice(0, 12)}...${NC}`);
+  if (config.llm.grokKey) console.log(`    Grok Key:     ${G}${config.llm.grokKey.slice(0, 12)}...${NC}  ${D}(X.AI Grok LLM)${NC}`);
+  // Groq is for voice transcription (Whisper). ALWAYS show so users can see
+  // whether it's configured — voice in Telegram needs this when NHA proxy is down.
+  console.log(`    Groq Key:     ${config.llm.groqKey ? G + config.llm.groqKey.slice(0, 12) + '...' : R + '(not set)'}${NC}  ${D}(voice transcription, free at https://console.groq.com/keys)${NC}`);
+  if (config.llm.mistralKey) console.log(`    Mistral Key:  ${G}${config.llm.mistralKey.slice(0, 12)}...${NC}`);
+  if (config.llm.cohereKey)  console.log(`    Cohere Key:   ${G}${config.llm.cohereKey.slice(0, 12)}...${NC}`);
   if (config.llm.model) console.log(`    Model:        ${W}${config.llm.model}${NC}`);
   console.log(`    Timeout:      ${D}${config.llm.timeout}ms${NC}`);
 

@@ -9,14 +9,45 @@ import { sendJSON, sendError, parseBody } from '../index.mjs';
 import { loadConfig } from '../../config.mjs';
 import { NHA_DIR, AGENTS_DIR } from '../../constants.mjs';
 import { callLLM, callLLMStream, parseAgentFile } from '../../services/llm.mjs';
-import { webSearch, fetchUrl } from '../../services/web-tools.mjs';
+import { webSearch, fetchUrl, fetchUrlRich, headProbe } from '../../services/web-tools.mjs';
 
-// Agents that get web data pre-fetched before their LLM call
+// Agents that get web data pre-fetched (search + URL content) before their LLM call.
+// We err on the side of inclusion: any agent that writes analysis, copy, briefings,
+// or reports benefits from real-time data — without it they hallucinate plausible
+// but generic frameworks. Synthesis-only agents (CanvasAgent, GitHub/Email/Slack
+// connectors) are intentionally excluded.
 const WEB_TOOL_AGENTS = new Set([
-  'WebSearchAgent', 'TravelAgent', 'mercury', 'MERCURY',
-  'athena', 'ATHENA', 'oracle', 'ORACLE', 'cassandra', 'CASSANDRA',
-  'HERALD', 'DataAnalystAgent', 'herald', 'tempest', 'TEMPEST',
-  'epicure', 'EPICURE', 'cartographer', 'CARTOGRAPHER',
+  // Original research/intel set
+  'WebSearchAgent', 'TravelAgent',
+  'MERCURY', 'mercury',
+  'ATHENA',  'athena',
+  'ORACLE',  'oracle',
+  'CASSANDRA', 'cassandra',
+  'HERALD',  'herald',
+  'DataAnalystAgent',
+  'TEMPEST', 'tempest',
+  'EPICURE', 'epicure',
+  'CARTOGRAPHER', 'cartographer',
+  // Analysis & writing — they MUST ground on the target site, not invent.
+  'QUILL', 'quill',
+  'ECHO',  'echo',
+  'MURASAKI', 'murasaki',
+  'SCHEHERAZADE', 'scheherazade',
+  'MUSE', 'muse',
+  // Security / architecture / reasoning — also benefit from grounded context.
+  'FORGE', 'forge',
+  'PROMETHEUS', 'prometheus',
+  'SABER', 'saber',
+  'ADE', 'ade',
+  'ZERO', 'zero',
+  'SAURON', 'sauron',
+  'LOGOS', 'logos',
+  'VERITAS', 'veritas',
+  'LINK', 'link',
+  'NAVI', 'navi',
+  'EDI', 'edi',
+  // Polyglot needs source content to translate accurately.
+  'polyglot',
 ]);
 
 // ── Complete Agent Registry ─────────────────────────────────────────────────
@@ -94,18 +125,195 @@ async function runWebSearch(query) {
 }
 
 /**
- * Fetch a URL and return formatted content string.
+ * Fetch a URL and return a structured result. Caller decides how to format it.
+ * Returns { ok, url, content?, title?, metadata?, code?, reason? }.
  */
 async function runFetchUrl(url) {
   try {
-    const result = await fetchUrl(url);
-    if (result.error) return `Fetch failed: ${result.message}`;
-    const titlePart = result.title ? `Title: ${result.title}\n\n` : '';
-    const text = (result.body || '').slice(0, 5000);
-    return `Content from ${url}:\n\n${titlePart}${text}`;
+    const result = await fetchUrlRich(url, { maxChars: 16_000 });
+    if (result.error) {
+      return { ok: false, url, code: result.code || 'FETCH_FAILED', reason: result.message || 'unknown' };
+    }
+    const meta = result.metadata || {};
+    const ogBlock = Object.keys(meta.og || {}).length
+      ? `OpenGraph: ${Object.entries(meta.og).slice(0, 8).map(([k, v]) => `${k}=${String(v).slice(0, 200)}`).join(' | ')}\n`
+      : '';
+    const ldBlock = (meta.jsonLd || []).length
+      ? `Schema.org types: ${meta.jsonLd.slice(0, 6).map(j => j.type).join(', ')}\n`
+      : '';
+    const headingsBlock = meta.headings && (meta.headings.h1?.length || meta.headings.h2?.length)
+      ? `Headings H1: ${(meta.headings.h1 || []).slice(0, 5).join(' | ')}\n` +
+        (meta.headings.h2?.length ? `Headings H2: ${meta.headings.h2.slice(0, 8).join(' | ')}\n` : '')
+      : '';
+    const descBlock = meta.description ? `Description: ${meta.description}\n` : '';
+    return {
+      ok: true,
+      url: result.url || url,
+      title: result.title || '',
+      content: result.body || '',
+      metadata: meta,
+      preamble: `${result.title ? `Title: ${result.title}\n` : ''}${descBlock}${ogBlock}${ldBlock}${headingsBlock}`.trim(),
+    };
   } catch (e) {
-    return `Fetch error: ${e.message}`;
+    return { ok: false, url, code: 'EXCEPTION', reason: e.message || String(e) };
   }
+}
+
+/**
+ * Extract URLs from free-form text — robust matcher.
+ *
+ * Catches:
+ *   - Fully-qualified URLs: http(s)://example.com/path
+ *   - Bare domains with www: www.example.com
+ *   - Bare domains without www: example.com, example.it, example.co.uk
+ *   - Markdown-wrapped: [label](example.com) — the URL portion is matched
+ *
+ * Rejects:
+ *   - File extensions misread as domains: image.png, doc.pdf, app.js
+ *   - Single-word tokens without a dot
+ *   - Email addresses (the @ rules out the domain match)
+ *
+ * Returns normalized https:// URLs, deduplicated, max 6.
+ */
+const FILE_EXT_BLOCKLIST = new Set([
+  'png','jpg','jpeg','gif','webp','svg','ico','bmp','tiff',
+  'pdf','doc','docx','xls','xlsx','ppt','pptx','csv','txt','zip','tar','gz','rar','7z',
+  'mp3','mp4','wav','ogg','mov','avi','mkv',
+  'js','css','json','xml','yaml','yml','md','html','htm',
+]);
+
+function extractUrlsFromText(text) {
+  if (!text) return [];
+  const t = String(text);
+  const found = new Set();
+
+  // Full URLs
+  for (const m of t.matchAll(/https?:\/\/[^\s,)<>"'`]+/gi)) {
+    const clean = m[0].replace(/[.,;:!?)\]]+$/, '');
+    found.add(clean);
+  }
+
+  // Bare domains — TLD of 2..24 letters. Accepts 2-label (apple.com),
+  // 3-label (www.apple.com), and N-label domains.
+  const bareRe = /(?<![\/@\w])(?:www\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.([a-z]{2,24})\b(?:\/[^\s,()<>"'`]*)?/gi;
+  for (const m of t.matchAll(bareRe)) {
+    const candidate = m[0].replace(/[.,;:!?)\]]+$/, '');
+    if (candidate.startsWith('http')) continue;
+    const tld = (m[1] || '').toLowerCase();
+    if (FILE_EXT_BLOCKLIST.has(tld)) continue;
+    if (/^\d+(\.\d+)+$/.test(candidate)) continue;
+    found.add('https://' + candidate);
+  }
+
+  // Dedup: if "https://x.com/path" and "https://www.x.com/path" both present,
+  // keep the longer (more specific) one only.
+  const list = [...found];
+  const filtered = list.filter(url => {
+    const stripped = url.replace(/^https?:\/\/(www\.)?/, '');
+    return !list.some(other =>
+      other !== url &&
+      other.replace(/^https?:\/\/(www\.)?/, '') === stripped &&
+      other.length > url.length,
+    );
+  });
+
+  return filtered.slice(0, 6);
+}
+
+/**
+ * Automatic fallback: when the primary fetch fails, try to gather indirect
+ * intelligence about the domain via web search. Looks for:
+ *   - site:domain.com listings (whatever Google has indexed)
+ *   - "<domain> chi è" / "<domain> azienda settore" — public profiles, news
+ *   - Wikipedia / corporate registries
+ *
+ * Returns up to 3 fetched pages with real content, formatted for ground truth.
+ * Returns null if nothing useful was found.
+ */
+async function gatherIndirectIntel(failedUrl, sse) {
+  try {
+    const parsed = new URL(failedUrl);
+    const domain = parsed.hostname.replace(/^www\./, '');
+    const queries = [
+      `site:${domain}`,
+      `"${domain}" azienda settore prodotti`,
+      `${domain} chi è cosa fa`,
+    ];
+
+    if (sse) sse({ token: `[Fallback: ricerco info indirette su ${domain}...]` });
+
+    const allResults = [];
+    for (const q of queries) {
+      try {
+        const r = await webSearch(q, 5);
+        if (!r.error && Array.isArray(r.results)) {
+          for (const item of r.results) {
+            // Skip if the URL is the same failed domain (we already know it's down)
+            try {
+              const u = new URL(item.url);
+              if (u.hostname.replace(/^www\./, '') === domain) continue;
+            } catch { /* skip invalid URLs */ }
+            allResults.push({ ...item, fromQuery: q });
+          }
+        }
+      } catch { /* skip failed query */ }
+    }
+
+    if (allResults.length === 0) return null;
+
+    // Dedupe by URL, take top 4, fetch them
+    const seen = new Set();
+    const unique = allResults.filter(r => {
+      if (seen.has(r.url)) return false;
+      seen.add(r.url);
+      return true;
+    }).slice(0, 4);
+
+    if (sse) sse({ token: `[Fallback: ${unique.length} fonti indirette trovate, recupero contenuto...]` });
+
+    const fetched = await Promise.all(
+      unique.map(async (r) => {
+        try {
+          const full = await fetchUrlRich(r.url, { maxChars: 4_000, timeout: 8_000 });
+          if (full.error) return null;
+          return {
+            url: r.url,
+            title: full.title || r.title || '',
+            snippet: r.snippet || '',
+            content: (full.body || '').slice(0, 3_000),
+            description: full.metadata?.description || '',
+            fromQuery: r.fromQuery,
+          };
+        } catch { return null; }
+      })
+    );
+
+    const good = fetched.filter(Boolean);
+    if (good.length === 0) return null;
+
+    return good;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Strip transient status markers, internal think/tool blocks, and propagation
+ * noise before the text is injected into another agent's prompt or surfaced
+ * to the client. Parity with LegionX `CommunicationStream.stripTags`.
+ */
+function sanitizeAgentOutput(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+    .replace(/<tool[^>]*>[\s\S]*?<\/tool>/gi, '')
+    .replace(/<scratch[^>]*>[\s\S]*?<\/scratch>/gi, '')
+    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+    .replace(/\[(?:Searching|Fetching|GET|POST|HEAD|Raccolta dati web|Parlamento)[^\]]*\]\s*/gi, '')
+    .replace(/​|﻿/g, '') // zero-width / BOM
+    .replace(/\r\n/g, '\n')
+    .trim();
 }
 
 /**
@@ -257,8 +465,24 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
         } catch {}
       }
 
-      const contextBlock = context ? `\n\n## CONTEXT FROM PREVIOUS STEPS:\n${context.slice(0, 12000)}` : '';
-      const proposalContextBlock = body.proposalContext ? `\n\n## OTHER AGENTS' PROPOSALS (CROSS-READING):\n${body.proposalContext.slice(0, 8000)}` : '';
+      const contextBlock = context ? `\n\n## CONTEXT FROM PREVIOUS STEPS:\n${sanitizeAgentOutput(context).slice(0, 12000)}` : '';
+
+      // Cross-reading block — when other agents have already produced proposals,
+      // we inject them with explicit deliberation instructions so the model
+      // engages with them (agree/disagree) rather than restating its own view.
+      const proposalContextBlock = body.proposalContext ? `
+
+## ALTRE PROPOSTE GIÀ COMPLETATE (CROSS-READING)
+
+I seguenti output sono proposte di altri agenti che hanno lavorato sullo stesso task. Leggile attentamente prima di rispondere.
+
+${sanitizeAgentOutput(body.proposalContext).slice(0, 12000)}
+
+### ISTRUZIONI DI DELIBERAZIONE (obbligatorie)
+1. **Identifica i punti in cui CONCORDI** con un agente precedente → marca con \`[✓ CONCORDA CON: NomeAgente]\` e cita il punto specifico.
+2. **Identifica i punti in cui DISSENTI** → marca con \`[✗ DISACCORDO CON: NomeAgente]\` e spiega il motivo con evidenze concrete (dai dati fetched, non opinioni).
+3. **NON ripetere ciò che hanno già detto bene** — aggiungi il TUO contributo specifico dalla TUA specializzazione.
+4. **Se i dati raccolti contraddicono un agente precedente**, segnalalo esplicitamente.` : '';
 
       const formatInstructions = `\n\nFORMATTING RULES (CRITICAL — your output will be rendered as HTML):
 - Use MARKDOWN TABLES with | pipes | for ALL tabular data. Example:
@@ -284,9 +508,96 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
       const userMessage = stepDef?.prompt || task;
 
       const useWebTools = WEB_TOOL_AGENTS.has(agent);
+      const isPrimaryResearch = !!body.isPrimaryResearch || !!stepDef?.isPrimaryResearch;
       let webDataBlock = '';
+      const fetchOutcomes = { ok: 0, failed: 0, attempted: 0, failures: [] };
 
-      // Pre-fetch web data BEFORE the LLM call so the model writes with real facts
+      // ── Pre-fetch URLs declared in the task ─────────────────────────
+      const taskUrls = extractUrlsFromText(task);
+      if (taskUrls.length > 0) {
+        sse({ token: `[Fetching ${taskUrls.length} URL(s) from task...]` });
+        const urlFetches = await Promise.all(
+          taskUrls.slice(0, 4).map(async (url) => {
+            sse({ token: `[GET ${url}]` });
+            const r = await runFetchUrl(url);
+            fetchOutcomes.attempted++;
+            if (r.ok) fetchOutcomes.ok++;
+            else { fetchOutcomes.failed++; fetchOutcomes.failures.push({ url: r.url, code: r.code, reason: r.reason }); }
+            return r;
+          })
+        );
+
+        const okFetches = urlFetches.filter(f => f.ok);
+        const failedFetches = urlFetches.filter(f => !f.ok);
+
+        if (okFetches.length > 0) {
+          const okBlock = okFetches.map(f => {
+            const preamble = f.preamble ? `${f.preamble}\n\n` : '';
+            const content = (f.content || '').slice(0, 12_000);
+            return `### Content from ${f.url}\n${preamble}${content}`;
+          }).join('\n\n---\n\n');
+          webDataBlock = `
+
+## ✅ DATI REALI RACCOLTI DAL SITO (GROUND TRUTH — usa SOLO questi)
+
+Quanto segue è il contenuto effettivamente estratto dai siti specificati nel task.
+È OBBLIGATORIO basare l'analisi su questi dati e SOLO su questi. È VIETATO:
+- Inventare il settore, i prodotti, il target o il modello di business.
+- Aggiungere "esempi tipici del settore" o "best practice generiche" senza riferirsi ai dati sopra.
+- Scrivere "da verificare" o "supponiamo che" quando il dato è già presente nel blocco.
+
+${okBlock}`;
+        }
+
+        // ── Automatic indirect-intel fallback ──
+        // Search the web for info ABOUT each failed domain (registries, news,
+        // Wikipedia, profiles). This gives the agent grounded data even when
+        // the primary site is down, instead of forcing it to invent a framework.
+        let recoveredAny = false;
+        if (failedFetches.length > 0) {
+          const failBlock = failedFetches.map(f => `- ${f.url}  →  ${f.code}: ${f.reason}`).join('\n');
+          webDataBlock += `\n\n## ⚠ FONTI PRIMARIE NON DISPONIBILI\n${failBlock}`;
+          sse({ data_unavailable: failedFetches.map(f => ({ url: f.url, code: f.code, reason: f.reason })) });
+
+          const indirectBlocks = [];
+          for (const f of failedFetches.slice(0, 3)) {
+            const intel = await gatherIndirectIntel(f.url, sse);
+            if (intel && intel.length > 0) {
+              recoveredAny = true;
+              const block = intel.map(i =>
+                `### ${i.title || '(senza titolo)'}\nURL: ${i.url}\nQuery: "${i.fromQuery}"\n${i.description ? `Descrizione: ${i.description}\n` : ''}\n${i.content}`,
+              ).join('\n\n---\n\n');
+              indirectBlocks.push(`#### Info indirette su ${f.url}:\n\n${block}`);
+            }
+          }
+
+          if (indirectBlocks.length > 0) {
+            webDataBlock += `\n\n## 🔎 FONTI INDIRETTE (raccolte automaticamente perché le fonti primarie sono down)\n\nIl sito principale non è raggiungibile, ma queste fonti pubbliche parlano dello stesso dominio/azienda. **Usa queste informazioni come ground truth** — sono dati reali, non inventati.\n\n${indirectBlocks.join('\n\n---\n\n')}`;
+            sse({ token: '[Fallback: recupero indiretto riuscito, procedo con i dati alternativi.]' });
+          } else {
+            webDataBlock += `\n\nNessuna fonte indiretta utile trovata sul web per i domini sopra. Per le sezioni che riguardano questi URL, scrivi esplicitamente "Fonte non raggiungibile — analisi non eseguibile". NON sostituire con framework generici, esempi tipici, o supposizioni basate sul nome del dominio.`;
+          }
+        }
+
+        // Fail-fast: only abort if primary research has NO data AT ALL —
+        // neither primary fetches nor indirect intel recovered anything.
+        if (isPrimaryResearch && okFetches.length === 0 && !recoveredAny && taskUrls.length > 0) {
+          clearInterval(keepalive);
+          sse({
+            aborted: true,
+            reason: 'PRIMARY_RESEARCH_FAILED',
+            message: 'Tutti gli URL del task sono irraggiungibili. Pipeline interrotta per evitare contenuto inventato.',
+            failures: fetchOutcomes.failures,
+          });
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
+        }
+
+        sse({ token: '\n' });
+      }
+
+      // ── Web-search agents: search-driven data collection ────────────
       if (useWebTools) {
         sse({ token: '[Raccolta dati web...]' });
 
@@ -307,7 +618,11 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
         const fetchResults = await Promise.all(
           urlMatches.map(async (url) => {
             sse({ token: `[Fetching: ${url}]` });
-            return { url, content: await runFetchUrl(url) };
+            const r = await runFetchUrl(url);
+            fetchOutcomes.attempted++;
+            if (r.ok) fetchOutcomes.ok++;
+            else fetchOutcomes.failed++;
+            return r;
           })
         );
 
@@ -315,11 +630,19 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
           .map((s) => `### Search: "${s.query}"\n${s.result}`)
           .join('\n\n---\n\n');
 
-        const fetchBlock = fetchResults.length > 0
-          ? fetchResults.map((f) => `### Full content: ${f.url}\n${f.content}`).join('\n\n---\n\n')
+        const fetchBlock = fetchResults
+          .filter(f => f.ok)
+          .map(f => `### Full content: ${f.url}\n${f.preamble ? f.preamble + '\n\n' : ''}${(f.content || '').slice(0, 8_000)}`)
+          .join('\n\n---\n\n');
+
+        const failedFetches = fetchResults.filter(f => !f.ok);
+        const failBlock = failedFetches.length > 0
+          ? `\n\n## URL non raggiungibili durante la ricerca:\n${failedFetches.map(f => `- ${f.url}  →  ${f.code}`).join('\n')}`
           : '';
 
-        webDataBlock = `\n\n## REAL-TIME WEB DATA (use ONLY this data — do NOT invent prices or figures):\n\n${searchBlock}${fetchBlock ? '\n\n---\n\n' + fetchBlock : ''}`;
+        const collected = `${searchBlock}${fetchBlock ? '\n\n---\n\n' + fetchBlock : ''}${failBlock}`;
+        webDataBlock = (webDataBlock || '') +
+          `\n\n## REAL-TIME WEB DATA (use ONLY this data — do NOT invent prices, figures, brands, sectors):\n\n${collected}`;
 
         sse({ token: '\n' });
       }
@@ -338,7 +661,17 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
       }, { max_tokens: 16384 });
 
       clearInterval(keepalive);
-      sse({ done: true, output, tokensOut });
+      // Strip internal think/tool blocks before emitting the final output —
+      // the streamed tokens may contain them. Quality is computed on the clean
+      // text so think-blocks don't inflate output_length artificially.
+      const cleanOutput = sanitizeAgentOutput(output);
+      const dataQuality = computeDataQuality({
+        fetchOutcomes,
+        output: cleanOutput,
+        taskUrls,
+        useWebTools,
+      });
+      sse({ done: true, output: cleanOutput, tokensOut, dataQuality, fetchOutcomes });
       res.write('data: [DONE]\n\n');
       res.end();
     } catch (e) {
@@ -346,6 +679,30 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
       sse({ error: e.message });
       res.end();
     }
+  });
+
+  // ── /api/studio/smoke-test — Pre-run reachability check ──────────────
+  router.post('/api/studio/smoke-test', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      let urls = Array.isArray(body.urls) ? body.urls : [];
+      if (!urls.length && typeof body.task === 'string') urls = extractUrlsFromText(body.task);
+      if (!urls.length) return sendJSON(res, 200, { probes: [], allOk: true });
+
+      const probes = await Promise.all(
+        urls.slice(0, 8).map(async (url) => {
+          try {
+            const r = await headProbe(url);
+            return { url, ok: r.ok, status: r.status, reason: r.reason || '', finalUrl: r.finalUrl };
+          } catch (e) {
+            return { url, ok: false, status: 0, reason: e.message || String(e) };
+          }
+        })
+      );
+
+      const allOk = probes.every(p => p.ok);
+      sendJSON(res, 200, { probes, allOk });
+    } catch (e) { sendError(res, 500, e.message); }
   });
 
   // ── /api/studio/deliberate — Parliament Geth Consensus ───────────────
@@ -402,16 +759,35 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
 
       tok('[Parlamento — Round 2: Cross-Reading & Refinamento] ');
       const r2Results = [];
+      // Per-agent timeout — if any single agent stalls (network, LLM hung)
+      // the loop must not block the whole deliberation. After this budget,
+      // fall back to the agent's Round 1 output and continue.
+      const PER_AGENT_TIMEOUT_MS = 90_000;
       for (const proposal of eligible) {
         tok(`[Round 2: ${proposal.label || proposal.agent}] `);
         const r2Sys = `You are ${proposal.agent}, a specialist AI agent in NHA Studio Parliament. Today is ${today}. Respond entirely in ${language}.\n\n## WORKFLOW GOAL: ${task}\n\n## YOUR ROUND 1 RESPONSE:\n${proposal.output.slice(0,3000)}\n\n## OTHER AGENTS' ROUND 1 PROPOSALS:\n${crossCtx(proposal.agent)}\n\nDELIBERATION ROUND 2 — REFINEMENT:\n1. Review the other agents' proposals carefully\n2. Incorporate valid points where you AGREE — mark with [AGREE]\n3. Flag genuine disagreements with [CONTRADICTION] and explain your reasoning with evidence\n4. Produce your COMPLETE REFINED response — thorough and exhaustive\n5. Keep analysis focused on: ${task}\n\nBe THOROUGH. Minimum 600 words of substantive refined analysis.`;
         let r2Out = '';
+        let fellBack = false;
         try {
-          await callLLMStream(config, r2Sys, 'Produce your refined Round 2 response. Write complete content under every heading — never leave a section title without body text.',
-            (t) => { r2Out += t; }, { max_tokens: 16384 });
-        } catch { r2Out = proposal.output; }
-        r2Results.push({ agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out });
-        sse({ deliberation_r2: { agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out } });
+          // Race the LLM stream against a hard timeout.
+          await Promise.race([
+            callLLMStream(config, r2Sys, 'Produce your refined Round 2 response. Write complete content under every heading — never leave a section title without body text.',
+              (t) => { r2Out += t; }, { max_tokens: 16384 }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('R2_AGENT_TIMEOUT')), PER_AGENT_TIMEOUT_MS)),
+          ]);
+        } catch (err) {
+          // Fallback: use Round 1 output so the rest of deliberation can proceed.
+          fellBack = true;
+          r2Out = proposal.output;
+          tok(`[Round 2 ${proposal.label || proposal.agent}: timeout — uso Round 1 come fallback] `);
+        }
+        // If the stream returned but produced no text (LLM hiccup), also fall back.
+        if (!r2Out || r2Out.trim().length < 50) {
+          fellBack = true;
+          r2Out = proposal.output;
+        }
+        r2Results.push({ agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out, fellBack });
+        sse({ deliberation_r2: { agent: proposal.agent, label: proposal.label, icon: proposal.icon, output: r2Out, fellBack } });
       }
 
       const r2Conv = measureConvergence(r2Results.map(r => r.output));
@@ -435,9 +811,22 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
       const medSys = `You are HERALD, the Parliament Mediator in NHA Studio. Today is ${today}. Respond entirely in ${language}.\n\n## WORKFLOW GOAL: ${task}\n\n## ALL AGENTS' REFINED POSITIONS (Round 2):\n${allR2Ctx}${contBlock}\n\n${medTask}\n\nCRITICAL: NEVER write a heading without immediately writing full content below it. Every section MUST have at least 5-8 concrete bullet points or detailed paragraphs. Be EXHAUSTIVE.`;
 
       let mediationOutput = '';
+      const HERALD_TIMEOUT_MS = 120_000;
       try {
-        await callLLMStream(config, medSys, 'Produce the Parliament final synthesis. Be thorough and complete.', (t) => { mediationOutput += t; }, { max_tokens: 16384 });
-      } catch {}
+        await Promise.race([
+          callLLMStream(config, medSys, 'Produce the Parliament final synthesis. Be thorough and complete.', (t) => { mediationOutput += t; }, { max_tokens: 16384 }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('HERALD_TIMEOUT')), HERALD_TIMEOUT_MS)),
+        ]);
+      } catch (err) {
+        // HERALD timed out — emit whatever we got so the client isn't stuck.
+        tok(`[HERALD mediation: timeout dopo ${HERALD_TIMEOUT_MS/1000}s — restituisco contenuto parziale] `);
+      }
+      // If absolutely nothing came back, fall back to a concatenation of the
+      // r2 outputs so the user has SOMETHING to read instead of a blank panel.
+      if (!mediationOutput || mediationOutput.trim().length < 50) {
+        mediationOutput = `# Sintesi automatica (HERALD non disponibile)\n\n` +
+          r2Results.map(r => `## ${r.label || r.agent}\n${r.output.slice(0, 2000)}`).join('\n\n---\n\n');
+      }
       sse({ deliberation_r3: { output: mediationOutput, converged } });
 
       clearInterval(keepalive);
@@ -453,6 +842,66 @@ Select the optimal agent pipeline. Output ONLY the JSON.`;
   });
 }
 
+// ── Data-quality scoring (replaces fake sentiment "confidence") ────────
+/**
+ * Compute a 0..1 data-quality score from observable signals.
+ *
+ * Signals (weighted):
+ *   - fetch_success_ratio:  fraction of attempted fetches that succeeded   (0.45)
+ *   - declared_urls_ok:     primary URLs from the task were reachable      (0.25)
+ *   - output_length:        produced a substantive response (>= 600 chars) (0.10)
+ *   - no_error_strings:     output free of "fetch failed", "search failed" (0.10)
+ *   - structured_evidence:  output cites numbers, dates, or quoted strings (0.10)
+ *
+ * Returns { score: number, label: 'high'|'medium'|'low', signals: {...} }.
+ */
+export function computeDataQuality({ fetchOutcomes, output = '', taskUrls = [], useWebTools = false }) {
+  const out = String(output || '');
+  const signals = {};
+
+  const totalAttempted = fetchOutcomes?.attempted || 0;
+  const totalOk        = fetchOutcomes?.ok || 0;
+  if (totalAttempted > 0) {
+    signals.fetch_success_ratio = totalOk / totalAttempted;
+  } else if (useWebTools || taskUrls.length > 0) {
+    signals.fetch_success_ratio = 0;
+  } else {
+    signals.fetch_success_ratio = 1; // No fetches expected → neutral
+  }
+
+  const declaredFailures = (fetchOutcomes?.failures || []).filter(f => taskUrls.includes(f.url)).length;
+  if (taskUrls.length === 0) {
+    signals.declared_urls_ok = 1;
+  } else {
+    signals.declared_urls_ok = Math.max(0, 1 - declaredFailures / taskUrls.length);
+  }
+
+  signals.output_length = Math.min(1, out.length / 1_200);
+
+  const errorMarkers = /fetch failed|search failed|errore 500|errore 404|http_500|http_404|http_429|http_4\d{2}|timeout|network error/gi;
+  const errorCount = (out.match(errorMarkers) || []).length;
+  signals.no_error_strings = Math.max(0, 1 - errorCount / 5);
+
+  const hasNumbers  = /\b\d{1,4}(?:[.,]\d+)?(?:\s*(%|€|\$|£|¥|kg|cm|mm|km|°c))?/i.test(out);
+  const hasDates    = /\b(19|20)\d{2}\b|\b\d{1,2}[\/\-.]\d{1,2}[\/\-.](19|20)?\d{2}\b/.test(out);
+  const hasQuotes   = /"[^"]{8,}"|"[^"]{8,}"/.test(out);
+  const structScore = (hasNumbers ? 0.5 : 0) + (hasDates ? 0.25 : 0) + (hasQuotes ? 0.25 : 0);
+  signals.structured_evidence = Math.min(1, structScore);
+
+  const score =
+    0.45 * signals.fetch_success_ratio +
+    0.25 * signals.declared_urls_ok +
+    0.10 * signals.output_length +
+    0.10 * signals.no_error_strings +
+    0.10 * signals.structured_evidence;
+
+  let label = 'low';
+  if (score >= 0.70) label = 'high';
+  else if (score >= 0.50) label = 'medium';
+
+  return { score: Math.round(score * 100) / 100, label, signals };
+}
+
 // ── Keyword fallback planner (used when LLM is unavailable) ────────────
 
 function buildKeywordFallback(task, sanitizedTask, hasPdf, pdfName, it) {
@@ -461,7 +910,8 @@ function buildKeywordFallback(task, sanitizedTask, hasPdf, pdfName, it) {
 
   const hasEmail      = /email|mail|inbox|posta/i.test(taskLow);
   const hasCalendar   = /calendar|agenda|calendari|eventi|schedule/i.test(taskLow);
-  const hasSearch     = /cerca|search|notizie|news|ultime|latest|web|internet|tendenz|trend|acquista|compra|dove\s+trovare|where\s+to\s+buy|similar|simile/i.test(taskLow);
+  const hasUrl        = /https?:\/\/[^\s]+/i.test(taskLow);
+  const hasSearch     = hasUrl || /cerca|search|notizie|news|ultime|latest|web|internet|tendenz|trend|acquista|compra|dove\s+trovare|where\s+to\s+buy|similar|simile|esamina|analizza.*sito|analisi.*sito|sito\s+web/i.test(taskLow);
   const hasCanvas     = /html|dashboard|visua|report|grafico|chart/i.test(taskLow);
   const hasGitHub     = /github|git\b|issue\b|pull request|\bPR\b/i.test(taskLow);
   const hasSlack      = /slack/i.test(taskLow);

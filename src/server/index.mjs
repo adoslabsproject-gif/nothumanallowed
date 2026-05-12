@@ -376,14 +376,39 @@ export async function startServer({ port = 3847, host = '127.0.0.1', noBrowser =
 
   const server = http.createServer(handleRequest);
 
-  // Attach WebSocket AFTER HTTP server is listening to avoid WS error events
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
+  // Retry the bind for up to 12 s on EADDRINUSE. The classic case is a fresh
+  // self-restart right after the previous process died: the listen socket can
+  // be stuck in TIME_WAIT (no PID owns it, so the lsof-kill above can't help).
+  // Linear backoff 600 ms × 20 = 12 s — more than enough on every kernel I've
+  // seen for a localhost listen socket to clear.
+  const tryListen = () => new Promise((resolve, reject) => {
+    const onErr = (err) => reject(err);
+    server.once('error', onErr);
     server.listen(port, host, () => {
-      server.removeListener('error', reject);
+      server.removeListener('error', onErr);
       resolve(undefined);
     });
   });
+
+  let listenAttempts = 0;
+  const MAX_LISTEN_ATTEMPTS = 20;
+  while (true) {
+    try {
+      await tryListen();
+      break;
+    } catch (err) {
+      listenAttempts++;
+      const isAddrInUse = err && (err.code === 'EADDRINUSE' || err.code === 'EACCES');
+      if (!isAddrInUse || listenAttempts >= MAX_LISTEN_ATTEMPTS) {
+        throw err;
+      }
+      // Brief notice every 3 s so the user knows we're not stuck
+      if (listenAttempts % 5 === 0) {
+        console.log(`\x1b[33m  ! Port ${port} still busy (TIME_WAIT?), retry ${listenAttempts}/${MAX_LISTEN_ATTEMPTS}...\x1b[0m`);
+      }
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
 
   setupWebSocket(server);
 
@@ -433,6 +458,18 @@ export async function startServer({ port = 3847, host = '127.0.0.1', noBrowser =
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ platform: 'nha-ui', version: VERSION }),
   }).catch(() => {});
+
+  // ── AWF: auto-start advanced triggers (file-watch, RSS, IMAP) and the
+  // 24h workflow auto-backup. Without this, file-watch / RSS triggers
+  // configured by the user never actually fire. Wrapped in try/catch so a
+  // bad workflow config can't take down the daemon.
+  try {
+    const { startAdvancedTriggers, startAutoBackup } = await import('./routes/connectors.mjs');
+    startAdvancedTriggers();
+    startAutoBackup(24);
+  } catch (e) {
+    console.log(`  ${R}⚠${NC} ${D}AWF triggers/backup failed to start - ${e.message}${NC}`);
+  }
 
   if (!noBrowser) openBrowser(`http://localhost:${port}`);
 

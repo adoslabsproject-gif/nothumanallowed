@@ -14,13 +14,21 @@
 
 import fs   from 'fs';
 import path from 'path';
-import { exec, spawn } from 'child_process';
-import { createServer } from 'net';
+import { exec, spawn, execSync } from 'child_process';
+import { createServer, Socket } from 'net';
 import { promisify } from 'util';
+import { createRequire } from 'module';
+// `require` shim for the rare spots where CJS-style require() was historically
+// used in this ESM file. Without this, every `require(...)` here throws
+// "ReferenceError: require is not defined" — which is exactly the bug that
+// took 31 releases to diagnose because it surfaced in the SSE error channel.
+const require = createRequire(import.meta.url);
 import { sendJSON, sendError, parseBody, sendSSE } from '../index.mjs';
 import { loadConfig }   from '../../config.mjs';
-import { callLLM, callLLMStream, fixQwen3BPE } from '../../services/llm.mjs';
+import { callLLM, callLLMStream, callLLMWithTools, getApiKey, fixQwen3BPE } from '../../services/llm.mjs';
 import { NHA_DIR } from '../../constants.mjs';
+import * as acorn from 'acorn';
+import acornJsx from 'acorn-jsx';
 
 const execAsync = promisify(exec);
 
@@ -39,10 +47,14 @@ class SandboxManager {
   constructor() {
     /** @type {{ proc: import('child_process').ChildProcess; port: number; projectName: string; startedAt: Date; healthy: boolean } | null} */
     this._sandbox = null;
+    this._stoppedByUser = false;
   }
 
   isRunning() {
-    return this._sandbox !== null && this._sandbox.proc && !this._sandbox.proc.killed;
+    if (!this._sandbox || !this._sandbox.proc) return false;
+    if (this._sandbox.proc.killed) { this._sandbox = null; return false; }
+    // Verify the process is actually alive (not zombie)
+    try { process.kill(this._sandbox.proc.pid, 0); return true; } catch { this._sandbox = null; return false; }
   }
 
   status() {
@@ -55,17 +67,41 @@ class SandboxManager {
   get port() { return this.isRunning() ? this._sandbox.port : null; }
 
   async stop() {
-    if (!this.isRunning()) return;
-    const { proc } = this._sandbox;
+    if (!this._sandbox) return;
+    this._stoppedByUser = true;
+    const { proc, port } = this._sandbox;
     this._sandbox = null;
+
+    // 1. Kill process directly + process group + all children
     try {
-      proc.kill('SIGTERM');
-      // Give it a grace period then SIGKILL
+      // Direct kill first — most reliable
+      try { proc.kill('SIGKILL'); } catch {}
+      if (proc.pid) {
+        // Also kill the process group
+        try { process.kill(-proc.pid, 'SIGKILL'); } catch {}
+        try { process.kill(proc.pid, 'SIGKILL'); } catch {}
+      }
+      // Wait for exit
       await new Promise((resolve) => {
-        const t = setTimeout(() => { try { proc.kill('SIGKILL'); } catch {} resolve(); }, 4000);
+        const t = setTimeout(resolve, 1000);
         proc.once('exit', () => { clearTimeout(t); resolve(); });
       });
     } catch {}
+
+    // 2. Force-kill any orphan processes still holding the port
+    if (port) {
+      try {
+        if (process.platform === 'win32') {
+          await execAsync(`for /f "tokens=5" %a in ('netstat -ano ^| findstr :${port} ^| findstr LISTENING') do taskkill /F /PID %a`, { timeout: 3000 });
+        } else {
+          const { stdout } = await execAsync(`lsof -ti:${port} 2>/dev/null || true`, { timeout: 2000 });
+          const pids = stdout.trim().split(/\s+/).filter(Boolean);
+          for (const pid of pids) { try { process.kill(parseInt(pid), 'SIGKILL'); } catch {} }
+        }
+      } catch {}
+      // Wait for OS to release the port
+      await new Promise((r) => setTimeout(r, 500));
+    }
   }
 
   /**
@@ -76,11 +112,29 @@ class SandboxManager {
    */
   async start(projectName, projectDir, emit, _attempt = 1) {
     const MAX_RETRIES = 3;
+    this._stoppedByUser = false;
+
+    // Server version banner — lets the user verify their `nha ui` process is
+    // actually running the latest code (npm install only updates files on disk;
+    // the running process must be killed and restarted to pick them up).
+    if (_attempt === 1) {
+      try {
+        const { VERSION } = await import('../../constants.mjs');
+        emit({ type: 'status', msg: `nha sandbox manager v${VERSION} — if this is older than what you installed, kill nha ui and restart it (the running process won't pick up new code by itself)` });
+      } catch { /* non-fatal */ }
+    }
 
     // Kill any existing sandbox
     if (this.isRunning()) {
       emit({ type: 'phase', phase: 'cleanup', msg: 'Stopping previous sandbox...' });
       await this.stop();
+      // CRITICAL: `stop()` sets `_stoppedByUser = true` so the dying process'
+      // crash isn't misreported. We MUST reset it here, otherwise the brand
+      // new sandbox we're about to spawn will exit silently on any crash —
+      // bypassing both Tier 1 (npm install) and Tier 2 (LLM/rename) autofix.
+      // This was the root cause of the "require is not defined — no autofix
+      // ever runs" bug. The flag intent is per-process, not persistent.
+      this._stoppedByUser = false;
     }
 
     if (!fs.existsSync(projectDir)) {
@@ -155,7 +209,7 @@ class SandboxManager {
         NODE_ENV: 'development',
         NHA_SANDBOX: '1',
       },
-      detached: false,
+      detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -177,6 +231,15 @@ class SandboxManager {
       const line = d.toString().trim();
       stderrBuf += d.toString();
       if (line) emit({ type: 'log', msg: `[stderr] ${line}` });
+    });
+
+    // Capture spawn-level errors (e.g. ENOENT on 'node', permission denied).
+    // Without this handler, Node would throw an unhandled 'error' event and
+    // the whole nha ui process could die silently. This is the missing path
+    // that produced the "[error] require is not defined" with no autofix flow.
+    proc.on('error', (err) => {
+      stderrBuf += `\n[spawn error] ${err.message}\n${err.stack || ''}\n`;
+      emit({ type: 'warn', msg: `[spawn error] ${err.code || ''} ${err.message}` });
     });
 
     // Wait for exit or healthy
@@ -211,13 +274,27 @@ class SandboxManager {
 
     // ── Crash handling — auto-fix missing modules ─────────────────────────
     const exitCode = typeof healthy === 'object' ? healthy.exitCode : -1;
-    emit({ type: 'status', msg: `Process exited with code ${exitCode}` });
+    // If user pressed Stop, don't report as crash. We ALSO log this so we
+    // can see in the UI when the stoppedByUser flag is what's blocking the
+    // autofix flow (was a real bug pre-15.1.24).
+    if (this._stoppedByUser) {
+      emit({ type: 'warn', msg: 'Crash handling skipped: _stoppedByUser=true (user pressed Stop, or previous stop() leaked the flag). If this is unexpected, restart nha ui to pick up the latest fix.' });
+      return;
+    }
+    emit({ type: 'status', msg: `Process exited with code ${exitCode} (attempt ${_attempt}/${MAX_RETRIES})` });
+    // Surface the captured stderr right away so the user sees the REAL error
+    // (not just the post-Tier-2 summary). This is the diagnostic gold.
+    if (stderrBuf && stderrBuf.trim()) {
+      const stderrSnippet = stderrBuf.split('\n').slice(0, 20).join('\n');
+      emit({ type: 'log', msg: `[stderr full capture, ${stderrBuf.length} bytes]\n${stderrSnippet}` });
+    } else {
+      emit({ type: 'warn', msg: 'Process exited but stderr is EMPTY — could be: process killed by OS, spawn failed before any output, or stdio mis-routed. Run "node .nha-launcher.js" manually in the project dir to reproduce.' });
+    }
 
-    // Extract missing module name from stderr
+    // ── Tier 1: missing module → npm install + retry ─────────────────────
     const missingMatch = stderrBuf.match(/Cannot find module ['"]([^'"]+)['"]/);
     if (missingMatch && _attempt < MAX_RETRIES) {
       const missingMod = missingMatch[1];
-      // Skip shim-able or built-in modules
       if (!missingMod.startsWith('.') && !missingMod.startsWith('/') && !missingMod.startsWith('node:')) {
         const pkgName = missingMod.startsWith('@') ? missingMod.split('/').slice(0, 2).join('/') : missingMod.split('/')[0];
         emit({ type: 'phase', phase: 'autofix', msg: `Missing module "${pkgName}" — installing...` });
@@ -235,9 +312,235 @@ class SandboxManager {
       }
     }
 
-    // Show the actual error from stderr
-    const errDetail = stderrBuf.split('\n').find((l) => l.includes('Error') || l.includes('error')) || stderrBuf.slice(0, 300);
-    emit({ type: 'error', msg: _attempt >= MAX_RETRIES ? `Failed after ${MAX_RETRIES} attempts: ${errDetail}` : `Crash: ${errDetail || 'Server crashed on startup'}` });
+    // ── Tier 2: runtime errors that need code fix (require/import mismatch,
+    //   SyntaxError, ReferenceError, TypeError) — extract failing file from
+    //   stack trace and ask LLM to repair it. This is the bug the user hit:
+    //   "require is not defined" inside an ESM project should auto-rewrite
+    //   require() → import statements, or flip package.json "type" field. ───
+    const runtimePatterns = [
+      { name: 'CJS/ESM mismatch',   re: /require is not defined/i,
+        hint: 'The file uses CommonJS `require()` but the project is ESM ("type":"module" in package.json or .mjs extension). Convert all `require(\'X\')` to ES module `import` statements. Convert `module.exports = ...` to `export default ...`. Keep all logic identical.' },
+      { name: 'ESM/CJS mismatch',   re: /Cannot use import statement outside a module/i,
+        hint: 'The file uses ES module `import` but the project is CommonJS. Either add `"type":"module"` to package.json (preferred for new projects) or convert imports to `require()`.' },
+      { name: 'import.meta misuse', re: /import\.meta(?:\.url)? is only valid in/i,
+        hint: 'The file uses `import.meta` in a CommonJS context. Either switch the project to ESM (add `"type":"module"` to package.json) or replace `import.meta.url` with `__filename` / `__dirname`.' },
+      { name: 'SyntaxError',        re: /SyntaxError:.+/i,
+        hint: 'The file has a JavaScript syntax error. Fix the syntax issue — unclosed brackets, missing commas, invalid tokens. Output the complete corrected file.' },
+      { name: 'ReferenceError',     re: /ReferenceError: (\w+) is not defined/i,
+        hint: 'A variable is referenced but never declared/imported. Either import it from the correct module or declare it. Common missing globals: "require" (use import), "process" (Node only — add `import process from \'node:process\'` in ESM), "__dirname" (in ESM use `import.meta.url` + fileURLToPath).' },
+      { name: 'TypeError null/undefined', re: /TypeError: Cannot read prop(?:erties|erty)? .+ of (?:undefined|null)/i,
+        hint: 'Null/undefined access. Add a null-check or optional chaining (?.) before the failing access.' },
+    ];
+
+    const matchedPattern = runtimePatterns.find(p => p.re.test(stderrBuf));
+    // ALWAYS log the autofix decision, so the user can see why Tier 2 fires
+    // or doesn't fire. Previous versions emitted nothing when matchedPattern
+    // was undefined — leaving the user confused why no autofix ran.
+    if (!matchedPattern) {
+      emit({ type: 'warn', msg: `Auto-fix: no known runtime pattern matched in stderr. Patterns checked: ${runtimePatterns.map(p => p.name).join(', ')}. stderr starts with: "${stderrBuf.slice(0, 200).replace(/\n/g, ' ⏎ ')}"` });
+    } else if (_attempt >= MAX_RETRIES) {
+      emit({ type: 'warn', msg: `Auto-fix: pattern "${matchedPattern.name}" matched but MAX_RETRIES (${MAX_RETRIES}) reached. Stopping.` });
+    }
+    if (matchedPattern && _attempt < MAX_RETRIES) {
+      emit({ type: 'phase', phase: 'autofix', msg: `Runtime error detected: ${matchedPattern.name} — analyzing...` });
+
+      const pkgPath = path.join(projectDir, 'package.json');
+      const isRequireError = /require is not defined/i.test(stderrBuf);
+      const isImportError  = /Cannot use import statement outside a module/i.test(stderrBuf);
+
+      // ── Extract file path from stack trace (multiple patterns) ──
+      // Try several regex forms to be robust against various Node stack formats.
+      const allPaths = new Set();
+      // Form A: "at /abs/path/file.js:N:M" or "at file:///abs/path/file.js:N:M"
+      for (const m of stderrBuf.matchAll(/(?:file:\/\/)?(\/[^\s:()'"]+\.(?:m?js|cjs|jsx?|tsx?)):\d+(?::\d+)?/g)) {
+        allPaths.add(m[1]);
+      }
+      // Form B: ESM error header "file:///path/file.js:N"
+      for (const m of stderrBuf.matchAll(/file:\/\/(\/[^\s:'"]+\.(?:m?js|cjs|jsx?|tsx?)):?\d*/g)) {
+        allPaths.add(m[1]);
+      }
+      // Form C: bare absolute path at start of line (Node prints this for CJS syntax)
+      for (const m of stderrBuf.matchAll(/^(\/[^\s:'"]+\.(?:m?js|cjs|jsx?|tsx?))(?::\d+)?$/gm)) {
+        allPaths.add(m[1]);
+      }
+
+      // First filter: paths that look like they live in this project
+      let projectFiles = [...allPaths]
+        .filter(p => p.startsWith(projectDir) || p.includes('/' + path.basename(projectDir) + '/'))
+        .map(p => p.startsWith(projectDir) ? path.relative(projectDir, p) : null)
+        .filter(Boolean)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 5);
+
+      // FALLBACK: if no stack-trace files matched, scan the project directory
+      // for all .js / .mjs / .cjs files (excluding node_modules) and pick the
+      // ones that contain `require(` or `import` — those are the candidates.
+      if (projectFiles.length === 0) {
+        emit({ type: 'status', msg: `Stack trace did not reveal a file in project — scanning project files...` });
+        try {
+          const _walk = (dir, out = []) => {
+            for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+              if (ent.name === 'node_modules' || ent.name.startsWith('.')) continue;
+              const abs = path.join(dir, ent.name);
+              if (ent.isDirectory()) _walk(abs, out);
+              else if (/\.(m?js|cjs)$/.test(ent.name)) out.push(abs);
+            }
+            return out;
+          };
+          const allJs = _walk(projectDir);
+          // Heuristic — pick files matching the error semantics
+          const triggers = isRequireError
+            ? /\brequire\s*\(/
+            : isImportError ? /^\s*import\s+/m
+            : /\brequire\s*\(|^\s*import\s+/m;
+          const candidates = allJs
+            .filter(abs => {
+              try { return triggers.test(fs.readFileSync(abs, 'utf-8')); } catch { return false; }
+            })
+            .slice(0, 3);
+          projectFiles = candidates.map(abs => path.relative(projectDir, abs));
+        } catch (e) {
+          emit({ type: 'warn', msg: `Project scan failed: ${e.message.slice(0, 200)}` });
+        }
+      }
+
+      // ── Deterministic fixes BEFORE LLM repair (faster, no token cost) ──
+      // The trick is to consider the file extension because it overrides
+      // package.json "type" in Node.
+      let deterministicFixApplied = false;
+      if ((isRequireError || isImportError) && projectFiles.length > 0) {
+        for (const rel of projectFiles) {
+          const ext = path.extname(rel).toLowerCase();
+          const abs = path.join(projectDir, rel);
+
+          // Case A: file is .mjs (forced ESM) using require() → rename to .cjs
+          // This is the FAST fix Node itself suggests in the error message.
+          if (isRequireError && ext === '.mjs') {
+            const newAbs = abs.replace(/\.mjs$/i, '.cjs');
+            try {
+              fs.renameSync(abs, newAbs);
+              // Update package.json "main" if it pointed to the old file
+              if (fs.existsSync(pkgPath)) {
+                const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+                if (pkg.main && pkg.main.endsWith(rel)) {
+                  pkg.main = pkg.main.replace(/\.mjs$/i, '.cjs');
+                  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+                }
+              }
+              emit({ type: 'status', msg: `Auto-fix: renamed ${rel} → ${path.basename(newAbs)} (Node suggests this for CJS-in-.mjs)` });
+              deterministicFixApplied = true;
+            } catch (e) {
+              emit({ type: 'warn', msg: `Rename ${rel} failed: ${e.message.slice(0, 200)}` });
+            }
+          }
+          // Case B: file is .cjs (forced CJS) using import → rename to .mjs
+          else if (isImportError && ext === '.cjs') {
+            const newAbs = abs.replace(/\.cjs$/i, '.mjs');
+            try {
+              fs.renameSync(abs, newAbs);
+              if (fs.existsSync(pkgPath)) {
+                const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+                if (pkg.main && pkg.main.endsWith(rel)) {
+                  pkg.main = pkg.main.replace(/\.cjs$/i, '.mjs');
+                  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+                }
+              }
+              emit({ type: 'status', msg: `Auto-fix: renamed ${rel} → ${path.basename(newAbs)} (Node suggests this for import-in-.cjs)` });
+              deterministicFixApplied = true;
+            } catch (e) {
+              emit({ type: 'warn', msg: `Rename ${rel} failed: ${e.message.slice(0, 200)}` });
+            }
+          }
+        }
+      }
+
+      // Case C: ambiguous .js files — toggle package.json "type"
+      // ONLY effective when files are .js (extension doesn't force a mode)
+      if (!deterministicFixApplied && (isRequireError || isImportError) && fs.existsSync(pkgPath)) {
+        const onlyJsFiles = projectFiles.every(p => path.extname(p).toLowerCase() === '.js');
+        if (onlyJsFiles) {
+          try {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+            if (isImportError && pkg.type !== 'module') {
+              pkg.type = 'module';
+              fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+              emit({ type: 'status', msg: 'Auto-fix: added "type":"module" to package.json (for .js with import)' });
+              deterministicFixApplied = true;
+            } else if (isRequireError && pkg.type === 'module') {
+              delete pkg.type;
+              fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+              emit({ type: 'status', msg: 'Auto-fix: removed "type":"module" from package.json (for .js with require)' });
+              deterministicFixApplied = true;
+            }
+          } catch (e) {
+            emit({ type: 'warn', msg: `package.json toggle failed: ${e.message.slice(0, 200)}` });
+          }
+        }
+      }
+
+      if (deterministicFixApplied) {
+        emit({ type: 'status', msg: `Auto-fix: restarting sandbox (attempt ${_attempt + 1}/${MAX_RETRIES})...` });
+        return this.start(projectName, projectDir, emit, _attempt + 1);
+      }
+
+      if (projectFiles.length === 0) {
+        emit({ type: 'warn', msg: `Auto-fix: could not identify a target file to repair. Stack trace shown above.` });
+      } else {
+        emit({ type: 'phase', phase: 'autofix', msg: `Auto-fix repairing ${projectFiles.length} file(s) with LLM: ${projectFiles.join(', ')}` });
+        let anyFixed = false;
+        for (const rel of projectFiles) {
+          const abs = path.join(projectDir, rel);
+          let original = '';
+          try { original = fs.readFileSync(abs, 'utf-8'); } catch { continue; }
+          if (!original) continue;
+
+          const errSnippet = stderrBuf.split('\n').slice(0, 30).join('\n');
+          const fixPrompt =
+`A Node.js sandbox crashed with this runtime error:
+
+${errSnippet.slice(0, 1500)}
+
+The failing file is: ${rel}
+
+What to fix: ${matchedPattern.hint}
+
+CRITICAL: Output ONLY the complete corrected file content. No commentary, no markdown fences. Keep all working logic intact — only change what's necessary to fix the error.
+
+Current file content:
+${original.slice(0, 12_000)}`;
+
+          try {
+            emit({ type: 'status', msg: `Auto-fix: rewriting ${rel}...` });
+            let fixed = '';
+            await callLLMStream(loadConfig(), 'You are a precise code repair assistant. Output only the corrected file, no explanation.', fixPrompt, (c) => { fixed += c; }, { max_tokens: 16384 });
+            fixed = fixed.replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
+            if (fixed.length > 20 && fixed !== original) {
+              fs.writeFileSync(abs, fixed, 'utf-8');
+              emit({ type: 'status', msg: `Auto-fix: ✓ repaired ${rel} (${fixed.length} chars)` });
+              anyFixed = true;
+            } else {
+              emit({ type: 'warn', msg: `Auto-fix: LLM returned no useful change for ${rel}` });
+            }
+          } catch (e) {
+            emit({ type: 'warn', msg: `Auto-fix: LLM repair of ${rel} failed — ${(e.message || '').slice(0, 200)}` });
+          }
+        }
+        if (anyFixed) {
+          emit({ type: 'status', msg: `Auto-fix: restarting sandbox (attempt ${_attempt + 1}/${MAX_RETRIES})...` });
+          return this.start(projectName, projectDir, emit, _attempt + 1);
+        }
+      }
+    }
+
+    // Show the actual error from stderr — include full trace for debugging
+    const stderrLines = stderrBuf.split('\n').filter(l => l.trim());
+    const errLine = stderrLines.find((l) => l.includes('Error') || l.includes('error'));
+    const stackLines = stderrLines.filter(l => l.includes('at ') || l.includes('Error')).slice(0, 5).join('\n');
+    const errDetail = errLine || stderrBuf.slice(0, 500) || 'No error output captured';
+    const fullErr = stackLines ? `${errDetail}\n${stackLines}` : errDetail;
+    emit({ type: 'error', msg: _attempt >= MAX_RETRIES
+      ? `Failed after ${MAX_RETRIES} attempts (exit ${exitCode}):\n${fullErr}`
+      : `Crash (exit ${exitCode}):\n${fullErr}` });
   }
 }
 
@@ -566,7 +869,7 @@ const ChatStore = {
  * Tool-calling agent that can read/edit/write files inside the project.
  * Uses structured SSE events: { type: 'text', token } | { type: 'tool', ... } | { type: 'done', changed }
  */
-async function runWebCraftAgent(config, projectName, message, attachments, emit) {
+async function runWebCraftAgent(config, projectName, message, attachments, emit, isAborted = () => false) {
   const MAX_STEPS = 8; // max agentic loop iterations
   const dir = ProjectStore.dir(projectName);
   if (!fs.existsSync(dir)) { emit({ type: 'error', msg: 'Project not found' }); return; }
@@ -577,70 +880,31 @@ async function runWebCraftAgent(config, projectName, message, attachments, emit)
   const LANG_MAP = { en:'English',it:'Italian',es:'Spanish',fr:'French',de:'German',pt:'Portuguese' };
   const language = LANG_MAP[(config?.language||'it').slice(0,2)] || 'Italian';
 
-  const toolSpec = `
-AVAILABLE TOOLS (use exactly ONE tool per <tool> tag):
+  // Native tool definitions for function calling (Anthropic/OpenAI)
+  const nativeTools = [
+    { name: 'read_file', description: 'Read a file from the project', input_schema: { type: 'object', properties: { path: { type: 'string', description: 'Relative path to the file' } }, required: ['path'] } },
+    { name: 'edit_file', description: 'Make a surgical edit to an existing file. The old_text must be an EXACT match of the current file content. Copy-paste from read_file output.', input_schema: { type: 'object', properties: { path: { type: 'string', description: 'Relative path' }, old_text: { type: 'string', description: 'Exact text to replace (copy from read_file output)' }, new_text: { type: 'string', description: 'Replacement text' } }, required: ['path', 'old_text', 'new_text'] } },
+    { name: 'create_file', description: 'Create a new file. ONLY for files that do not exist yet. Cannot overwrite existing files.', input_schema: { type: 'object', properties: { path: { type: 'string', description: 'Relative path' }, content: { type: 'string', description: 'Full file content' } }, required: ['path', 'content'] } },
+    { name: 'delete_file', description: 'Delete a file', input_schema: { type: 'object', properties: { path: { type: 'string', description: 'Relative path' } }, required: ['path'] } },
+    { name: 'list_files', description: 'List all project files', input_schema: { type: 'object', properties: {} } },
+    { name: 'search_files', description: 'Search for text in project files', input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Search pattern' }, glob: { type: 'string', description: 'File glob pattern (e.g. *.js)' } }, required: ['query'] } },
+    { name: 'run_command', description: 'Run a shell command in the project directory', input_schema: { type: 'object', properties: { command: { type: 'string', description: 'Shell command' } }, required: ['command'] } },
+    { name: 'check_syntax', description: 'Check file for syntax errors', input_schema: { type: 'object', properties: { path: { type: 'string', description: 'Relative path' } }, required: ['path'] } },
+    { name: 'restart_sandbox', description: 'Restart the sandbox server to test changes', input_schema: { type: 'object', properties: {} } },
+  ];
 
-── FILE OPERATIONS ──
-
-1. read — Read a file's content:
-<tool>{"op":"read","path":"relative/path.js"}</tool>
-
-2. edit — Surgical replacement (EXACT match required):
-<tool>{"op":"edit","path":"relative/path.js","old":"EXACT_CODE_TO_REPLACE","new":"REPLACEMENT_CODE"}</tool>
-
-3. write — Write/create a file (full content):
-<tool>{"op":"write","path":"relative/path.js","content":"FULL_FILE_CONTENT"}</tool>
-
-4. rename — Rename or move a file:
-<tool>{"op":"rename","path":"old/path.js","newPath":"new/path.js"}</tool>
-
-5. delete — Delete a file:
-<tool>{"op":"delete","path":"relative/path.js"}</tool>
-
-── VERIFICATION ──
-
-6. check — Syntax check (JS/JSON/CSS/HTML):
-<tool>{"op":"check","path":"relative/path.js"}</tool>
-
-7. lint — Full diagnostics with line numbers:
-<tool>{"op":"lint","path":"relative/path.js"}</tool>
-
-8. search — Grep/find text in project files:
-<tool>{"op":"search","query":"searchPattern","glob":"*.js"}</tool>
-
-9. list — List all project files with sizes:
-<tool>{"op":"list"}</tool>
-
-── EXECUTION ──
-
-10. run — Execute a shell command in the project directory:
-<tool>{"op":"run","cmd":"npm install express"}</tool>
-<tool>{"op":"run","cmd":"npm test"}</tool>
-<tool>{"op":"run","cmd":"node -e \\"console.log(1+1)\\""}</tool>
-
-11. sandbox — Restart the sandbox server to test changes:
-<tool>{"op":"sandbox"}</tool>
-
-── DIFF ──
-
-12. diff — Show diff between current file and last snapshot:
-<tool>{"op":"diff","path":"relative/path.js"}</tool>
-
-WORKFLOW — follow this for every change:
-1. Read the file(s) you need to modify
-2. Make your changes with edit or write
-3. Use check or lint to verify — fix any errors
-4. Use sandbox to restart and verify the app works
-5. When ALL changes are complete and verified, output: <done/>
+  // System prompt for native tool calling (no <tool> tags needed)
+  const toolInstructions = `
+WORKFLOW: read_file → edit_file (surgical changes) → check_syntax → restart_sandbox
 
 RULES:
-- "old" in edit must be EXACT verbatim code — copy-paste from read output
-- Use edit for targeted changes, write for new files or complete rewrites
-- ALWAYS read before edit if you haven't seen the file content
-- ALWAYS check/lint after modifications
-- Use run for npm install, npm test, or any shell command
-- Use search to find code patterns across the project
-- Output <done/> when you are completely finished — MANDATORY
+- To modify existing files: ALWAYS use edit_file. NEVER use create_file on existing files — it will fail.
+- edit_file: read the file first, then copy EXACT text from the read output as old_text.
+- To APPEND to a truncated file: old_text = last few lines, new_text = those lines + new content.
+- Keep each edit SMALL — max 30-40 lines. Do MULTIPLE edits for larger changes.
+- If edit_file fails (old_text not found): read the file again, copy the EXACT text, retry.
+- NEVER say you fixed something without verifying with check_syntax.
+- create_file is ONLY for brand new files.
 `;
 
   // Build system prompt with fresh file list each step
@@ -675,16 +939,14 @@ RULES:
     return [
       `You are WebCraft Agent — an elite AI coding assistant. Today: ${today}. Language: ${language}.`,
       `\nYou control the project IDE. You MUST use tools to implement changes — never just explain.`,
-      `\nYour workflow: read → plan → edit/write → check → verify → done.`,
       `\nAfter EVERY tool use, you will receive the result. Based on the result, decide what to do next.`,
-      `\nWhen finished, output <done/> to signal completion.`,
       `\n\n## PROJECT: ${projectName}`,
       `\n## FILE TREE:\n${fileIndex}`,
       skillContext,
       skillCtx ? `\n\n## PROJECT KNOWLEDGE:\n${skillCtx}` : '',
       attachments?.length ? `\n\n## ATTACHMENTS: ${attachments.map((a) => a.name).join(', ')}` : '',
       fileContents ? `\n\n## LOADED FILES:\n${fileContents}` : '',
-      `\n\n${toolSpec}`,
+      `\n\n${toolInstructions}`,
     ].join('');
   }
 
@@ -693,16 +955,164 @@ RULES:
     ? _buildMultimodalContent(message, attachments)
     : message;
 
-  // ── Agentic loop ───────────────────────────────────────────────────────────
+  // ── Agentic loop — native tool calling ────────────────────────────────────
   let hasChanges = false;
   const modifiedFiles = new Set();
-  let conversationHistory = [
-    { role: 'user', content: userContent },
-  ];
 
-  for (let step = 0; step < MAX_STEPS; step++) {
+  // Tool execution handler — called by callLLMWithTools for each tool_use
+  async function handleToolCall(toolName, input) {
+    const relPath = input.path;
+    if (relPath && !_isSafePath(relPath)) return 'Error: unsafe path';
+
+    if (toolName === 'read_file') {
+      const src = ProjectStore.readFile(projectName, relPath);
+      emit({ type: 'tool', op: 'read', path: relPath, result: src ? 'ok' : 'not_found' });
+      return src !== null ? src.slice(0, 16000) : 'Error: file not found';
+    }
+
+    if (toolName === 'edit_file') {
+      const src = ProjectStore.readFile(projectName, relPath);
+      if (!src) { emit({ type: 'tool', op: 'edit', path: relPath, result: 'file_not_found' }); return 'Error: file not found'; }
+      const oldStr = input.old_text;
+      const newStr = input.new_text;
+      if (src.includes(oldStr)) {
+        const newSrc = src.replace(oldStr, newStr ?? '');
+        ProjectStore.writeFile(projectName, relPath, newSrc);
+        hasChanges = true;
+        modifiedFiles.add(relPath);
+        emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 2000), newSnippet: (newStr ?? '').slice(0, 2000) });
+        return 'OK — edit applied successfully';
+      }
+      // Fuzzy match
+      const oldLines = oldStr.split('\n').map(l => l.trim());
+      const srcLines = src.split('\n');
+      let matchStart = -1;
+      for (let i = 0; i <= srcLines.length - oldLines.length; i++) {
+        let ok = true;
+        for (let j = 0; j < oldLines.length; j++) {
+          if (srcLines[i + j].trim() !== oldLines[j]) { ok = false; break; }
+        }
+        if (ok) { matchStart = i; break; }
+      }
+      if (matchStart >= 0) {
+        const before = srcLines.slice(0, matchStart).join('\n');
+        const after = srcLines.slice(matchStart + oldLines.length).join('\n');
+        const result = (before ? before + '\n' : '') + (newStr ?? '') + (after ? '\n' + after : '');
+        ProjectStore.writeFile(projectName, relPath, result);
+        hasChanges = true;
+        modifiedFiles.add(relPath);
+        emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 2000), newSnippet: (newStr ?? '').slice(0, 2000) });
+        return 'OK — edit applied (fuzzy match)';
+      }
+      emit({ type: 'tool', op: 'edit', path: relPath, result: 'old_not_found' });
+      return 'Error: old_text not found in file. Use read_file to see the EXACT current content, copy the exact lines, and retry.';
+    }
+
+    if (toolName === 'create_file') {
+      const existing = ProjectStore.readFile(projectName, relPath);
+      if (existing !== null) {
+        emit({ type: 'tool', op: 'write', path: relPath, result: 'blocked_use_edit' });
+        return 'Error: file already exists. Use edit_file to modify it.';
+      }
+      ProjectStore.writeFile(projectName, relPath, input.content ?? '');
+      hasChanges = true;
+      modifiedFiles.add(relPath);
+      emit({ type: 'tool', op: 'write', path: relPath, result: 'ok', newSnippet: (input.content ?? '').slice(0, 500) });
+      return 'OK — file created';
+    }
+
+    if (toolName === 'delete_file') {
+      const abs = path.join(dir, relPath);
+      if (fs.existsSync(abs)) { fs.unlinkSync(abs); hasChanges = true; modifiedFiles.add(relPath); }
+      emit({ type: 'tool', op: 'delete', path: relPath, result: 'ok' });
+      return 'OK — file deleted';
+    }
+
+    if (toolName === 'list_files') {
+      const files = _listProjectFiles(dir);
+      emit({ type: 'tool', op: 'list', path: '', result: `${files.length} files` });
+      return files.map(f => `- ${f}`).join('\n');
+    }
+
+    if (toolName === 'search_files') {
+      const matches = ProjectStore.grep(projectName, input.query);
+      emit({ type: 'tool', op: 'search', path: '', result: `${matches.length} matches` });
+      return matches.length === 0 ? 'No matches found' : matches.slice(0, 20).map(m => `${m.file}:${m.lineNum}: ${m.line}`).join('\n');
+    }
+
+    if (toolName === 'run_command') {
+      const blocked = /rm\s+-rf|rmdir|format|mkfs|dd\s+if|shutdown|reboot|kill\s+-9\s+1\b/i;
+      if (blocked.test(input.command)) { emit({ type: 'tool', op: 'run', path: '', result: 'blocked' }); return 'Error: dangerous command blocked'; }
+      try {
+        const { stdout, stderr } = await execAsync(input.command, { cwd: dir, timeout: 30000, env: { ...process.env, NODE_ENV: 'development' } });
+        emit({ type: 'tool', op: 'run', path: '', result: 'ok' });
+        return (stdout + (stderr ? '\n[stderr] ' + stderr : '')).slice(0, 4000) || 'OK — no output';
+      } catch (e) {
+        emit({ type: 'tool', op: 'run', path: '', result: 'error' });
+        return `Error: ${(e.stderr || e.message || '').slice(0, 2000)}`;
+      }
+    }
+
+    if (toolName === 'check_syntax') {
+      const src = ProjectStore.readFile(projectName, relPath);
+      if (!src) { emit({ type: 'tool', op: 'check', path: relPath, result: 'not_found' }); return 'File not found'; }
+      const ext = relPath.split('.').pop()?.toLowerCase();
+      let result = 'ok';
+      if (ext === 'js' || ext === 'mjs') { try { new Function(src); } catch (e) { result = `syntax_error: ${e.message.replace(/\n.*/s, '')}`; } }
+      else if (ext === 'json') { try { JSON.parse(src); } catch (e) { result = `json_error: ${e.message}`; } }
+      else if (ext === 'html') { result = src.includes('</html>') ? 'ok' : 'missing </html> tag'; }
+      emit({ type: 'tool', op: 'check', path: relPath, result });
+      return result === 'ok' ? 'OK — no syntax errors' : result;
+    }
+
+    if (toolName === 'restart_sandbox') {
+      if (sandbox.isRunning()) await sandbox.stop();
+      try {
+        const port = await _findFreePort(4000, 4999);
+        if (port) {
+          const shimDir = path.join(dir, '.nha-shims');
+          ensureDir(shimDir);
+          _writeShims(shimDir);
+          const entryFile = _detectEntry(dir);
+          if (entryFile) {
+            const patchedEntry = _patchEntry(dir, entryFile, shimDir, port);
+            const proc = spawn('node', [patchedEntry], { cwd: dir, env: { ...process.env, PORT: String(port), NODE_ENV: 'development', NHA_SANDBOX: '1' }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+            sandbox._sandbox = { proc, port, projectName, startedAt: new Date(), healthy: false };
+            const healthy = await _waitForPort(port, 10000);
+            if (healthy) { sandbox._sandbox.healthy = true; emit({ type: 'sandbox_ready', port }); return `OK — sandbox running on port ${port}`; }
+          }
+        }
+      } catch {}
+      emit({ type: 'tool', op: 'sandbox', path: '', result: 'error' });
+      return 'Error: sandbox failed to start';
+    }
+
+    return `Error: unknown tool ${toolName}`;
+  }
+
+  // Try native tool calling first (Anthropic, OpenAI)
+  const provider = config.llm?.provider || 'anthropic';
+  const useNativeTools = provider === 'anthropic' || provider === 'openai';
+
+  if (useNativeTools) {
     const systemPrompt = buildSystemPrompt();
-    emit({ type: 'step', step: step + 1, max: MAX_STEPS });
+    const messages = [{ role: 'user', content: userContent }];
+
+    await callLLMWithTools(config, systemPrompt, messages, nativeTools,
+      (text) => emit({ type: 'text', token: text }),
+      handleToolCall,
+      { max_tokens: 16384, isAborted, maxTurns: MAX_STEPS }
+    );
+  } else {
+    // Fallback for other providers — use old text-based <tool> system
+    // (kept for backward compatibility with Gemini, DeepSeek, etc.)
+    let conversationHistory = [{ role: 'user', content: userContent }];
+    emit({ type: 'text', token: 'Note: Using text-based tools (native tool calling not available for this provider).\n' });
+    // Minimal old-style loop with <tool> tags — simplified
+    for (let step = 0; step < MAX_STEPS; step++) {
+      if (isAborted()) break;
+      const systemPrompt = buildSystemPrompt();
+      emit({ type: 'step', step: step + 1, max: MAX_STEPS });
 
     // Build user message from conversation history
     // callLLMStream takes a single string, so we concatenate the conversation
@@ -722,21 +1132,30 @@ RULES:
     const isDone = stepResponse.includes('<done/>') || stepResponse.includes('<done />');
 
     // Extract and execute ALL tool calls from this step
+    // First try matched pairs, then handle truncated (unclosed) tool tags
     const toolRegex = /<tool>([\s\S]*?)<\/tool>/g;
     let match;
     const toolResults = [];
+    const matchedRanges = [];
 
     while ((match = toolRegex.exec(stepResponse)) !== null) {
+      matchedRanges.push([match.index, match.index + match[0].length]);
       let toolCall;
       try {
-        // Fix common JSON issues from LLM
         let raw = match[1].trim();
         raw = raw.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
         toolCall = JSON.parse(raw);
       } catch {
-        toolResults.push({ op: 'error', result: 'JSON parse failed' });
-        emit({ type: 'tool', op: 'parse_error', path: '', result: 'json_parse_failed' });
-        continue;
+        // LLM often puts raw HTML/code inside JSON values without proper escaping.
+        // Extract fields manually using a robust regex-based parser.
+        try {
+          toolCall = _parseToolCallRobust(match[1].trim());
+        } catch (parseErr2) {
+          console.error('[TOOL-PARSE] JSON parse failed even after robust parse:', parseErr2.message, 'raw:', match[1].slice(0, 200));
+          toolResults.push({ op: 'error', result: 'JSON parse failed' });
+          emit({ type: 'tool', op: 'parse_error', path: '', result: 'json_parse_failed' });
+          continue;
+        }
       }
 
       const { op, path: relPath, old: oldStr, new: newStr, content, newPath, query, glob: globPat, cmd } = toolCall;
@@ -808,29 +1227,49 @@ RULES:
 
       // ── edit ──
       } else if (op === 'edit') {
+        console.log(`[EDIT-DEBUG] path=${relPath} oldStr.length=${oldStr?.length ?? 'null'} newStr.length=${newStr?.length ?? 'null'}`);
+        if (oldStr) console.log(`[EDIT-DEBUG] old first 100: ${JSON.stringify(oldStr.slice(0, 100))}`);
         const src = ProjectStore.readFile(projectName, relPath);
         if (src === null) {
           toolResults.push({ op: 'edit', path: relPath, result: 'file_not_found' });
           emit({ type: 'tool', op: 'edit', path: relPath, result: 'file_not_found' });
-        } else if (!src.includes(oldStr)) {
-          const repaired = await _attemptEditRepair(config, relPath, src, oldStr, newStr);
-          if (repaired) {
-            ProjectStore.writeFile(projectName, relPath, repaired);
-            hasChanges = true;
-            modifiedFiles.add(relPath);
-            toolResults.push({ op: 'edit', path: relPath, result: 'ok_repaired' });
-            emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok_repaired', oldSnippet: oldStr.slice(0, 300), newSnippet: newStr?.slice(0, 300) });
-          } else {
-            toolResults.push({ op: 'edit', path: relPath, result: 'old_not_found', hint: 'Use read to see current content, then retry with exact text' });
-            emit({ type: 'tool', op: 'edit', path: relPath, result: 'old_not_found', oldSnippet: oldStr.slice(0, 200) });
-          }
-        } else {
+        } else if (src.includes(oldStr)) {
+          console.log(`[EDIT-DEBUG] EXACT MATCH found — applying edit`);
+          // Exact match — apply directly
           const newSrc = src.replace(oldStr, newStr ?? '');
           ProjectStore.writeFile(projectName, relPath, newSrc);
           hasChanges = true;
           modifiedFiles.add(relPath);
           toolResults.push({ op: 'edit', path: relPath, result: 'ok' });
-          emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 300), newSnippet: newStr?.slice(0, 300) ?? '' });
+          emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 2000), newSnippet: newStr?.slice(0, 2000) ?? '' });
+        } else {
+          console.log(`[EDIT-DEBUG] NO exact match — trying fuzzy. src.length=${src.length} oldStr.length=${oldStr?.length}`);
+          // Fuzzy match: compare lines ignoring leading/trailing whitespace
+          const oldLines = oldStr.split('\n').map(l => l.trim());
+          const srcLines = src.split('\n');
+          let matchStart = -1;
+          for (let i = 0; i <= srcLines.length - oldLines.length; i++) {
+            let ok = true;
+            for (let j = 0; j < oldLines.length; j++) {
+              if (srcLines[i + j].trim() !== oldLines[j]) { ok = false; break; }
+            }
+            if (ok) { matchStart = i; break; }
+          }
+          if (matchStart >= 0) {
+            // Fuzzy matched — replace the matched lines with new content
+            const before = srcLines.slice(0, matchStart).join('\n');
+            const after = srcLines.slice(matchStart + oldLines.length).join('\n');
+            const result = (before ? before + '\n' : '') + (newStr ?? '') + (after ? '\n' + after : '');
+            ProjectStore.writeFile(projectName, relPath, result);
+            hasChanges = true;
+            modifiedFiles.add(relPath);
+            toolResults.push({ op: 'edit', path: relPath, result: 'ok' });
+            emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 2000), newSnippet: newStr?.slice(0, 2000) });
+          } else {
+            // No match — return error, let the agent retry with correct text
+            toolResults.push({ op: 'edit', path: relPath, result: 'old_not_found — your old text does not match the file. Use read tool to see the EXACT current content, then copy-paste the exact lines and retry.' });
+            emit({ type: 'tool', op: 'edit', path: relPath, result: 'old_not_found', oldSnippet: oldStr.slice(0, 200) });
+          }
         }
 
       // ── write ──
@@ -839,11 +1278,18 @@ RULES:
           toolResults.push({ op: 'write', path: relPath, result: 'missing_content' });
           emit({ type: 'tool', op: 'write', path: relPath, result: 'missing_content' });
         } else {
-          ProjectStore.writeFile(projectName, relPath, content);
-          hasChanges = true;
-          modifiedFiles.add(relPath);
-          toolResults.push({ op: 'write', path: relPath, result: 'ok' });
-          emit({ type: 'tool', op: 'write', path: relPath, result: 'ok' });
+          const prevContent = ProjectStore.readFile(projectName, relPath);
+          // BLOCK write on existing files — always. Use edit to modify, even truncated files.
+          if (prevContent !== null) {
+            toolResults.push({ op: 'write', path: relPath, result: 'error: file already exists — use edit tool to make surgical changes, do NOT rewrite the entire file. Read the file first, then use edit with exact old/new strings.' });
+            emit({ type: 'tool', op: 'write', path: relPath, result: 'blocked_use_edit' });
+          } else {
+            ProjectStore.writeFile(projectName, relPath, content);
+            hasChanges = true;
+            modifiedFiles.add(relPath);
+            toolResults.push({ op: 'write', path: relPath, result: 'ok' });
+            emit({ type: 'tool', op: 'write', path: relPath, result: 'ok', newSnippet: content.slice(0, 500) });
+          }
         }
 
       // ── rename ──
@@ -947,7 +1393,7 @@ RULES:
               const proc = spawn('node', [patchedEntry], {
                 cwd: projectDir,
                 env: { ...process.env, PORT: String(port), NODE_ENV: 'development', NHA_SANDBOX: '1' },
-                detached: false, stdio: ['ignore', 'pipe', 'pipe'],
+                detached: true, stdio: ['ignore', 'pipe', 'pipe'],
               });
               sandbox._sandbox = { proc, port, projectName, startedAt: new Date(), healthy: false };
               let sandboxStderr = '';
@@ -1021,8 +1467,67 @@ RULES:
       }
     }
 
-    // If agent said done or no tools were called, break
-    if (isDone || toolResults.length === 0) break;
+    // Handle truncated tool call — <tool> without </tool> (response cut off by max_tokens)
+    const lastToolOpen = stepResponse.lastIndexOf('<tool>');
+    if (lastToolOpen >= 0) {
+      const alreadyMatched = matchedRanges.some(([start, end]) => lastToolOpen >= start && lastToolOpen < end);
+      if (!alreadyMatched) {
+        const truncatedRaw = stepResponse.slice(lastToolOpen + 6).trim();
+        if (truncatedRaw.length > 20) {
+          console.log('[TOOL-TRUNCATED] Found unclosed <tool> tag, attempting robust parse. Length:', truncatedRaw.length);
+          try {
+            const toolCall = _parseToolCallRobust(truncatedRaw);
+            // Execute the truncated tool call
+            const { op, path: relPath, old: oldStr, new: newStr, content } = toolCall;
+            if (op === 'edit' && relPath && oldStr) {
+              const src = ProjectStore.readFile(projectName, relPath);
+              if (src && src.includes(oldStr)) {
+                const newSrc = src.replace(oldStr, newStr ?? '');
+                ProjectStore.writeFile(projectName, relPath, newSrc);
+                hasChanges = true;
+                modifiedFiles.add(relPath);
+                toolResults.push({ op: 'edit', path: relPath, result: 'ok' });
+                emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 2000), newSnippet: newStr?.slice(0, 2000) ?? '' });
+                console.log('[TOOL-TRUNCATED] Edit applied successfully from truncated tool call');
+              } else if (src) {
+                // Try fuzzy match
+                const oldLines = oldStr.split('\n').map(l => l.trim());
+                const srcLines = src.split('\n');
+                let matchStart = -1;
+                for (let i = 0; i <= srcLines.length - oldLines.length; i++) {
+                  let ok = true;
+                  for (let j = 0; j < oldLines.length; j++) {
+                    if (srcLines[i + j].trim() !== oldLines[j]) { ok = false; break; }
+                  }
+                  if (ok) { matchStart = i; break; }
+                }
+                if (matchStart >= 0) {
+                  const before = srcLines.slice(0, matchStart).join('\n');
+                  const after = srcLines.slice(matchStart + oldLines.length).join('\n');
+                  const result = (before ? before + '\n' : '') + (newStr ?? '') + (after ? '\n' + after : '');
+                  ProjectStore.writeFile(projectName, relPath, result);
+                  hasChanges = true;
+                  modifiedFiles.add(relPath);
+                  toolResults.push({ op: 'edit', path: relPath, result: 'ok' });
+                  emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 2000), newSnippet: newStr?.slice(0, 2000) ?? '' });
+                  console.log('[TOOL-TRUNCATED] Edit applied via fuzzy match from truncated tool call');
+                }
+              }
+            }
+          } catch (e) {
+            console.log('[TOOL-TRUNCATED] Failed to parse truncated tool:', e.message);
+          }
+        }
+      }
+    }
+
+    // If any edit failed, ignore <done/> — force retry
+    const hasFailedEdit = toolResults.some((r) => r.op === 'edit' && (r.result?.includes('not_found') || r.result?.includes('blocked')));
+    if (hasFailedEdit && step < MAX_STEPS - 1) {
+      // Don't break — let the agent see the error and retry
+    } else if (isDone || toolResults.length === 0) {
+      break;
+    }
 
     // Build tool results feedback for next iteration
     const feedbackParts = toolResults.map((r) => {
@@ -1041,6 +1546,7 @@ RULES:
       conversationHistory = [conversationHistory[0], ...conversationHistory.slice(-6)];
     }
   }
+  } // end of fallback else block
 
   // ── Post-edit: syntax check all modified JS files ──────────────────────────
   const syntaxErrors = [];
@@ -1089,7 +1595,7 @@ RULES:
           const proc = spawn('node', [patchedEntry], {
             cwd: projectDir,
             env: { ...process.env, PORT: String(port), NODE_ENV: 'development', NHA_SANDBOX: '1' },
-            detached: false,
+            detached: true,
             stdio: ['ignore', 'pipe', 'pipe'],
           });
           sandbox._sandbox = { proc, port, projectName, startedAt: new Date(), healthy: false };
@@ -1168,9 +1674,15 @@ function countTokens(text) {
  * Returns true if the file likely needs a continuation call.
  */
 function isFileTruncated(content, filename) {
-  if (!content || content.length < 10) return true;
+  if (!content) return true;
   const trimmed = content.trimEnd();
   const ext = filename.split('.').pop()?.toLowerCase();
+  // Short files: check if they're valid for their type before flagging
+  if (trimmed.length < 10) {
+    if (ext === 'json') { try { JSON.parse(trimmed); return false; } catch { return true; } }
+    if (ext === 'css' || ext === 'js' || ext === 'mjs') return trimmed.length < 3;
+    return false;
+  }
 
   if (ext === 'js' || ext === 'mjs' || ext === 'ts') {
     const open = (trimmed.match(/\{/g) || []).length;
@@ -1438,6 +1950,7 @@ OUTPUT FORMAT: Raw file content ONLY — zero explanations, zero markdown fences
 
 CODE STANDARDS (MANDATORY — every file):
 - COMPLETE, WORKING code — no TODOs, no placeholders, no "add your code here"
+- NEVER create empty data files (empty JSON arrays, empty objects) — create them dynamically at runtime when needed
 - Every function FULLY implemented with real business logic
 - Modern ES6+: async/await, const/let, destructuring, template literals, optional chaining
 - Comprehensive error handling: try/catch with meaningful error messages, proper HTTP status codes
@@ -1889,6 +2402,453 @@ export function register(router) {
   });
 
   // ── Diagnostics (lint) — returns errors/warnings for a file ───────────────
+  // ── TypeScript checkJs linter — enterprise-grade diagnostics ─────────────────
+
+  let _tscPath = null;
+  let _tscChecked = false;
+
+  function findTsc() {
+    if (_tscChecked) return _tscPath;
+    _tscChecked = true;
+    // Our own bundled tsc (from package dependency)
+    const __dir = path.dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+      path.resolve(__dir, '../../../node_modules/.bin/tsc'),
+      path.resolve(__dir, '../../../../node_modules/.bin/tsc'),
+    ];
+    // Also try global — execSync imported at top of file (ESM).
+    try {
+      const globalTsc = execSync('which tsc 2>/dev/null || where tsc 2>nul', { encoding: 'utf-8', timeout: 3000 }).trim();
+      if (globalTsc) candidates.push(globalTsc);
+    } catch {}
+    for (const c of candidates) {
+      try { if (fs.existsSync(c)) { _tscPath = c; return c; } } catch {}
+    }
+    return null;
+  }
+
+  async function lintJSWithTypeScript(projectDir, relPath) {
+    const tsc = findTsc();
+    if (!tsc) return null; // fallback to acorn
+
+    const absFile = path.join(projectDir, relPath);
+    if (!fs.existsSync(absFile)) return null;
+
+    try {
+      const { stdout, stderr } = await execAsync(
+        `"${tsc}" --noEmit --checkJs --allowJs --target es2020 --moduleResolution bundler --skipLibCheck --ignoreConfig "${absFile}" 2>&1`,
+        { cwd: projectDir, timeout: 10000 }
+      );
+      const output = stdout || stderr || '';
+      const diagnostics = [];
+      // Parse tsc output: path(line,col): error TSxxxx: message
+      const lineRegex = /\((\d+),(\d+)\):\s+(error|warning)\s+TS\d+:\s+(.+)/g;
+      let m;
+      while ((m = lineRegex.exec(output)) !== null) {
+        diagnostics.push({
+          from: { line: parseInt(m[1]), col: parseInt(m[2]) - 1 },
+          severity: m[3] === 'error' ? 'error' : 'warning',
+          message: m[4].trim(),
+        });
+      }
+      return diagnostics;
+    } catch (e) {
+      // tsc returns exit code 1 when there are errors — parse its output
+      const output = e.stdout || e.stderr || e.message || '';
+      const diagnostics = [];
+      const lineRegex = /\((\d+),(\d+)\):\s+(error|warning)\s+TS\d+:\s+(.+)/g;
+      let m;
+      while ((m = lineRegex.exec(output)) !== null) {
+        diagnostics.push({
+          from: { line: parseInt(m[1]), col: parseInt(m[2]) - 1 },
+          severity: m[3] === 'error' ? 'error' : 'warning',
+          message: m[4].trim(),
+        });
+      }
+      return diagnostics.length > 0 ? diagnostics : null;
+    }
+  }
+
+  // ── Acorn fallback linter — AST-based diagnostics ──────────────────────────
+
+  const JsxParser = acorn.Parser.extend(acornJsx());
+  const JS_BUILTINS = new Set([
+    'undefined','NaN','Infinity','globalThis','eval','isFinite','isNaN','parseFloat','parseInt',
+    'decodeURI','decodeURIComponent','encodeURI','encodeURIComponent',
+    'Array','ArrayBuffer','BigInt','BigInt64Array','BigUint64Array','Boolean','DataView','Date',
+    'Error','EvalError','FinalizationRegistry','Float32Array','Float64Array','Function',
+    'Int8Array','Int16Array','Int32Array','JSON','Map','Math','Number','Object','Promise',
+    'Proxy','RangeError','ReferenceError','Reflect','RegExp','Set','SharedArrayBuffer',
+    'String','Symbol','SyntaxError','TypeError','URIError','Uint8Array','Uint8ClampedArray',
+    'Uint16Array','Uint32Array','WeakMap','WeakRef','WeakSet',
+    'console','setTimeout','setInterval','clearTimeout','clearInterval','queueMicrotask',
+    'atob','btoa','fetch','structuredClone','performance','crypto','navigator','location',
+    'window','document','self','global','process','require','module','exports','__dirname','__filename',
+    'Buffer','URL','URLSearchParams','TextEncoder','TextDecoder','AbortController','AbortSignal',
+    'Event','EventTarget','CustomEvent','FormData','Headers','Request','Response',
+    'ReadableStream','WritableStream','TransformStream','Blob','File','FileReader',
+    'WebSocket','Worker','SharedWorker','BroadcastChannel','MessageChannel','MessagePort',
+    'Intl','alert','confirm','prompt','requestAnimationFrame','cancelAnimationFrame',
+    'MutationObserver','ResizeObserver','IntersectionObserver','PerformanceObserver',
+    'HTMLElement','Element','Node','NodeList','DocumentFragment',
+    'localStorage','sessionStorage','history','screen','CSS','CSSStyleSheet',
+    'XMLHttpRequest','Image','Audio','Video','MediaSource','SourceBuffer',
+    'Map','Set','WeakMap','WeakSet','Proxy','Reflect',
+    'arguments','this','super','import','export',
+  ]);
+  const REACT_GLOBALS = new Set([
+    'React','useState','useEffect','useRef','useCallback','useMemo','useContext',
+    'useReducer','useLayoutEffect','useImperativeHandle','useDebugValue','useTransition',
+    'useDeferredValue','useId','useSyncExternalStore','useInsertionEffect',
+    'createContext','createRef','forwardRef','lazy','memo','startTransition',
+    'Component','PureComponent','Fragment','StrictMode','Suspense','Profiler',
+    'createElement','cloneElement','isValidElement','Children',
+    'jsx','jsxs','jsxDEV',
+  ]);
+  const NODE_MODULES = new Set([
+    'fs','path','os','http','https','url','util','stream','events','crypto','child_process',
+    'net','dgram','dns','tls','zlib','readline','cluster','worker_threads','perf_hooks',
+    'assert','buffer','querystring','string_decoder','timers','v8','vm','inspector',
+  ]);
+
+  function lintJS(content, relPath, projectName) {
+    const diagnostics = [];
+    const ext = relPath.split('.').pop()?.toLowerCase();
+    const isJsx = ext === 'jsx' || ext === 'tsx';
+
+    // 1. Parse with acorn (real AST)
+    let ast;
+    try {
+      ast = JsxParser.parse(content, {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        locations: true,
+        allowImportExportEverywhere: true,
+        allowReturnOutsideFunction: true,
+        allowHashBang: true,
+      });
+    } catch (e) {
+      diagnostics.push({
+        from: { line: e.loc?.line || 1, col: e.loc?.column || 0 },
+        severity: 'error',
+        message: e.message.replace(/\(\d+:\d+\)$/, '').trim(),
+      });
+      return diagnostics;
+    }
+
+    // 2. Scope analysis — collect declarations and references
+    const declared = new Set();
+    const imported = new Set();
+    const importSources = [];
+    const references = []; // { name, loc }
+    const exportedNames = new Set();
+
+    function walkNode(node, scope) {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => walkNode(n, scope)); return; }
+      if (!node.type) return;
+
+      const localScope = new Set(scope);
+
+      switch (node.type) {
+        case 'VariableDeclaration':
+          for (const decl of node.declarations) {
+            collectPattern(decl.id, localScope);
+            if (decl.init) walkNode(decl.init, localScope);
+          }
+          // Walk rest of body with the declared vars
+          return;
+
+        case 'FunctionDeclaration':
+          if (node.id) localScope.add(node.id.name);
+          declared.add(node.id?.name);
+          const fnScope = new Set(localScope);
+          for (const p of node.params) collectPattern(p, fnScope);
+          walkNode(node.body, fnScope);
+          return;
+
+        case 'FunctionExpression':
+        case 'ArrowFunctionExpression': {
+          const arrowScope = new Set(localScope);
+          if (node.id) arrowScope.add(node.id.name);
+          for (const p of node.params) collectPattern(p, arrowScope);
+          walkNode(node.body, arrowScope);
+          return;
+        }
+
+        case 'ClassDeclaration':
+        case 'ClassExpression':
+          if (node.id) { localScope.add(node.id.name); declared.add(node.id.name); }
+          if (node.superClass) walkNode(node.superClass, localScope);
+          walkNode(node.body, localScope);
+          return;
+
+        case 'ImportDeclaration':
+          for (const spec of node.specifiers) {
+            imported.add(spec.local.name);
+            localScope.add(spec.local.name);
+          }
+          importSources.push({ source: node.source.value, loc: node.loc });
+          return;
+
+        case 'ExportNamedDeclaration':
+          if (node.declaration) walkNode(node.declaration, localScope);
+          if (node.specifiers) for (const s of node.specifiers) exportedNames.add(s.exported.name || s.exported.value);
+          return;
+
+        case 'ExportDefaultDeclaration':
+          walkNode(node.declaration, localScope);
+          return;
+
+        case 'Identifier':
+          if (!localScope.has(node.name) && !declared.has(node.name) && !imported.has(node.name)) {
+            references.push({ name: node.name, loc: node.loc });
+          }
+          return;
+
+        case 'MemberExpression':
+          walkNode(node.object, localScope);
+          // Don't walk computed property as reference
+          if (node.computed) walkNode(node.property, localScope);
+          return;
+
+        case 'Property':
+        case 'MethodDefinition':
+          // Don't treat keys as references
+          if (node.computed) walkNode(node.key, localScope);
+          walkNode(node.value, localScope);
+          return;
+
+        case 'CatchClause':
+          const catchScope = new Set(localScope);
+          if (node.param) collectPattern(node.param, catchScope);
+          walkNode(node.body, catchScope);
+          return;
+
+        case 'ForInStatement':
+        case 'ForOfStatement': {
+          const forScope = new Set(localScope);
+          if (node.left.type === 'VariableDeclaration') {
+            for (const d of node.left.declarations) collectPattern(d.id, forScope);
+          } else { walkNode(node.left, forScope); }
+          walkNode(node.right, forScope);
+          walkNode(node.body, forScope);
+          return;
+        }
+
+        case 'ForStatement': {
+          const forScope2 = new Set(localScope);
+          if (node.init?.type === 'VariableDeclaration') {
+            for (const d of node.init.declarations) collectPattern(d.id, forScope2);
+          } else if (node.init) { walkNode(node.init, forScope2); }
+          if (node.test) walkNode(node.test, forScope2);
+          if (node.update) walkNode(node.update, forScope2);
+          walkNode(node.body, forScope2);
+          return;
+        }
+
+        case 'BlockStatement':
+        case 'Program': {
+          const blockScope = new Set(localScope);
+          // Pre-scan for hoisted declarations
+          if (node.body) {
+            for (const stmt of node.body) {
+              if (stmt.type === 'FunctionDeclaration' && stmt.id) blockScope.add(stmt.id.name);
+              if (stmt.type === 'VariableDeclaration') {
+                for (const d of stmt.declarations) collectPattern(d.id, blockScope);
+              }
+              if (stmt.type === 'ClassDeclaration' && stmt.id) blockScope.add(stmt.id.name);
+              if (stmt.type === 'ImportDeclaration') {
+                for (const s of stmt.specifiers) { blockScope.add(s.local.name); imported.add(s.local.name); }
+              }
+            }
+          }
+          if (node.body) for (const stmt of node.body) walkNode(stmt, blockScope);
+          return;
+        }
+
+        case 'LabeledStatement':
+          walkNode(node.body, localScope);
+          return;
+
+        case 'JSXIdentifier':
+          // JSX component names (capitalized) are references
+          if (/^[A-Z]/.test(node.name) && !localScope.has(node.name) && !declared.has(node.name) && !imported.has(node.name)) {
+            references.push({ name: node.name, loc: node.loc });
+          }
+          return;
+
+        case 'JSXMemberExpression':
+          walkNode(node.object, localScope);
+          return;
+      }
+
+      // Generic walk for other node types
+      for (const key of Object.keys(node)) {
+        if (key === 'loc' || key === 'start' || key === 'end' || key === 'type' || key === 'raw' || key === 'value' || key === 'name' || key === 'operator' || key === 'prefix' || key === 'sourceType') continue;
+        const val = node[key];
+        if (val && typeof val === 'object') walkNode(val, localScope);
+      }
+    }
+
+    function collectPattern(pattern, scope) {
+      if (!pattern) return;
+      if (pattern.type === 'Identifier') { scope.add(pattern.name); declared.add(pattern.name); }
+      else if (pattern.type === 'ObjectPattern') { for (const p of pattern.properties) collectPattern(p.value || p.argument, scope); }
+      else if (pattern.type === 'ArrayPattern') { for (const e of pattern.elements) if (e) collectPattern(e, scope); }
+      else if (pattern.type === 'RestElement') collectPattern(pattern.argument, scope);
+      else if (pattern.type === 'AssignmentPattern') collectPattern(pattern.left, scope);
+    }
+
+    walkNode(ast, new Set());
+
+    // 3. Report undefined references (excluding builtins and React globals)
+    const allKnown = new Set([...declared, ...imported, ...JS_BUILTINS]);
+    if (isJsx || content.includes('from \'react\'') || content.includes('from "react"')) {
+      for (const g of REACT_GLOBALS) allKnown.add(g);
+    }
+    for (const ref of references) {
+      if (allKnown.has(ref.name)) continue;
+      // Skip single-letter vars (often from minified/short code)
+      if (ref.name.length === 1) continue;
+      // Skip common DOM event handler names
+      if (/^on[A-Z]/.test(ref.name)) continue;
+      diagnostics.push({
+        from: { line: ref.loc.start.line, col: ref.loc.start.column },
+        severity: 'warning',
+        message: `'${ref.name}' is not defined`,
+      });
+    }
+
+    // 4. Check import sources — verify local files exist
+    for (const imp of importSources) {
+      const src = imp.source;
+      if (src.startsWith('.') || src.startsWith('/')) {
+        const dir = path.dirname(relPath);
+        const candidates = [
+          path.join(dir, src),
+          path.join(dir, src + '.js'),
+          path.join(dir, src + '.mjs'),
+          path.join(dir, src + '.jsx'),
+          path.join(dir, src + '/index.js'),
+          path.join(dir, src + '/index.mjs'),
+        ].map(p => p.replace(/\\/g, '/'));
+        const found = candidates.some(c => ProjectStore.readFile(projectName, c) !== null);
+        if (!found) {
+          diagnostics.push({
+            from: { line: imp.loc.start.line, col: imp.loc.start.column },
+            severity: 'error',
+            message: `Cannot resolve import '${src}'`,
+          });
+        }
+      }
+    }
+
+    return diagnostics;
+  }
+
+  function lintCSS(content) {
+    const diagnostics = [];
+    const lines = content.split('\n');
+
+    // Brace balance per-line tracking
+    let depth = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const ch of line) {
+        if (ch === '{') depth++;
+        if (ch === '}') depth--;
+      }
+      if (depth < 0) {
+        diagnostics.push({ from: { line: i + 1, col: 0 }, severity: 'error', message: 'Unexpected closing brace }' });
+        depth = 0;
+      }
+    }
+    if (depth > 0) {
+      diagnostics.push({ from: { line: lines.length, col: 0 }, severity: 'error', message: `${depth} unclosed brace(s) {` });
+    }
+
+    // Check for common CSS errors
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      // Empty property value
+      if (/^[a-z-]+:\s*;/i.test(line)) {
+        diagnostics.push({ from: { line: i + 1, col: 0 }, severity: 'warning', message: 'Empty property value' });
+      }
+      // Duplicate semicolons
+      if (/;;/.test(line) && !line.startsWith('//') && !line.startsWith('/*')) {
+        diagnostics.push({ from: { line: i + 1, col: line.indexOf(';;') }, severity: 'warning', message: 'Duplicate semicolon' });
+      }
+      // Missing semicolon (property line without ; that isn't a selector/comment/brace)
+      if (/^[a-z-]+\s*:/.test(line) && !line.endsWith(';') && !line.endsWith('{') && !line.endsWith('}') && !line.endsWith(',') && !line.startsWith('//') && !line.startsWith('/*') && !line.startsWith('*')) {
+        diagnostics.push({ from: { line: i + 1, col: line.length }, severity: 'warning', message: 'Missing semicolon' });
+      }
+    }
+
+    return diagnostics;
+  }
+
+  function lintHTML(content, relPath, projectName) {
+    const diagnostics = [];
+    const lines = content.split('\n');
+
+    // Tag balance check
+    const voidTags = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+    const tagStack = [];
+    const tagRegex = /<\/?([a-z][a-z0-9]*)\b[^>]*\/?>/gi;
+    let match;
+    while ((match = tagRegex.exec(content)) !== null) {
+      const full = match[0];
+      const tagName = match[1].toLowerCase();
+      if (voidTags.has(tagName) || full.endsWith('/>')) continue;
+      const lineNum = content.slice(0, match.index).split('\n').length;
+
+      if (full.startsWith('</')) {
+        // Closing tag
+        if (tagStack.length === 0) {
+          diagnostics.push({ from: { line: lineNum, col: 0 }, severity: 'error', message: `Unexpected closing tag </${tagName}>` });
+        } else {
+          const last = tagStack[tagStack.length - 1];
+          if (last.name === tagName) {
+            tagStack.pop();
+          } else {
+            diagnostics.push({ from: { line: lineNum, col: 0 }, severity: 'error', message: `Mismatched tag: expected </${last.name}> but found </${tagName}>` });
+          }
+        }
+      } else {
+        tagStack.push({ name: tagName, line: lineNum });
+      }
+    }
+    // Report unclosed tags (max 5)
+    for (const unclosed of tagStack.slice(-5)) {
+      diagnostics.push({ from: { line: unclosed.line, col: 0 }, severity: 'error', message: `Unclosed tag <${unclosed.name}>` });
+    }
+
+    // Check src/href references to local files
+    const refRegex = /(?:src|href)=["']([^"']*?\.(?:js|css|mjs|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|eot))["']/gi;
+    let refMatch;
+    while ((refMatch = refRegex.exec(content)) !== null) {
+      const ref = refMatch[1];
+      if (ref.startsWith('http') || ref.startsWith('//') || ref.startsWith('data:') || ref.startsWith('#') || ref.startsWith('mailto:')) continue;
+      const htmlDir = path.dirname(relPath);
+      const refPath = ref.startsWith('/') ? ref.slice(1) : path.join(htmlDir, ref).replace(/\\/g, '/');
+      const publicRef = refPath.startsWith('public/') ? refPath : `public/${refPath}`;
+      const fileExists = ProjectStore.readFile(projectName, refPath) !== null
+        || ProjectStore.readFile(projectName, publicRef) !== null
+        || ProjectStore.readFile(projectName, ref) !== null;
+      if (!fileExists) {
+        const lineNum = content.slice(0, refMatch.index).split('\n').length;
+        diagnostics.push({
+          from: { line: lineNum, col: 0 },
+          severity: 'error',
+          message: `Referenced file not found: ${ref}`,
+        });
+      }
+    }
+
+    return diagnostics;
+  }
+
   router.post('/api/studio/webcraft/lint', async (req, res) => {
     try {
       const { projectName, path: relPath } = await parseBody(req);
@@ -1896,76 +2856,38 @@ export function register(router) {
       const content = ProjectStore.readFile(projectName, relPath);
       if (content === null) return sendJSON(res, 200, { diagnostics: [] });
 
-      const diagnostics = [];
-      const ext = relPath.split('.').pop()?.toLowerCase();
+      const ext = (relPath.split('.').pop() || '').toLowerCase();
+      let diagnostics = [];
 
-      if (ext === 'js' || ext === 'mjs' || ext === 'jsx') {
-        try { new Function(content); } catch (e) {
-          const match = e.message.match(/^(.*?)$/m);
-          const lineMatch = e.message.match(/:(\d+):(\d+)/);
-          diagnostics.push({
-            from: lineMatch ? { line: parseInt(lineMatch[1]), col: parseInt(lineMatch[2]) } : { line: 1, col: 0 },
-            severity: 'error',
-            message: match?.[1] || e.message,
-          });
-        }
+      // JavaScript / JSX — try TypeScript checkJs first, fallback to acorn
+      if (['js', 'mjs', 'jsx', 'cjs'].includes(ext)) {
+        const projectDir = ProjectStore.dir(projectName);
+        const tsDiags = await lintJSWithTypeScript(projectDir, relPath);
+        diagnostics = tsDiags || lintJS(content, relPath, projectName);
       }
 
+      // JSON — parse errors with precise location
       if (ext === 'json') {
         try { JSON.parse(content); } catch (e) {
-          const posMatch = e.message.match(/position (\d+)/);
+          const posMatch = e.message.match(/position (\d+)/i);
           const pos = posMatch ? parseInt(posMatch[1]) : 0;
-          const lines = content.slice(0, pos).split('\n');
+          const before = content.slice(0, pos).split('\n');
           diagnostics.push({
-            from: { line: lines.length, col: (lines[lines.length - 1] || '').length },
+            from: { line: before.length, col: (before[before.length - 1] || '').length },
             severity: 'error',
             message: e.message,
           });
         }
       }
 
+      // CSS — brace balance + property validation
       if (ext === 'css') {
-        const opens = (content.match(/\{/g) || []).length;
-        const closes = (content.match(/\}/g) || []).length;
-        if (opens !== closes) {
-          diagnostics.push({
-            from: { line: content.split('\n').length, col: 0 },
-            severity: 'warning',
-            message: `Unbalanced braces: ${opens} open, ${closes} close`,
-          });
-        }
+        diagnostics = lintCSS(content);
       }
 
+      // HTML/HTM — tag balance + reference validation
       if (ext === 'html' || ext === 'htm') {
-        if (!content.includes('</html>')) {
-          diagnostics.push({
-            from: { line: content.split('\n').length, col: 0 },
-            severity: 'warning',
-            message: 'Missing </html> closing tag',
-          });
-        }
-        // Check references to local files
-        const refRegex = /(?:src|href)=["']([^"']*?\.(?:js|css|mjs))["']/gi;
-        let refMatch;
-        const lines = content.split('\n');
-        while ((refMatch = refRegex.exec(content)) !== null) {
-          const ref = refMatch[1];
-          if (ref.startsWith('http') || ref.startsWith('//') || ref.startsWith('data:')) continue;
-          const htmlDir = path.dirname(relPath);
-          const refPath = ref.startsWith('/') ? ref.slice(1) : path.join(htmlDir, ref).replace(/\\/g, '/');
-          const publicRef = refPath.startsWith('public/') ? refPath : `public/${refPath}`;
-          const fileExists = ProjectStore.readFile(projectName, refPath) !== null
-            || ProjectStore.readFile(projectName, publicRef) !== null
-            || ProjectStore.readFile(projectName, ref) !== null;
-          if (!fileExists) {
-            const lineNum = content.slice(0, refMatch.index).split('\n').length;
-            diagnostics.push({
-              from: { line: lineNum, col: 0 },
-              severity: 'error',
-              message: `Referenced file not found: ${ref}`,
-            });
-          }
-        }
+        diagnostics = lintHTML(content, relPath, projectName);
       }
 
       sendJSON(res, 200, { diagnostics });
@@ -2006,6 +2928,14 @@ export function register(router) {
     } catch (e) { sendError(res, 500, e.message); }
   });
 
+  // ── Sandbox stop (beacon — for beforeunload) ───────────────────────────────
+  router.post('/api/studio/webcraft/sandbox/stop-beacon', async (_req, res) => {
+    try {
+      await sandbox.stop();
+      sendJSON(res, 200, { ok: true });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
   // ── Sandbox status ────────────────────────────────────────────────────────
   router.get('/api/studio/webcraft/sandbox/status', (_req, res) => {
     sendJSON(res, 200, sandbox.status());
@@ -2013,22 +2943,138 @@ export function register(router) {
 
   // ── Sandbox runtime errors (reported by injected script in iframe) ────────
   const sandboxErrors = [];
+  // Debounce: only autofix the same source URL once every 8s to avoid loops
+  const _autofixCooldown = new Map();
+
+  // Browser-side runtime error patterns that we know how to fix.
+  // Each one maps to an LLM repair hint specific to the failure mode.
+  const BROWSER_FIX_PATTERNS = [
+    { name: 'require is not defined',  re: /require is not defined/i,
+      hint: 'The file uses CommonJS `require()` in a browser context where it does NOT exist. Convert all `require("X")` to ES module `import X from "X"` (or named imports as appropriate). Convert `module.exports = ...` to `export default ...`. Ensure the HTML loads the script with `<script type="module" src="...">`. Keep all logic identical.' },
+    { name: 'module is not defined',   re: /\bmodule is not defined/i,
+      hint: 'The file references the CommonJS `module` global which does not exist in browsers. Replace `module.exports = X` with `export default X` (or `export { X }`).' },
+    { name: 'exports is not defined',  re: /\bexports is not defined/i,
+      hint: 'The file uses CommonJS `exports` in a browser context. Replace `exports.X = Y` with `export const X = Y`.' },
+    { name: 'process is not defined',  re: /\bprocess is not defined/i,
+      hint: 'The code references Node.js `process` global in the browser. Either remove the reference (e.g. delete `process.env.X` checks) or stub it: `const process = { env: {} };` at top of file. Prefer removal.' },
+    { name: 'SyntaxError',             re: /SyntaxError:.+|Unexpected (token|identifier|string|end)/i,
+      hint: 'JavaScript syntax error in the file. Fix the syntax — unclosed brackets, missing commas, invalid token. Output the complete corrected file.' },
+    { name: 'ReferenceError',          re: /(?:Uncaught )?ReferenceError: (\w+) is not defined/i,
+      hint: 'A variable is referenced but never declared/imported. Either import it from the correct module, define it, or remove the dead reference.' },
+    { name: 'TypeError null/undefined', re: /(?:Uncaught )?TypeError: (?:Cannot read prop(?:erties|erty)? .+ of (?:undefined|null)|null is not an object|undefined is not (?:a function|an object))/i,
+      hint: 'Null/undefined access. Add a null-check or optional chaining (?.) before the failing access. If the failure is on DOM element lookup, the script may be running before the DOM is ready — wrap in DOMContentLoaded.' },
+  ];
+
   router.post('/api/studio/webcraft/sandbox/errors', async (req, res) => {
     try {
       const body = await parseBody(req);
-      if (body.error) {
+      if (!body.error) return sendJSON(res, 200, { ok: true });
+
+      const message = String(body.error).slice(0, 500);
+      const source  = String(body.source || '').slice(0, 200);
+      const stack   = String(body.stack || '').slice(0, 1000);
+
+      sandboxErrors.push({
+        ts: new Date().toISOString(),
+        message,
+        source,
+        line: body.line || 0,
+        col: body.col || 0,
+        stack,
+      });
+      if (sandboxErrors.length > 20) sandboxErrors.splice(0, sandboxErrors.length - 20);
+
+      // Respond to the iframe immediately — autofix runs async after.
+      sendJSON(res, 200, { ok: true });
+
+      // ── Autofix path ────────────────────────────────────────────────
+      const sb = sandbox._sandbox;
+      if (!sb || !sb.projectName) return; // no project — can't fix
+      const projectDir = ProjectStore.dir(sb.projectName);
+      if (!fs.existsSync(projectDir)) return;
+
+      const matched = BROWSER_FIX_PATTERNS.find(p => p.re.test(message) || p.re.test(stack));
+      if (!matched) return;
+
+      // Resolve the failing file from the source URL.
+      // source is typically "http://localhost:NNNN/path/to/file.js?..." or
+      // a bare filename. We strip the origin and query, then map under projectDir.
+      let relFile = '';
+      try {
+        if (source && source.includes('://')) {
+          const u = new URL(source);
+          relFile = u.pathname.replace(/^\/+/, '').split('?')[0];
+        } else if (source) {
+          relFile = source.replace(/^\/+/, '').split('?')[0];
+        }
+        // Fallback: extract from stack trace
+        if (!relFile && stack) {
+          const m = stack.match(/(?:https?:\/\/[^\s)]+\/)([^\s:?)]+\.(?:m?js|jsx?|tsx?|cjs|html))/);
+          if (m) relFile = m[1];
+        }
+      } catch { /* ignore parse errors */ }
+
+      // Strip leading "static/" or asset prefixes that Vite/Webpack add
+      relFile = relFile.replace(/^(static|assets|dist|public|build|out)\//, '');
+
+      if (!relFile) return;
+
+      const absFile = path.join(projectDir, relFile);
+      // Safety: must be inside projectDir
+      if (!absFile.startsWith(projectDir + path.sep)) return;
+      if (!fs.existsSync(absFile)) return;
+
+      // Cooldown: don't autofix the same file more than once every 8s
+      const cdKey = absFile;
+      const now = Date.now();
+      const last = _autofixCooldown.get(cdKey) || 0;
+      if (now - last < 8_000) return;
+      _autofixCooldown.set(cdKey, now);
+
+      const original = fs.readFileSync(absFile, 'utf-8');
+      if (!original || original.length < 5) return;
+
+      const fixPrompt =
+`A browser sandbox preview crashed with this runtime error:
+
+Error: ${message}
+Source: ${source}
+Stack (first lines):
+${stack.slice(0, 800)}
+
+The failing file is: ${relFile}
+
+What to fix: ${matched.hint}
+
+CRITICAL: Output ONLY the complete corrected file content. No commentary, no markdown fences. Keep all working logic intact — only change what's necessary to fix the runtime error.
+
+Current file content:
+${original.slice(0, 12_000)}`;
+
+      try {
+        let fixed = '';
+        await callLLMStream(loadConfig(), 'You are a precise code repair assistant. Output only the corrected file, no explanation.', fixPrompt, (c) => { fixed += c; }, { max_tokens: 16_384 });
+        fixed = fixed.replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
+        if (fixed.length > 20 && fixed !== original) {
+          fs.writeFileSync(absFile, fixed, 'utf-8');
+          // Notify connected WebSocket clients so the iframe can be reloaded.
+          // The Studio/WebCraft UI polls these errors and will surface the fix.
+          sandboxErrors.push({
+            ts: new Date().toISOString(),
+            message: `✓ Auto-fix applied to ${relFile} (${matched.name}) — reload the preview to test.`,
+            source: '__autofix__',
+            line: 0, col: 0, stack: '',
+          });
+          if (sandboxErrors.length > 20) sandboxErrors.splice(0, sandboxErrors.length - 20);
+        }
+      } catch (e) {
         sandboxErrors.push({
           ts: new Date().toISOString(),
-          message: String(body.error).slice(0, 500),
-          source: String(body.source || '').slice(0, 200),
-          line: body.line || 0,
-          col: body.col || 0,
-          stack: String(body.stack || '').slice(0, 1000),
+          message: `✗ Auto-fix failed for ${relFile}: ${(e.message || '').slice(0, 200)}`,
+          source: '__autofix__',
+          line: 0, col: 0, stack: '',
         });
-        // Keep only last 20 errors
-        if (sandboxErrors.length > 20) sandboxErrors.splice(0, sandboxErrors.length - 20);
       }
-      sendJSON(res, 200, { ok: true });
     } catch { sendJSON(res, 200, { ok: true }); }
   });
 
@@ -2048,13 +3094,22 @@ export function register(router) {
     const { projectName, message, attachments = [] } = body;
     if (!projectName || !message) return sendError(res, 400, 'projectName and message required');
 
+    // Abort detection — stop agent when client disconnects
+    let clientAborted = false;
+    req.on('close', () => { clientAborted = true; });
+    req.on('aborted', () => { clientAborted = true; });
+
     const sse = sendSSE(res);
+    const guardedEmit = (ev) => {
+      if (clientAborted || res.writableEnded) return;
+      sse.send(ev);
+    };
     try {
-      await runWebCraftAgent(config, projectName, message, attachments, sse.send);
+      await runWebCraftAgent(config, projectName, message, attachments, guardedEmit, () => clientAborted);
     } catch (e) {
-      sse.send({ type: 'error', msg: e.message });
+      if (!clientAborted) sse.send({ type: 'error', msg: e.message });
     }
-    sse.end();
+    if (!res.writableEnded) sse.end();
   });
 
   // ── Autofix queue ─────────────────────────────────────────────────────────
@@ -2105,66 +3160,49 @@ export function register(router) {
     try {
       const { projectName } = await parseBody(req);
       if (!projectName) return sendError(res, 400, 'projectName required');
+      console.log('[scan] Starting scan for:', projectName);
       const dir = ProjectStore.dir(projectName);
       if (!fs.existsSync(dir)) return sendJSON(res, 200, { issues: [] });
 
       const files = _listProjectFiles(dir);
       const issues = [];
-      const allFileNames = new Set(files);
 
       for (const relPath of files) {
         const content = ProjectStore.readFile(projectName, relPath);
         if (!content) continue;
-        const ext = relPath.split('.').pop()?.toLowerCase();
+        const ext = (relPath.split('.').pop() || '').toLowerCase();
 
-        // JS syntax check
-        if (ext === 'js' || ext === 'mjs') {
-          try { new Function(content); } catch (e) {
-            issues.push({ file: relPath, severity: 'error', message: `Syntax: ${e.message.replace(/\n.*/s, '')}` });
-          }
-        }
-
-        // JSON parse check
-        if (ext === 'json') {
+        let diags = [];
+        if (['js', 'mjs', 'jsx', 'cjs'].includes(ext)) {
+          try {
+            const tsDiags = await lintJSWithTypeScript(dir, relPath);
+            diags = tsDiags || lintJS(content, relPath, projectName);
+          } catch { diags = lintJS(content, relPath, projectName); }
+        } else if (ext === 'json') {
           try { JSON.parse(content); } catch (e) {
-            issues.push({ file: relPath, severity: 'error', message: `JSON: ${e.message}` });
+            diags.push({ from: { line: 1, col: 0 }, severity: 'error', message: e.message });
           }
+        } else if (ext === 'css') {
+          diags = lintCSS(content);
+        } else if (ext === 'html' || ext === 'htm') {
+          diags = lintHTML(content, relPath, projectName);
         }
 
-        // CSS brace balance
-        if (ext === 'css') {
-          const o = (content.match(/\{/g) || []).length, c = (content.match(/\}/g) || []).length;
-          if (o !== c) issues.push({ file: relPath, severity: 'warning', message: `Unbalanced braces: ${o} open, ${c} close` });
-        }
-
-        // HTML closing tag + reference check
-        if (ext === 'html' || ext === 'htm') {
-          if (!content.includes('</html>')) {
-            issues.push({ file: relPath, severity: 'warning', message: 'Missing </html>' });
-          }
-          // Check file references
-          const refRegex = /(?:src|href)=["']([^"']*?\.(?:js|css|mjs))["']/gi;
-          let m;
-          while ((m = refRegex.exec(content)) !== null) {
-            const ref = m[1];
-            if (ref.startsWith('http') || ref.startsWith('//') || ref.startsWith('data:')) continue;
-            const htmlDir = path.dirname(relPath);
-            const refPath = ref.startsWith('/') ? ref.slice(1) : path.join(htmlDir, ref).replace(/\\/g, '/');
-            const publicRef = refPath.startsWith('public/') ? refPath : `public/${refPath}`;
-            if (!allFileNames.has(refPath) && !allFileNames.has(publicRef) && !allFileNames.has(ref)) {
-              issues.push({ file: relPath, severity: 'error', message: `Missing file: ${ref}` });
-            }
+        // Convert diagnostics to scan issues (only errors, not warnings — too noisy)
+        for (const d of diags) {
+          if (d.severity === 'error') {
+            issues.push({ file: relPath, severity: d.severity, message: `Line ${d.from.line}: ${d.message}` });
           }
         }
 
         // Truncation check
         if (isFileTruncated(content, relPath)) {
-          issues.push({ file: relPath, severity: 'warning', message: 'File appears truncated' });
+          issues.push({ file: relPath, severity: 'error', message: 'File appears truncated — incomplete generation' });
         }
       }
 
       sendJSON(res, 200, { issues, scanned: files.length });
-    } catch (e) { sendError(res, 500, e.message); }
+    } catch (e) { console.error('[scan] CRASH:', e); sendError(res, 500, e.message); }
   });
 
   // ── Syntax check ──────────────────────────────────────────────────────────
@@ -2187,6 +3225,93 @@ export function register(router) {
 
 function _safeName(name) {
   return (name ?? '').replace(/[^a-zA-Z0-9_\-. ]/g, '_').trim() || 'unnamed';
+}
+
+/**
+ * Robust tool call parser for when JSON.parse fails.
+ * The LLM often puts raw HTML/code with unescaped quotes, newlines, < > inside JSON values.
+ * This extracts "op", "path", "old", "new", "content", "query", "cmd" etc. by finding
+ * the key-value boundaries manually.
+ */
+function _parseToolCallRobust(raw) {
+  const result = {};
+
+  // Extract "op" — always a simple string
+  const opMatch = raw.match(/"op"\s*[:>]\s*"([^"]+)"/);
+  if (opMatch) result.op = opMatch[1];
+
+  // Extract "path" — simple string
+  const pathMatch = raw.match(/"path"\s*[:>]\s*"([^"]+)"/);
+  if (pathMatch) result.path = pathMatch[1];
+
+  // Extract "newPath" — simple string
+  const newPathMatch = raw.match(/"newPath"\s*[:>]\s*"([^"]+)"/);
+  if (newPathMatch) result.newPath = newPathMatch[1];
+
+  // Extract "query" — simple string (fix \| to |)
+  const queryMatch = raw.match(/"query"\s*[:>]\s*"([^"]+)"/);
+  if (queryMatch) result.query = queryMatch[1].replace(/\\\|/g, '|');
+
+  // Extract "glob" — simple string
+  const globMatch = raw.match(/"glob"\s*[:>]\s*"([^"]+)"/);
+  if (globMatch) result.glob = globMatch[1];
+
+  // Extract "cmd" — simple string
+  const cmdMatch = raw.match(/"cmd"\s*[:>]\s*"([^"]+)"/);
+  if (cmdMatch) result.cmd = cmdMatch[1];
+
+  // For edit: extract "old" and "new" — these can be HUGE multiline strings with HTML
+  // Strategy: find "old" key, then grab everything until we hit ","new" or the end
+  if (result.op === 'edit') {
+    const oldIdx = raw.indexOf('"old"');
+    const newIdx = raw.indexOf('"new"');
+    if (oldIdx >= 0 && newIdx > oldIdx) {
+      // old value is between "old":"/>" and ","new"
+      let oldStart = raw.indexOf('"', oldIdx + 5); // find opening quote after "old":
+      if (oldStart < 0) oldStart = raw.indexOf('>', oldIdx + 5); // handle "old">
+      if (oldStart >= 0) {
+        oldStart++; // skip the opening quote/bracket
+        // Find the end — look for ","new" pattern
+        const oldEnd = raw.lastIndexOf('"', newIdx - 1);
+        if (oldEnd > oldStart) {
+          result.old = raw.slice(oldStart, oldEnd);
+        }
+      }
+      // new value is after "new":"
+      let newStart = raw.indexOf('"', newIdx + 5);
+      if (newStart < 0) newStart = raw.indexOf('>', newIdx + 5);
+      if (newStart >= 0) {
+        newStart++;
+        // Find end — last " before the closing }
+        const lastBrace = raw.lastIndexOf('}');
+        const newEnd = raw.lastIndexOf('"', lastBrace);
+        if (newEnd > newStart) {
+          result.new = raw.slice(newStart, newEnd);
+        }
+      }
+    }
+  }
+
+  // For write: extract "content"
+  if (result.op === 'write') {
+    const contentIdx = raw.indexOf('"content"');
+    if (contentIdx >= 0) {
+      let contentStart = raw.indexOf('"', contentIdx + 9);
+      if (contentStart < 0) contentStart = raw.indexOf('>', contentIdx + 9);
+      if (contentStart >= 0) {
+        contentStart++;
+        const lastBrace = raw.lastIndexOf('}');
+        const contentEnd = raw.lastIndexOf('"', lastBrace);
+        if (contentEnd > contentStart) {
+          result.content = raw.slice(contentStart, contentEnd);
+        }
+      }
+    }
+  }
+
+  if (!result.op) throw new Error('Could not extract op from tool call');
+  console.log(`[TOOL-PARSE] Robust parse recovered: op=${result.op} path=${result.path} old.len=${result.old?.length ?? 0} new.len=${result.new?.length ?? 0}`);
+  return result;
 }
 
 function _isSafePath(relPath) {
@@ -2238,6 +3363,7 @@ function _patchEntry(projectDir, entryFile, shimDir, port) {
   const launcher = [
     `// NHA WebCraft Sandbox Launcher — auto-generated`,
     `process.env.PORT = '${port}';`,
+    `process.env.HOST = '0.0.0.0';`,
     `process.env.NODE_ENV = 'development';`,
     `require('${shimAbs}');`,
     `// Inject error reporter into HTML responses`,
@@ -2256,6 +3382,16 @@ function _patchEntry(projectDir, entryFile, shimDir, port) {
     `    }`,
     `  } catch(e) {}`,
     `  return _origEnd.apply(this, arguments);`,
+    `};`,
+    `// Strip X-Frame-Options so sandbox iframe works`,
+    `const _origSetHeader = require('http').ServerResponse.prototype.setHeader;`,
+    `require('http').ServerResponse.prototype.setHeader = function(name, val) {`,
+    `  if (name.toLowerCase() === 'x-frame-options') return this;`,
+    `  if (name.toLowerCase() === 'content-security-policy' && typeof val === 'string' && val.includes('frame-ancestors')) {`,
+    `    val = val.replace(/frame-ancestors[^;]*(;|$)/gi, '');`,
+    `    if (!val.trim()) return this;`,
+    `  }`,
+    `  return _origSetHeader.call(this, name, val);`,
     `};`,
     `require('${entryAbs}');`,
   ].join('\n');
@@ -2320,7 +3456,25 @@ module.exports.default = store;
 `;
 
   // Security headers shim (express middleware)
-  const helmetShim = `module.exports = () => (req, res, next) => next();`;
+  const helmetShim = `
+const noop = (req, res, next) => next();
+const handler = () => noop;
+handler.contentSecurityPolicy = handler;
+handler.crossOriginEmbedderPolicy = handler;
+handler.crossOriginOpenerPolicy = handler;
+handler.crossOriginResourcePolicy = handler;
+handler.dnsPrefetchControl = handler;
+handler.frameguard = handler;
+handler.hidePoweredBy = handler;
+handler.hsts = handler;
+handler.ieNoOpen = handler;
+handler.noSniff = handler;
+handler.originAgentCluster = handler;
+handler.permittedCrossDomainPolicies = handler;
+handler.referrerPolicy = handler;
+handler.xssFilter = handler;
+module.exports = handler;
+`;
 
   // Generic no-op shim for unknown enterprise deps
   const noopShim = `module.exports = new Proxy({}, { get: () => new Proxy(() => {}, { get: (_, p) => p === 'then' ? undefined : new Proxy(() => {}, { get: (__, q) => q === 'then' ? undefined : () => {} }) }) });`;
@@ -2377,17 +3531,17 @@ function _waitForPort(port, timeoutMs) {
   return new Promise((resolve) => {
     const deadline = Date.now() + timeoutMs;
     const check = () => {
-      const sock = createServer();
-      sock.once('error', () => {
-        // Port is still closed by us — it means the app is listening
-        resolve(true);
-      });
-      sock.listen(port, '127.0.0.1', () => {
-        // We could bind it → app hasn't taken the port yet
-        sock.close();
-        if (Date.now() > deadline) { resolve(false); return; }
-        setTimeout(check, 300);
-      });
+      // Use the ESM-imported Socket — NEVER `require('net')` here, this file
+      // is .mjs and `require` is not defined in ESM. The require call here
+      // was the single root cause of "[error] require is not defined" with
+      // no autofix flow visible — the crash happened INSIDE the nha ui
+      // server itself (in this exact function), not in the child sandbox.
+      const sock = new Socket();
+      sock.setTimeout(500);
+      sock.once('connect', () => { sock.destroy(); resolve(true); });
+      sock.once('error', () => { sock.destroy(); if (Date.now() > deadline) { resolve(false); } else { setTimeout(check, 300); } });
+      sock.once('timeout', () => { sock.destroy(); if (Date.now() > deadline) { resolve(false); } else { setTimeout(check, 300); } });
+      sock.connect(port, 'localhost');
     };
     check();
   });

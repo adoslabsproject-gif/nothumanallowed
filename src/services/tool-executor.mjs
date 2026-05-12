@@ -63,30 +63,41 @@ function getTsxPath() {
 
 /** Actions that mutate external state and require user confirmation. */
 export const DESTRUCTIVE_ACTIONS = new Set([
-  'gmail_send',
-  'gmail_send_attach',
-  'gmail_reply',
-  'gmail_delete',
-  'imap_send',
-  'imap_reply',
-  'imap_bulk_send',
-  'imap_send_template',
-  'imap_trash',
-  'calendar_create',
-  'calendar_move',
-  'calendar_update',
-  'calendar_delete',
-  'contact_delete',
-  'task_done',
-  'task_delete',
-  'task_clear',
-  'notify_remind',
-  'slack_send',
-  'github_create_issue',
-  'file_write',
-  'drive_upload',
-  'drive_update',
-  'drive_delete',
+  // Gmail
+  'gmail_send', 'gmail_send_attach', 'gmail_reply', 'gmail_delete',
+  'gmail_mark_read', 'gmail_mark_starred', 'gmail_archive', 'gmail_trash',
+  // IMAP (custom email accounts)
+  'imap_send', 'imap_reply', 'imap_bulk_send', 'imap_send_template',
+  'imap_trash', 'imap_mark_read', 'imap_mark_starred', 'imap_draft',
+  // Calendar
+  'calendar_create', 'calendar_move', 'calendar_update', 'calendar_delete',
+  // Contacts
+  'contact_add', 'contact_update', 'contact_delete',
+  // Tasks (local) + Google Tasks
+  'task_add', 'task_done', 'task_delete', 'task_clear',
+  'gtask_add', 'gtask_complete', 'gtask_delete',
+  // Notes
+  'note_add',
+  // Reminders / notifications
+  'notify_remind', 'reminder_create',
+  // Slack
+  'slack_send', 'slack_dm', 'slack_react', 'slack_mark_read',
+  // Notion
+  'notion_page', 'notion_update',
+  // GitHub
+  'github_create_issue', 'github_comment',
+  // File system (local)
+  'file_write', 'file_move', 'file_delete', 'file_mkdir',
+  // Google Drive
+  'drive_upload', 'drive_update', 'drive_delete', 'drive_move', 'drive_share',
+  // Birthdays
+  'birthday_add', 'birthday_update', 'birthday_delete',
+  // Alexandria messaging
+  'alexandria_send',
+  // Cron / scheduling
+  'cron_create', 'cron_delete',
+  // Portfolio (local file)
+  'portfolio_add', 'portfolio_remove', 'portfolio_tx_add',
 ]);
 
 // ── Tool Definitions (for system prompt) ─────────────────────────────────────
@@ -163,8 +174,17 @@ TOOLS:
 14. calendar_create(summary: string, start: string, end: string, attendees?: string[], description?: string)
     Create a NEW calendar event. start/end are ISO 8601 datetime strings.
     Use this when the user says: "inserisci", "aggiungi", "crea", "metti", "fissa", "prenota", "add", "create", "schedule", "book".
+
+    PARAMETER MEANING (CRITICAL — most common mistake):
+      - summary  = the TITLE of the event (what you'd write on a calendar grid). Short, derived from what the user said.
+      - description = optional NOTES/details. Leave empty unless the user gave extra context that doesn't fit in the title.
+      - NEVER put the title in description. NEVER leave summary empty.
+
+    Always derive summary, date and time from the actual user message — never use literal values from this documentation.
+
     IMPORTANT: When user says "inserisci appuntamento" or "crea evento" → use calendar_create, NOT calendar_find.
     Extract the summary, date, and time from the user message. If end time is not specified, default to 1 hour after start.
+    The tool RESPONSE will include the real eventId in parentheses (a long lowercase alphanumeric Google ID — NEVER invent one). REMEMBER this exact value. If the user later says "correggi", "modifica", "cambia", "sposta", "elimina" referring to this same event, use calendar_update / calendar_move / calendar_delete with that exact eventId — do NOT create a second event. Never use placeholder IDs like "ABC123" or "event_123" — those are illustrative only.
 
 15. calendar_move(eventId: string, newStart: string, newEnd: string)
     Reschedule an event. ALWAYS confirm before moving.
@@ -178,7 +198,16 @@ TOOLS:
 
 18. calendar_update(eventId: string, summary?: string, location?: string, description?: string, start?: string, end?: string)
     Update ANY field of an existing calendar event: title, location, description, start time, end time.
-    You MUST call calendar_find first to get the eventId. Only include fields that need to change. ALWAYS confirm before updating.
+    Only include fields that need to change.
+
+    HOW TO GET eventId — IN ORDER OF PREFERENCE:
+      1. From your OWN previous tool response in this conversation: when you ran calendar_create / calendar_find / calendar_date earlier, the response contained the REAL eventId (a long lowercase alphanumeric Google-issued string). Use that exact value verbatim.
+      2. If step 1 doesn't apply, call calendar_find or calendar_date FIRST to look it up.
+      3. NEVER fabricate an eventId. NEVER copy placeholder strings from this documentation. Real eventIds come from Google Calendar tool responses only.
+
+    CRITICAL — "CORREGGI" / "MODIFICA" / "CAMBIA TITOLO" mappings:
+      When the user says "correggi", "modifica", "cambia", "rinomina", "sposta", "aggiorna" referring to the most recent event you just created, use calendar_update with the real eventId returned by your previous calendar_create call.
+      Do NOT call calendar_create a second time — that would create a DUPLICATE event.
 
 19. calendar_delete(eventId: string)
     Delete (permanently remove) a calendar event by its eventId.
@@ -276,8 +305,34 @@ TOOLS:
 40. slack_messages(channel: string, maxResults?: number)
     List recent messages in a Slack channel (name or ID). Default max 15.
 
-41. slack_send(channel: string, text: string)
+41. slack_send(channel: string, text: string, threadTs?: string)
     Send a message to a Slack channel. ALWAYS confirm before sending.
+    If threadTs is provided, post as a thread reply instead of a top-level message.
+
+41b. slack_search(query: string, count?: number)
+     Full-text search messages across the whole Slack workspace. Returns the most
+     recent matches with channel, user, text and a Slack permalink each. Use this
+     for "find the message where X talked about Y", "trova il messaggio di Marco
+     su X", "did anyone post about the release", etc.
+
+41c. slack_dm(user: string, text?: string)
+     Open or send a direct message to a user. The user parameter accepts a Slack
+     user ID (Uxxx), username, real name, or email — the tool resolves them
+     automatically. If text is provided, the message is sent immediately; otherwise
+     the DM channel is just opened.
+
+41d. slack_thread(channel: string, ts: string)
+     List all replies in a thread. ts is the parent message timestamp (returned
+     by slack_messages or slack_search). Use this before posting a contextual
+     reply with slack_send + threadTs.
+
+41e. slack_react(channel: string, ts: string, emoji: string)
+     Add an emoji reaction to a message. emoji is the name without colons
+     (e.g. "thumbsup", "rocket", "white_check_mark"). Confirm before reacting on
+     someone else's message.
+
+41f. slack_mark_read(channel: string, ts?: string)
+     Mark a Slack channel as read up to a given timestamp (default: now).
 
 --- FILE ATTACHMENT ---
 
@@ -411,7 +466,15 @@ TOOLS:
     Only call this if you need to refresh or the section is missing.
 
 66. imap_read(messageId: string)
-    Read a full email message from the local DB by its id. Returns subject, from, to, body_text, body_html, attachments.
+    Read a full email message from the local DB by its id. Returns subject, from, to, body_text, body_html, and a numbered ATTACHMENTS list.
+    If the email has attachments, follow up with imap_attachment_read to read each one's content.
+
+66b. imap_attachment_read(messageId: string, filename?: string, index?: number, attachmentId?: string)
+    Download and parse an attachment of a given email. messageId is required; pick the attachment by filename (substring match,
+    case-insensitive), 1-based index, or attachmentId (exact). Returns extracted text for PDF (text-based POs/quotes/invoices),
+    DOCX (Word), and any text/* type. For image-based PDFs or unsupported binary types, returns metadata and instructs the
+    user to share the relevant section as text. Use this whenever the user says "leggi l'allegato", "read the attachment",
+    "estrai dati dall'allegato", "what's in the PDF", etc.
 
 67. imap_send(accountId: string, to: string, subject: string, bodyHtml: string, cc?: string, inReplyTo?: string)
     Send an email via SMTP from a configured IMAP account. ALWAYS confirm with user before sending.
@@ -600,6 +663,117 @@ TOOLS:
     query: free-text like "Federal Reserve inflation", "AI chips", "earnings season".
     Returns: headline, source, publish time, and URL for each article.
 
+88. earnings_calendar(ticker: string, days?: number)
+    Next earnings date + EPS/revenue estimates + last 4 quarters surprise history + analyst trend for next quarter.
+    Use BEFORE any near-term trade idea — earnings move stocks more than fundamentals.
+
+89. dividend_calendar(ticker: string)
+    Dividend yield, payout ratio, next ex-dividend date, next pay date, 5y average yield.
+
+90. economic_calendar(country?: string, days?: number)
+    Upcoming macroeconomic releases (FOMC, ECB, CPI, NFP, etc.) for a country. Defaults: US, 7 days.
+    country codes: "US" | "EU" | "IT" | "DE" | "FR" | "UK" | "JP" | "CN". Returns time, importance ★/★★/★★★, forecast vs previous.
+
+91. stock_screener(screen?: string, count?: number)
+    Pre-built Yahoo Finance screeners. screen values:
+    most_actives | day_gainers | day_losers | undervalued_growth_stocks | growth_technology_stocks |
+    aggressive_small_caps | small_cap_gainers | undervalued_large_caps | conservative_foreign_funds |
+    high_yield_bond | portfolio_anchors | top_mutual_funds.
+    Returns sym/name/price/change%/mcap/P/E for the top N matches.
+
+92. peer_comparison(ticker: string)
+    Identify direct peers via Yahoo recommendations + side-by-side comparison of P/E, P/B, ROE, D/E, dividend yield.
+    Use to position a stock vs its industry, NOT just vs the broad market.
+
+93. sec_filings(ticker: string, form?: string, limit?: number)
+    SEC EDGAR filings for a US-listed company. form filter: "10-K" | "10-Q" | "8-K" | "DEF 14A" | "4" (insider) | "13F-HR" etc.
+    Each row: date · form · description + direct URL to the filing document. Default: latest 10 of any form.
+
+94. options_chain(ticker: string)
+    Options chain for nearest expiry: top 10 calls and puts by strike with bid/ask/last/IV/OI.
+    Lists all available expirations. Use for IV analysis, options strategy sizing, gamma proximity.
+
+95. portfolio_add(ticker: string, qty: number, cost?: number)
+    Add (or average-down) a stock position to the local portfolio (~/.nha/portfolio.json). cost = price/share.
+
+96. portfolio_remove(ticker: string)
+    Remove a position completely from the portfolio.
+
+97. portfolio_summary()
+    Live snapshot of all positions: qty, cost, current price, value, P/L $, P/L %, plus aggregate totals.
+
+98. portfolio_metrics(period?: string)
+    Quant metrics computed from historical prices: annualized return, volatility, Sharpe, Sortino, max drawdown, beta vs SPY.
+    period: "1mo" "3mo" "6mo" "1y" "2y" "5y" "10y". Default: "1y". Assumes 4% risk-free rate.
+
+99. news_sentiment(ticker?: string, query?: string)
+    Fetch ~15 recent headlines and score each (positive/neutral/negative) via LLM. Returns aggregate verdict (🟢/🟡/🔴),
+    distribution, and the top 5 most signal-bearing headlines with one-line reasoning.
+
+100. backtest_strategy(ticker?: string, period?: string, strategy?: string)
+    Run a parametric backtest. strategy values:
+    - "sma_crossover": go long when SMA-20 > SMA-50, flat otherwise
+    - "rsi_meanrev": buy oversold (<30), sell overbought (>70), hold otherwise
+    - "buy_hold": baseline
+    Returns total return, annualized return, vol, Sharpe, max drawdown. For custom strategies use execute_code directly.
+
+101. italian_market(what?: string)
+    Italian market snapshot. what: "all" | "mib" (FTSE MIB index) | "constituents" (top 15 blue chips with live prices) | "spread" (BTP-Bund 10y).
+
+102. portfolio_correlation(period?: string)
+    Pearson correlation matrix between all holdings + SPY benchmark over a period (default 1y).
+    Surfaces concentration risk (>0.7 correlation = redundant) and diversification opportunities (<0.3 = good).
+
+103. portfolio_sector_breakdown()
+    Breakdown of portfolio exposure by sector, country, and currency. Computed from live prices × position size.
+    Use to spot over-concentration (e.g. 60% in tech) or unhedged currency exposure.
+
+104. portfolio_var(period?: string, confidence?: number)
+    Historical-simulation Value at Risk and Expected Shortfall (CVaR). Default: 1y, 95% confidence.
+    Output: 1-day VaR % and $, 10-day VaR (sqrt-time scaled), Expected Shortfall (avg tail loss).
+    For stress testing pass confidence=0.99.
+
+105. portfolio_rebalance(targets?: object)
+    Compare current weights vs target weights and suggest the exact share trades to rebalance.
+    targets: optional {AAPL: 0.20, MSFT: 0.15, ...} (sum to 1.0). If not provided, falls back to ~/.nha/portfolio.json
+    "targets" field, otherwise assumes equal-weight. Drift threshold for action: 1%.
+
+106. insider_trading(ticker: string, limit?: number)
+    SEC Form 4 (insider/officer transactions) for a US-listed company. Returns last N filings with direct URLs.
+    Open each URL to see whether the insider BOUGHT or SOLD shares — strong signal when clustered.
+
+107. option_strategy_builder(ticker: string, direction?: string, maxRisk?: number, daysToExpiry?: number)
+    Suggests concrete option strategies with strikes, expiry, net debit/credit, max profit/loss, breakeven, ROI.
+    direction: "bullish" | "bearish" | "neutral". Default: neutral. maxRisk: $ budget (default 1000). daysToExpiry: default 30.
+    Output adapts to ATM IV percentile vs 30d realized vol (cheap < 30th = buy premium; rich > 70th = sell premium):
+    - bullish+cheap → Bull Call Debit Spread        - bullish+rich → Bull Put Credit Spread
+    - bearish+cheap → Bear Put Debit Spread         - bearish+rich → Bear Call Credit Spread
+    - neutral+rich  → Iron Condor                   - neutral+cheap → Long Straddle
+    Each suggestion includes exact contracts × ticker × expiry × strike × side, with sizing scaled to maxRisk.
+
+108. crypto_onchain_metrics(coin: string)
+    Multi-source on-chain & derivatives view of a crypto asset. coin = CoinGecko ID (bitcoin, ethereum, solana, …).
+    Combines:
+    - CoinGecko market data: price, mcap, supply, ATH distance, social signal
+    - DeFi Llama TVL (for L1s): 30-day TVL trend
+    - Binance perpetual futures: 8h funding rate (last + avg of 8), open interest, positioning signal 🟢/🔴/🟡
+    - Alternative.me Fear & Greed Index (0-100)
+    - CoinGecko global: BTC/ETH/stablecoin market share
+    All-free APIs. No API key required.
+
+109. portfolio_tax_lots(method?: string)
+    Tax-lot accounting on the transaction history. method: "FIFO" | "LIFO" | "HIFO". Default: FIFO.
+    Computes realized short-term (taxed at income rate) vs long-term (15%/20% US) gains per ticker.
+    Lists open lots with cost basis, age (long-term threshold 365 days), unrealized P/L per lot.
+    Surfaces:
+    - ⚠ Wash-sale warnings: buys within 30 days of a loss sale (IRS §1091)
+    - 💡 Tax-loss harvest candidates: open lots with unrealized loss > $100, flags if hold < 31d (wash-sale risk)
+    Requires transactions recorded via portfolio_tx_add (legacy portfolio_add still works for current state).
+
+110. portfolio_tx_add(ticker: string, type: "buy"|"sell", qty: number, price: number, date?: string)
+    Record a dated transaction. Feeds portfolio_tax_lots. Also updates current positions for portfolio_summary parity.
+    date format: "YYYY-MM-DD" (defaults to today).
+
 --- CODE EXECUTION ---
 
 81. execute_code(language: "python"|"javascript"|"typescript", code: string, files?: [{path: string, content: string}], packages?: string[], stdin?: string, timeout?: number)
@@ -648,7 +822,15 @@ RULES:
 // Used ONLY when provider === 'nha'. Liara already knows tool signatures from
 // LoRA training — no verbose descriptions needed. Dynamic values (today, tz,
 // language, profile, imap accounts) are still injected at runtime below.
-export const LIARA_TOOL_DEFINITIONS = `You are Liara, the NHA personal AI assistant.
+export const LIARA_TOOL_DEFINITIONS = `## LANGUAGE — HIGHEST PRIORITY
+
+You MUST write your ENTIRE response in {{LANGUAGE}}. Every sentence, every confirmation, every error message. This overrides everything else. Even when this prompt itself is written in English, your reply to the user must be in {{LANGUAGE}} only. Do NOT mix languages. Do NOT default to English.
+
+If {{LANGUAGE}} is Italian, write only in Italian: "L'appuntamento è stato cancellato." NOT "The event has been deleted." or "Both events have been deleted."
+
+---
+
+You are Liara, the NHA personal AI assistant.
 Today: {{TODAY}} | Timezone: {{TIMEZONE}} | Language: {{LANGUAGE}}
 
 When the user's request requires an action, output one or more fenced JSON blocks:
@@ -657,29 +839,103 @@ When the user's request requires an action, output one or more fenced JSON block
 \`\`\`
 Multiple blocks allowed for chaining. Include natural text before/between/after blocks.
 Never output a JSON block as a suggestion — every block executes immediately.
-FINANCE: For financial analysis — ALWAYS call real data tools first (market_price → market_chart → market_indicators OR crypto_data + macro_data), then canvas_render with a full Chart.js HTML dashboard (dark theme: bg #070b0f, green #00ff41, amber #f59e0b, red #ff4444, blue #00e5ff). Never invent prices.
 
-AVAILABLE TOOLS:
-gmail_list · gmail_read · gmail_send · gmail_draft · gmail_reply · gmail_mark_read · gmail_mark_unread · gmail_archive · gmail_delete · gmail_send_attach
-imap_accounts · imap_list · imap_read · imap_send · imap_sync · imap_labels · imap_mark_read · imap_reply · imap_thread · imap_search · imap_mark_starred · imap_trash · imap_draft · imap_send_template · imap_bulk_send
-calendar_today · calendar_tomorrow · calendar_date · calendar_upcoming · calendar_week · calendar_month · calendar_create · calendar_move · calendar_find · calendar_update · calendar_delete · schedule_meeting · schedule_draft_email
-task_list · task_add · task_done · task_move · task_delete · task_clear · task_edit
-contact_search · contact_add · contact_update · contact_delete
-gtask_list · gtask_add · gtask_complete
-note_add · note_list
-github_issues · github_prs · github_notifications · github_create_issue
-notion_search · notion_page
-slack_channels · slack_messages · slack_send
-web_search · fetch_url · get_weather
-browser_open · browser_screenshot · browser_click · browser_type · browser_extract · browser_js · browser_wait · browser_scroll · browser_key · browser_close
-cron_add · cron_list · cron_remove
-screen_capture · screen_analyze
-canvas_render · canvas_clear
-collab_send · collab_read
-file_list · file_read · file_write · file_info · file_search
-drive_list · drive_read · drive_upload · drive_update · drive_delete · drive_info · drive_folder · drive_download
-maps_directions · notify_remind · birthdays_upcoming · birthday_add · execute_code
-market_price · market_chart · market_indicators · macro_data · crypto_data · market_news`.trim();
+## ABSOLUTE RULES (violate these and the user loses trust)
+
+1. NEVER invent tool output. If you need data (an event ID, a price, a search result), you MUST emit a tool JSON block and wait for its real response. Do NOT write fake "(eventId: 123456789)" or fake results.
+2. NEVER claim an action was completed unless you have just received a SUCCESS tool result for that action in this same turn. NEVER write "cancellato con successo", "creato con successo", "inviato" etc. without a real tool execution behind it. If you didn't emit the tool block, the action didn't happen.
+3. NEVER duplicate. If the user says "correggi/modifica/sposta/aggiorna" referring to an item you just created in this conversation, use the corresponding *_update / *_move tool with the eventId/taskId from your previous tool response. Do NOT create a second item.
+4. NEVER put the TITLE in the description field. The "summary" / "title" field is the SHORT name (what shows on a calendar grid). The "description" field is ONLY for extra notes.
+5. NEVER invent times. If the user did not specify a time, ASK them ("A che ora?"). Do not default to 10:00 or any other time silently. Same for missing date, duration, attendees.
+6. When the user confirms ("procedi", "sì", "fallo", "ok", "vai") AND there is a pending action from the IMMEDIATELY PREVIOUS assistant turn (you proposed something like "Posso cancellare X. Procedo?"), EXECUTE that exact pending action with the same parameters — do NOT search again, do NOT propose again, do NOT ask again. Emit the tool block for the action you just proposed.
+7. When in doubt, ASK ONE concise question — do not invent details.
+8. Tool JSON blocks MUST be wrapped in \`\`\`json ... \`\`\` fences. If you emit raw JSON without fences, the system can sometimes still parse it but it's unreliable — always use the fences.
+
+## TOOL SIGNATURES (parameters and how to use them)
+
+### Calendar
+calendar_create(summary, start, end, description?, attendees?, location?)
+  - summary = SHORT title derived from what the user actually said. REQUIRED. Do NOT leave empty.
+  - description = optional notes only. Do NOT put the title here.
+  - start/end = ISO 8601 datetimes. Default end = start + 1 hour.
+  - The tool response includes the REAL eventId. Use that exact value verbatim for any subsequent operation on the same event. The eventId is a long alphanumeric string returned by Google — NEVER fabricate one.
+  - Always derive every parameter value from the user's message, never from this documentation.
+
+calendar_update(eventId, summary?, location?, description?, start?, end?)
+  - Use this for "correggi", "modifica", "rinomina", "cambia titolo", "sposta", "aggiorna" referring to an event you JUST created or found.
+  - eventId MUST come from a real tool response (calendar_create / calendar_find / calendar_date). NEVER invent it.
+  - DO NOT use placeholder strings like "ABC123", "DEF456", "abc123", "event_123" — those are not real eventIds.
+  - If you don't have a real eventId, call calendar_find or calendar_date FIRST. Do not guess.
+
+calendar_delete(eventId)  — Delete an event you have a REAL eventId for. Same rules as update: never invent, never use placeholders.
+calendar_move(eventId, newStart, newEnd)  — Reschedule.
+calendar_find(query, daysAhead?)  — Search events by name. Returns eventIds. Use ONLY when you don't already have the id.
+  - daysAhead default is 7 — pass 30 or 60 for broader search if not found in 7.
+  - Query is matched case-insensitively against summary AND description.
+  - If a user names an event ambiguously (e.g. "Italiano della BMW" via voice-to-text typo for "Tagliando della BMW"), try BOTH the literal query AND alternative spellings.
+calendar_today() / calendar_tomorrow() / calendar_date(date) / calendar_upcoming(hours?) / calendar_week(startDate?) / calendar_month(month?)  — Read-only listings.
+  - **calendar_week with NO arguments** returns the CURRENT calendar week (Mon..Sun). Use this when the user says "questa settimana" / "this week". Do NOT pass startDate — let the tool compute the right Monday. Only pass startDate when the user explicitly names a different week.
+  - **"elimina gli appuntamenti di [date]"** → call calendar_date(date) FIRST to get real eventIds, then calendar_delete with each real id.
+schedule_meeting(clientName, subject, location, durationMinutes, dateFrom, dateTo)  — Find optimal slots considering travel time.
+
+### Gmail / IMAP
+gmail_list(limit?, query?)  — List recent emails. query supports Gmail search syntax.
+gmail_read(messageId)  — Read full email body.
+gmail_send(to, subject, body, cc?, bcc?)  — Send a new email.
+gmail_reply(messageId, body)  — Reply to a thread.
+gmail_draft(to, subject, body)  — Save a draft without sending.
+gmail_mark_read(messageId) / gmail_mark_unread(messageId) / gmail_archive(messageId) / gmail_delete(messageId)
+gmail_send_attach(to, subject, body, filePath)  — Send with attachment.
+imap_*  — Same operations for non-Gmail accounts. imap_send_template/imap_bulk_send for templated sends.
+
+### Tasks
+task_list() / task_add(text, dueDate?) / task_done(index) / task_edit(index, newText) / task_move(fromIndex, toIndex) / task_delete(index) / task_clear()
+gtask_list() / gtask_add(text) / gtask_complete(taskId)  — Google Tasks.
+
+### Contacts
+contact_search(query) / contact_add(name, email?, phone?) / contact_update(id, fields) / contact_delete(id)
+
+### Web + research
+web_search(query)  — Search the web (returns title/URL/snippet for top results).
+fetch_url(url)  — Fetch a page; returns title, meta description, OG tags, JSON-LD, main content. Use the full URL with https://. For naked domains (www.x.com), prepend https://.
+get_weather(location)  — Returns current conditions + 3-day forecast.
+maps_directions(origin, destination)
+
+### Browser automation (for JS-rendered pages or interaction)
+browser_open(url) → returns sessionId. browser_screenshot(sessionId) · browser_click(sessionId, selector) · browser_type(sessionId, selector, text) · browser_extract(sessionId, selector) · browser_js(sessionId, code) · browser_wait(sessionId, ms) · browser_scroll(sessionId, deltaY) · browser_key(sessionId, key) · browser_close(sessionId)
+
+### Notes / GitHub / Notion / Slack
+note_add(text) · note_list()
+github_issues(repo) · github_prs(repo) · github_notifications() · github_create_issue(repo, title, body)
+notion_search(query) · notion_page(pageId)
+slack_channels() · slack_messages(channel) · slack_send(channel, text, threadTs?) · slack_search(query) · slack_dm(user, text?) · slack_thread(channel, ts) · slack_react(channel, ts, emoji) · slack_mark_read(channel, ts?)
+
+### Files / Drive
+file_list(dir?) · file_read(path) · file_write(path, content) · file_info(path) · file_search(query)
+drive_list(folderId?) · drive_read(fileId) · drive_upload(name, content, folderId?) · drive_update(fileId, content) · drive_delete(fileId) · drive_info(fileId) · drive_folder(name, parentId?) · drive_download(fileId, savePath)
+
+### Reminders / automation
+notify_remind(text, when)  — Notify the user at a future time.
+birthdays_upcoming(days?) · birthday_add(name, date)
+cron_add(schedule, prompt) · cron_list() · cron_remove(index)
+
+### Screen / canvas / collab
+screen_capture() / screen_analyze(question?)
+canvas_render(html, title?)  — Render an HTML report/dashboard in the canvas panel.
+collab_send(channel, text) · collab_read(channel)
+
+### Finance
+market_price(symbol) · market_chart(symbol, period?) · market_indicators(symbol) · macro_data(metric, country?) · crypto_data(coin) · market_news(symbol?)
+FINANCE FLOW: always call real data tools first (market_price → market_chart → market_indicators OR crypto_data + macro_data), then canvas_render with a Chart.js HTML dashboard (dark theme: bg #070b0f, green #00ff41, amber #f59e0b, red #ff4444, blue #00e5ff). Never invent prices.
+
+### Code
+execute_code(language, code)  — Run Python/JS/shell in a sandbox.
+
+## CONFIRMATIONS
+
+Write operations that change state (gmail_send/reply/delete, calendar_create/update/move/delete, contact_delete, task_done/delete, notify_remind, file_write, drive_upload/update/delete) — describe what you're about to do in natural language first, then emit the JSON block. The system shows the user what's pending and acts on confirmation.
+
+If the user already confirmed in the previous turn ("procedi", "sì", "fallo"), execute the pending action directly using the parameters from that prior turn — do NOT ask again or restart from scratch.`.trim();
 
 // ── Action Parser ────────────────────────────────────────────────────────────
 
@@ -694,9 +950,12 @@ export function parseActions(text) {
   const actions = [];
   const textParts = [];
 
-  // Normalize: some LLMs output "json ... " (double-quote fences) instead of ```json ... ```
-  // Replace "json\n{...}\n" patterns with proper ```json fences before parsing
+  // Normalize: some LLMs output "json ... ", 'json ... ' or '''json ... '''
+  // (Python-style triple-quote) instead of ```json ... ```. We rewrite all
+  // these to proper triple-backtick fences before the main regex runs.
   const normalized = text
+    .replace(/'''json\s*\n?([\s\S]*?)\n?\s*'''/g, (_, body) => '```json\n' + body.trim() + '\n```')
+    .replace(/"""json\s*\n?([\s\S]*?)\n?\s*"""/g, (_, body) => '```json\n' + body.trim() + '\n```')
     .replace(/"json\s*\n([\s\S]*?)\n\s*"/g, (_, body) => '```json\n' + body.trim() + '\n```')
     .replace(/'json\s*\n([\s\S]*?)\n\s*'/g, (_, body) => '```json\n' + body.trim() + '\n```');
 
@@ -723,12 +982,53 @@ export function parseActions(text) {
   const trailing = normalized.slice(lastIndex).trim();
   if (trailing) textParts.push(trailing);
 
-  // Fallback: if no fenced blocks found, scan for bare {"action": ...} objects in the text
+  // Fallback: if no fenced blocks found, scan for bare {"action": ...} objects
+  // in the text. The previous regex was naive and stopped at the first `}`,
+  // breaking on nested params like {"action":"X","params":{"summary":"Y"}}.
+  // Now we do proper brace balancing so we always capture the FULL object.
   if (actions.length === 0) {
+    const consumed = new Set();
+    const findBareActions = (src) => {
+      let i = 0;
+      while (i < src.length) {
+        // Quick filter: only consider candidates that start with {"action"
+        const idx = src.indexOf('{"action"', i);
+        if (idx < 0) break;
+        // Walk forward balancing braces, respecting strings
+        let depth = 0;
+        let inStr = false;
+        let escape = false;
+        let end = -1;
+        for (let j = idx; j < src.length; j++) {
+          const c = src[j];
+          if (escape) { escape = false; continue; }
+          if (c === '\\' && inStr) { escape = true; continue; }
+          if (c === '"' && !escape) { inStr = !inStr; continue; }
+          if (inStr) continue;
+          if (c === '{') depth++;
+          else if (c === '}') {
+            depth--;
+            if (depth === 0) { end = j; break; }
+          }
+        }
+        if (end < 0) break;
+        const candidate = src.slice(idx, end + 1);
+        try {
+          const parsed = JSON.parse(candidate);
+          if (parsed.action && typeof parsed.action === 'string' && !consumed.has(candidate)) {
+            actions.push({ action: parsed.action, params: parsed.params || {} });
+            consumed.add(candidate);
+          }
+        } catch { /* not valid JSON, skip */ }
+        i = end + 1;
+      }
+    };
+    findBareActions(text);
+    // Legacy fallback kept for very loose JSON shapes — only fires if the
+    // brace scanner found nothing.
     const bareRegex = /\{[\s\S]*?"action"\s*:\s*"[^"]+[\s\S]*?\}/g;
     let bareMatch;
-    const consumed = new Set();
-    while ((bareMatch = bareRegex.exec(text)) !== null) {
+    while (actions.length === 0 && (bareMatch = bareRegex.exec(text)) !== null) {
       try {
         const parsed = JSON.parse(bareMatch[0]);
         if (parsed.action && typeof parsed.action === 'string' && !consumed.has(bareMatch[0])) {
@@ -747,11 +1047,112 @@ export function parseActions(text) {
   return { textParts, actions };
 }
 
+/**
+ * Strip orphan tool-fence blocks from a finished LLM response. These appear
+ * when the model emits an empty `'''json '''` (or backtick-fenced) block
+ * as a no-op marker — the parser doesn't pick them up as actions but they
+ * leak into the UI as visible noise. Run this on the final assistant text
+ * before showing it to the user.
+ */
+export function stripOrphanFences(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    // Triple-backtick, triple-single, triple-double quote fences with `json`
+    // marker — empty or with a body. We strip the whole block.
+    .replace(/```json\s*\n?[\s\S]*?```/g, '')
+    .replace(/'''json\s*\n?[\s\S]*?'''/g, '')
+    .replace(/"""json\s*\n?[\s\S]*?"""/g, '')
+    // Bare action JSON that the parser already consumed but the synthesis
+    // step regurgitated (rare but happens with Liara). Only strip if the
+    // JSON shape matches "action":"...".
+    .replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,?\s*("params"\s*:\s*\{[\s\S]*?\}\s*)?\}/g, '')
+    // Collapse blank-line clusters produced by the stripping.
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // ── Formatting Helpers ───────────────────────────────────────────────────────
 
 /**
  * Format an ISO timestamp into a human-readable time string.
  */
+// ── Attachment Parsers (zero-deps, best-effort) ────────────────────────────
+
+/**
+ * Extract text from a PDF buffer using a naïve pattern scan. Catches text
+ * inside `BT ... (text) Tj ... ET` blocks of uncompressed content streams.
+ * Won't work on PDFs whose content streams are FlateDecode-compressed — those
+ * need a real parser (pdfjs-dist). For typical ERP-generated POs/quotes the
+ * content stream is usually plain enough that this catches the line items.
+ */
+function _naivePdfText(buf) {
+  if (!Buffer.isBuffer(buf)) return '';
+  // PDFs can store text in (...) strings, sometimes split across multiple Tj
+  // calls. We collect them all, decode the basic escapes, and join with spaces.
+  const raw = buf.toString('latin1');
+  const out = [];
+  // BT ... ET text blocks. Inside: (text) Tj or [(a)(b)] TJ.
+  const blockRe = /BT[\s\S]*?ET/g;
+  let m;
+  while ((m = blockRe.exec(raw))) {
+    const block = m[0];
+    const strRe = /\(((?:\\.|[^\\)])*)\)/g;
+    let sm;
+    const parts = [];
+    while ((sm = strRe.exec(block))) {
+      const s = sm[1]
+        .replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t')
+        .replace(/\\\(/g, '(').replace(/\\\)/g, ')').replace(/\\\\/g, '\\')
+        .replace(/\\([0-7]{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+      parts.push(s);
+    }
+    if (parts.length) out.push(parts.join(' '));
+  }
+  // Cleanup: collapse whitespace, drop control chars.
+  return out.join('\n').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '').replace(/[ \t]+/g, ' ').trim();
+}
+
+/**
+ * Extract text from a DOCX buffer. DOCX = zip with `word/document.xml`. We
+ * use Node's built-in zlib to decompress the central directory, find the
+ * document.xml entry, decompress it, and pull <w:t>...</w:t> text runs.
+ */
+async function _naiveDocxText(buf) {
+  if (!Buffer.isBuffer(buf)) return '';
+  const zlib = await import('zlib');
+  const { promisify } = await import('util');
+  const inflateRaw = promisify(zlib.inflateRaw);
+  // ZIP local file headers start with 0x504b0304. We scan for them and pick
+  // out the entry whose filename is "word/document.xml".
+  let i = 0;
+  while (i < buf.length - 30) {
+    if (buf.readUInt32LE(i) !== 0x04034b50) { i++; continue; }
+    const compMethod = buf.readUInt16LE(i + 8);
+    const compSize = buf.readUInt32LE(i + 18);
+    const nameLen = buf.readUInt16LE(i + 26);
+    const extraLen = buf.readUInt16LE(i + 28);
+    const name = buf.slice(i + 30, i + 30 + nameLen).toString('utf8');
+    const dataStart = i + 30 + nameLen + extraLen;
+    if (name === 'word/document.xml') {
+      const compData = buf.slice(dataStart, dataStart + compSize);
+      let xml = '';
+      try {
+        if (compMethod === 0) xml = compData.toString('utf8');
+        else if (compMethod === 8) xml = (await inflateRaw(compData)).toString('utf8');
+        else return '';
+      } catch { return ''; }
+      // Extract <w:t>...</w:t> runs (and the xml: space="preserve" variant).
+      const parts = [];
+      const re = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g;
+      let m;
+      while ((m = re.exec(xml))) parts.push(m[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'"));
+      return parts.join(' ').replace(/[ \t]+/g, ' ').trim();
+    }
+    i = dataStart + compSize;
+  }
+  return '';
+}
+
 export function formatTime(isoStr) {
   try {
     const d = new Date(isoStr);
@@ -950,6 +1351,41 @@ export async function buildSystemPrompt(persona, personaDescription, config, ini
  * @param {object} config — NHA config
  * @returns {Promise<string>} result description
  */
+
+/**
+ * Detect IDs that the model has clearly invented vs real Google Calendar
+ * eventIds. Real ones are LONG (≥10), LOWERCASE, alphanumeric (a-v + 0-9,
+ * sometimes with `_` or `-`). Placeholders are typically short, uppercase,
+ * dictionary words, or alternate-letter+digit pseudo-random patterns like
+ * "A1B2C3D4E5F6G7H8I9J0".
+ */
+function isPlaceholderEventId(id) {
+  if (!id || typeof id !== 'string') return true;
+  const s = id.trim();
+  // 1. Explicit literal blocklist (covers everything we've seen so far)
+  const LITERAL = new Set([
+    'abc123', 'def456', 'xyz789', 'event_123', 'event_123456789',
+    '123', '456', 'foo', 'bar', 'baz', 'example', 'placeholder',
+    'eventid', 'event_id', 'id', 'null', 'undefined', 'some-google-id',
+    'event-id', 'id-from-tool', 'event_abc', 'event_xyz',
+  ]);
+  if (LITERAL.has(s.toLowerCase())) return true;
+  // 2. Too short — Google eventIds are always ≥ 16 chars in practice
+  if (s.length < 10) return true;
+  // 3. Contains spaces — never valid
+  if (/\s/.test(s)) return true;
+  // 4. Pseudo-random alternating letter+digit pattern like "A1B2C3D4..."
+  //    Real Google eventIds NEVER look like this — they have natural
+  //    base32-ish randomness, not human-readable patterns.
+  if (/^[A-Z](?:\d[A-Z]){3,}/i.test(s)) return true;
+  // 5. Almost-all-uppercase: Google eventIds are lowercase. UPPERCASE
+  //    is a model invention signature.
+  const upper = (s.match(/[A-Z]/g) || []).length;
+  const lower = (s.match(/[a-z]/g) || []).length;
+  if (upper >= 3 && upper > lower) return true;
+  return false;
+}
+
 export async function executeTool(action, params, config) {
   switch (action) {
     // ── Gmail ──────────────────────────────────────────────────────────────
@@ -1123,7 +1559,76 @@ export async function executeTool(action, params, config) {
       imapMarkRead(params.messageId, true);
       const to = (() => { try { const a = JSON.parse(msg.to_addresses || '[]'); return a.map(x => x.address || x).join(', '); } catch { return msg.to_addresses || ''; } })();
       const body = msg.body_reply_only || msg.body_text || msg.body_preview || '(empty)';
-      return `Subject: ${msg.subject}\nFrom: ${msg.from_name ? msg.from_name + ' <' + msg.from_address + '>' : msg.from_address}\nTo: ${to}\nDate: ${msg.internal_date}\n\n${body.slice(0, 3000)}`;
+      // Surface attachments in the tool response so the LLM can decide whether
+      // to follow up with imap_attachment_read. Without this it has no way to
+      // know an attachment exists.
+      const atts = (msg.attachments || []).map((a, i) =>
+        `[${i + 1}] "${a.filename || 'unnamed'}" — ${a.content_type || 'application/octet-stream'} — ${Math.round((a.size_bytes || 0) / 1024)} KB — id:${a.id}`
+      ).join('\n');
+      const attBlock = atts
+        ? `\n\n--- ATTACHMENTS (${msg.attachments.length}) ---\n${atts}\n\nTo read the content of an attachment, call: imap_attachment_read with messageId="${msg.id}" and either filename or index.`
+        : '';
+      return `Subject: ${msg.subject}\nFrom: ${msg.from_name ? msg.from_name + ' <' + msg.from_address + '>' : msg.from_address}\nTo: ${to}\nDate: ${msg.internal_date}\n\n${body.slice(0, 3000)}${attBlock}`;
+    }
+
+    case 'imap_attachment_read': {
+      if (!params.messageId) return 'messageId required. Use imap_read first to get the messageId and the list of attachments.';
+      const { getMessage: imapGetMsgForAtt } = await import('./email-db.mjs');
+      const msg = imapGetMsgForAtt(params.messageId);
+      if (!msg) return 'Message not found.';
+      const attachments = msg.attachments || [];
+      if (!attachments.length) return 'This message has no attachments.';
+      // Resolution: explicit attachmentId > filename match > index > first
+      let chosen = null;
+      if (params.attachmentId) {
+        chosen = attachments.find(a => a.id === params.attachmentId);
+      } else if (params.filename) {
+        const needle = String(params.filename).toLowerCase();
+        chosen = attachments.find(a => (a.filename || '').toLowerCase().includes(needle));
+      } else if (typeof params.index === 'number') {
+        chosen = attachments[Math.max(0, params.index - 1)] || null;
+      }
+      if (!chosen) chosen = attachments[0];
+      if (!chosen) return 'Could not resolve which attachment to read.';
+      const { fetchAttachmentContent } = await import('./email-imap.mjs');
+      let result;
+      try {
+        result = await fetchAttachmentContent(msg.account_id, msg.imap_folder_path, msg.uid, chosen.part_id);
+      } catch (e) {
+        return `Failed to fetch attachment "${chosen.filename}" from server: ${e.message}`;
+      }
+      if (!result?.buffer) return `Attachment "${chosen.filename}" returned no content.`;
+      const buf = result.buffer;
+      const ct = (chosen.content_type || result.contentType || '').toLowerCase();
+      const head = `Attachment: ${chosen.filename}\nType: ${ct || 'unknown'}\nSize: ${Math.round(buf.length / 1024)} KB\n\n`;
+
+      // Text-ish — return up to 10k chars of UTF-8.
+      if (/^text\/|application\/(json|xml|csv|x-yaml)/i.test(ct) || /\.(txt|csv|json|xml|log|md|html)$/i.test(chosen.filename || '')) {
+        return head + buf.toString('utf8').slice(0, 10000);
+      }
+
+      // PDF — naïve text extraction from the raw stream. Catches text-based
+      // PDFs (invoices, purchase orders, quotes generated by ERP software).
+      // Doesn't handle scanned/OCR PDFs — for those the model gets a clear
+      // "image-based PDF" hint so it can ask the user.
+      if (/pdf/i.test(ct) || /\.pdf$/i.test(chosen.filename || '')) {
+        const text = _naivePdfText(buf);
+        if (text && text.length > 30) {
+          return head + `--- Extracted text (best-effort, ${text.length} chars) ---\n${text.slice(0, 10000)}`;
+        }
+        return head + `PDF appears to be image-based or compressed (no extractable text found). ` +
+          `Tell the user the PDF can't be auto-read — they can open it manually or share the relevant section as text.`;
+      }
+
+      // DOCX — minimal text extraction from word/document.xml inside the zip.
+      if (/wordprocessingml|msword/i.test(ct) || /\.docx?$/i.test(chosen.filename || '')) {
+        const text = await _naiveDocxText(buf);
+        if (text) return head + `--- Extracted text (${text.length} chars) ---\n${text.slice(0, 10000)}`;
+        return head + 'Could not extract text from DOCX (possibly malformed or password-protected).';
+      }
+
+      // Unsupported — return metadata only.
+      return head + `Tipo "${ct}" non supportato per lettura automatica. Allegato disponibile nella casella email; chiedi all'utente di condividere il contenuto rilevante come testo.`;
     }
 
     case 'imap_send': {
@@ -1309,14 +1814,43 @@ export async function executeTool(action, params, config) {
     }
 
     case 'calendar_create': {
-      await createEvent(config, {
-        summary: params.summary,
+      // Robustness: accept common param-name aliases that the model often
+      // emits instead of `summary` (Google Calendar's official field name
+      // for the event title — but LLMs trained on natural language confuse
+      // "summary" with "description/note", so they sometimes put the actual
+      // title under `title`/`name`/`subject` or even leave summary empty
+      // and put the title text in `description`).
+      let summary = params.summary || params.title || params.name || params.subject || '';
+      let description = params.description || params.notes || '';
+
+      // Last-resort fallback: if summary is still empty but description
+      // looks like a title (one line, < 120 chars, no period), promote it.
+      if (!summary.trim() && description.trim()) {
+        const firstLine = description.split('\n')[0].trim();
+        if (firstLine.length > 0 && firstLine.length < 120) {
+          summary = firstLine;
+          // If description was JUST the title, clear it — otherwise keep the rest
+          const rest = description.split('\n').slice(1).join('\n').trim();
+          description = rest;
+        }
+      }
+
+      if (!summary.trim()) {
+        return 'Error: event title (summary) is required. Please specify what the event is about.';
+      }
+
+      const created = await createEvent(config, {
+        summary,
         start: params.start,
         end: params.end,
-        description: params.description || '',
+        description,
         attendees: params.attendees || [],
       });
-      return `Event "${params.summary}" created for ${formatTime(params.start)} - ${formatTime(params.end)}.`;
+      // Surface the eventId so the model/Telegram responder can use it for
+      // subsequent calendar_update or calendar_delete in the same turn.
+      const eventId = created?.id || created?.eventId || '';
+      const idHint = eventId ? ` (eventId: ${eventId})` : '';
+      return `Event "${summary}" created for ${formatTime(params.start)} - ${formatTime(params.end)}.${idHint}`;
     }
 
     case 'calendar_move': {
@@ -1329,7 +1863,18 @@ export async function executeTool(action, params, config) {
     }
 
     case 'calendar_week': {
-      const startDate = params.startDate || new Date().toISOString().split('T')[0];
+      // Default to MONDAY of the current ISO week, not "today". When a user
+      // asks "questa settimana"/"this week", they mean Mon..Sun of the calendar
+      // week — not "next 7 days from today". If they want the latter they can
+      // pass startDate explicitly.
+      const isoMondayOfCurrentWeek = () => {
+        const d = new Date();
+        const day = d.getDay();                   // 0=Sun, 1=Mon, ..., 6=Sat
+        const offset = day === 0 ? -6 : 1 - day;  // shift back to Monday
+        const monday = new Date(d.getTime() + offset * 86400000);
+        return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+      };
+      const startDate = params.startDate || isoMondayOfCurrentWeek();
       const from = new Date(startDate + 'T00:00:00');
       const to = new Date(from.getTime() + 7 * 86400000);
       const events = await listEvents(config, 'primary', from, to);
@@ -1396,31 +1941,71 @@ export async function executeTool(action, params, config) {
     }
 
     case 'calendar_find': {
-      const query = (params.query || '').toLowerCase();
-      const daysAhead = params.daysAhead || 30;
-      const from = new Date();
-      const to = new Date(from.getTime() + daysAhead * 86400000);
-      const events = await listEvents(config, 'primary', from, to);
+      const queryRaw = (params.query || '').trim();
+      const query = queryRaw.toLowerCase();
+      // Token-level fuzzy match: handles voice-to-text typos like
+      // "Italiano della BMW" matching event "Tagliando BMW" via the shared
+      // significant token "BMW". Stop-words and articles are ignored.
+      const STOP_WORDS = new Set(['il','la','i','le','gli','un','una','di','del','dello','della','dei','degli','delle','a','al','allo','alla','ai','agli','alle','con','per','su','da','in','e','o','che','the','a','an','of','for','to','in','on','with','and','or','my','your']);
+      const tokens = query.split(/\s+/).filter(t => t.length >= 3 && !STOP_WORDS.has(t));
 
-      const matches = events.filter(e =>
-        (e.summary || '').toLowerCase().includes(query) ||
-        (e.description || '').toLowerCase().includes(query)
-      );
+      const requestedDays = params.daysAhead || 30;
+      // Try the requested range first, then auto-broaden to 90 days if empty.
+      // Voice users frequently underestimate how far ahead an event is.
+      const tryRange = async (days) => {
+        const from = new Date();
+        const to = new Date(from.getTime() + days * 86400000);
+        const events = await listEvents(config, 'primary', from, to);
 
-      if (matches.length === 0) return `No events found matching "${params.query}" in the next ${daysAhead} days.`;
+        // Strict substring match first
+        let matches = events.filter(e =>
+          (e.summary || '').toLowerCase().includes(query) ||
+          (e.description || '').toLowerCase().includes(query)
+        );
 
+        // Fuzzy fallback: any significant token (3+ chars, no stop-word) matches
+        if (matches.length === 0 && tokens.length > 0) {
+          matches = events.filter(e => {
+            const hay = ((e.summary || '') + ' ' + (e.description || '')).toLowerCase();
+            return tokens.some(t => hay.includes(t));
+          });
+        }
+        return { events, matches };
+      };
+
+      let { matches } = await tryRange(requestedDays);
+      let effectiveDays = requestedDays;
+      if (matches.length === 0 && requestedDays < 90) {
+        const broad = await tryRange(90);
+        matches = broad.matches;
+        effectiveDays = 90;
+      }
+
+      if (matches.length === 0) {
+        return `No events found matching "${queryRaw}" in the next ${effectiveDays} days (tried fuzzy match on tokens: ${tokens.join(', ') || '(none)'}). Try calendar_week or calendar_month for a broader view.`;
+      }
+
+      const widened = effectiveDays > requestedDays ? ` (auto-broadened to ${effectiveDays} days)` : '';
       return matches.map((e, i) => {
         const time = e.isAllDay ? 'All day' : `${formatTime(e.start)} - ${formatTime(e.end)}`;
         const date = e.start.split('T')[0];
         const loc = e.location ? ` | Location: ${e.location}` : '';
         return `${i + 1}. [eventId: ${e.id}] ${date} ${time} — ${e.summary}${loc}`;
-      }).join('\n');
+      }).join('\n') + (widened ? `\n${widened}` : '');
     }
 
     case 'calendar_update': {
+      let eventId = String(params.eventId || '').trim();
+      if (!eventId) return 'eventId required. Call calendar_find or calendar_date first to get the REAL eventId.';
+
+      // Reject obvious placeholder IDs (model copied from prompt examples or
+      // emitted obvious patterns like "A1B2C3D4E5F6G7H8I9J0").
+      if (isPlaceholderEventId(eventId)) {
+        return `"${eventId}" looks invented (placeholder pattern). Call calendar_find or calendar_date FIRST to get real eventIds.`;
+      }
+
       // Smart eventId resolution: if it looks like a name instead of a Google Calendar ID, search for it
-      let eventId = params.eventId;
-      if (eventId && (eventId.includes(' ') || eventId.length < 10 || /[A-Z]/.test(eventId))) {
+      if (eventId.includes(' ') || eventId.length < 10 || /[A-Z]/.test(eventId)) {
         const from = new Date();
         const to = new Date(from.getTime() + 14 * 86400000);
         const events = await listEvents(config, 'primary', from, to);
@@ -1432,10 +2017,15 @@ export async function executeTool(action, params, config) {
         }
       }
 
+      // Accept same param-name aliases as calendar_create so the model can
+      // be sloppy about title vs summary without breaking things.
+      const newSummary = params.summary || params.title || params.name || params.subject;
+      const newDescription = params.description ?? params.notes;
+
       const patch = {};
-      if (params.summary) patch.summary = params.summary;
+      if (newSummary) patch.summary = newSummary;
       if (params.location) patch.location = params.location;
-      if (params.description) patch.description = params.description;
+      if (newDescription !== undefined) patch.description = newDescription;
       if (params.start) {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         patch.start = { dateTime: new Date(params.start).toISOString(), timeZone: tz };
@@ -1444,16 +2034,37 @@ export async function executeTool(action, params, config) {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         patch.end = { dateTime: new Date(params.end).toISOString(), timeZone: tz };
       }
-      await updateEvent(config, 'primary', eventId, patch);
+      if (Object.keys(patch).length === 0) {
+        return 'No fields to update. Specify at least one of: summary (title), location, description, start, end.';
+      }
+      try {
+        await updateEvent(config, 'primary', eventId, patch);
+      } catch (err) {
+        const msg = String(err?.message || err);
+        if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
+          return `eventId "${eventId}" does NOT exist in Google Calendar. The ID looks invented — DO NOT retry with this value. Call calendar_date or calendar_find FIRST to retrieve real eventIds, then call calendar_update with one of those.`;
+        }
+        throw err;
+      }
       const changes = Object.keys(patch).join(', ');
-      return `Event updated successfully (${changes}). ${params.location ? `New location: ${params.location}` : ''}`;
+      return `Event updated successfully (changed: ${changes})${newSummary ? `. New title: "${newSummary}"` : ''}${params.location ? `. New location: ${params.location}` : ''}`;
     }
 
     case 'calendar_delete': {
-      if (!params.eventId) return 'eventId required. Call calendar_find first to get the eventId.';
-      // Smart eventId resolution: if it looks like a name instead of a Google Calendar ID, search for it
-      let delEventId = params.eventId;
-      if (delEventId && (delEventId.includes(' ') || delEventId.length < 10 || /[A-Z]/.test(delEventId))) {
+      if (!params.eventId) return 'eventId required. Call calendar_find or calendar_date first to get the REAL eventId.';
+      let delEventId = String(params.eventId).trim();
+
+      // Reject placeholder IDs the model may have copied verbatim from prompt
+      // examples or hallucinated wholesale. Real Google Calendar eventIds
+      // are long LOWERCASE alphanumeric strings — never UPPERCASE patterns
+      // like "A1B2C3D4E5F6G7H8I9J0" (visibly invented).
+      if (isPlaceholderEventId(delEventId)) {
+        return `"${delEventId}" looks invented (placeholder pattern). Real Google Calendar eventIds are long lowercase alphanumeric strings (a-v + 0-9, often with - and _). Call calendar_date(YYYY-MM-DD) or calendar_find(query) FIRST to get the real eventIds, then call calendar_delete with one of those.`;
+      }
+
+      // Branch A — looks like a free-text search query (spaces, caps, very short).
+      // The model passed a NAME instead of an ID — resolve to ID via listEvents.
+      if (delEventId.includes(' ') || delEventId.length < 10 || /[A-Z]/.test(delEventId)) {
         const fromD = new Date();
         const toD = new Date(fromD.getTime() + 60 * 86400000);
         const evts = await listEvents(config, 'primary', fromD, toD);
@@ -1461,11 +2072,39 @@ export async function executeTool(action, params, config) {
         if (m) {
           delEventId = m.id;
         } else {
-          return `Could not find event matching "${params.eventId}" in the next 60 days. Use calendar_find to search first.`;
+          return `Could not find event matching "${params.eventId}" in the next 60 days. Use calendar_find or calendar_date to get the real eventId first.`;
         }
       }
-      await deleteEvent(config, 'primary', delEventId);
-      return `Event deleted successfully.`;
+
+      // Branch B — try the delete. If Google returns 404 the ID is invalid
+      // (almost always means the model hallucinated it). Surface this clearly
+      // to the LLM so its next turn doesn't try the same fake ID again.
+      try {
+        await deleteEvent(config, 'primary', delEventId);
+        return `Event ${delEventId} deleted successfully.`;
+      } catch (err) {
+        const msg = String(err?.message || err);
+        const is404 = msg.includes('404') || msg.toLowerCase().includes('not found');
+        if (is404) {
+          // Try to look up real events near the requested date (if user hinted one)
+          const hintDate = params.date || params.day || params.on;
+          let hint = '';
+          if (hintDate) {
+            try {
+              const d = new Date(hintDate + 'T00:00:00');
+              const from = d;
+              const to = new Date(d.getTime() + 86400000);
+              const evts = await listEvents(config, 'primary', from, to);
+              if (evts.length > 0) {
+                hint = `\n\nReal events on ${hintDate} (use these IDs, NOT invented ones):\n` +
+                  evts.map(e => `- [eventId: ${e.id}] ${formatTime(e.start)} — ${e.summary || '(no title)'}`).join('\n');
+              }
+            } catch { /* ignore */ }
+          }
+          return `eventId "${delEventId}" does NOT exist in Google Calendar. Looks like it was invented — DO NOT retry with this ID. Call calendar_date(YYYY-MM-DD) or calendar_find(query) FIRST to get the real eventId, then call calendar_delete with the value you receive.${hint}`;
+        }
+        throw err;
+      }
     }
 
     // ── Smart Scheduling ──────────────────────────────────────────────────
@@ -1699,7 +2338,44 @@ export async function executeTool(action, params, config) {
 
     case 'slack_send': {
       const sl = await import('./slack.mjs');
-      return sl.sendMessage(config, params.channel, params.text);
+      return sl.sendMessage(config, params.channel, params.text, params.threadTs || null);
+    }
+
+    case 'slack_search': {
+      const sl = await import('./slack.mjs');
+      const results = await sl.searchMessages(config, params.query, { count: params.count || 20 });
+      if (!results.length) return `No messages match "${params.query}".`;
+      return results.map((r, i) =>
+        `${i + 1}. [#${r.channel}] ${r.user} (${new Date(parseFloat(r.ts) * 1000).toLocaleString()}): ${r.text.slice(0, 200)}${r.permalink ? `\n   → ${r.permalink}` : ''}`,
+      ).join('\n');
+    }
+
+    case 'slack_dm': {
+      const sl = await import('./slack.mjs');
+      const channelId = await sl.openDM(config, params.user);
+      if (params.text) await sl.sendMessage(config, channelId, params.text);
+      return params.text
+        ? `DM sent to ${params.user} (channel ${channelId}).`
+        : `Opened DM channel ${channelId} with ${params.user}.`;
+    }
+
+    case 'slack_thread': {
+      const sl = await import('./slack.mjs');
+      const replies = await sl.getThreadReplies(config, params.channel, params.ts);
+      if (!replies.length) return 'Thread has no replies.';
+      return replies.map((r, i) =>
+        `${i + 1}. ${r.user} (${new Date(parseFloat(r.ts) * 1000).toLocaleTimeString()}): ${r.text.slice(0, 200)}`,
+      ).join('\n');
+    }
+
+    case 'slack_react': {
+      const sl = await import('./slack.mjs');
+      return sl.addReaction(config, params.channel, params.ts, params.emoji || 'thumbsup');
+    }
+
+    case 'slack_mark_read': {
+      const sl = await import('./slack.mjs');
+      return sl.markRead(config, params.channel, params.ts || null);
     }
 
     // ── Maps Directions ──────────────────────────────────────────────────
@@ -2029,15 +2705,45 @@ export async function executeTool(action, params, config) {
       const url = params.url;
       if (!url) return 'A URL is required.';
 
-      const result = await wt.fetchUrl(url);
-      if (result.error) return `Fetch error: ${result.message}`;
+      // Use the rich variant so we get OpenGraph / JSON-LD / headings.
+      // The structured preamble dramatically reduces hallucination on sites
+      // where the body alone is ambiguous (e.g. SPA shells, B2B catalogs).
+      const result = await wt.fetchUrlRich(url);
+      if (result.error) {
+        return `Fetch error (${result.code || 'UNKNOWN'}): ${result.message}. ` +
+               `Try web_search to find an alternative source, or browser_open for JS-rendered pages.`;
+      }
 
+      const meta = result.metadata || {};
       const lines = [];
       if (result.title) lines.push(`Title: ${result.title}`);
       lines.push(`URL: ${result.url || url}`);
-      lines.push(`Status: ${result.status}`);
+      lines.push(`Status: ${result.status}  Bytes: ${result.bytes}  Attempts: ${result.attempts}`);
+      if (meta.description) lines.push(`Description: ${meta.description}`);
+      if (meta.lang) lines.push(`Lang: ${meta.lang}`);
+      if (meta.canonical) lines.push(`Canonical: ${meta.canonical}`);
+
+      const ogKeys = Object.keys(meta.og || {});
+      if (ogKeys.length) {
+        const ogPairs = ogKeys.slice(0, 8).map(k => `${k}=${String(meta.og[k]).slice(0, 240)}`);
+        lines.push(`OpenGraph: ${ogPairs.join(' | ')}`);
+      }
+
+      const ldTypes = (meta.jsonLd || []).map(j => j.type).filter(Boolean);
+      if (ldTypes.length) {
+        lines.push(`Schema.org types found: ${[...new Set(ldTypes)].join(', ')}`);
+        const ldNames = (meta.jsonLd || []).map(j => j.name).filter(Boolean).slice(0, 5);
+        if (ldNames.length) lines.push(`Schema.org entities: ${ldNames.join(' | ')}`);
+      }
+
+      if (meta.headings) {
+        if (meta.headings.h1?.length) lines.push(`H1: ${meta.headings.h1.slice(0, 3).join(' | ')}`);
+        if (meta.headings.h2?.length) lines.push(`H2: ${meta.headings.h2.slice(0, 6).join(' | ')}`);
+      }
+
       if (result.truncated) lines.push('[Content was truncated due to size limits]');
       lines.push('');
+      lines.push('--- MAIN CONTENT ---');
       lines.push(result.body);
 
       return lines.join('\n');
@@ -2047,13 +2753,37 @@ export async function executeTool(action, params, config) {
     case 'get_weather': {
       const location = (params.location || '').trim();
       if (!location) return 'A location is required (e.g. "Rome", "Viterbo, Italy").';
+      const encodedLoc = encodeURIComponent(location);
+      const WTTR_UA = 'Mozilla/5.0 (compatible; nha-weather/1.0; +https://nothumanallowed.com)';
+      const fetchWithRetry = async (attempts = 3) => {
+        let lastErr = null;
+        for (let i = 0; i < attempts; i++) {
+          try {
+            const r = await fetch(`https://wttr.in/${encodedLoc}?format=j1`, {
+              headers: { 'User-Agent': WTTR_UA, 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(10_000),
+            });
+            if (r.ok) return r;
+            // 429/5xx → retry; 4xx other → don't retry
+            if (r.status === 429 || (r.status >= 500 && r.status < 600)) {
+              await new Promise(rs => setTimeout(rs, 600 * (i + 1) + Math.random() * 400));
+              continue;
+            }
+            return r;
+          } catch (e) {
+            lastErr = e;
+            if (i < attempts - 1) await new Promise(rs => setTimeout(rs, 600 * (i + 1)));
+          }
+        }
+        if (lastErr) throw lastErr;
+        return null;
+      };
       try {
-        const encodedLoc = encodeURIComponent(location);
-        const wttrRes = await fetch(`https://wttr.in/${encodedLoc}?format=j1`, {
-          headers: { 'User-Agent': 'nha-cli/1.0' },
-          signal: AbortSignal.timeout(8000),
-        });
-        if (!wttrRes.ok) return `Weather service returned ${wttrRes.status} for "${location}". Try a different location name.`;
+        const wttrRes = await fetchWithRetry(3);
+        if (!wttrRes || !wttrRes.ok) {
+          const status = wttrRes ? wttrRes.status : 'NET_ERR';
+          return `Weather service returned ${status} for "${location}". Try a more specific location (e.g. "Rome, Italy") or use web_search("weather ${location}") as fallback.`;
+        }
         const w = await wttrRes.json();
         const cur = w.current_condition?.[0];
         const area = w.nearest_area?.[0];
@@ -3326,6 +4056,1230 @@ export async function executeTool(action, params, config) {
       } catch (e) {
         return `market_news error: ${e.message}`;
       }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FINANCIAL ANALYSIS — extended tool suite
+    // All providers are free / public APIs (Yahoo Finance unofficial,
+    // SEC EDGAR, CoinGecko, FRED with optional key). Tools return
+    // human-readable text so an LLM can synthesize a report on top.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    case 'earnings_calendar': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      const days = Math.min(parseInt(params.days || '60', 10), 365);
+      if (!ticker) return 'earnings_calendar: ticker required (e.g. "AAPL").';
+      try {
+        const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=earnings,calendarEvents,earningsHistory,earningsTrend`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!res.ok) return `earnings_calendar: HTTP ${res.status}`;
+        const d = await res.json();
+        const summary = d?.quoteSummary?.result?.[0] || {};
+        const cal = summary.calendarEvents?.earnings || {};
+        const hist = summary.earningsHistory?.history || [];
+        const trend = summary.earningsTrend?.trend || [];
+        const lines = [`Earnings calendar — ${ticker}`];
+        if (cal.earningsDate?.length) {
+          const dates = cal.earningsDate.map(d => (d.fmt || d.raw)).filter(Boolean).join(' – ');
+          lines.push(`Next earnings: ${dates}${cal.isEarningsDateEstimate ? ' (estimated)' : ''}`);
+          if (cal.earningsAverage?.fmt) lines.push(`  EPS estimate: ${cal.earningsAverage.fmt} (low ${cal.earningsLow?.fmt || '?'} / high ${cal.earningsHigh?.fmt || '?'})`);
+          if (cal.revenueAverage?.fmt) lines.push(`  Revenue estimate: ${cal.revenueAverage.fmt}`);
+        }
+        if (hist.length) {
+          lines.push('\nHistory (last quarters): est → actual (surprise %)');
+          hist.slice(0, 4).forEach(h => {
+            const est = h.epsEstimate?.fmt ?? '?';
+            const act = h.epsActual?.fmt ?? '?';
+            const surp = h.surprisePercent?.fmt ?? '?';
+            lines.push(`  ${h.quarter?.fmt || '?'}: ${est} → ${act} (${surp})`);
+          });
+        }
+        if (trend.length) {
+          const next = trend.find(t => t.period === '+1q') || trend[0];
+          if (next?.earningsEstimate?.avg?.fmt) {
+            lines.push(`\nAnalyst trend next Q: avg EPS ${next.earningsEstimate.avg.fmt}, growth ${next.earningsEstimate.growth?.fmt || '?'} (${next.earningsEstimate.numberOfAnalysts?.fmt || '?'} analysts)`);
+          }
+        }
+        return lines.join('\n');
+      } catch (e) { return `earnings_calendar error: ${e.message}`; }
+    }
+
+    case 'dividend_calendar': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      if (!ticker) return 'dividend_calendar: ticker required.';
+      try {
+        const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=summaryDetail,calendarEvents`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!res.ok) return `dividend_calendar: HTTP ${res.status}`;
+        const d = await res.json();
+        const sd = d?.quoteSummary?.result?.[0]?.summaryDetail || {};
+        const cal = d?.quoteSummary?.result?.[0]?.calendarEvents || {};
+        const lines = [`Dividend — ${ticker}`];
+        lines.push(`Yield: ${sd.dividendYield?.fmt || 'n/a'}${sd.trailingAnnualDividendRate?.fmt ? ` (${sd.trailingAnnualDividendRate.fmt}/yr)` : ''}`);
+        lines.push(`Payout ratio: ${sd.payoutRatio?.fmt || 'n/a'}`);
+        if (cal.exDividendDate?.fmt) lines.push(`Next ex-dividend: ${cal.exDividendDate.fmt}`);
+        if (cal.dividendDate?.fmt) lines.push(`Next pay date: ${cal.dividendDate.fmt}`);
+        if (sd.fiveYearAvgDividendYield?.fmt) lines.push(`5y avg yield: ${sd.fiveYearAvgDividendYield.fmt}`);
+        return lines.join('\n');
+      } catch (e) { return `dividend_calendar error: ${e.message}`; }
+    }
+
+    case 'economic_calendar': {
+      const days = Math.min(parseInt(params.days || '7', 10), 30);
+      const country = String(params.country || 'US').toUpperCase();
+      try {
+        // Use Trading Economics public calendar feed (free tier, JSON, no key).
+        const today = new Date();
+        const to = new Date(today.getTime() + days * 86400000);
+        const fmt = (d) => d.toISOString().slice(0, 10);
+        const url = `https://api.tradingeconomics.com/calendar/country/${encodeURIComponent(country)}?d1=${fmt(today)}&d2=${fmt(to)}&c=guest:guest&f=json`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'NHA/1.0', 'Accept': 'application/json' }, signal: AbortSignal.timeout(15000) });
+        if (!res.ok) return `economic_calendar: HTTP ${res.status} — try country code like "US", "EU", "IT", "DE".`;
+        const events = await res.json();
+        if (!Array.isArray(events) || events.length === 0) return `economic_calendar: no events in next ${days} days for ${country}.`;
+        const lines = [`Economic calendar — ${country}, next ${days} days (${events.length} events)`];
+        events.slice(0, 30).forEach(e => {
+          const when = (e.Date || '').slice(0, 16).replace('T', ' ');
+          const imp = e.Importance === 3 ? '★★★' : e.Importance === 2 ? '★★' : '★';
+          lines.push(`  ${when} ${imp} ${e.Event || e.Category}: forecast ${e.Forecast ?? '?'} | previous ${e.Previous ?? '?'}${e.Actual != null ? ` | actual ${e.Actual}` : ''}`);
+        });
+        return lines.join('\n');
+      } catch (e) { return `economic_calendar error: ${e.message}`; }
+    }
+
+    case 'stock_screener': {
+      // Yahoo Finance has a public "screener" endpoint. We use it via the
+      // predefined-screener IDs (no key required). For complex filtering on
+      // arbitrary criteria the LLM should chain calls (e.g. screener →
+      // peer_comparison → market_indicators on each result).
+      const screen = String(params.screen || 'most_actives').toLowerCase();
+      const count = Math.min(parseInt(params.count || '20', 10), 50);
+      // Known screen IDs: most_actives, day_gainers, day_losers, undervalued_growth_stocks,
+      //   growth_technology_stocks, aggressive_small_caps, small_cap_gainers, undervalued_large_caps,
+      //   conservative_foreign_funds, high_yield_bond, portfolio_anchors, solid_large_growth_funds,
+      //   solid_midcap_growth_funds, top_mutual_funds.
+      try {
+        const url = `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=true&lang=en-US&region=US&scrIds=${encodeURIComponent(screen)}&count=${count}`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(15000) });
+        if (!res.ok) return `stock_screener: HTTP ${res.status} — known screens: most_actives, day_gainers, day_losers, undervalued_growth_stocks, growth_technology_stocks, aggressive_small_caps, small_cap_gainers, undervalued_large_caps.`;
+        const d = await res.json();
+        const quotes = d?.finance?.result?.[0]?.quotes || [];
+        if (!quotes.length) return `stock_screener: no results for "${screen}".`;
+        const lines = [`Stock screener — ${screen} (${quotes.length} results)`];
+        quotes.forEach((q, i) => {
+          const sym = q.symbol;
+          const name = (q.shortName || q.longName || '').slice(0, 40);
+          const price = q.regularMarketPrice?.fmt || q.regularMarketPrice;
+          const chg = q.regularMarketChangePercent?.fmt || `${q.regularMarketChangePercent?.toFixed?.(2)}%`;
+          const mcap = q.marketCap?.fmt || '?';
+          const pe = q.trailingPE?.fmt || q.forwardPE?.fmt || '?';
+          lines.push(`${i + 1}. ${sym} (${name}) — $${price} ${chg} | mcap ${mcap} | P/E ${pe}`);
+        });
+        return lines.join('\n');
+      } catch (e) { return `stock_screener error: ${e.message}`; }
+    }
+
+    case 'peer_comparison': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      if (!ticker) return 'peer_comparison: ticker required.';
+      try {
+        const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=recommendationTrend,upgradeDowngradeHistory,assetProfile,summaryProfile`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!res.ok) return `peer_comparison: HTTP ${res.status}`;
+        const d = await res.json();
+        const profile = d?.quoteSummary?.result?.[0]?.assetProfile || d?.quoteSummary?.result?.[0]?.summaryProfile || {};
+        const peersUrl = `https://query1.finance.yahoo.com/v1/finance/recommendationsbysymbol/${encodeURIComponent(ticker)}`;
+        const peerRes = await fetch(peersUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        const peerData = peerRes.ok ? await peerRes.json() : null;
+        const peers = peerData?.finance?.result?.[0]?.recommendedSymbols?.map(s => s.symbol) || [];
+        const lines = [`Peer comparison — ${ticker}`];
+        if (profile.industry) lines.push(`Industry: ${profile.industry}${profile.sector ? ` · ${profile.sector}` : ''}`);
+        if (peers.length === 0) return lines.join('\n') + '\nNo peer suggestions available.';
+        lines.push(`\nPeers: ${peers.join(', ')}\n`);
+        // Compare key metrics for ticker + first 5 peers.
+        const symbols = [ticker, ...peers.slice(0, 5)];
+        const batch = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}&fields=regularMarketPrice,marketCap,trailingPE,forwardPE,priceToBook,returnOnEquity,profitMargins,debtToEquity,dividendYield`;
+        const bres = await fetch(batch, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!bres.ok) return lines.join('\n');
+        const bd = await bres.json();
+        const rows = bd?.quoteResponse?.result || [];
+        const fmt = (v) => v == null ? '?' : (typeof v === 'number' ? v.toFixed(2) : v);
+        const header = `${'Ticker'.padEnd(10)}${'Price'.padStart(10)}${'P/E (ttm)'.padStart(12)}${'P/E (fwd)'.padStart(12)}${'P/B'.padStart(10)}${'ROE %'.padStart(10)}${'D/E'.padStart(10)}${'DivYld %'.padStart(11)}`;
+        lines.push(header);
+        rows.forEach(r => {
+          lines.push(
+            `${r.symbol.padEnd(10)}${String(fmt(r.regularMarketPrice)).padStart(10)}${String(fmt(r.trailingPE)).padStart(12)}${String(fmt(r.forwardPE)).padStart(12)}${String(fmt(r.priceToBook)).padStart(10)}${String(fmt(r.returnOnEquity ? (r.returnOnEquity * 100) : null)).padStart(10)}${String(fmt(r.debtToEquity)).padStart(10)}${String(fmt(r.dividendYield ? (r.dividendYield * 100) : null)).padStart(11)}`
+          );
+        });
+        return lines.join('\n');
+      } catch (e) { return `peer_comparison error: ${e.message}`; }
+    }
+
+    case 'sec_filings': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      const formType = String(params.form || '').toUpperCase();
+      const limit = Math.min(parseInt(params.limit || '10', 10), 25);
+      if (!ticker) return 'sec_filings: ticker required.';
+      try {
+        // SEC EDGAR requires a User-Agent with contact info per their TOS.
+        const ua = 'NotHumanAllowed CLI hello@nothumanallowed.com';
+        // Step 1: ticker → CIK
+        const tickersRes = await fetch('https://www.sec.gov/files/company_tickers.json', { headers: { 'User-Agent': ua } });
+        if (!tickersRes.ok) return `sec_filings: failed to map ticker (HTTP ${tickersRes.status})`;
+        const map = await tickersRes.json();
+        const entry = Object.values(map).find(e => e.ticker?.toUpperCase() === ticker);
+        if (!entry) return `sec_filings: ticker ${ticker} not found in SEC EDGAR (only US-listed companies).`;
+        const cik = String(entry.cik_str).padStart(10, '0');
+        // Step 2: fetch filings list for that CIK
+        const fres = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, { headers: { 'User-Agent': ua } });
+        if (!fres.ok) return `sec_filings: HTTP ${fres.status}`;
+        const fd = await fres.json();
+        const recent = fd.filings?.recent || {};
+        const rows = [];
+        for (let i = 0; i < (recent.form?.length || 0); i++) {
+          const form = recent.form[i];
+          if (formType && form !== formType) continue;
+          rows.push({
+            form,
+            date: recent.filingDate[i],
+            accession: recent.accessionNumber[i],
+            primary: recent.primaryDocument[i],
+            description: recent.primaryDocDescription[i] || '',
+          });
+          if (rows.length >= limit) break;
+        }
+        if (rows.length === 0) return `sec_filings: no ${formType || ''} filings for ${ticker}.`;
+        const lines = [`SEC filings — ${entry.title} (${ticker}) — CIK ${cik}`];
+        rows.forEach(r => {
+          const accNoDash = r.accession.replace(/-/g, '');
+          const url = `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${accNoDash}/${r.primary}`;
+          lines.push(`  ${r.date}  ${r.form.padEnd(6)} ${r.description || ''}\n    ${url}`);
+        });
+        return lines.join('\n');
+      } catch (e) { return `sec_filings error: ${e.message}`; }
+    }
+
+    case 'options_chain': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      if (!ticker) return 'options_chain: ticker required.';
+      try {
+        const url = `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(ticker)}`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!res.ok) return `options_chain: HTTP ${res.status}`;
+        const d = await res.json();
+        const result = d?.optionChain?.result?.[0];
+        if (!result) return `options_chain: no options data for ${ticker}.`;
+        const exps = (result.expirationDates || []).slice(0, 6);
+        const quote = result.quote || {};
+        const chain = result.options?.[0] || {};
+        const lines = [`Options chain — ${ticker} @ $${quote.regularMarketPrice}`];
+        lines.push(`Expirations available: ${exps.map(t => new Date(t * 1000).toISOString().slice(0, 10)).join(', ')}`);
+        const calls = (chain.calls || []).slice(0, 10);
+        const puts = (chain.puts || []).slice(0, 10);
+        if (calls.length) {
+          lines.push(`\nCalls (top ${calls.length} by strike, exp ${new Date(chain.expirationDate * 1000).toISOString().slice(0, 10)}):`);
+          calls.forEach(c => lines.push(`  K=$${c.strike} bid=${c.bid} ask=${c.ask} last=${c.lastPrice} IV=${(c.impliedVolatility * 100).toFixed(1)}% OI=${c.openInterest}`));
+        }
+        if (puts.length) {
+          lines.push(`\nPuts (top ${puts.length} by strike):`);
+          puts.forEach(p => lines.push(`  K=$${p.strike} bid=${p.bid} ask=${p.ask} last=${p.lastPrice} IV=${(p.impliedVolatility * 100).toFixed(1)}% OI=${p.openInterest}`));
+        }
+        return lines.join('\n');
+      } catch (e) { return `options_chain error: ${e.message}`; }
+    }
+
+    case 'portfolio_add': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      const qty = parseFloat(params.qty || params.quantity || '0');
+      const cost = parseFloat(params.cost || params.price || '0');
+      if (!ticker || qty <= 0) return 'portfolio_add: ticker and qty (>0) required.';
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      let pf = { positions: [], cash: 0 };
+      try { if (fs.default.existsSync(file)) pf = JSON.parse(fs.default.readFileSync(file, 'utf-8')); } catch {}
+      pf.positions = pf.positions || [];
+      const existing = pf.positions.find(p => p.ticker === ticker);
+      if (existing) {
+        const totalQty = existing.qty + qty;
+        const avgCost = ((existing.qty * existing.cost) + (qty * cost)) / totalQty;
+        existing.qty = totalQty;
+        existing.cost = avgCost;
+      } else {
+        pf.positions.push({ ticker, qty, cost, addedAt: new Date().toISOString() });
+      }
+      fs.default.mkdirSync(path.default.dirname(file), { recursive: true });
+      fs.default.writeFileSync(file, JSON.stringify(pf, null, 2));
+      return `Portfolio updated: ${ticker} qty=${qty}${cost ? ` @ avg cost $${cost}` : ''}. Total positions: ${pf.positions.length}.`;
+    }
+
+    case 'portfolio_remove': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      if (!ticker) return 'portfolio_remove: ticker required.';
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      let pf = { positions: [] };
+      try { if (fs.default.existsSync(file)) pf = JSON.parse(fs.default.readFileSync(file, 'utf-8')); } catch {}
+      const before = (pf.positions || []).length;
+      pf.positions = (pf.positions || []).filter(p => p.ticker !== ticker);
+      if (pf.positions.length === before) return `Portfolio: ${ticker} not found.`;
+      fs.default.writeFileSync(file, JSON.stringify(pf, null, 2));
+      return `Portfolio: ${ticker} removed.`;
+    }
+
+    case 'portfolio_summary': {
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      if (!fs.default.existsSync(file)) return 'Portfolio is empty. Add positions with portfolio_add.';
+      const pf = JSON.parse(fs.default.readFileSync(file, 'utf-8'));
+      const positions = pf.positions || [];
+      if (positions.length === 0) return 'Portfolio is empty.';
+      // Fetch live prices in batch
+      const symbols = positions.map(p => p.ticker).join(',');
+      const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+      if (!res.ok) return `portfolio_summary: HTTP ${res.status}`;
+      const d = await res.json();
+      const quotes = d?.quoteResponse?.result || [];
+      const priceMap = Object.fromEntries(quotes.map(q => [q.symbol, q.regularMarketPrice]));
+      let totalValue = 0, totalCost = 0;
+      const rows = positions.map(p => {
+        const price = priceMap[p.ticker] || 0;
+        const value = price * p.qty;
+        const cost = (p.cost || 0) * p.qty;
+        const pl = value - cost;
+        const plPct = cost > 0 ? (pl / cost) * 100 : 0;
+        totalValue += value; totalCost += cost;
+        return { ticker: p.ticker, qty: p.qty, costBasis: p.cost, currentPrice: price, value, pl, plPct };
+      });
+      const totalPL = totalValue - totalCost;
+      const totalPLPct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
+      const lines = [`Portfolio summary — ${positions.length} positions`];
+      lines.push(`${'Ticker'.padEnd(10)}${'Qty'.padStart(10)}${'Cost'.padStart(12)}${'Price'.padStart(12)}${'Value'.padStart(14)}${'P/L'.padStart(14)}${'P/L %'.padStart(10)}`);
+      rows.forEach(r => {
+        lines.push(`${r.ticker.padEnd(10)}${String(r.qty).padStart(10)}${('$' + (r.costBasis || 0).toFixed(2)).padStart(12)}${('$' + r.currentPrice.toFixed(2)).padStart(12)}${('$' + r.value.toFixed(2)).padStart(14)}${((r.pl >= 0 ? '+' : '') + '$' + r.pl.toFixed(2)).padStart(14)}${(r.plPct.toFixed(2) + '%').padStart(10)}`);
+      });
+      lines.push(`\nTotal value: $${totalValue.toFixed(2)} | Cost basis: $${totalCost.toFixed(2)} | P/L: ${totalPL >= 0 ? '+' : ''}$${totalPL.toFixed(2)} (${totalPLPct.toFixed(2)}%)`);
+      return lines.join('\n');
+    }
+
+    case 'portfolio_metrics': {
+      const period = params.period || '1y';
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      if (!fs.default.existsSync(file)) return 'Portfolio is empty.';
+      const pf = JSON.parse(fs.default.readFileSync(file, 'utf-8'));
+      const positions = pf.positions || [];
+      if (positions.length === 0) return 'Portfolio is empty.';
+      // Fetch historical returns for each ticker → compute weighted portfolio returns,
+      // then Sharpe, Sortino, max drawdown, beta vs SPY.
+      const symbols = [...positions.map(p => p.ticker), 'SPY'];
+      const fetchHist = async (sym) => {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${period}&interval=1d`;
+        const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!r.ok) return null;
+        const d = await r.json();
+        return d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || null;
+      };
+      const series = {};
+      for (const s of symbols) series[s] = await fetchHist(s);
+      const valid = Object.values(series).filter(Array.isArray);
+      if (valid.length === 0) return 'portfolio_metrics: failed to fetch historical data.';
+      const N = Math.min(...valid.map(a => a.length));
+      // Weighted returns: weight = current_value / total_value
+      const lastPrice = (s) => (series[s] || []).slice(-1)[0];
+      const weights = positions.map(p => p.qty * (lastPrice(p.ticker) || 0));
+      const totalW = weights.reduce((a, b) => a + b, 0) || 1;
+      const wNorm = weights.map(w => w / totalW);
+      const dailyRet = (arr) => arr.slice(1).map((v, i) => (v - arr[i]) / arr[i]).filter(r => Number.isFinite(r));
+      const tickerRets = positions.map(p => dailyRet(series[p.ticker] || []).slice(-N + 1));
+      const minRetLen = Math.min(...tickerRets.map(r => r.length), dailyRet(series.SPY).length);
+      const portfRets = [];
+      for (let i = 0; i < minRetLen; i++) {
+        let r = 0;
+        for (let j = 0; j < tickerRets.length; j++) r += (tickerRets[j][i] || 0) * wNorm[j];
+        portfRets.push(r);
+      }
+      const spyRets = dailyRet(series.SPY).slice(-minRetLen);
+      const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+      const stdev = (a) => { const m = mean(a); return Math.sqrt(mean(a.map(x => (x - m) ** 2))); };
+      const annRet = mean(portfRets) * 252 * 100;
+      const annVol = stdev(portfRets) * Math.sqrt(252) * 100;
+      const sharpe = annVol > 0 ? (annRet - 4) / annVol : 0; // assume 4% risk-free
+      const downside = portfRets.filter(r => r < 0);
+      const sortino = downside.length > 1 ? (annRet - 4) / (stdev(downside) * Math.sqrt(252) * 100) : 0;
+      // Max drawdown
+      const cum = []; let acc = 1;
+      portfRets.forEach(r => { acc *= (1 + r); cum.push(acc); });
+      let peak = -Infinity, maxDD = 0;
+      cum.forEach(v => { peak = Math.max(peak, v); maxDD = Math.min(maxDD, (v - peak) / peak); });
+      // Beta vs SPY
+      const covMean = mean(portfRets.map((r, i) => (r - mean(portfRets)) * (spyRets[i] - mean(spyRets))));
+      const varSpy = mean(spyRets.map(r => (r - mean(spyRets)) ** 2));
+      const beta = varSpy > 0 ? covMean / varSpy : 0;
+      return `Portfolio metrics (${period}, ${minRetLen} trading days):
+  Annualized return: ${annRet.toFixed(2)}%
+  Annualized volatility: ${annVol.toFixed(2)}%
+  Sharpe ratio: ${sharpe.toFixed(2)} (assuming 4% RFR)
+  Sortino ratio: ${sortino.toFixed(2)}
+  Max drawdown: ${(maxDD * 100).toFixed(2)}%
+  Beta vs SPY: ${beta.toFixed(2)}`;
+    }
+
+    case 'news_sentiment': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      const query = params.query || ticker;
+      if (!ticker && !query) return 'news_sentiment: ticker or query required.';
+      // 1. Pull recent news via the existing market_news tool
+      const newsRes = await executeTool('market_news', { ticker, query, limit: 15 }, config);
+      if (typeof newsRes !== 'string' || newsRes.startsWith('market_news error')) return newsRes;
+      // 2. Sentiment-score each headline via LLM (single call, batched)
+      const { callLLM } = await import('./llm.mjs');
+      const sysPrompt = `You score financial-news headlines for sentiment. Output ONLY JSON array, no prose.\n` +
+        `For each headline, output {"i": index, "s": "positive"|"neutral"|"negative", "c": confidence 0..1, "why": "<10 words"}.\n` +
+        `Bullish/positive for the asset = "positive". Bearish/risk = "negative". Pure info = "neutral".`;
+      const headlines = newsRes.split('\n').filter(l => /^\d+\./.test(l)).map((l, i) => `${i + 1}. ${l.replace(/^\d+\.\s*/, '').slice(0, 200)}`);
+      const userMsg = headlines.join('\n');
+      let scored;
+      try {
+        const raw = await callLLM(config, sysPrompt, userMsg, { temperature: 0, maxTokens: 800 });
+        const m = raw.match(/\[[\s\S]*\]/);
+        if (m) scored = JSON.parse(m[0]);
+      } catch { /* fallthrough */ }
+      if (!Array.isArray(scored)) return newsRes + '\n\n(sentiment scoring failed)';
+      const counts = { positive: 0, neutral: 0, negative: 0 };
+      const weightedSum = scored.reduce((acc, s) => { counts[s.s] = (counts[s.s] || 0) + 1; return acc + (s.s === 'positive' ? s.c : s.s === 'negative' ? -s.c : 0); }, 0);
+      const avg = scored.length ? weightedSum / scored.length : 0;
+      const verdict = avg > 0.2 ? '🟢 Bullish' : avg < -0.2 ? '🔴 Bearish' : '🟡 Mixed';
+      const out = [`News sentiment — ${ticker || query} (${scored.length} headlines)`,
+        `Aggregate: ${verdict} (score ${avg.toFixed(2)})`,
+        `Distribution: ${counts.positive || 0} positive · ${counts.neutral || 0} neutral · ${counts.negative || 0} negative`,
+        '',
+        'Top signals:'];
+      scored.slice(0, 5).forEach(s => out.push(`  [${s.s}] ${headlines[s.i - 1] || '?'} — ${s.why}`));
+      return out.join('\n');
+    }
+
+    case 'backtest_strategy': {
+      // Thin wrapper around execute_code: produces a parametric backtest
+      // script (pandas + numpy) and runs it. Useful as a one-liner from the
+      // chat — for production-grade backtesting users should call execute_code
+      // directly with their own strategy.
+      const ticker = String(params.ticker || 'SPY').toUpperCase();
+      const period = params.period || '5y';
+      const strategy = params.strategy || 'sma_crossover'; // sma_crossover | rsi_meanrev | buy_hold
+      const code = `
+import urllib.request, json, sys
+url = "https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${period}&interval=1d"
+req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+r = urllib.request.urlopen(req).read()
+d = json.loads(r)
+res = d["chart"]["result"][0]
+closes = [c for c in res["indicators"]["quote"][0]["close"] if c is not None]
+strategy = "${strategy}"
+signal = [0]*len(closes)
+if strategy == "sma_crossover":
+    fast, slow = 20, 50
+    for i in range(slow, len(closes)):
+        f = sum(closes[i-fast+1:i+1])/fast
+        s = sum(closes[i-slow+1:i+1])/slow
+        signal[i] = 1 if f > s else 0
+elif strategy == "rsi_meanrev":
+    gains = [max(0, closes[i]-closes[i-1]) for i in range(1, len(closes))]
+    losses = [max(0, closes[i-1]-closes[i]) for i in range(1, len(closes))]
+    p = 14
+    for i in range(p, len(closes)-1):
+        avg_g = sum(gains[i-p:i])/p; avg_l = sum(losses[i-p:i])/p
+        rsi = 100 - (100 / (1 + (avg_g / (avg_l or 1e-9))))
+        signal[i+1] = 1 if rsi < 30 else 0 if rsi > 70 else signal[i]
+else:
+    signal = [1]*len(closes)  # buy & hold
+
+rets, eq = [], [1.0]
+for i in range(1, len(closes)):
+    r = signal[i-1] * (closes[i]-closes[i-1]) / closes[i-1]
+    rets.append(r); eq.append(eq[-1] * (1+r))
+total = (eq[-1] - 1) * 100
+days = len(rets)
+ann = ((eq[-1]) ** (252/days) - 1) * 100 if days else 0
+import statistics as st
+vol = (st.pstdev(rets) * (252**0.5) * 100) if len(rets) > 1 else 0
+sharpe = (ann - 4) / vol if vol else 0
+peak = max_dd = 0
+for v in eq:
+    peak = max(peak, v); max_dd = min(max_dd, (v-peak)/peak)
+print(f"Backtest {strategy} on ${ticker} (${period}):")
+print(f"  Total return: {total:.2f}% over {days} days")
+print(f"  Annualized: {ann:.2f}%, vol {vol:.2f}%, Sharpe {sharpe:.2f}")
+print(f"  Max drawdown: {max_dd*100:.2f}%")
+`;
+      return executeTool('execute_code', { language: 'python', code, timeout: 60 }, config);
+    }
+
+    case 'portfolio_correlation': {
+      // Pearson correlation matrix of all portfolio holdings + SPY benchmark.
+      const period = params.period || '1y';
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      if (!fs.default.existsSync(file)) return 'Portfolio is empty.';
+      const pf = JSON.parse(fs.default.readFileSync(file, 'utf-8'));
+      const positions = pf.positions || [];
+      if (positions.length < 2) return 'Need at least 2 positions for a correlation matrix.';
+      const symbols = [...positions.map(p => p.ticker), 'SPY'];
+      const series = {};
+      for (const s of symbols) {
+        try {
+          const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=${period}&interval=1d`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+          if (!r.ok) continue;
+          const d = await r.json();
+          series[s] = d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter(Number.isFinite) || [];
+        } catch {}
+      }
+      const valid = Object.entries(series).filter(([_, a]) => a.length > 30);
+      if (valid.length < 2) return 'portfolio_correlation: not enough historical data.';
+      const N = Math.min(...valid.map(([_, a]) => a.length));
+      const rets = Object.fromEntries(valid.map(([s, a]) => {
+        const arr = a.slice(-N);
+        return [s, arr.slice(1).map((v, i) => (v - arr[i]) / arr[i])];
+      }));
+      const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+      const corr = (a, b) => {
+        const ma = mean(a), mb = mean(b);
+        let num = 0, dA = 0, dB = 0;
+        for (let i = 0; i < a.length; i++) { const xa = a[i] - ma, xb = b[i] - mb; num += xa * xb; dA += xa * xa; dB += xb * xb; }
+        return num / Math.sqrt(dA * dB || 1);
+      };
+      const syms = valid.map(([s]) => s);
+      const matrix = syms.map(a => syms.map(b => corr(rets[a], rets[b])));
+      const lines = [`Correlation matrix (${period}, ${N} days)`];
+      lines.push('         ' + syms.map(s => s.padStart(8)).join(''));
+      matrix.forEach((row, i) => {
+        lines.push(syms[i].padEnd(9) + row.map(v => v.toFixed(2).padStart(8)).join(''));
+      });
+      // Find pairs with highest correlation (excluding self/SPY)
+      const pairs = [];
+      for (let i = 0; i < syms.length; i++) for (let j = i + 1; j < syms.length; j++) {
+        if (syms[i] === 'SPY' || syms[j] === 'SPY') continue;
+        pairs.push({ a: syms[i], b: syms[j], r: matrix[i][j] });
+      }
+      pairs.sort((a, b) => b.r - a.r);
+      if (pairs.length) {
+        lines.push('\nMost correlated pairs (concentration risk):');
+        pairs.slice(0, 3).forEach(p => lines.push(`  ${p.a} ↔ ${p.b}: ${p.r.toFixed(2)}${p.r > 0.7 ? '  ⚠ high' : ''}`));
+        lines.push('\nLeast correlated (diversification value):');
+        pairs.slice(-3).reverse().forEach(p => lines.push(`  ${p.a} ↔ ${p.b}: ${p.r.toFixed(2)}`));
+      }
+      return lines.join('\n');
+    }
+
+    case 'portfolio_sector_breakdown': {
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      if (!fs.default.existsSync(file)) return 'Portfolio is empty.';
+      const pf = JSON.parse(fs.default.readFileSync(file, 'utf-8'));
+      const positions = pf.positions || [];
+      if (positions.length === 0) return 'Portfolio is empty.';
+      const symbols = positions.map(p => p.ticker);
+      // Batch-fetch assetProfile + live price
+      const summaries = {};
+      for (const s of symbols) {
+        try {
+          const r = await fetch(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(s)}?modules=assetProfile,summaryDetail,price`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+          if (r.ok) {
+            const d = await r.json();
+            summaries[s] = d?.quoteSummary?.result?.[0] || {};
+          }
+        } catch {}
+      }
+      const rows = positions.map(p => {
+        const sx = summaries[p.ticker] || {};
+        const sector = sx.assetProfile?.sector || sx.assetProfile?.industry || 'Unknown';
+        const industry = sx.assetProfile?.industry || '';
+        const country = sx.assetProfile?.country || 'Unknown';
+        const currency = sx.price?.currency || sx.summaryDetail?.currency || 'USD';
+        const price = sx.price?.regularMarketPrice?.raw || 0;
+        const value = price * p.qty;
+        return { ticker: p.ticker, sector, industry, country, currency, value };
+      });
+      const total = rows.reduce((a, r) => a + r.value, 0) || 1;
+      const bySector = {};
+      const byCountry = {};
+      const byCurrency = {};
+      rows.forEach(r => {
+        bySector[r.sector] = (bySector[r.sector] || 0) + r.value;
+        byCountry[r.country] = (byCountry[r.country] || 0) + r.value;
+        byCurrency[r.currency] = (byCurrency[r.currency] || 0) + r.value;
+      });
+      const fmt = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `  ${k.padEnd(28)} ${((v / total) * 100).toFixed(1).padStart(6)}%   $${v.toFixed(0).padStart(10)}`).join('\n');
+      return [
+        `Portfolio breakdown — total value $${total.toFixed(0)}`,
+        '',
+        `By sector:\n${fmt(bySector)}`,
+        '',
+        `By country:\n${fmt(byCountry)}`,
+        '',
+        `By currency:\n${fmt(byCurrency)}`,
+      ].join('\n');
+    }
+
+    case 'portfolio_var': {
+      // Historical-simulation Value at Risk and Expected Shortfall.
+      const period = params.period || '1y';
+      const conf = parseFloat(params.confidence || '0.95'); // 95% default; pass 0.99 for stress
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      if (!fs.default.existsSync(file)) return 'Portfolio is empty.';
+      const pf = JSON.parse(fs.default.readFileSync(file, 'utf-8'));
+      const positions = pf.positions || [];
+      if (positions.length === 0) return 'Portfolio is empty.';
+      const symbols = positions.map(p => p.ticker);
+      const series = {};
+      for (const s of symbols) {
+        try {
+          const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=${period}&interval=1d`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+          if (!r.ok) continue;
+          const d = await r.json();
+          series[s] = d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter(Number.isFinite) || [];
+        } catch {}
+      }
+      const valid = positions.filter(p => (series[p.ticker] || []).length > 30);
+      if (valid.length === 0) return 'portfolio_var: not enough data.';
+      const N = Math.min(...valid.map(p => series[p.ticker].length));
+      const lastPrice = (p) => series[p.ticker][series[p.ticker].length - 1];
+      const values = valid.map(p => p.qty * lastPrice(p));
+      const totalValue = values.reduce((a, b) => a + b, 0);
+      const weights = values.map(v => v / totalValue);
+      const dailyRet = (a) => a.slice(1).map((v, i) => (v - a[i]) / a[i]);
+      const tickerRets = valid.map(p => dailyRet(series[p.ticker]).slice(-N + 1));
+      const minLen = Math.min(...tickerRets.map(r => r.length));
+      const portfRets = [];
+      for (let i = 0; i < minLen; i++) {
+        let r = 0;
+        for (let j = 0; j < tickerRets.length; j++) r += (tickerRets[j][i] || 0) * weights[j];
+        portfRets.push(r);
+      }
+      // Sort returns ascending; VaR is the loss at the (1-conf) quantile.
+      const sorted = [...portfRets].sort((a, b) => a - b);
+      const idx = Math.floor((1 - conf) * sorted.length);
+      const varRet = sorted[idx];
+      const tailLosses = sorted.slice(0, idx + 1);
+      const esRet = tailLosses.reduce((a, b) => a + b, 0) / (tailLosses.length || 1);
+      const portValue = positions.reduce((a, p) => a + (lastPrice(p) || 0) * p.qty, 0);
+      return [
+        `Portfolio VaR (Historical Simulation, ${period}, ${minLen} days)`,
+        `Confidence: ${(conf * 100).toFixed(0)}%`,
+        `Portfolio value: $${portValue.toFixed(0)}`,
+        `Daily VaR: ${(varRet * 100).toFixed(2)}%  =  $${(varRet * portValue).toFixed(0)} loss`,
+        `Expected Shortfall (CVaR): ${(esRet * 100).toFixed(2)}%  =  $${(esRet * portValue).toFixed(0)} avg tail loss`,
+        `10-day VaR (sqrt-time scaled): ${(varRet * Math.sqrt(10) * 100).toFixed(2)}%  =  $${(varRet * Math.sqrt(10) * portValue).toFixed(0)}`,
+        '',
+        `Interpretation: with ${(conf * 100).toFixed(0)}% confidence, daily losses won't exceed the VaR figure.`,
+        `When they do (the worst ${((1 - conf) * 100).toFixed(0)}% of days), the average loss is the ES/CVaR.`,
+      ].join('\n');
+    }
+
+    case 'portfolio_rebalance': {
+      // Compare current weights vs target weights. Targets can be passed as
+      // `params.targets = {AAPL: 0.20, MSFT: 0.15, ...}` or read from
+      // `~/.nha/portfolio.json` field `targets`. Without targets we assume
+      // equal-weight.
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      if (!fs.default.existsSync(file)) return 'Portfolio is empty.';
+      const pf = JSON.parse(fs.default.readFileSync(file, 'utf-8'));
+      const positions = pf.positions || [];
+      if (positions.length === 0) return 'Portfolio is empty.';
+      let targets = params.targets || pf.targets || null;
+      if (!targets) {
+        const eq = 1 / positions.length;
+        targets = Object.fromEntries(positions.map(p => [p.ticker, eq]));
+      }
+      const symbols = positions.map(p => p.ticker);
+      const r = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+      if (!r.ok) return `portfolio_rebalance: HTTP ${r.status}`;
+      const d = await r.json();
+      const priceMap = Object.fromEntries((d?.quoteResponse?.result || []).map(q => [q.symbol, q.regularMarketPrice]));
+      const rows = positions.map(p => {
+        const px = priceMap[p.ticker] || 0;
+        const value = px * p.qty;
+        return { ticker: p.ticker, qty: p.qty, price: px, value };
+      });
+      const total = rows.reduce((a, r) => a + r.value, 0) || 1;
+      const lines = [`Portfolio rebalance — total $${total.toFixed(0)}`];
+      lines.push(`${'Ticker'.padEnd(10)}${'Current %'.padStart(12)}${'Target %'.padStart(12)}${'Drift'.padStart(10)}${'Action'.padStart(30)}`);
+      let totalTrade = 0;
+      rows.forEach(p => {
+        const current = (p.value / total) * 100;
+        const target = (targets[p.ticker] || 0) * 100;
+        const drift = current - target;
+        const tradeUsd = (target - current) / 100 * total;
+        const shares = p.price > 0 ? tradeUsd / p.price : 0;
+        const action = Math.abs(drift) < 1 ? '✓ ok'
+          : drift > 0 ? `SELL ${Math.abs(shares).toFixed(2)} @ $${p.price.toFixed(2)}`
+          : `BUY  ${Math.abs(shares).toFixed(2)} @ $${p.price.toFixed(2)}`;
+        totalTrade += Math.abs(tradeUsd);
+        lines.push(`${p.ticker.padEnd(10)}${current.toFixed(2).padStart(11)}%${target.toFixed(2).padStart(11)}%${(drift >= 0 ? '+' : '') + drift.toFixed(2).padStart(8)}%${action.padStart(30)}`);
+      });
+      lines.push(`\nTotal trade volume to rebalance: $${totalTrade.toFixed(0)}`);
+      lines.push(`Drift threshold ≥ 1% → trades suggested above. Below threshold → leave as is.`);
+      return lines.join('\n');
+    }
+
+    case 'option_strategy_builder': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      const direction = String(params.direction || 'neutral').toLowerCase();
+      const maxRisk = parseFloat(params.maxRisk || params.max_risk || '1000');
+      const targetDays = parseInt(params.daysToExpiry || params.dte || '30', 10);
+      if (!ticker) return 'option_strategy_builder: ticker required.';
+      try {
+        // 1. Fetch options chain (Yahoo Finance, free)
+        const chainRes = await fetch(`https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(ticker)}`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        if (!chainRes.ok) return `option_strategy_builder: HTTP ${chainRes.status}`;
+        const cd = await chainRes.json();
+        const result = cd?.optionChain?.result?.[0];
+        if (!result) return `option_strategy_builder: no options data for ${ticker}.`;
+        const spot = result.quote?.regularMarketPrice;
+        // 2. Pick the expiration closest to targetDays
+        const today = Date.now() / 1000;
+        const exps = result.expirationDates || [];
+        const expPicked = exps.reduce((best, e) => {
+          const dte = (e - today) / 86400;
+          if (dte < 5) return best;
+          const bestDte = best ? (best - today) / 86400 : Infinity;
+          return Math.abs(dte - targetDays) < Math.abs(bestDte - targetDays) ? e : best;
+        }, 0);
+        if (!expPicked) return `option_strategy_builder: no suitable expiry near ${targetDays} days.`;
+        const dtePicked = Math.round((expPicked - today) / 86400);
+        // Fetch the picked chain
+        const pickedRes = await fetch(`https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(ticker)}?date=${expPicked}`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        const pickedData = await pickedRes.json();
+        const opts = pickedData?.optionChain?.result?.[0]?.options?.[0] || {};
+        const calls = opts.calls || [];
+        const puts = opts.puts || [];
+        if (calls.length === 0 || puts.length === 0) return `option_strategy_builder: empty chain for chosen expiry.`;
+        // 3. ATM IV (average call+put closest to spot)
+        const closest = (arr) => arr.reduce((a, b) => Math.abs(a.strike - spot) < Math.abs(b.strike - spot) ? a : b);
+        const atmCall = closest(calls);
+        const atmPut = closest(puts);
+        const atmIV = ((atmCall.impliedVolatility || 0) + (atmPut.impliedVolatility || 0)) / 2;
+        // 4. IV rank from market_chart historical realized vol as proxy (no API for historical IV free)
+        const chartRes = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+        let ivPercentile = null;
+        try {
+          const ch = await chartRes.json();
+          const closes = ch?.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter(Number.isFinite) || [];
+          // Rolling 30-day realized vol annualized
+          const rollingVols = [];
+          for (let i = 30; i < closes.length; i++) {
+            const window = closes.slice(i - 30, i);
+            const rets = window.slice(1).map((v, j) => Math.log(v / window[j]));
+            const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+            const variance = rets.reduce((a, r) => a + (r - mean) ** 2, 0) / (rets.length - 1);
+            rollingVols.push(Math.sqrt(variance * 252));
+          }
+          if (rollingVols.length > 20) {
+            const sorted = [...rollingVols].sort((a, b) => a - b);
+            const rank = sorted.findIndex(v => v >= atmIV);
+            ivPercentile = rank < 0 ? 100 : (rank / sorted.length) * 100;
+          }
+        } catch {}
+        const ivCheap = ivPercentile != null && ivPercentile < 30;
+        const ivRich = ivPercentile != null && ivPercentile > 70;
+        // 5. Build strategy recommendations
+        const expStr = new Date(expPicked * 1000).toISOString().slice(0, 10);
+        const findStrike = (arr, targetDelta) => {
+          // Find option whose abs(delta) is closest to target. Yahoo doesn't always provide delta;
+          // approximate by inMoneyness: for calls, delta≈0.5 at ATM; +0.05 per 1% ITM.
+          let best = arr[0], bestDist = Infinity;
+          for (const o of arr) {
+            const moneyness = (o.strike - spot) / spot;
+            const approxDelta = arr === calls ? Math.max(0.05, Math.min(0.95, 0.5 - moneyness * 5)) : Math.max(-0.95, Math.min(-0.05, -0.5 - moneyness * 5));
+            const dist = Math.abs(Math.abs(approxDelta) - targetDelta);
+            if (dist < bestDist) { bestDist = dist; best = o; }
+          }
+          return best;
+        };
+        const mid = (o) => ((o.bid || 0) + (o.ask || 0)) / 2 || o.lastPrice || 0;
+        const strategies = [];
+
+        if (direction === 'bullish' || direction === 'long') {
+          if (ivCheap || ivPercentile == null) {
+            // Bull Call Debit Spread (buy ATM, sell OTM)
+            const buy = atmCall;
+            const sell = calls.find(c => c.strike > spot * 1.05) || calls[calls.length - 1];
+            const debit = (mid(buy) - mid(sell)) * 100;
+            const width = (sell.strike - buy.strike) * 100;
+            const maxProfit = width - debit;
+            const maxLoss = debit;
+            const be = buy.strike + (debit / 100);
+            const contracts = Math.max(1, Math.floor(maxRisk / debit));
+            strategies.push({
+              name: 'Bull Call Debit Spread',
+              rationale: 'Bullish, IV cheap → buy premium, defined risk',
+              legs: [`BUY  ${contracts}x ${ticker} ${expStr} ${buy.strike} CALL @ ~$${mid(buy).toFixed(2)}`,
+                     `SELL ${contracts}x ${ticker} ${expStr} ${sell.strike} CALL @ ~$${mid(sell).toFixed(2)}`],
+              netDebit: debit * contracts,
+              maxProfit: maxProfit * contracts,
+              maxLoss: maxLoss * contracts,
+              breakeven: be.toFixed(2),
+              roi: ((maxProfit / Math.max(1, maxLoss)) * 100).toFixed(0) + '%',
+            });
+          }
+          if (ivRich) {
+            // Bull Put Credit Spread (sell OTM put, buy further OTM put)
+            const sell = puts.find(p => p.strike < spot * 0.97 && p.strike > spot * 0.93) || puts[Math.floor(puts.length / 2)];
+            const buy = puts.find(p => p.strike < sell.strike - spot * 0.03) || puts[0];
+            const credit = (mid(sell) - mid(buy)) * 100;
+            const width = (sell.strike - buy.strike) * 100;
+            const maxLoss = width - credit;
+            const be = sell.strike - (credit / 100);
+            const contracts = Math.max(1, Math.floor(maxRisk / maxLoss));
+            strategies.push({
+              name: 'Bull Put Credit Spread',
+              rationale: 'Bullish, IV rich → sell premium, defined risk',
+              legs: [`SELL ${contracts}x ${ticker} ${expStr} ${sell.strike} PUT @ ~$${mid(sell).toFixed(2)}`,
+                     `BUY  ${contracts}x ${ticker} ${expStr} ${buy.strike} PUT @ ~$${mid(buy).toFixed(2)}`],
+              netCredit: credit * contracts,
+              maxProfit: credit * contracts,
+              maxLoss: maxLoss * contracts,
+              breakeven: be.toFixed(2),
+              roi: ((credit / Math.max(1, maxLoss)) * 100).toFixed(0) + '%',
+            });
+          }
+        }
+
+        if (direction === 'bearish' || direction === 'short') {
+          if (ivCheap || ivPercentile == null) {
+            const buy = atmPut;
+            const sell = puts.find(p => p.strike < spot * 0.95) || puts[0];
+            const debit = (mid(buy) - mid(sell)) * 100;
+            const width = (buy.strike - sell.strike) * 100;
+            const maxProfit = width - debit;
+            const be = buy.strike - (debit / 100);
+            const contracts = Math.max(1, Math.floor(maxRisk / debit));
+            strategies.push({
+              name: 'Bear Put Debit Spread',
+              rationale: 'Bearish, IV cheap → buy premium, defined risk',
+              legs: [`BUY  ${contracts}x ${ticker} ${expStr} ${buy.strike} PUT @ ~$${mid(buy).toFixed(2)}`,
+                     `SELL ${contracts}x ${ticker} ${expStr} ${sell.strike} PUT @ ~$${mid(sell).toFixed(2)}`],
+              netDebit: debit * contracts, maxProfit: maxProfit * contracts, maxLoss: debit * contracts,
+              breakeven: be.toFixed(2), roi: ((maxProfit / Math.max(1, debit)) * 100).toFixed(0) + '%',
+            });
+          }
+          if (ivRich) {
+            const sell = calls.find(c => c.strike > spot * 1.03 && c.strike < spot * 1.07) || calls[Math.floor(calls.length / 2)];
+            const buy = calls.find(c => c.strike > sell.strike + spot * 0.03) || calls[calls.length - 1];
+            const credit = (mid(sell) - mid(buy)) * 100;
+            const width = (buy.strike - sell.strike) * 100;
+            const maxLoss = width - credit;
+            const be = sell.strike + (credit / 100);
+            const contracts = Math.max(1, Math.floor(maxRisk / maxLoss));
+            strategies.push({
+              name: 'Bear Call Credit Spread',
+              rationale: 'Bearish, IV rich → sell premium, defined risk',
+              legs: [`SELL ${contracts}x ${ticker} ${expStr} ${sell.strike} CALL @ ~$${mid(sell).toFixed(2)}`,
+                     `BUY  ${contracts}x ${ticker} ${expStr} ${buy.strike} CALL @ ~$${mid(buy).toFixed(2)}`],
+              netCredit: credit * contracts, maxProfit: credit * contracts, maxLoss: maxLoss * contracts,
+              breakeven: be.toFixed(2), roi: ((credit / Math.max(1, maxLoss)) * 100).toFixed(0) + '%',
+            });
+          }
+        }
+
+        if (direction === 'neutral' || direction === 'range') {
+          if (ivRich) {
+            // Iron Condor — sell OTM call + OTM put, buy further OTM wings
+            const sellPut  = puts.find(p => p.strike < spot * 0.95 && p.strike > spot * 0.90) || puts[Math.floor(puts.length * 0.3)];
+            const buyPut   = puts.find(p => p.strike < sellPut.strike - spot * 0.05) || puts[0];
+            const sellCall = calls.find(c => c.strike > spot * 1.05 && c.strike < spot * 1.10) || calls[Math.floor(calls.length * 0.7)];
+            const buyCall  = calls.find(c => c.strike > sellCall.strike + spot * 0.05) || calls[calls.length - 1];
+            const credit = (mid(sellPut) + mid(sellCall) - mid(buyPut) - mid(buyCall)) * 100;
+            const widthPut = (sellPut.strike - buyPut.strike) * 100;
+            const widthCall = (buyCall.strike - sellCall.strike) * 100;
+            const maxLoss = Math.max(widthPut, widthCall) - credit;
+            const contracts = Math.max(1, Math.floor(maxRisk / maxLoss));
+            strategies.push({
+              name: 'Iron Condor',
+              rationale: 'Neutral, IV rich → defined-risk short premium, profits if price stays in range',
+              legs: [
+                `SELL ${contracts}x ${expStr} ${sellPut.strike} PUT @ ~$${mid(sellPut).toFixed(2)}`,
+                `BUY  ${contracts}x ${expStr} ${buyPut.strike} PUT @ ~$${mid(buyPut).toFixed(2)}`,
+                `SELL ${contracts}x ${expStr} ${sellCall.strike} CALL @ ~$${mid(sellCall).toFixed(2)}`,
+                `BUY  ${contracts}x ${expStr} ${buyCall.strike} CALL @ ~$${mid(buyCall).toFixed(2)}`,
+              ],
+              netCredit: credit * contracts, maxProfit: credit * contracts, maxLoss: maxLoss * contracts,
+              breakeven: `${(sellPut.strike - credit / 100).toFixed(2)} to ${(sellCall.strike + credit / 100).toFixed(2)}`,
+              roi: ((credit / Math.max(1, maxLoss)) * 100).toFixed(0) + '%',
+            });
+          }
+          if (ivCheap) {
+            // Long Straddle — direction-agnostic, profits from large move
+            const debit = (mid(atmCall) + mid(atmPut)) * 100;
+            const contracts = Math.max(1, Math.floor(maxRisk / debit));
+            strategies.push({
+              name: 'Long Straddle',
+              rationale: 'Neutral, IV cheap → expecting a large move either direction (often pre-earnings)',
+              legs: [
+                `BUY ${contracts}x ${expStr} ${atmCall.strike} CALL @ ~$${mid(atmCall).toFixed(2)}`,
+                `BUY ${contracts}x ${expStr} ${atmPut.strike} PUT @ ~$${mid(atmPut).toFixed(2)}`,
+              ],
+              netDebit: debit * contracts, maxProfit: 'unlimited (call) / large (put)', maxLoss: debit * contracts,
+              breakeven: `${(atmCall.strike - debit / 100).toFixed(2)} or ${(atmCall.strike + debit / 100).toFixed(2)}`,
+              roi: 'depends on move magnitude',
+            });
+          }
+        }
+
+        if (strategies.length === 0) {
+          strategies.push({ name: '(no recommendation)', rationale: `direction=${direction} + IV=${ivPercentile?.toFixed(0)}% — no matching template. Try direction=bullish/bearish/neutral.` });
+        }
+
+        const ivLabel = ivPercentile == null ? 'n/a' : `${ivPercentile.toFixed(0)}th percentile (${ivCheap ? 'CHEAP' : ivRich ? 'RICH' : 'normal'})`;
+        const lines = [
+          `Option strategy builder — ${ticker} @ $${spot}`,
+          `Direction: ${direction}  |  ATM IV: ${(atmIV * 100).toFixed(1)}%  |  IV rank: ${ivLabel}`,
+          `Expiry chosen: ${expStr} (${dtePicked} DTE)  |  Max risk budget: $${maxRisk}`,
+          '',
+        ];
+        strategies.forEach((s, i) => {
+          lines.push(`${i + 1}. ${s.name}`);
+          lines.push(`   ${s.rationale}`);
+          (s.legs || []).forEach(l => lines.push(`   ${l}`));
+          if (s.netDebit) lines.push(`   Net debit: $${(s.netDebit).toFixed(0)}`);
+          if (s.netCredit) lines.push(`   Net credit: $${(s.netCredit).toFixed(0)}`);
+          if (s.maxProfit != null) lines.push(`   Max profit: ${typeof s.maxProfit === 'number' ? '$' + s.maxProfit.toFixed(0) : s.maxProfit}`);
+          if (s.maxLoss != null) lines.push(`   Max loss: $${typeof s.maxLoss === 'number' ? s.maxLoss.toFixed(0) : s.maxLoss}`);
+          if (s.breakeven) lines.push(`   Breakeven: ${s.breakeven}`);
+          if (s.roi) lines.push(`   ROI: ${s.roi}`);
+          lines.push('');
+        });
+        return lines.join('\n');
+      } catch (e) { return `option_strategy_builder error: ${e.message}`; }
+    }
+
+    case 'crypto_onchain_metrics': {
+      const coin = String(params.coin || 'bitcoin').toLowerCase();
+      const lines = [`On-chain & derivatives — ${coin}`];
+      try {
+        // 1. CoinGecko: price + market cap + supply
+        const cgRes = await fetch(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coin)}?localization=false&tickers=false&community_data=true&developer_data=false`, { headers: { 'Accept': 'application/json', 'User-Agent': 'NHA/1.0' } });
+        if (cgRes.ok) {
+          const cg = await cgRes.json();
+          const md = cg.market_data || {};
+          const price = md.current_price?.usd;
+          const mcap = md.market_cap?.usd;
+          const supply = md.circulating_supply;
+          const ath = md.ath?.usd;
+          const athDate = md.ath_date?.usd?.slice(0, 10);
+          const fromAth = md.ath_change_percentage?.usd?.toFixed(1);
+          lines.push(`Price: $${price?.toLocaleString()}  |  Market cap: $${(mcap / 1e9)?.toFixed(2)}B  |  Circulating: ${(supply / 1e6)?.toFixed(2)}M`);
+          lines.push(`ATH: $${ath?.toLocaleString()} on ${athDate}  (${fromAth}% from ATH)`);
+          if (cg.community_data?.twitter_followers) lines.push(`Twitter followers: ${cg.community_data.twitter_followers.toLocaleString()}`);
+          // MVRV approximation using market cap / realized cap (CoinGecko doesn't expose realized cap directly,
+          // but we approximate via mcap / (supply × avg_30d_price) — quick proxy).
+          if (md.market_cap_change_percentage_24h_in_currency?.usd != null) {
+            lines.push(`24h mcap change: ${md.market_cap_change_percentage_24h_in_currency.usd.toFixed(2)}%`);
+          }
+        }
+
+        // 2. DeFi Llama TVL (free, no key) — for L1s and DeFi protocols
+        try {
+          const llSlugMap = { bitcoin: null, ethereum: 'ethereum', solana: 'solana', avalanche: 'avalanche', polygon: 'polygon', arbitrum: 'arbitrum', optimism: 'optimism', polkadot: 'polkadot', cosmos: 'cosmos' };
+          const slug = llSlugMap[coin];
+          if (slug) {
+            const llRes = await fetch(`https://api.llama.fi/v2/historicalChainTvl/${slug}`);
+            if (llRes.ok) {
+              const tvl = await llRes.json();
+              const latest = tvl[tvl.length - 1];
+              const month = tvl[tvl.length - 30] || tvl[0];
+              const chgPct = month?.tvl ? ((latest.tvl - month.tvl) / month.tvl * 100) : 0;
+              lines.push(`\nDeFi TVL on ${slug}: $${(latest.tvl / 1e9).toFixed(2)}B (30d ${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(1)}%)`);
+            }
+          } else if (coin === 'bitcoin') {
+            // BTC: pull total DeFi TVL on bitcoin sidechains
+            const llRes = await fetch('https://api.llama.fi/v2/historicalChainTvl/Bitcoin');
+            if (llRes.ok) {
+              const tvl = await llRes.json();
+              const latest = tvl[tvl.length - 1];
+              lines.push(`\nDeFi TVL on Bitcoin (sidechains/L2): $${(latest.tvl / 1e6).toFixed(0)}M`);
+            }
+          }
+        } catch {}
+
+        // 3. Binance perpetual futures: funding rate + open interest (free, no key)
+        try {
+          const sym = coin === 'bitcoin' ? 'BTCUSDT' : coin === 'ethereum' ? 'ETHUSDT' : coin === 'solana' ? 'SOLUSDT' : null;
+          if (sym) {
+            const [fr, oi] = await Promise.all([
+              fetch(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=${sym}&limit=8`).then(r => r.ok ? r.json() : null).catch(() => null),
+              fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${sym}`).then(r => r.ok ? r.json() : null).catch(() => null),
+            ]);
+            if (Array.isArray(fr) && fr.length) {
+              const lastFr = parseFloat(fr[fr.length - 1].fundingRate) * 100;
+              const avg8 = fr.reduce((a, x) => a + parseFloat(x.fundingRate), 0) / fr.length * 100;
+              lines.push(`\nBinance perp funding (8h × 8 readings): last ${lastFr.toFixed(4)}%  |  avg ${avg8.toFixed(4)}%`);
+              lines.push(`  → ${avg8 > 0.02 ? '🟢 longs paying shorts (bullish positioning)' : avg8 < -0.02 ? '🔴 shorts paying longs (bearish positioning)' : '🟡 neutral'}`);
+            }
+            if (oi?.openInterest) lines.push(`Open Interest: ${parseFloat(oi.openInterest).toLocaleString()} ${sym.replace('USDT', '')}`);
+          }
+        } catch {}
+
+        // 4. Fear & Greed Index (alternative.me, free)
+        try {
+          const fgRes = await fetch('https://api.alternative.me/fng/?limit=1', { headers: { 'Accept': 'application/json' } });
+          if (fgRes.ok) {
+            const fg = await fgRes.json();
+            const f = fg.data?.[0];
+            if (f) lines.push(`\nFear & Greed Index: ${f.value}/100 — ${f.value_classification}`);
+          }
+        } catch {}
+
+        // 5. BTC dominance + Stablecoin supply proxy
+        try {
+          const gRes = await fetch('https://api.coingecko.com/api/v3/global', { headers: { 'Accept': 'application/json' } });
+          if (gRes.ok) {
+            const g = await gRes.json();
+            const dom = g.data?.market_cap_percentage || {};
+            lines.push(`\nMarket structure: BTC dominance ${dom.btc?.toFixed(1)}%  |  ETH ${dom.eth?.toFixed(1)}%  |  Stablecoins (USDT+USDC) ${((dom.usdt || 0) + (dom.usdc || 0)).toFixed(1)}%`);
+          }
+        } catch {}
+
+        return lines.join('\n');
+      } catch (e) { return `crypto_onchain_metrics error: ${e.message}`; }
+    }
+
+    case 'portfolio_tax_lots': {
+      // Tax-lot accounting. Reads ~/.nha/portfolio.json's `transactions` array
+      // (buy/sell events with date + qty + price), produces realized + unrealized
+      // gain breakdown using the chosen accounting method.
+      const method = String(params.method || 'FIFO').toUpperCase(); // FIFO | LIFO | HIFO
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      if (!fs.default.existsSync(file)) return 'Portfolio empty (no ~/.nha/portfolio.json).';
+      const pf = JSON.parse(fs.default.readFileSync(file, 'utf-8'));
+      const txs = (pf.transactions || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+      if (txs.length === 0) return 'No transactions recorded. Use portfolio_tx_add to record buys/sells with date.';
+
+      // Build open lots per ticker by applying buys/sells with the chosen method.
+      const lotsByTicker = {};
+      const realizedByTicker = {};
+      const washSaleWarnings = [];
+      const today = new Date().toISOString().slice(0, 10);
+      const yearAgoMs = Date.now() - 365 * 86400000;
+
+      for (const tx of txs) {
+        const t = (tx.ticker || '').toUpperCase();
+        if (!t) continue;
+        lotsByTicker[t] = lotsByTicker[t] || [];
+        realizedByTicker[t] = realizedByTicker[t] || { shortTerm: 0, longTerm: 0, totalSold: 0 };
+        if (tx.type === 'buy' || tx.type === 'BUY') {
+          lotsByTicker[t].push({ date: tx.date, qty: tx.qty, cost: tx.price, remaining: tx.qty });
+          // Wash sale check: any sale at a LOSS within 30 days before this buy?
+          const recentLosses = (realizedByTicker[t].events || []).filter(ev => ev.loss < 0 && (new Date(tx.date) - new Date(ev.date)) <= 30 * 86400000 && (new Date(tx.date) - new Date(ev.date)) >= 0);
+          if (recentLosses.length) washSaleWarnings.push(`${t}: buy on ${tx.date} may trigger wash-sale rule (loss sale on ${recentLosses[0].date}, $${(-recentLosses[0].loss).toFixed(2)} disallowed).`);
+        } else if (tx.type === 'sell' || tx.type === 'SELL') {
+          let qtyToClose = tx.qty;
+          const sortLots = (lots) => {
+            if (method === 'LIFO') return [...lots].sort((a, b) => b.date.localeCompare(a.date));
+            if (method === 'HIFO') return [...lots].sort((a, b) => b.cost - a.cost);
+            return [...lots].sort((a, b) => a.date.localeCompare(b.date)); // FIFO
+          };
+          const order = sortLots(lotsByTicker[t]);
+          for (const lot of order) {
+            if (qtyToClose <= 0) break;
+            if (lot.remaining <= 0) continue;
+            const take = Math.min(lot.remaining, qtyToClose);
+            const proceeds = take * tx.price;
+            const costBasis = take * lot.cost;
+            const gain = proceeds - costBasis;
+            const holdMs = new Date(tx.date) - new Date(lot.date);
+            const isLongTerm = holdMs > 365 * 86400000;
+            if (isLongTerm) realizedByTicker[t].longTerm += gain;
+            else realizedByTicker[t].shortTerm += gain;
+            realizedByTicker[t].totalSold += take;
+            realizedByTicker[t].events = realizedByTicker[t].events || [];
+            realizedByTicker[t].events.push({ date: tx.date, qty: take, gain, loss: gain < 0 ? gain : 0, lotDate: lot.date, isLongTerm });
+            lot.remaining -= take;
+            qtyToClose -= take;
+          }
+        }
+      }
+
+      // Fetch live prices for unrealized gain.
+      const tickersOpen = Object.keys(lotsByTicker).filter(t => lotsByTicker[t].some(l => l.remaining > 0));
+      let priceMap = {};
+      if (tickersOpen.length) {
+        try {
+          const r = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickersOpen.join(',')}`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+          if (r.ok) {
+            const d = await r.json();
+            priceMap = Object.fromEntries((d?.quoteResponse?.result || []).map(q => [q.symbol, q.regularMarketPrice]));
+          }
+        } catch {}
+      }
+
+      const lines = [`Tax lot report — method: ${method}`, ''];
+      let totalRealizedShort = 0, totalRealizedLong = 0, totalUnrealized = 0;
+      let lossHarvestCandidates = [];
+      for (const t of Object.keys(lotsByTicker)) {
+        const open = lotsByTicker[t].filter(l => l.remaining > 0);
+        const realized = realizedByTicker[t] || { shortTerm: 0, longTerm: 0 };
+        const price = priceMap[t];
+        let unrealized = 0;
+        open.forEach(l => { if (price) unrealized += (price - l.cost) * l.remaining; });
+        totalRealizedShort += realized.shortTerm;
+        totalRealizedLong += realized.longTerm;
+        totalUnrealized += unrealized;
+        // Tax-loss harvesting: lot with unrealized loss + holding > some threshold
+        open.forEach(l => {
+          if (price && (price - l.cost) * l.remaining < -100) {
+            const holdDays = (Date.now() - new Date(l.date).getTime()) / 86400000;
+            lossHarvestCandidates.push({ ticker: t, lotDate: l.date, qty: l.remaining, cost: l.cost, currentPrice: price, loss: (price - l.cost) * l.remaining, holdDays });
+          }
+        });
+        lines.push(`${t}:`);
+        lines.push(`  Realized: short-term $${realized.shortTerm.toFixed(2)} | long-term $${realized.longTerm.toFixed(2)} | total $${(realized.shortTerm + realized.longTerm).toFixed(2)}`);
+        if (open.length) {
+          lines.push(`  Open lots (${open.length}, live $${price?.toFixed(2) || '?'}):`);
+          open.forEach(l => {
+            const u = price ? (price - l.cost) * l.remaining : 0;
+            const ageDays = ((Date.now() - new Date(l.date).getTime()) / 86400000).toFixed(0);
+            lines.push(`    ${l.date}  qty ${l.remaining}  cost $${l.cost.toFixed(2)}  unrealized $${u.toFixed(2)}  (${ageDays}d, ${ageDays > 365 ? 'long-term' : 'SHORT-TERM'})`);
+          });
+        }
+        lines.push('');
+      }
+      lines.push(`TOTALS:`);
+      lines.push(`  Realized short-term gains: $${totalRealizedShort.toFixed(2)}  (taxed at ordinary income rate)`);
+      lines.push(`  Realized long-term gains:  $${totalRealizedLong.toFixed(2)}  (taxed at 0/15/20% in US)`);
+      lines.push(`  Unrealized gains: $${totalUnrealized.toFixed(2)}`);
+      if (washSaleWarnings.length) {
+        lines.push(`\n⚠ Wash-sale warnings:\n  ${washSaleWarnings.join('\n  ')}`);
+      }
+      if (lossHarvestCandidates.length) {
+        lines.push(`\n💡 Tax-loss harvest candidates (unrealized loss > $100):`);
+        lossHarvestCandidates.sort((a, b) => a.loss - b.loss).slice(0, 5).forEach(c => {
+          lines.push(`  ${c.ticker} lot ${c.lotDate} qty ${c.qty}: realize $${c.loss.toFixed(2)} loss${c.holdDays < 31 ? ' ⚠ <31 days, wash-sale risk' : ''}`);
+        });
+      }
+      return lines.join('\n');
+    }
+
+    case 'portfolio_tx_add': {
+      // Record a buy/sell transaction. Used to feed portfolio_tax_lots.
+      const ticker = String(params.ticker || '').toUpperCase();
+      const type = String(params.type || 'buy').toLowerCase();
+      const qty = parseFloat(params.qty || params.quantity || '0');
+      const price = parseFloat(params.price || '0');
+      const date = String(params.date || new Date().toISOString().slice(0, 10));
+      if (!ticker || qty <= 0 || !['buy', 'sell'].includes(type)) return 'portfolio_tx_add: ticker, type (buy|sell), qty (>0), price required.';
+      const fs = await import('fs'); const path = await import('path'); const os = await import('os');
+      const file = path.default.join(os.default.homedir(), '.nha', 'portfolio.json');
+      let pf = { positions: [], transactions: [] };
+      try { if (fs.default.existsSync(file)) pf = JSON.parse(fs.default.readFileSync(file, 'utf-8')); } catch {}
+      pf.transactions = pf.transactions || [];
+      pf.transactions.push({ ticker, type, qty, price, date, recordedAt: new Date().toISOString() });
+      // Also update current `positions` for parity with portfolio_summary.
+      pf.positions = pf.positions || [];
+      const idx = pf.positions.findIndex(p => p.ticker === ticker);
+      if (type === 'buy') {
+        if (idx >= 0) {
+          const existing = pf.positions[idx];
+          const totalQty = existing.qty + qty;
+          existing.cost = ((existing.qty * existing.cost) + (qty * price)) / totalQty;
+          existing.qty = totalQty;
+        } else {
+          pf.positions.push({ ticker, qty, cost: price, addedAt: new Date().toISOString() });
+        }
+      } else {
+        if (idx >= 0) {
+          pf.positions[idx].qty -= qty;
+          if (pf.positions[idx].qty <= 0) pf.positions.splice(idx, 1);
+        }
+      }
+      fs.default.mkdirSync(path.default.dirname(file), { recursive: true });
+      fs.default.writeFileSync(file, JSON.stringify(pf, null, 2));
+      return `Transaction recorded: ${type.toUpperCase()} ${qty} ${ticker} @ $${price} on ${date}. Total transactions: ${pf.transactions.length}.`;
+    }
+
+    case 'insider_trading': {
+      const ticker = String(params.ticker || '').toUpperCase();
+      const limit = Math.min(parseInt(params.limit || '15', 10), 30);
+      if (!ticker) return 'insider_trading: ticker required.';
+      try {
+        const ua = 'NotHumanAllowed CLI hello@nothumanallowed.com';
+        const tres = await fetch('https://www.sec.gov/files/company_tickers.json', { headers: { 'User-Agent': ua } });
+        if (!tres.ok) return `insider_trading: ticker map HTTP ${tres.status}`;
+        const map = await tres.json();
+        const entry = Object.values(map).find(e => e.ticker?.toUpperCase() === ticker);
+        if (!entry) return `insider_trading: ${ticker} not in SEC EDGAR (US-listed only).`;
+        const cik = String(entry.cik_str).padStart(10, '0');
+        const fres = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, { headers: { 'User-Agent': ua } });
+        if (!fres.ok) return `insider_trading: HTTP ${fres.status}`;
+        const fd = await fres.json();
+        const recent = fd.filings?.recent || {};
+        const rows = [];
+        for (let i = 0; i < (recent.form?.length || 0); i++) {
+          if (recent.form[i] !== '4') continue;
+          rows.push({
+            date: recent.filingDate[i],
+            accession: recent.accessionNumber[i],
+            primary: recent.primaryDocument[i],
+          });
+          if (rows.length >= limit) break;
+        }
+        if (rows.length === 0) return `insider_trading: no Form 4 (insider) filings for ${ticker}.`;
+        const lines = [`Insider trading (Form 4) — ${entry.title} (${ticker}) — last ${rows.length}`];
+        rows.forEach(r => {
+          const accNoDash = r.accession.replace(/-/g, '');
+          const url = `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${accNoDash}/${r.primary}`;
+          lines.push(`  ${r.date}  Form 4 → ${url}`);
+        });
+        lines.push(`\nNote: Form 4 filings report officer/director/10%-owner transactions. Open URLs to see whether BUY (acquired) or SELL (disposed).`);
+        return lines.join('\n');
+      } catch (e) { return `insider_trading error: ${e.message}`; }
+    }
+
+    case 'italian_market': {
+      // FTSE MIB constituents and BTP-Bund spread (10y Italy minus 10y Germany).
+      const which = String(params.what || 'all').toLowerCase();
+      const lines = [];
+      try {
+        if (which === 'all' || which === 'mib' || which === 'index') {
+          const r = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/FTSEMIB.MI?range=5d&interval=1d', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+          if (r.ok) {
+            const d = await r.json();
+            const res = d.chart.result[0];
+            const closes = res.indicators.quote[0].close.filter(Boolean);
+            const last = closes[closes.length - 1];
+            const prev = closes[closes.length - 2];
+            const chg = prev ? ((last - prev) / prev * 100) : 0;
+            lines.push(`FTSE MIB: ${last?.toFixed(0)} (${chg >= 0 ? '+' : ''}${chg.toFixed(2)}% giorn.)`);
+          }
+        }
+        if (which === 'all' || which === 'spread' || which === 'btp') {
+          const [it, de] = await Promise.all([
+            fetch('https://query1.finance.yahoo.com/v8/finance/chart/^TNX-IT?range=1d&interval=1d', { headers: { 'User-Agent': 'Mozilla/5.0' } }).catch(() => null),
+            fetch('https://query1.finance.yahoo.com/v8/finance/chart/^TNX-DE?range=1d&interval=1d', { headers: { 'User-Agent': 'Mozilla/5.0' } }).catch(() => null),
+          ]);
+          // Yahoo doesn't expose BTP/Bund directly via simple ticker; use approx via futures or skip.
+          lines.push('BTP-Bund spread: dato non disponibile via Yahoo gratis. Suggerisco fetch_url su https://www.borsaitaliana.it/borsa/obbligazioni.html');
+        }
+        // Top constituents — manual list of FTSE MIB blue chips, fetched as batch
+        if (which === 'all' || which === 'constituents' || which === 'top') {
+          const tickers = ['ENI.MI','ENEL.MI','UCG.MI','ISP.MI','STLAM.MI','RACE.MI','TIT.MI','G.MI','MB.MI','LDO.MI','PRY.MI','SPM.MI','PST.MI','BAMI.MI','FBK.MI'];
+          const r = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers.join(',')}`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NHA/1.0)' } });
+          if (r.ok) {
+            const d = await r.json();
+            const quotes = d?.quoteResponse?.result || [];
+            lines.push('\nFTSE MIB — Top constituents:');
+            quotes.forEach(q => {
+              const chg = q.regularMarketChangePercent;
+              lines.push(`  ${q.symbol.padEnd(9)} ${(q.shortName || '').slice(0, 22).padEnd(23)} €${(q.regularMarketPrice || 0).toFixed(2).padStart(8)}  ${(chg >= 0 ? '+' : '') + chg?.toFixed(2)}%`);
+            });
+          }
+        }
+        if (lines.length === 0) return `italian_market: parametro "what" non riconosciuto. Usa "all" | "mib" | "constituents" | "spread".`;
+        return lines.join('\n');
+      } catch (e) { return `italian_market error: ${e.message}`; }
     }
 
     default:

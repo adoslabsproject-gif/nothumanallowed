@@ -1,6 +1,23 @@
 # NotHumanAllowed
 
-**38 specialized AI agents, 80 tools, Studio visual workflows, WebCraft full-stack builder — all local, all free.** Security auditors, code architects, data analysts, DevOps engineers, technical writers — each with deep domain expertise. Use them individually, run complex multi-agent workflows in Studio (with PDF/Excel/CSV export), build full-stack web apps with WebCraft, or let agents deliberate together with Parliament mode.
+**38 specialized AI agents, 100+ tools, AWF visual workflow automation with a world-class debugger, Studio multi-agent workflows, WebCraft full-stack builder — all local, all free.** Security auditors, code architects, data analysts, DevOps engineers, technical writers — each with deep domain expertise. Use them individually, automate anything visually with AWF (with live step streaming, conditional breakpoints, variable watcher, edit-and-resume), run multi-agent deliberation in Studio (with PDF/Excel/CSV export), build full-stack web apps with WebCraft, or let agents collaborate in Parliament mode.
+
+## ✨ NEW in v16.0.0
+
+- **AWF World-Class Debugger** — inspired by Chrome DevTools and Replay.io:
+  - Live step streaming via WebSocket — watch your workflow execute in real time
+  - Conditional breakpoints with JS expressions (e.g. `output.includes('error')`)
+  - Variable watcher + edit-and-resume during pause (Smalltalk-style live coding)
+  - Replay deterministic with `wfSnapshot` + replay-from-node (cached upstream)
+  - Step diff side-by-side between two runs — regression hunting
+  - AI "explain this error" in plain language, 1-click cached
+- **Connector Marketplace** — install community-built node bundles (declarative, no RCE)
+- **Templates Marketplace** — 1-click import for production-ready workflows
+- **Drive Workspace Sync** — push/pull workflows between machines (merge or replace)
+- **Env Switcher** — dev/staging/prod, credentials resolve per environment
+- **4 new triggers**: file watch, RSS feed, IMAP folder, Discord message
+- **Conditional merge n-ary** — wait for all upstream branches before proceeding
+- Auto-start triggers + 24h auto-backup at daemon boot
 
 ## Quick Start
 
@@ -49,6 +66,52 @@ When a workflow completes, Studio provides three export formats:
 - **CSV** — all Markdown tables from the report merged into a single file
 
 Export buttons appear in the result panel and in the toolbar after each run.
+
+---
+
+## AWF — Visual Workflow Automation with World-Class Debugger
+
+AWF (AutoWorkFlow) is a visual pipeline builder embedded in `nha ui`. Drag and drop triggers, actions, AI nodes, and logic blocks — connect them into pipelines that run on schedule, webhook, file change, RSS feed, IMAP folder, or Discord message.
+
+```
+Open nha ui → click AWF in the sidebar
+```
+
+### 34 nodes available
+
+- **8 Triggers**: Manual, Cron, New Email, Webhook, File Watch, RSS Feed, IMAP Folder, Discord Message
+- **14 Actions**: Send Email, Slack Message, GitHub Issue, Notion Page, Calendar Event, Web Search, Browser Step, and more
+- **6 AI nodes**: Direct LLM call, run any of 38 specialist agents, summarize, classify, translate, code-gen
+- **6 Logic**: If/Switch branching, Loop/ForEach, Conditional Merge (n-ary), Error Handler with retry, Delay, Subworkflow
+
+### World-Class Debugger
+
+The debugger is the differentiator. Inspired by Chrome DevTools and Replay.io, it brings to workflow automation what those tools brought to web development:
+
+- **Live step streaming via WebSocket** — every node lights up on the canvas as it executes
+- **Conditional breakpoints** — pause only when `output.includes('error')` or any JS expression
+- **Variable watcher** — inspect `ctx.input`, `ctx.output`, `ctx.loopItem` while paused
+- **Edit-and-resume** — change the paused node's config and resume with the new values (no restart)
+- **Replay deterministic** — every run snapshots the workflow, so replays are identical even if you edit the workflow after
+- **Replay-from-node** — re-execute starting from a specific node, reusing upstream output (skip expensive API calls during debug)
+- **Step diff** — compare two runs side-by-side, find what changed
+- **AI explain** — 1-click "explain this error" in plain language
+
+### Templates Marketplace
+
+Five built-in templates ready to import (lawyer hearing reminders, accountant invoice extraction, freelance daily brief, company support triage, company lead-generation) plus a community marketplace fetched from `nothumanallowed.com/awf/templates`.
+
+### Connector Marketplace
+
+A connector is a **declarative** bundle (no executable code, schema-validated, host-allowlisted) that adds new node types and templates to your palette. Install with one click, share JSON manifests.
+
+### Workspace Sync (Google Drive)
+
+Push your workflows to Drive from one machine, pull them on another. Merge mode preserves local changes; replace mode mirrors Drive. Plus automatic 24h backup.
+
+### Multi-environment Credentials
+
+Switch between `dev` / `staging` / `prod` environments — credentials (`${cred.NAME}` placeholders) resolve per environment so you can develop against staging keys and ship to prod with one toggle.
 
 ---
 

@@ -8,6 +8,7 @@ import { sendJSON, sendError, parseBody } from '../index.mjs';
 import { loadConfig } from '../../config.mjs';
 import { AGENTS_DIR, NHA_DIR } from '../../constants.mjs';
 import { callLLMStream, parseAgentFile } from '../../services/llm.mjs';
+import { tryDirectActionAll } from '../../services/message-responder.mjs';
 
 function loadAgentCards() {
   if (!fs.existsSync(AGENTS_DIR)) return [];
@@ -88,6 +89,23 @@ export function register(router) {
     const sse = (ev, data) => res.write(`event: ${ev}\ndata: ${JSON.stringify(data)}\n\n`);
 
     try {
+      // ── Direct-action pre-step (deterministic tool exec, LLM only for NLU) ──
+      // Same dispatcher used by Telegram / Discord / Chat WebUI / AWF: if
+      // the user's message maps to a state-changing tool (CRUD on calendar,
+      // email, drive, slack, github, file, ...), execute it server-side and
+      // stream the result. LLM agent is bypassed entirely for actions.
+      const direct = await tryDirectActionAll(body.message, loadConfig(), {
+        auditKey: `agents:${body.agent || 'any'}`,
+      });
+      if (direct) {
+        sse('tool', { action: direct.action, status: 'done' });
+        sse('token', { content: direct.message });
+        sse('done', {});
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+
       const agentSlug = body.agent?.toLowerCase();
       const LANG_MAP = { it:'Italian', en:'English', es:'Spanish', fr:'French', de:'German', pt:'Portuguese', nl:'Dutch', pl:'Polish', ru:'Russian', zh:'Chinese', ja:'Japanese', ko:'Korean', ar:'Arabic', hi:'Hindi', tr:'Turkish', sv:'Swedish', da:'Danish', fi:'Finnish', cs:'Czech' };
       const lang = LANG_MAP[(config?.language || config?.lang || 'en').slice(0,2)] || 'English';

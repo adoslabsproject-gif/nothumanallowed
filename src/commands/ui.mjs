@@ -84,11 +84,42 @@ export async function cmdUI(args) {
     }
   } catch { /* port is free */ }
 
-  // Auto-start ops daemon (Telegram + cron) if not already running
+  // Detect if we were spawned by the self-restart helper after an npm-update.
+  // The marker file is written by /api/npm-update right before exiting.
+  // This lets us:
+  //   - confirm to the user that the upgrade landed (visible in the boot log)
+  //   - guarantee the ops daemon (Telegram/Discord bot) is back up
+  let restartedFromUpdate = false;
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const os = await import('os');
+    const markerPath = path.join(os.default.homedir(), '.nha', 'last-restart.json');
+    if (fs.existsSync(markerPath)) {
+      const stat = fs.statSync(markerPath);
+      // Consider the marker fresh only if written within the last 5 minutes
+      if (Date.now() - stat.mtimeMs < 5 * 60_000) {
+        const meta = JSON.parse(fs.readFileSync(markerPath, 'utf-8'));
+        restartedFromUpdate = true;
+        console.log(`  \x1b[0;32m↻\x1b[0m Restarted after update: v${meta.fromVersion} → v${meta.toVersion}`);
+      }
+      // Always clean up so we don't repeat the message on next manual restart
+      try { fs.unlinkSync(markerPath); } catch {}
+    }
+  } catch { /* non-fatal */ }
+
+  // Auto-start ops daemon (Telegram + cron) if not already running.
+  // After a self-restart this is what brings the Telegram bot back online —
+  // critical for VM users whose only control channel is Telegram.
   if (!isRunning()) {
     const result = startDaemon();
     if (result.ok) {
-      console.log(`  \x1b[0;32m✓\x1b[0m PAO daemon started (PID ${result.pid})`);
+      console.log(`  \x1b[0;32m✓\x1b[0m PAO daemon ${restartedFromUpdate ? 'restarted' : 'started'} (PID ${result.pid})`);
+    } else {
+      console.log(`  \x1b[0;31m✗\x1b[0m PAO daemon failed to start: ${result.error || 'unknown'}`);
+      if (restartedFromUpdate) {
+        console.log(`    Telegram/Discord bot may be offline. Run "nha ops start" manually.`);
+      }
     }
   }
 

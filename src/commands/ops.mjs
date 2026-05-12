@@ -97,8 +97,18 @@ export async function cmdOps(args) {
       const telegramConfigured = !!config.responder?.telegram?.token;
       const discordConfigured = !!config.responder?.discord?.token;
       console.log(`\n  ${BOLD}Message Responder${NC}\n`);
-      console.log(`  Telegram:         ${responder.telegram ? G + 'active' + NC : telegramConfigured ? Y + 'configured (daemon restart needed)' + NC : D + 'not configured' + NC}`);
-      console.log(`  Discord:          ${responder.discord ? G + 'active' + NC : discordConfigured ? Y + 'configured (daemon restart needed)' + NC : D + 'not configured' + NC}`);
+      // Surface the exact reason the responder didn't activate (missing
+      // LLM key on a paid provider, missing token, etc.) instead of the
+      // generic "daemon restart needed" — which is misleading because the
+      // daemon IS running, the responder just refused to spin up.
+      const reason = responder.reason || '';
+      let inactiveHintTel = 'configured but inactive (try: nha ops stop && nha ops start)';
+      if (reason.startsWith('missing_key:')) {
+        const p = reason.slice('missing_key:'.length);
+        inactiveHintTel = `configured but LLM key missing for provider "${p}" — fix with:  nha config set provider nha  (free Liara)  OR  nha config set ${p}-key YOUR_KEY`;
+      }
+      console.log(`  Telegram:         ${responder.telegram ? G + 'active' + NC : telegramConfigured ? Y + inactiveHintTel + NC : D + 'not configured' + NC}`);
+      console.log(`  Discord:          ${responder.discord ? G + 'active' + NC : discordConfigured ? Y + inactiveHintTel + NC : D + 'not configured' + NC}`);
       console.log(`  Auto-route:       ${config.responder?.autoRoute !== false ? G + 'keyword routing' + NC : D + 'CONDUCTOR only' + NC}`);
 
       console.log('');
