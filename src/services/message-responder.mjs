@@ -2145,6 +2145,72 @@ class TelegramResponder {
     // Reuse the same proposal extractor — it works on raw user text too,
     // because it just looks for title quotes / dates / times.
     if (isDelete) {
+      // ─── BULK DELETE: "cancella TUTTI gli appuntamenti di MAGGIO"
+      // Trigger when isDelete + "tutti/all/everything" + (month name | week | "oggi" | "domani"
+      // | specific date). Iterate over the list and delete each one. Honest
+      // reporting: tell the user how many were deleted vs failed.
+      const isBulk = /\b(tutti|tutte|all|every(thing)?|in\s+tot)\b/.test(lower);
+      const monthMatch = lower.match(new RegExp(`\\b(${Object.keys(MONTH_MAP).join('|')})(?:\\s+(20\\d{2}))?\\b`));
+      const isOggi   = /\b(oggi|today)\b/.test(lower);
+      const isDomani = /\b(domani|tomorrow)\b/.test(lower);
+      const isWeek   = /\b(questa\s+settimana|della\s+settimana|this\s+week|della\s+week)\b/.test(lower);
+      if (isBulk && (monthMatch || isOggi || isDomani || isWeek)) {
+        // 1. Fetch the events in that timeframe via the right list tool.
+        let listing = '';
+        let scopeLabel = '';
+        try {
+          if (monthMatch) {
+            const monthNum = MONTH_MAP[monthMatch[1]];
+            const yearNum = parseInt(monthMatch[2] || String(new Date().getFullYear()), 10);
+            const monthStr = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+            listing = String(await executeTool('calendar_month', { month: monthStr }, config));
+            scopeLabel = `di ${monthMatch[1]} ${yearNum}`;
+          } else if (isOggi) {
+            listing = String(await executeTool('calendar_today', {}, config));
+            scopeLabel = 'di oggi';
+          } else if (isDomani) {
+            listing = String(await executeTool('calendar_tomorrow', {}, config));
+            scopeLabel = 'di domani';
+          } else if (isWeek) {
+            listing = String(await executeTool('calendar_week', {}, config));
+            scopeLabel = 'di questa settimana';
+          }
+        } catch (e) {
+          return { action: 'calendar_delete_bulk', success: false, message: `Errore nel recupero degli appuntamenti: ${e.message}` };
+        }
+        const events = this._parseEventsFromToolOutput(listing);
+        if (!events || events.length === 0) {
+          return { action: 'calendar_delete_bulk', success: true,
+            message: `Nessun appuntamento ${scopeLabel} da cancellare. Calendario già vuoto in quell'intervallo.` };
+        }
+        // 2. Delete each event with a real tool call. Track failures.
+        let ok = 0, ko = 0;
+        const failed = [];
+        for (const ev of events) {
+          if (!ev.eventId) { ko++; failed.push(ev.summary || '(no title)'); continue; }
+          try {
+            await executeTool('calendar_delete', { eventId: ev.eventId }, config);
+            ok++;
+          } catch (e) {
+            ko++;
+            failed.push(`${ev.summary || ev.eventId} (${e.message?.slice(0, 60) || 'err'})`);
+          }
+        }
+        // 3. Honest, factual summary.
+        const lines = [`Ho cancellato ${ok} appuntament${ok === 1 ? 'o' : 'i'} ${scopeLabel}.`];
+        if (ko > 0) {
+          lines.push(`Non sono riuscito a cancellarne ${ko}: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}`);
+        }
+        if (this._lastDirectAuditChatId) {
+          this._recordAudit(this._lastDirectAuditChatId, {
+            tool: 'calendar_delete_bulk',
+            success: ok > 0,
+            summary: `${ok} cancellati ${scopeLabel}, ${ko} falliti`,
+          });
+        }
+        return { action: 'calendar_delete_bulk', success: ok > 0, message: lines.join('\n') };
+      }
+
       const extracted = this._extractCalendarProposal(userMessage);
       if (!extracted.date && !extracted.title) return null;
 
