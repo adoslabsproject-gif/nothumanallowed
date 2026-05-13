@@ -774,6 +774,43 @@ class TelegramResponder {
     this.log('[Telegram] Responder stopped');
   }
 
+  /**
+   * Send a Telegram message that may exceed the 4096-char API limit.
+   * Splits on paragraph/line boundaries when possible, never on a multi-byte
+   * sequence. Sends in order with a small delay to avoid rate-limit 429.
+   * Returns the array of message IDs sent.
+   */
+  async _sendMessageSafe(chatId, text, extraOpts = {}) {
+    const TG_MAX = 4000; // safety margin from 4096 to account for emoji weight
+    const str = String(text == null ? '' : text);
+    if (str.length <= TG_MAX) {
+      return [await this._telegramCall('sendMessage', { chat_id: chatId, text: str, ...extraOpts })];
+    }
+    // Split intelligently: try paragraph breaks, then lines, then hard slice.
+    const chunks = [];
+    let remaining = str;
+    while (remaining.length > TG_MAX) {
+      let cutAt = remaining.lastIndexOf('\n\n', TG_MAX);
+      if (cutAt < TG_MAX / 2) cutAt = remaining.lastIndexOf('\n', TG_MAX);
+      if (cutAt < TG_MAX / 2) cutAt = remaining.lastIndexOf(' ', TG_MAX);
+      if (cutAt < TG_MAX / 2) cutAt = TG_MAX;
+      chunks.push(remaining.slice(0, cutAt).trim());
+      remaining = remaining.slice(cutAt).trim();
+    }
+    if (remaining) chunks.push(remaining);
+    const ids = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const part = chunks.length > 1 ? `(${i + 1}/${chunks.length})\n${chunks[i]}` : chunks[i];
+      try {
+        ids.push(await this._telegramCall('sendMessage', { chat_id: chatId, text: part, ...extraOpts }));
+      } catch (e) {
+        this.log(`[Telegram] sendMessage chunk ${i + 1}/${chunks.length} failed: ${e.message}`);
+      }
+      await this._sleep(180); // avoid 429 rate limit
+    }
+    return ids;
+  }
+
   async _scheduleUpdateCheck() {
     await this._checkAndNotifyUpdate();
     await this._checkLocalUpdateAndRestart();
@@ -834,14 +871,10 @@ class TelegramResponder {
 
       for (const chatId of chatIds) {
         try {
-          await this._telegramCall('sendMessage', {
-            chat_id: parseInt(chatId, 10),
-            text: msg,
-          });
+          await this._sendMessageSafe(parseInt(chatId, 10), msg);
         } catch {
           // User blocked bot or chat no longer exists — ignore
         }
-        // Small delay to avoid Telegram rate limits
         await this._sleep(300);
       }
     } catch (err) {
@@ -1037,12 +1070,11 @@ class TelegramResponder {
         const prefix = personaMode === 'persona-only' && personaName ? ''
                      : personaName ? `[${personaName}]\n\n`
                      : `[HERALD]\n\n`;
-        await this._telegramCall('sendMessage', { chat_id: chatId, text: prefix + truncated });
+        await this._sendMessageSafe(chatId, prefix + description);
         this.log(`[Telegram] Image vision response to ${fromUser} (${buf.length} bytes, ${description.length} chars)`);
       } catch (err) {
         this.log(`[Telegram] Vision failed: ${err.message}`);
-        await this._telegramCall('sendMessage', { chat_id: chatId,
-          text: `Non riesco ad analizzare l'immagine: ${err.message}` }).catch(() => {});
+        await this._sendMessageSafe(chatId, `Non riesco ad analizzare l'immagine: ${err.message}`).catch(() => {});
       }
       return;
     }
@@ -1055,16 +1087,13 @@ class TelegramResponder {
         await this._telegramCall('sendChatAction', { chat_id: chatId, action: 'typing' });
         rawText = await this._transcribeVoice(fileId);
         if (!rawText.trim()) {
-          await this._telegramCall('sendMessage', { chat_id: chatId, text: 'Non ho capito il vocale. Riprova.' });
+          await this._sendMessageSafe(chatId, 'Non ho capito il vocale. Riprova.');
           return;
         }
         this.log(`[Telegram] Voice transcribed for ${fromUser}: "${rawText.slice(0, 80)}"`);
       } catch (err) {
         this.log(`[Telegram] Voice transcription failed: ${err.message}`);
-        await this._telegramCall('sendMessage', {
-          chat_id: chatId,
-          text: `Non riesco a trascrivere il vocale (${err.message}).\n\nPer abilitare la trascrizione vocale gratuita, dal computer esegui:\nnha config set groqKey TUA_CHIAVE_GROQ\n\nLa chiave si ottiene gratis su https://console.groq.com/keys`,
-        });
+        await this._sendMessageSafe(chatId, `Non riesco a trascrivere il vocale (${err.message}).\n\nPer abilitare la trascrizione vocale gratuita, dal computer esegui:\nnha config set groqKey TUA_CHIAVE_GROQ\n\nLa chiave si ottiene gratis su https://console.groq.com/keys`);
         return;
       }
     }
@@ -1082,10 +1111,7 @@ class TelegramResponder {
 
     // If voice: show transcription so user knows what was understood
     if (isVoice) {
-      await this._telegramCall('sendMessage', {
-        chat_id: chatId,
-        text: `🎤 "${cleanText}"`,
-      }).catch(() => {});
+      await this._sendMessageSafe(chatId, `🎤 "${cleanText}"`).catch(() => {});
     }
 
     this.pendingRequests++;
@@ -1183,7 +1209,7 @@ class TelegramResponder {
             } else {
               reply = `[HERALD]\n\n${directResult.message}`;
             }
-            await this._telegramCall('sendMessage', { chat_id: chatId, text: reply });
+            await this._sendMessageSafe(chatId, reply);
 
             // Update rolling memory + reset pending action (so a follow-up
             // "Si" doesn't try to delete a second time).
@@ -1310,7 +1336,7 @@ class TelegramResponder {
           } else {
             reply = `[HERALD]\n\n${directFresh.message}`;
           }
-          await this._telegramCall('sendMessage', { chat_id: chatId, text: reply });
+          await this._sendMessageSafe(chatId, reply);
           const MAX = 20;
           const prevLog = (lastCtx && Array.isArray(lastCtx.conversationLog)) ? lastCtx.conversationLog : [];
           this._lastContextByChatId[chatId] = {
@@ -1437,19 +1463,13 @@ class TelegramResponder {
         prefixedText = `[${agentLabel}]\n\n${truncated}`;
       }
 
-      await this._telegramCall('sendMessage', {
-        chat_id: chatId,
-        text: prefixedText,
-      });
+      await this._sendMessageSafe(chatId, prefixedText);
 
       this.log(`[Telegram] Responded to ${fromUser} via ${agentLabel}${personaName ? ` (as "${personaName}")` : ''} (${responseText.length} chars)${isCompletedAction(responseText) ? ' [action completed — context reset]' : ''}`);
     } catch (err) {
       this.log(`[Telegram] Agent call failed: ${err.message}`);
       // Send error message to user
-      await this._telegramCall('sendMessage', {
-        chat_id: chatId,
-        text: `Error: ${err.message}`,
-      }).catch(() => {});
+      await this._sendMessageSafe(chatId, `Error: ${err.message}`).catch(() => {});
     } finally {
       this.pendingRequests--;
     }
@@ -2598,6 +2618,63 @@ class TelegramResponder {
     const chatId = this._lastDirectAuditChatId;
     const { executeTool: _executeToolPre } = await import('./tool-executor.mjs');
 
+    // ─── PAGINATION: "mostra i prossimi / vai avanti / i restanti" ─────────
+    // Deterministic next-page fetch from the cached lastCalendarEvents instead
+    // of letting the LLM hallucinate "the remaining events" (Giovanni
+    // Santaniello's bug: NHA inventing fake events when asked for page 2).
+    const isPaginationRequest = /\b(mostra(?:mi)?\s+(?:i\s+)?(?:prossimi|altri|restanti|seguenti)|vai\s+avanti|continua\s+(?:l[ai']\s+)?(?:lista|elenco)|i\s+(?:prossimi|altri|restanti|seguenti)\s+\d*|gli\s+altri|dammi\s+(?:i\s+)?(?:prossimi|restanti|altri)|next\s+page|next\s+\d+|show\s+more|continue\b)/i.test(userMessage);
+    if (isPaginationRequest) {
+      // Pull from list-cache (works across all kinds) — calendar first.
+      try {
+        const cacheFile = path.join(os.homedir(), '.nha', 'list-cache.json');
+        if (fs.existsSync(cacheFile)) {
+          const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+          // Find the most recent calendar list across all chats
+          let allItems = []; let shown = 0; let foundChatKey = null;
+          for (const [k, v] of Object.entries(cache)) {
+            if (Array.isArray(v?.lastList_calendar) && v.lastList_calendar.length > 0) {
+              if (!foundChatKey || (v.lastList_calendar_at || 0) > (cache[foundChatKey]?.lastList_calendar_at || 0)) {
+                foundChatKey = k;
+                allItems = v.lastList_calendar;
+                shown = v.lastList_calendar_shownCount || 0;
+              }
+            }
+          }
+          if (allItems.length > 0 && shown < allItems.length) {
+            // Page size from regex capture or default 8
+            const numMatch = userMessage.match(/\b(\d+)\b/);
+            const pageSize = numMatch ? Math.min(parseInt(numMatch[1], 10), 20) : 8;
+            const nextSlice = allItems.slice(shown, shown + pageSize);
+            const lines = [`📅 Eventi ${shown + 1}-${shown + nextSlice.length} di ${allItems.length}:`];
+            const byDay = new Map();
+            for (const e of nextSlice) {
+              const day = e.date || (e.start || '').slice(0, 10) || 'misc';
+              if (!byDay.has(day)) byDay.set(day, []);
+              byDay.get(day).push(e);
+            }
+            for (const [day, evs] of [...byDay.entries()].sort()) {
+              const d = day !== 'misc' ? new Date(day + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+              if (d) lines.push(`\n${d}:`);
+              for (const e of evs) lines.push(`  ${e.time || '—'} — ${e.summary}`);
+            }
+            const newShown = shown + nextSlice.length;
+            const remaining = allItems.length - newShown;
+            if (remaining > 0) lines.push(`\n... ${remaining} eventi rimanenti. Scrivi "mostra i prossimi" per continuare.`);
+            else lines.push(`\n✓ Fine elenco.`);
+            // Update shownCount in cache
+            cache[foundChatKey].lastList_calendar_shownCount = newShown;
+            fs.writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
+            this.log(`[direct] PAGINATION calendar: shown ${shown}→${newShown} of ${allItems.length}`);
+            return { action: 'calendar_page', success: true, message: lines.join('\n') };
+          }
+          if (allItems.length > 0 && shown >= allItems.length) {
+            return { action: 'calendar_page', success: true, message: '✓ Hai già visto tutti gli eventi. Scrivi "appuntamenti di oggi/settimana/maggio" per una nuova ricerca.' };
+          }
+        }
+      } catch (e) { this.log(`[direct] pagination failed: ${e.message}`); }
+      // Fall through if no cached list
+    }
+
     // ─── ANAPHORIC delete + CONFIRMATION yes ────────────────────────────────
     // If the previous turn ran a LIST/LAST-SHOWN and the user now says
     // "cancellalo / eliminalo / quello / si / conferma / fallo", resolve the
@@ -2875,6 +2952,16 @@ class TelegramResponder {
       const runListAndRemember = async (toolName, args, actionKey) => {
         try {
           const out = await executeTool(toolName, args, config);
+          // Reset pagination state for this kind: a NEW list starts fresh.
+          try {
+            const cacheFile = path.join(os.homedir(), '.nha', 'list-cache.json');
+            if (fs.existsSync(cacheFile)) {
+              const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+              const persistKey = chatId || '__last_list__';
+              if (cache[persistKey]) delete cache[persistKey].lastList_calendar_shownCount;
+              fs.writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
+            }
+          } catch {}
           // Parse from text first (cheap, works when tools include event IDs).
           let events = this._parseEventsFromToolOutput(String(out));
           // Fallback: tools like calendar_month don't print event IDs in their
@@ -2909,6 +2996,37 @@ class TelegramResponder {
           };
           this.log(`[direct] LIST stored: chatId=${persistKey} eventsCount=${events.length} tool=${toolName}`);
           try { saveTelegramContext(this._lastContextByChatId); } catch (e) { this.log(`[direct] persist FAILED: ${e.message}`); }
+
+          // ── PAGINATION CAP (Giovanni's bug, v16.0.23) ──
+          // Telegram limits messages to 4096 chars. If the list has many events,
+          // show first 8 with footer "scrivi 'mostra i prossimi' per continuare"
+          // and persist shownCount in list-cache so pagination is deterministic.
+          const PAGE_SIZE = 8;
+          if (events.length > PAGE_SIZE) {
+            const firstPage = events.slice(0, PAGE_SIZE);
+            const lines = [`📅 ${firstPage.length} eventi (di ${events.length} totali):`];
+            const byDay = new Map();
+            for (const e of firstPage) {
+              const day = e.date || (e.start || '').slice(0, 10) || 'misc';
+              if (!byDay.has(day)) byDay.set(day, []);
+              byDay.get(day).push(e);
+            }
+            for (const [day, evs] of [...byDay.entries()].sort()) {
+              const d = day !== 'misc' ? new Date(day + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+              if (d) lines.push(`\n${d}:`);
+              for (const e of evs) lines.push(`  ${e.time || '—'} — ${e.summary}`);
+            }
+            lines.push(`\n... ${events.length - PAGE_SIZE} eventi rimanenti. Scrivi "mostra i prossimi" per continuare.`);
+            // Mark shownCount in list-cache so the pagination handler picks up from here.
+            try {
+              const cacheFile = path.join(os.homedir(), '.nha', 'list-cache.json');
+              const cache = fs.existsSync(cacheFile) ? JSON.parse(fs.readFileSync(cacheFile, 'utf-8')) : {};
+              cache[persistKey] = cache[persistKey] || {};
+              cache[persistKey].lastList_calendar_shownCount = PAGE_SIZE;
+              fs.writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
+            } catch {}
+            return { action: actionKey, success: true, message: lines.join('\n') };
+          }
           return { action: actionKey, success: true, message: String(out) };
         } catch (e) { return { action: actionKey, success: false, message: `Errore: ${e.message}` }; }
       };
