@@ -321,12 +321,47 @@ function isContinuationMessage(text, lastCtx) {
 function isCompletedAction(text) {
   if (!text) return false;
   const lower = text.toLowerCase();
+  // Specific high-confidence signals
   const DONE_SIGNALS = ['cancellato con successo','eliminato con successo','evento eliminato',
     'evento cancellato','deleted successfully','removed successfully','email inviata','email sent',
     'draft created','bozza creata','aggiornato con successo','updated successfully',
     'task completato','task done','creato con successo','created successfully',
     'spostato con successo','moved successfully'];
-  return DONE_SIGNALS.some(s => lower.includes(s));
+  if (DONE_SIGNALS.some(s => lower.includes(s))) return true;
+  // Broader patterns (v16.0.21 guardrail): "è stato X", "l'ho fatto", "ho cancellato".
+  // These catch HERALD-style narrations like "L'appuntamento è stato spostato al 19 maggio".
+  const BROAD = /\b(è\s+(stat[ao]|stat[ei])\s+(cancellat[ao]i?|eliminat[ao]i?|rimoss[ao]i?|spostat[ao]i?|modificat[ao]i?|aggiornat[ao]i?|creat[ao]i?|inviat[ao]i?|inoltrat[ao]i?|archiviat[ao]i?|completat[ao]i?|rinominat[ao]i?|condivis[ao]i?|segnat[ao]i?))/i;
+  if (BROAD.test(text)) return true;
+  const HO = /\b(ho\s+(cancellato|eliminato|rimosso|spostato|modificato|aggiornato|creato|inviato|inoltrato|archiviato|completato|rinominato|condiviso|segnato|fissato|prenotato|programmato|cambiato|risolto))/i;
+  if (HO.test(text)) return true;
+  const EN = /\b(i\s+(have|just)\s+(deleted|removed|moved|created|updated|sent|forwarded|archived|completed|renamed|shared|marked))/i;
+  if (EN.test(text)) return true;
+  return false;
+}
+
+// Tool whitelist for "actually mutated state". If the agent claims a
+// completed mutation but NONE of these were called, we treat it as fake.
+const _MUTATION_TOOLS = new Set([
+  'calendar_create', 'calendar_update', 'calendar_delete', 'calendar_move',
+  'gmail_send', 'gmail_reply', 'gmail_forward', 'gmail_delete', 'gmail_archive',
+  'gmail_label', 'gmail_mark_read', 'gmail_mark_unread', 'gmail_draft',
+  'task_add', 'task_done', 'task_delete', 'task_edit',
+  'note_add', 'note_delete',
+  'reminder_create', 'reminder_cancel',
+  'contact_create', 'contact_update', 'contact_delete',
+  'drive_upload', 'drive_update', 'drive_delete', 'drive_rename', 'drive_move', 'drive_share',
+  'gtask_complete', 'gtask_update', 'gtask_delete',
+  'slack_send', 'notion_update', 'github_create_issue', 'github_close_issue',
+  'imap_send', 'imap_reply', 'imap_delete',
+]);
+function _toolResultLineIsMutation(line) {
+  if (typeof line !== 'string') return false;
+  const m = line.match(/^\[([\w_]+)\]\s+(.*)$/);
+  if (!m) return false;
+  const [, name, rest] = m;
+  if (!_MUTATION_TOOLS.has(name)) return false;
+  if (/Error:|^Error\b/i.test(rest)) return false; // failed → didn't actually mutate
+  return true;
 }
 
 async function callAgentWithTools(config, agentName, userMessage, languageOverride, preHistory, chatId) {
@@ -354,6 +389,9 @@ async function callAgentWithTools(config, agentName, userMessage, languageOverri
   // preHistory: full conversation history from previous turn (for sticky confirmations)
   const history = preHistory ? [...preHistory] : [];
   let finalText = '';
+  // Track EVERY tool call across ALL rounds. The final post-response
+  // guardrail uses this to detect "claimed action without actual tool call".
+  const _allToolResults = [];
 
   for (let round = 0; round < 5; round++) {
     const parts = history.map(h => (h.role === 'user' ? '[User]' : '[Assistant]') + ' ' + h.content);
@@ -409,7 +447,9 @@ async function callAgentWithTools(config, agentName, userMessage, languageOverri
       try {
         const result = await _exec(action, params, config, chatId);
         const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
-        toolResults.push(`[${action}] ${resultStr}`);
+        const line = `[${action}] ${resultStr}`;
+        toolResults.push(line);
+        _allToolResults.push(line);
       } catch (err) {
         // Detect Google/Microsoft OAuth token expiry — give user a clear fix instruction
         const msg = err.message || '';
@@ -418,7 +458,9 @@ async function callAgentWithTools(config, agentName, userMessage, languageOverri
           authError = action.startsWith('gmail') || action.startsWith('imap') || action.startsWith('calendar') || action.startsWith('contact') || action.startsWith('drive') || action.startsWith('gtask')
             ? 'google' : 'microsoft';
         }
-        toolResults.push(`[${action}] Error: ${err.message}`);
+        const errLine = `[${action}] Error: ${err.message}`;
+        toolResults.push(errLine);
+        _allToolResults.push(errLine);
       }
     }
 
@@ -449,6 +491,24 @@ async function callAgentWithTools(config, agentName, userMessage, languageOverri
       `Tool results:\n${toolResults.join('\n')}\n\n` +
       `Now give the user a short, clear confirmation. Be direct — no preamble, no HERALD format. ` +
       `If an action was completed, say so clearly. REMEMBER: reply ONLY in ${language}.`;
+  }
+
+  // ── POST-RESPONSE ANTI-HALLUCINATION GUARDRAIL (v16.0.21) ─────────────
+  // If the agent claims a completed mutation ("ho cancellato", "è stato
+  // spostato", "I have deleted") BUT no mutation tool was actually called
+  // across any of the 5 rounds — REPLACE the lie with an honest error.
+  // The user sees the truth: "Non sono riuscito a eseguire l'azione".
+  if (finalText) {
+    const claimsAction = isCompletedAction(finalText);
+    if (claimsAction) {
+      const didMutate = _allToolResults.some(_toolResultLineIsMutation);
+      if (!didMutate) {
+        try { console.warn(`[GUARDRAIL] Mutation claim without tool call. Tools used: [${_allToolResults.map(l => l.match(/^\[([\w_]+)\]/)?.[1]).filter(Boolean).join(', ')}]. Replacing fake response: "${finalText.slice(0, 160)}"`); } catch {}
+        finalText = language === 'Italian'
+          ? `⚠️ Attenzione: avevo dichiarato di aver eseguito un'azione, ma in realtà non ho chiamato nessun tool di modifica. NON è stato fatto nulla.\n\nPer favore ripeti la richiesta in modo specifico — es. "sposta l'appuntamento Tagliando macchina al 19 maggio alle 17:30" — così che io possa eseguire il comando esatto.`
+          : `⚠️ Warning: I claimed an action was completed but did not actually call any modification tool. NOTHING was changed.\n\nPlease restate your request precisely — e.g. "move the Car Service appointment to May 19 at 17:30" — so I can run the exact tool call.`;
+      }
+    }
   }
 
   // Defensive language post-check: small models sometimes drop back to English
