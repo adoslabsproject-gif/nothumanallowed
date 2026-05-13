@@ -1486,6 +1486,204 @@ class TelegramResponder {
   // Parse calendar_date / calendar_find tool output. The executor returns
   // a human-readable string with each event on its own line plus the
   // eventId in parentheses. We extract structured records.
+  // ── Generic LIST→REMEMBER + ANAPHORIC RESOLUTION (v16.0.16) ────────────
+  // Same pattern as the calendar fix, applied uniformly to every list-tool:
+  // email, task, contact, drive, note, reminder, gtask, notion.
+  // Why: a single regex parser can never handle every tool's ID format.
+  // The cleanest path is to call the low-level API directly and persist
+  // structured items, then resolve anaphoric references generically.
+  // Open allowlist of kinds — no hardcoded restriction. Any new tool can
+  // call _rememberItems(<any-kind-string>, items) without changing this file.
+  _propForKind(kind) { return `lastList_${kind}`; }
+
+  _rememberItems(kind, items, extra = {}) {
+    if (!kind || !Array.isArray(items)) return;
+    const chatId = this._lastDirectAuditChatId || '__last_list__';
+    const prop = this._propForKind(kind);
+    const prev = this._lastContextByChatId[chatId] || {};
+    this._lastContextByChatId[chatId] = {
+      ...prev,
+      [prop]: items,
+      [`${prop}At`]: Date.now(),
+      lastListKind: kind,
+      lastListAt: Date.now(),
+      ...extra,
+    };
+    this.log(`[direct] ${kind} LIST stored: chatId=${chatId} count=${items.length}`);
+    try { saveTelegramContext(this._lastContextByChatId); } catch {}
+  }
+
+  /**
+   * Resolve an anaphoric reference ("cancellalo", "il primo", "l'ultimo",
+   * "il numero 2") against the most recently listed items of a given kind.
+   * If kind is omitted, falls back to lastListKind (the most recently listed
+   * type — calendar after calendar_today, email after gmail_list, etc).
+   * Cross-key fallback included.
+   */
+  _resolveAnaphoric(kind, userMessage) {
+    const chatId = this._lastDirectAuditChatId;
+    // Use the shared list-cache module as source of truth — it's populated
+    // by executeToolAndRemember from every channel.
+    let items = [];
+    try {
+      const cacheFile = path.join(os.homedir(), '.nha', 'list-cache.json');
+      let cache = {};
+      if (fs.existsSync(cacheFile)) {
+        try { cache = JSON.parse(fs.readFileSync(cacheFile, 'utf-8')); } catch { cache = {}; }
+      }
+      if (!kind) {
+        // Auto-pick the freshest list across any chat.
+        const direct = chatId && cache[chatId];
+        if (direct?.lastListKind) kind = direct.lastListKind;
+        else {
+          let bestKind = null, bestAt = 0;
+          for (const v of Object.values(cache)) {
+            if (v?.lastListKind && (v.lastListAt || 0) > bestAt) { bestKind = v.lastListKind; bestAt = v.lastListAt; }
+          }
+          kind = bestKind;
+        }
+      }
+      if (!kind) return null;
+      const prop = `lastList_${kind}`;
+      items = (chatId && cache[chatId]?.[prop]) || [];
+      if (items.length === 0) {
+        let bestArr = null, bestAt = 0;
+        for (const v of Object.values(cache)) {
+          if (Array.isArray(v?.[prop]) && v[prop].length > 0 && (v[`${prop}_at`] || 0) > bestAt) {
+            bestArr = v[prop]; bestAt = v[`${prop}_at`] || 0;
+          }
+        }
+        if (bestArr) items = bestArr;
+      }
+    } catch {}
+    if (items.length === 0) return null;
+    const low = (userMessage || '').toLowerCase();
+    const ordinalMap = { primo: 0, prima: 0, secondo: 1, seconda: 1, terzo: 2, terza: 2, quarto: 3, quinto: 4, first: 0, second: 1, third: 2 };
+    for (const [word, idx] of Object.entries(ordinalMap)) {
+      if (new RegExp(`\\b${word}\\b`).test(low) && items[idx]) return { item: items[idx], kind };
+    }
+    if (/\b(ultim[oa]|last)\b/.test(low)) return { item: items[items.length - 1], kind };
+    const numMatch = low.match(/\b(?:numero|number|n\.?|#)\s*(\d+)\b/);
+    if (numMatch) {
+      const idx = parseInt(numMatch[1], 10) - 1;
+      if (items[idx]) return { item: items[idx], kind };
+    }
+    if (items.length === 1) return { item: items[0], kind };
+    return null;
+  }
+
+  /**
+   * Detect a generic anaphoric DELETE/COMPLETE/REPLY/OPEN command.
+   * Returns the matched action verb or null.
+   */
+  _detectAnaphoricAction(userMessage) {
+    const t = (userMessage || '').trim();
+    if (!t) return null;
+    const yes = /^\s*(s[ìi]\b|si\s|sì\s|ok\b|okay\b|certo\b|certamente\b|d'?accordo\b|fai|fallo|procedi|esegui|conferm[oa]|yes\b|yep\b|confirm\b|do\s*it|go\s*ahead)/i.test(t);
+    if (yes) return 'confirm';
+    if (/(cancell|elimin|rimuov|delete|remove)\w*\s*[!.?]?$/i.test(t)) return 'delete';
+    if (/(complet|don[ei]|spunt|finit|fatt)\w*\s*[!.?]?$/i.test(t)) return 'complete';
+    if (/(rispond|reply|risp\b)\w*\s*[!.?]?$/i.test(t)) return 'reply';
+    if (/(apri|open|leggi|read|mostra|view)\w*\s*[!.?]?$/i.test(t)) return 'open';
+    return null;
+  }
+
+  /**
+   * Execute an anaphoric verb (delete/complete/reply/open/confirm) against
+   * an item resolved by _resolveAnaphoric. The (verb, kind) pair maps to a
+   * concrete tool call. Unknown combinations return null (fall through to
+   * the LLM). All executions persist to the global audit log.
+   */
+  async _executeAnaphoricVerb(verb, kind, item, userText, config) {
+    const { executeTool } = await import('./tool-executor.mjs');
+    const chatId = this._lastDirectAuditChatId;
+    const auditAndReturn = (toolName, success, message, summary) => {
+      if (chatId) this._recordAudit(chatId, { tool: toolName, success, summary });
+      return { action: toolName, success, message };
+    };
+
+    // confirm = treat as the pending action (default: delete) when there's
+    // a single recently-listed item.
+    const effective = verb === 'confirm' ? 'delete' : verb;
+
+    // ── DELETE family ─────────────────────────────────────────────────────
+    if (effective === 'delete') {
+      if (kind === 'calendar' && item.eventId) {
+        try { await executeTool('calendar_delete', { eventId: item.eventId }, config); return auditAndReturn('calendar_delete', true, `Ho cancellato "${item.summary}".`, item.summary); }
+        catch (e) { return auditAndReturn('calendar_delete', false, `Errore: ${e.message}`, ''); }
+      }
+      if (kind === 'email' && (item.messageId || item.id)) {
+        try { await executeTool('gmail_delete', { messageId: item.messageId || item.id }, config); return auditAndReturn('gmail_delete', true, `Ho eliminato l'email "${item.subject || item.summary}".`, item.subject || ''); }
+        catch (e) { return auditAndReturn('gmail_delete', false, `Errore: ${e.message}`, ''); }
+      }
+      if (kind === 'task' && item.id) {
+        try { await executeTool('task_delete', { id: item.id }, config); return auditAndReturn('task_delete', true, `Ho eliminato il task "${item.description || item.summary}".`, ''); }
+        catch (e) { return auditAndReturn('task_delete', false, `Errore: ${e.message}`, ''); }
+      }
+      if (kind === 'contact' && item.id) {
+        try { await executeTool('contact_delete', { id: item.id }, config); return auditAndReturn('contact_delete', true, `Ho eliminato il contatto "${item.name || item.summary}".`, ''); }
+        catch (e) { return auditAndReturn('contact_delete', false, `Errore: ${e.message}`, ''); }
+      }
+      if (kind === 'drive' && (item.fileId || item.id)) {
+        try { await executeTool('drive_delete', { fileId: item.fileId || item.id }, config); return auditAndReturn('drive_delete', true, `Ho eliminato il file "${item.name || item.summary}".`, ''); }
+        catch (e) { return auditAndReturn('drive_delete', false, `Errore: ${e.message}`, ''); }
+      }
+      if (kind === 'note' && item.id) {
+        try { await executeTool('note_delete', { id: item.id }, config); return auditAndReturn('note_delete', true, `Ho eliminato la nota "${item.title || item.summary}".`, ''); }
+        catch (e) { return auditAndReturn('note_delete', false, `Errore: ${e.message}`, ''); }
+      }
+      if (kind === 'reminder' && item.id) {
+        try { await executeTool('reminder_cancel', { id: item.id }, config); return auditAndReturn('reminder_cancel', true, `Ho cancellato il promemoria "${item.message || item.summary}".`, ''); }
+        catch (e) { return auditAndReturn('reminder_cancel', false, `Errore: ${e.message}`, ''); }
+      }
+      if (kind === 'gtask' && (item.id || item.taskId)) {
+        try { await executeTool('gtask_delete', { id: item.id || item.taskId }, config); return auditAndReturn('gtask_delete', true, `Ho eliminato il task Google "${item.title || item.summary}".`, ''); }
+        catch (e) { return auditAndReturn('gtask_delete', false, `Errore: ${e.message}`, ''); }
+      }
+    }
+
+    // ── COMPLETE family (tasks) ──────────────────────────────────────────
+    if (effective === 'complete') {
+      if (kind === 'task' && item.id) {
+        try { await executeTool('task_done', { id: item.id }, config); return auditAndReturn('task_done', true, `Ho completato il task "${item.description || item.summary}".`, ''); }
+        catch (e) { return auditAndReturn('task_done', false, `Errore: ${e.message}`, ''); }
+      }
+      if (kind === 'gtask' && (item.id || item.taskId)) {
+        try { await executeTool('gtask_complete', { id: item.id || item.taskId }, config); return auditAndReturn('gtask_complete', true, `Ho completato il task Google "${item.title || item.summary}".`, ''); }
+        catch (e) { return auditAndReturn('gtask_complete', false, `Errore: ${e.message}`, ''); }
+      }
+    }
+
+    // ── OPEN/READ family ─────────────────────────────────────────────────
+    if (effective === 'open') {
+      if (kind === 'email' && (item.messageId || item.id)) {
+        try { const out = await executeTool('gmail_read', { messageId: item.messageId || item.id }, config); return { action: 'gmail_read', success: true, message: String(out) }; }
+        catch (e) { return { action: 'gmail_read', success: false, message: `Errore: ${e.message}` }; }
+      }
+      if (kind === 'drive' && (item.fileId || item.id)) {
+        try { const out = await executeTool('drive_read', { fileId: item.fileId || item.id }, config); return { action: 'drive_read', success: true, message: String(out) }; }
+        catch (e) { return { action: 'drive_read', success: false, message: `Errore: ${e.message}` }; }
+      }
+      if (kind === 'note' && item.id) {
+        try { const out = await executeTool('note_read', { id: item.id }, config); return { action: 'note_read', success: true, message: String(out) }; }
+        catch (e) { return { action: 'note_read', success: false, message: `Errore: ${e.message}` }; }
+      }
+    }
+
+    // ── REPLY family (email only) ────────────────────────────────────────
+    if (effective === 'reply' && kind === 'email' && (item.messageId || item.id)) {
+      // We don't know the reply body yet — return a prompt so the LLM can
+      // ask the user. Tag the message so the next turn knows context.
+      return {
+        action: 'gmail_reply_pending', success: true,
+        message: `Sto per rispondere a "${item.subject || item.from}". Scrivi il testo della risposta e procedo.`,
+      };
+    }
+
+    // Unknown verb+kind combination → fall back to the regular handlers.
+    return null;
+  }
+
   /**
    * Map a list-tool invocation to the (timeMin, timeMax) range that listEvents
    * would query. Used as a fallback when the textual tool output doesn't
@@ -2565,6 +2763,26 @@ export async function tryDirectActionAll(text, config, opts = {}) {
   const h = _getDirectHandler();
   if (opts.auditKey) h._lastDirectAuditChatId = opts.auditKey;
   if (opts.log) h.log = opts.log;
+
+  // ── UNIVERSAL ANAPHORIC DISPATCHER (v16.0.16) ──
+  // Intercept anaphoric / yes-confirm commands BEFORE any sub-handler. Resolves
+  // the referent from the most recent list (any kind) and executes the right
+  // tool deterministically. Stops the LLM from running fake-actions.
+  const anaphor = h._detectAnaphoricAction ? h._detectAnaphoricAction(text) : null;
+  if (anaphor) {
+    const resolved = h._resolveAnaphoric ? h._resolveAnaphoric(null, text) : null;
+    if (resolved && resolved.item) {
+      try {
+        const result = await h._executeAnaphoricVerb(anaphor, resolved.kind, resolved.item, text, config);
+        if (result) return result;
+      } catch (e) {
+        h.log && h.log(`[direct] anaphoric universal dispatcher error: ${e.message}`);
+      }
+    } else {
+      h.log && h.log(`[direct] anaphoric verb=${anaphor} but no item to resolve`);
+    }
+  }
+
   return await h._tryDirectFreshCalendarAction(text, config)
       || await h._tryDirectFreshEmailAction(text, config)
       || await h._tryDirectFreshTaskAction(text, config)

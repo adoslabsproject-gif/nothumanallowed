@@ -1386,6 +1386,169 @@ function isPlaceholderEventId(id) {
   return false;
 }
 
+/**
+ * Wrapper around executeTool that ALSO persists structured items for
+ * any list-tool, so the anaphoric resolver in message-responder can later
+ * map "cancellalo / il primo / aprilo" to the correct item ID.
+ * Use this from chat.mjs / message-responder.mjs to get free "memory"
+ * across turns and channels.
+ */
+export async function executeToolAndRemember(action, params, config, chatId) {
+  const result = await executeTool(action, params, config);
+  try { await _maybeRememberList(action, params, result, config, chatId); } catch {}
+  return result;
+}
+
+async function _maybeRememberList(action, params, result, config, chatId) {
+  if (!action) return;
+  const { rememberList } = await import('./list-cache.mjs');
+  // ── CALENDAR list tools — call listEvents directly for structured IDs ──
+  if (['calendar_today', 'calendar_tomorrow', 'calendar_week', 'calendar_month', 'calendar_date', 'calendar_upcoming'].includes(action)) {
+    try {
+      const { listEvents } = await import('./google-calendar.mjs');
+      const now = new Date();
+      let from, to;
+      if (action === 'calendar_today') { from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); to = new Date(from.getTime() + 86400000); }
+      else if (action === 'calendar_tomorrow') { from = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1); to = new Date(from.getTime() + 86400000); }
+      else if (action === 'calendar_week') { from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); to = new Date(from.getTime() + 7 * 86400000); }
+      else if (action === 'calendar_month') {
+        let y = now.getFullYear(), m = now.getMonth();
+        if (params?.month && /^\d{4}-\d{2}$/.test(params.month)) { const [yy, mm] = params.month.split('-'); y = parseInt(yy, 10); m = parseInt(mm, 10) - 1; }
+        from = new Date(y, m, 1); to = new Date(y, m + 1, 1);
+      }
+      else if (action === 'calendar_date' && params?.date) { const [yy, mm, dd] = params.date.split('-').map(n => parseInt(n, 10)); from = new Date(yy, mm - 1, dd); to = new Date(from.getTime() + 86400000); }
+      else if (action === 'calendar_upcoming') { const h = parseInt(params?.hours || '48', 10); from = now; to = new Date(now.getTime() + h * 3600000); }
+      if (from && to) {
+        const evs = await listEvents(config, 'primary', from, to);
+        const items = (evs || []).map(e => ({ eventId: e.id, id: e.id, summary: e.summary || '(senza titolo)', time: (e.start || '').slice(11, 16), date: (e.start || '').slice(0, 10) }));
+        rememberList(chatId, 'calendar', items);
+      }
+    } catch {}
+    return;
+  }
+  // ── EMAIL list tools ──
+  if (['gmail_list', 'gmail_search', 'gmail_unread', 'email_search', 'email_list'].includes(action)) {
+    try {
+      const { listMessages, getMessage } = await import('./google-gmail.mjs');
+      const query = params?.query || (action === 'gmail_unread' ? 'is:unread' : 'in:inbox');
+      const refs = await listMessages(config, query, params?.maxResults || 10);
+      const items = [];
+      for (const ref of refs.slice(0, 10)) {
+        try { const m = await getMessage(config, ref.id); items.push({ messageId: m.id, id: m.id, subject: m.subject, from: m.from, date: m.date }); }
+        catch {}
+      }
+      rememberList(chatId, 'email', items);
+    } catch {}
+    return;
+  }
+  // ── TASK list (internal NHA tasks) ──
+  if (action === 'task_list') {
+    try {
+      const { getTasks } = await import('./tasks.mjs');
+      const items = (getTasks() || []).map(t => ({ id: t.id, description: t.description, priority: t.priority, due: t.due }));
+      rememberList(chatId, 'task', items);
+    } catch {}
+    return;
+  }
+  // ── GOOGLE TASKS list ──
+  if (action === 'gtask_list') {
+    try {
+      const { listGTasks } = await import('./google-tasks.mjs').catch(() => ({}));
+      if (listGTasks) {
+        const tasks = await listGTasks(config, params?.listId);
+        const items = (tasks || []).map(t => ({ id: t.id, taskId: t.id, title: t.title, due: t.due }));
+        rememberList(chatId, 'gtask', items);
+      }
+    } catch {}
+    return;
+  }
+  // ── CONTACT search ──
+  if (action === 'contact_search' || action === 'contact_list') {
+    try {
+      const { searchContacts, listContacts } = await import('./google-contacts.mjs').catch(() => ({}));
+      const fn = action === 'contact_search' ? searchContacts : listContacts;
+      if (fn) {
+        const arr = await fn(config, params?.query || '');
+        const items = (arr || []).map(c => ({ id: c.resourceName || c.id, name: c.name || c.displayName, email: c.email }));
+        rememberList(chatId, 'contact', items);
+      }
+    } catch {}
+    return;
+  }
+  // ── DRIVE list ──
+  if (action === 'drive_list' || action === 'drive_search') {
+    try {
+      const { listDriveFiles } = await import('./google-drive.mjs').catch(() => ({}));
+      if (listDriveFiles) {
+        const files = await listDriveFiles(config, params?.folderId || null, params?.query || '');
+        const items = (files || []).map(f => ({ fileId: f.id, id: f.id, name: f.name, mimeType: f.mimeType }));
+        rememberList(chatId, 'drive', items);
+      }
+    } catch {}
+    return;
+  }
+  // ── NOTE list ──
+  if (action === 'note_list') {
+    try {
+      const { getNotes } = await import('./notes.mjs').catch(() => ({}));
+      if (getNotes) {
+        const notes = getNotes();
+        const items = (notes || []).map(n => ({ id: n.id, title: n.title, body: n.body?.slice(0, 200) }));
+        rememberList(chatId, 'note', items);
+      }
+    } catch {}
+    return;
+  }
+  // ── REMINDER list ──
+  if (action === 'reminder_list') {
+    try {
+      const { listReminders } = await import('./reminders.mjs').catch(() => ({}));
+      if (listReminders) {
+        const arr = listReminders();
+        const items = (arr || []).map(r => ({ id: r.id, message: r.message, when: r.when }));
+        rememberList(chatId, 'reminder', items);
+      }
+    } catch {}
+    return;
+  }
+  // ── NOTION search ──
+  if (action === 'notion_search') {
+    try {
+      // Notion search returns pages — we parse from the textual result as
+      // a best-effort, falling back to whatever ID hints the result contains.
+      const m = String(result).match(/[a-f0-9]{32}|[a-f0-9-]{36}/g);
+      if (m && m.length > 0) {
+        const items = m.slice(0, 10).map(id => ({ id, pageId: id }));
+        rememberList(chatId, 'notion', items);
+      }
+    } catch {}
+    return;
+  }
+  // ── SLACK search ──
+  if (action === 'slack_search') {
+    try {
+      const m = String(result).match(/\b(\d{10}\.\d{6})\b/g);
+      if (m && m.length > 0) {
+        const items = m.slice(0, 10).map(ts => ({ id: ts, ts }));
+        rememberList(chatId, 'slack', items);
+      }
+    } catch {}
+    return;
+  }
+  // ── GITHUB issue/PR list ──
+  if (action === 'github_list_issues' || action === 'github_issues' || action === 'github_prs' || action === 'github_pulls') {
+    try {
+      // Best effort from result text: lines like "#123 Title"
+      const matches = [...String(result).matchAll(/#(\d+)\s+(.+)/g)];
+      if (matches.length > 0) {
+        const items = matches.slice(0, 20).map(m => ({ id: m[1], number: parseInt(m[1], 10), title: m[2].trim() }));
+        rememberList(chatId, 'github', items);
+      }
+    } catch {}
+    return;
+  }
+}
+
 export async function executeTool(action, params, config) {
   switch (action) {
     // ── Gmail ──────────────────────────────────────────────────────────────

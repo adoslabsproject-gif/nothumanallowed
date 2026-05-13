@@ -16,7 +16,7 @@ import {
 } from '../../services/conversations.mjs';
 import { callLLMStream, callLLM, callLLMVision, parseAgentFile } from '../../services/llm.mjs';
 import { buildMemoryContext } from '../../services/memory.mjs';
-import { parseActions, executeTool, buildSystemPrompt, stripOrphanFences } from '../../services/tool-executor.mjs';
+import { parseActions, executeTool, executeToolAndRemember, buildSystemPrompt, stripOrphanFences } from '../../services/tool-executor.mjs';
 import { detectLanguage, tryDirectActionAll } from '../../services/message-responder.mjs';
 
 // Migrate on import (once)
@@ -487,7 +487,11 @@ export function register(router) {
         if (action === 'web_search' && wantsScreenshot) params.screenshot = true;
         sse('tool', { action, status: 'executing' });
         try {
-          const result = await executeTool(action, params, config);
+          // Use the remembering variant so list-tools auto-populate the
+          // anaphoric cache (~/.nha/list-cache.json). Same chatId/auditKey
+          // pattern as direct-action handlers.
+          const auditKey = `chat:${body.conversationId || 'anon'}`;
+          const result = await executeToolAndRemember(action, params, config, auditKey);
 
           // ── Screenshot result handling ───────────────────────────────────
           if (result && typeof result === 'object' && result.__screenshot) {
