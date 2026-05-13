@@ -1486,6 +1486,46 @@ class TelegramResponder {
   // Parse calendar_date / calendar_find tool output. The executor returns
   // a human-readable string with each event on its own line plus the
   // eventId in parentheses. We extract structured records.
+  /**
+   * Map a list-tool invocation to the (timeMin, timeMax) range that listEvents
+   * would query. Used as a fallback when the textual tool output doesn't
+   * include event IDs (calendar_month, calendar_today, etc).
+   */
+  _computeRangeForListTool(toolName, args) {
+    const now = new Date();
+    if (toolName === 'calendar_today') {
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return { from, to: new Date(from.getTime() + 86400000) };
+    }
+    if (toolName === 'calendar_tomorrow') {
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      return { from, to: new Date(from.getTime() + 86400000) };
+    }
+    if (toolName === 'calendar_week') {
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return { from, to: new Date(from.getTime() + 7 * 86400000) };
+    }
+    if (toolName === 'calendar_month') {
+      let y = now.getFullYear(), m = now.getMonth();
+      if (args?.month && /^\d{4}-\d{2}$/.test(args.month)) {
+        const [yy, mm] = args.month.split('-');
+        y = parseInt(yy, 10);
+        m = parseInt(mm, 10) - 1;
+      }
+      return { from: new Date(y, m, 1), to: new Date(y, m + 1, 1) };
+    }
+    if (toolName === 'calendar_date' && args?.date && /^\d{4}-\d{2}-\d{2}$/.test(args.date)) {
+      const [yy, mm, dd] = args.date.split('-').map(n => parseInt(n, 10));
+      const from = new Date(yy, mm - 1, dd);
+      return { from, to: new Date(from.getTime() + 86400000) };
+    }
+    if (toolName === 'calendar_upcoming') {
+      const hours = parseInt(args?.hours || '48', 10);
+      return { from: now, to: new Date(now.getTime() + hours * 3600000) };
+    }
+    return null;
+  }
+
   _parseEventsFromToolOutput(toolResult) {
     const text = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult || '');
     const lines = text.split(/\r?\n/);
@@ -2263,7 +2303,28 @@ class TelegramResponder {
       const runListAndRemember = async (toolName, args, actionKey) => {
         try {
           const out = await executeTool(toolName, args, config);
-          const events = this._parseEventsFromToolOutput(String(out));
+          // Parse from text first (cheap, works when tools include event IDs).
+          let events = this._parseEventsFromToolOutput(String(out));
+          // Fallback: tools like calendar_month don't print event IDs in their
+          // pretty-printed output, so we MUST call listEvents() directly to
+          // get structured objects with real Google Calendar event IDs.
+          // Without this, anaphoric "cancellalo" can never resolve.
+          if (events.length === 0) {
+            try {
+              const { listEvents } = await import('./google-calendar.mjs');
+              const range = this._computeRangeForListTool(toolName, args);
+              if (range) {
+                const evs = await listEvents(config, 'primary', range.from, range.to);
+                events = (evs || []).map(e => ({
+                  eventId: e.id,
+                  summary: e.summary || '(senza titolo)',
+                  time: (e.start || '').slice(11, 16),
+                  date: (e.start || '').slice(0, 10),
+                }));
+                this.log(`[direct] LIST structured fallback: ${events.length} events via listEvents(${range.from.toISOString().slice(0,10)}..${range.to.toISOString().slice(0,10)})`);
+              }
+            } catch (e) { this.log(`[direct] LIST structured fallback failed: ${e.message}`); }
+          }
           // Even without chatId, save to a global fallback bucket so the
           // anaphoric resolution can still find it.
           const persistKey = chatId || '__last_list__';

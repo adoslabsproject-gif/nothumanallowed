@@ -1,6 +1,6 @@
 {
   "name": "nothumanallowed",
-  "version": "16.0.14",
+  "version": "16.0.15",
   "description": "NotHumanAllowed — 38 AI agents, 100+ tools, AWF visual workflow automation with world-class debugger (live step streaming, conditional breakpoints, variable watcher, edit-and-resume, AI explain). Studio, WebCraft full-stack builder, Email, Calendar, Browser, Screen Capture, Canvas, Cron, Alexandria E2E messaging, GitHub, Notion, Slack, voice chat, free AI (Liara), 28 languages. Connector marketplace.",
   "type": "module",
   "bin": {
