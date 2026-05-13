@@ -11,12 +11,51 @@ export function register(router) {
   router.post('/api/google/auth', async (req, res) => {
     try {
       const { buildAuthUrl } = await import('../../services/google-oauth.mjs');
+      // Wipe out any cached refresh_token BEFORE starting a new flow.
+      // Otherwise Google can return a fresh access_token with the OLD scopes
+      // (using the still-valid refresh_token) and the user never gets the
+      // new permissions even after re-authorizing.
+      try {
+        const { deleteTokens } = await import('../../services/token-store.mjs');
+        deleteTokens('google');
+      } catch {}
       const config = loadConfig();
       const host = req.headers['host'] || 'localhost:3847';
       const redirectUri = `http://${host}/api/google/callback`;
       const { url, verifier, state } = buildAuthUrl(config, redirectUri);
       _googleOAuthPending = { verifier, state, redirectUri };
       sendJSON(res, 200, { ok: true, url });
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
+  // GET /api/google/status — diagnostic: what scopes does the current token
+  // actually have? Used by the Settings UI to highlight missing scopes.
+  router.get('/api/google/status', async (_req, res) => {
+    try {
+      const { loadTokens } = await import('../../services/token-store.mjs');
+      const tokens = loadTokens('google');
+      if (!tokens) return sendJSON(res, 200, { authenticated: false });
+      const scopeStr = tokens.scope || '';
+      const scopes = scopeStr.split(/\s+/).filter(Boolean);
+      const required = {
+        'gmail.modify':         scopes.includes('https://www.googleapis.com/auth/gmail.modify'),
+        'gmail.send':           scopes.includes('https://www.googleapis.com/auth/gmail.send'),
+        'calendar.events':      scopes.includes('https://www.googleapis.com/auth/calendar.events'),
+        'drive.readonly':       scopes.includes('https://www.googleapis.com/auth/drive.readonly'),
+        'drive.file':           scopes.includes('https://www.googleapis.com/auth/drive.file'),
+        'contacts':             scopes.includes('https://www.googleapis.com/auth/contacts'),
+        'tasks':                scopes.includes('https://www.googleapis.com/auth/tasks'),
+      };
+      const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k);
+      sendJSON(res, 200, {
+        authenticated: true,
+        email: tokens.email,
+        scopes,
+        scopeCheck: required,
+        missing,
+        canWriteDrive: required['drive.file'],
+        expiresAt: tokens.expires_at,
+      });
     } catch (e) { sendError(res, 500, e.message); }
   });
 
