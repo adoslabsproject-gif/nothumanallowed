@@ -207,6 +207,14 @@ export async function uploadFile(config, name, content, mimeType = 'text/plain',
 
   if (!res.ok) {
     const err = await res.text();
+    // Translate the 403 "insufficient scopes" mess into a clear instruction.
+    if (res.status === 403 && /insufficient/i.test(err)) {
+      throw new Error(
+        'Permessi Google Drive non sufficienti per scrivere file. ' +
+        'Riautorizza con: `nha google auth` (Settings → Google → Authorize). ' +
+        'Da v16.0.8 chiediamo anche lo scope drive.file per creare i file.'
+      );
+    }
     throw new Error(`Drive upload ${res.status}: ${err.slice(0, 200)}`);
   }
 
