@@ -18,6 +18,28 @@ import path from 'path';
 import os from 'os';
 import { VERSION } from '../constants.mjs';
 
+// ── Global audit log helpers (Fix 4 v16.0.12) ──
+// Append-only JSONL at ~/.nha/audit-log.jsonl, shared across every channel
+// (telegram, discord, chat web, AWF agents). Lets the user ask "what have you
+// done today?" from any surface and get a consistent answer.
+const _GLOBAL_AUDIT_FILE = path.join(os.homedir(), '.nha', 'audit-log.jsonl');
+function _appendGlobalAudit(entry) {
+  try {
+    fs.mkdirSync(path.dirname(_GLOBAL_AUDIT_FILE), { recursive: true });
+    fs.appendFileSync(_GLOBAL_AUDIT_FILE, JSON.stringify(entry) + '\n');
+  } catch {}
+}
+function _readGlobalAudit(limitTail = 100) {
+  try {
+    if (!fs.existsSync(_GLOBAL_AUDIT_FILE)) return [];
+    const text = fs.readFileSync(_GLOBAL_AUDIT_FILE, 'utf-8');
+    const lines = text.split('\n').filter(Boolean);
+    return lines.slice(-limitTail)
+      .map(l => { try { return JSON.parse(l); } catch { return null; } })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
 // ── Agent Routing (keyword-based, zero LLM calls) ───────────────────────────
 
 const ROUTING_TABLE = [
@@ -1449,21 +1471,43 @@ class TelegramResponder {
   _recordAudit(chatId, entry) {
     const ctx = this._lastContextByChatId[chatId] || (this._lastContextByChatId[chatId] = {});
     if (!Array.isArray(ctx.auditLog)) ctx.auditLog = [];
-    ctx.auditLog.push({ ts: Date.now(), ...entry });
+    const enriched = { ts: Date.now(), channel: chatId, ...entry };
+    ctx.auditLog.push(enriched);
     if (ctx.auditLog.length > 50) ctx.auditLog = ctx.auditLog.slice(-50);
     this._persistContext();
+    // ── Global audit log (Fix 4 v16.0.12) ──
+    // Append-only JSONL at ~/.nha/audit-log.jsonl shared across every channel
+    // (telegram / discord / chat web / AWF agent). Lets the user ask
+    // "what have you done today?" from any surface and get the same answer.
+    try {
+      _appendGlobalAudit(enriched);
+    } catch {}
   }
 
   _renderAuditForPrompt(chatId, maxEntries = 10) {
+    // Pull from BOTH the per-channel context AND the global log so the model
+    // sees actions made via a different channel too.
     const ctx = this._lastContextByChatId[chatId];
-    if (!ctx || !Array.isArray(ctx.auditLog) || ctx.auditLog.length === 0) return '';
-    const recent = ctx.auditLog.slice(-maxEntries);
+    const local = ctx?.auditLog || [];
+    let globalEntries = [];
+    try { globalEntries = _readGlobalAudit(100); } catch {}
+    // Merge + de-dupe by (ts, tool, summary), keep most recent.
+    const seen = new Set();
+    const merged = [...local, ...globalEntries].sort((a, b) => a.ts - b.ts).filter(e => {
+      const k = `${e.ts}|${e.tool}|${e.summary || ''}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (merged.length === 0) return '';
+    const recent = merged.slice(-maxEntries);
     const lines = recent.map(e => {
       const time = new Date(e.ts).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
       const status = e.success === false ? '✗ FALLITA' : '✓ OK';
-      return `- ${time} · ${e.tool} · ${status} · ${e.summary || ''}`;
+      const chan = e.channel && e.channel !== chatId ? ` [via ${String(e.channel).slice(0, 20)}]` : '';
+      return `- ${time} · ${e.tool} · ${status} · ${e.summary || ''}${chan}`;
     });
-    return `\n\n[AZIONI RECENTI ESEGUITE IN QUESTA CONVERSAZIONE — fonte di verità sui fatti già accaduti]\n${lines.join('\n')}\n[FINE AZIONI RECENTI]\n`;
+    return `\n\n[AZIONI RECENTI ESEGUITE — fonte di verità sui fatti già accaduti su QUALSIASI canale (Chat, Telegram, Discord, AWF)]\n${lines.join('\n')}\n[FINE AZIONI RECENTI]\n`;
   }
 
   _formatDateIT(isoDate) {

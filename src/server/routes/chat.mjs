@@ -219,32 +219,75 @@ export function register(router) {
       enrichedPrompt += `\n\nIMPORTANT: Output language is ${userLang}. Do NOT switch languages mid-response.`;
     }
 
-    // Rolling context window
+    // ── Conversation history → structured messages[] (Fix 1, v16.0.12) ──
+    // ChatGPT/Claude pass full history as messages[]. We do the same: each
+    // turn keeps its own {role, content} so the model sees a real
+    // conversation, not a concatenated string. The rolling SUMMARY of older
+    // turns (Fix 2) is injected as a context prefix in the system prompt.
     const rawHistory = (body.history || []).map(h => ({
-      role: h.role,
+      role: h.role === 'assistant' ? 'assistant' : 'user',
       content: (h.content || '').replace(/!\[Screenshot\]\(data:image\/[^)]+\)/g, '[Screenshot taken]'),
-    }));
-    const RECENT = 6;
-    const parts = [];
+    })).filter(m => m.content);
+
+    // ── Rolling summary (Fix 2) ──
+    // After a threshold of turns we generate (or reuse) a compact summary of
+    // everything OLDER than the recent window, persisted in the conversation
+    // object. The recent window stays as raw messages[]. This is the
+    // "memory like ChatGPT/Claude" pattern.
+    const RECENT = 12;
+    let conversationSummary = '';
+    let recentHistory = rawHistory;
     if (rawHistory.length > RECENT) {
+      recentHistory = rawHistory.slice(-RECENT);
       const older = rawHistory.slice(0, -RECENT);
-      const lines = [];
-      for (let i = 0; i < older.length; i += 2) {
-        const u = older[i]?.content?.slice(0, 150)?.replace(/\n/g, ' ') || '';
-        const a = older[i+1]?.content?.slice(0, 200)?.replace(/\n/g, ' ') || '';
-        if (u) lines.push(`- User: "${u.trim()}${u.length >= 150 ? '...' : ''}" → ${a.trim()}${a.length >= 200 ? '...' : ''}`);
+      // Try to reuse a cached summary from the conversation, regenerate if
+      // the older slice grew beyond what the cached summary covered.
+      let cachedConv = null;
+      if (body.conversationId) {
+        try { cachedConv = loadConversation(body.conversationId); } catch {}
       }
-      if (lines.length) parts.push(`[CONVERSATION CONTEXT]\n${lines.join('\n')}\n[END CONTEXT]`);
+      const cached = cachedConv?.rollingSummary;
+      if (cached && cached.coveredTurns === older.length) {
+        conversationSummary = cached.text;
+      } else {
+        // Generate a fresh summary via the same LLM. Compact, factual.
+        const summaryInput = older.map(m =>
+          `${m.role === 'user' ? 'Utente' : 'Assistente'}: ${m.content.slice(0, 600)}`
+        ).join('\n\n');
+        try {
+          conversationSummary = await callLLM(
+            config,
+            'Sei un sintetizzatore di conversazione. Riassumi in italiano in 200-400 token TUTTI i fatti, decisioni, preferenze utente, dati specifici (date, ID, nomi, numeri) emersi nella conversazione. Niente abbellimenti, solo informazione utile per ricostruire il contesto.',
+            summaryInput,
+            { max_tokens: 600, temperature: 0.2 },
+          );
+          if (cachedConv) {
+            cachedConv.rollingSummary = { text: conversationSummary, coveredTurns: older.length, at: new Date().toISOString() };
+            try { saveConversation(cachedConv); } catch {}
+          }
+        } catch { /* if summary fails, just skip it — recent history is enough */ }
+      }
     }
-    for (const t of rawHistory.slice(-RECENT)) {
-      parts.push(`${t.role === 'user' ? '[User]' : '[Assistant]'} ${t.content.slice(0, 2000)}`);
+
+    // Inject summary into the system prompt — it's the cheapest way for the
+    // model to see it AND it benefits from prompt caching on Anthropic.
+    if (conversationSummary) {
+      effectiveSystemPrompt = `${effectiveSystemPrompt || ''}\n\n[CONTESTO CONVERSAZIONE PRECEDENTE]\n${conversationSummary}\n[FINE CONTESTO]`;
     }
-    // Prefix the last user turn with an explicit per-message language tag.
-    // System prompts can lose effectiveness over long conversations; the
-    // per-turn tag is the closest hint to the model's first generated token
-    // and is the most reliable trigger for the right language.
-    parts.push(`[User · respond in ${userLang}] ${effectiveMsg}`);
-    const userMessage = parts.join('\n\n');
+
+    // ── User memory (Fix 3) — persistent across conversations + channels ──
+    // Loaded from ~/.nha/user-memory.md, prepended to the system prompt.
+    try {
+      const { buildMemoryPrefix } = await import('../../services/user-memory.mjs');
+      const memPrefix = buildMemoryPrefix();
+      if (memPrefix) effectiveSystemPrompt = `${memPrefix}${effectiveSystemPrompt || ''}`;
+    } catch {}
+
+    // The final user message — keep the per-turn language tag close to the
+    // model's first generated token.
+    const userMessage = `[User · respond in ${userLang}] ${effectiveMsg}`;
+    // History passed to the provider as proper messages[] (not concatenated).
+    const historyForLLM = recentHistory;
 
     // Attachments — handle non-streaming
     if (body.imageBase64 || body.pdfBase64 || body.fileContent) {
@@ -298,7 +341,7 @@ export function register(router) {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
         sse('token', { content: chunk });
-      });
+      }, { history: historyForLLM });
 
       const { textParts, actions } = parseActions(fullResponse);
       const toolResults = [];

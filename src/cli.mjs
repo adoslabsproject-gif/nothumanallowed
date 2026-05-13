@@ -18,6 +18,7 @@ import { cmdUI } from './commands/ui.mjs';
 import { cmdGoogle } from './commands/google-auth.mjs';
 import { cmdMicrosoft } from './commands/microsoft-auth.mjs';
 import { cmdScan } from './commands/scan.mjs';
+import { runMemory } from './commands/memory.mjs';
 import { cmdVoice } from './commands/voice.mjs';
 import { cmdPlugin, findPluginForCommand } from './commands/plugin.mjs';
 import { banner, info, ok, warn, fail, C, G, Y, D, W, BOLD, NC, M, B, R } from './ui.mjs';
@@ -85,6 +86,11 @@ export async function main(argv) {
     case 'tasks':
     case 'task':
       return cmdTasks(args);
+
+    case 'memory':
+    case 'memorize':
+    case 'remember':
+      return runMemory(args);
 
     case 'ops':
       return cmdOps(args);

@@ -399,11 +399,18 @@ export async function callAnthropic(apiKey, model, systemPrompt, userMessage, st
   const systemBlocks = systemPrompt
     ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
     : [];
+  // Build conversation messages: optional history[] then the current turn.
+  // history must alternate role: user/assistant/user/... ending with assistant
+  // (or be empty). The current userMessage is appended as the final user turn.
+  const historyMsgs = Array.isArray(opts.history)
+    ? opts.history.filter(m => m && m.role && m.content).map(m => ({ role: m.role, content: String(m.content) }))
+    : [];
+  const messages = [...historyMsgs, { role: 'user', content: userMessage }];
   const body = {
     model: model || 'claude-sonnet-4-20250514',
     max_tokens: opts.max_tokens || 8192,
     system: systemBlocks,
-    messages: [{ role: 'user', content: userMessage }],
+    messages,
     stream,
   };
   if (opts.temperature !== undefined) body.temperature = opts.temperature;
@@ -427,11 +434,15 @@ export async function callAnthropic(apiKey, model, systemPrompt, userMessage, st
 }
 
 export async function callOpenAI(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
+  const historyMsgs = Array.isArray(opts.history)
+    ? opts.history.filter(m => m && m.role && m.content).map(m => ({ role: m.role, content: String(m.content) }))
+    : [];
   const body = {
     model: model || 'gpt-4o',
     max_tokens: opts.max_tokens || 8192,
     messages: [
       { role: 'system', content: systemPrompt },
+      ...historyMsgs,
       { role: 'user', content: userMessage },
     ],
     stream,
@@ -459,9 +470,16 @@ export async function callGemini(apiKey, model, systemPrompt, userMessage, _stre
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
   const generationConfig = { maxOutputTokens: opts.max_tokens || 8192 };
   if (opts.temperature !== undefined) generationConfig.temperature = opts.temperature;
+  // Gemini uses 'contents' with role 'user'/'model'. Convert history.
+  const historyContents = Array.isArray(opts.history)
+    ? opts.history.filter(m => m && m.role && m.content).map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: String(m.content) }],
+      }))
+    : [];
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ parts: [{ text: userMessage }] }],
+    contents: [...historyContents, { role: 'user', parts: [{ text: userMessage }] }],
     generationConfig,
   };
   const res = await fetch(url, {
@@ -664,11 +682,18 @@ export async function callNHA(apiKey, model, systemPrompt, userMessage, stream =
     .replace(/\|\|\(/g, '||(')                  // LDAP (cosmetic, non-breaking)
     .replace(/\)\|\|/g, ')||');                 // LDAP
 
+  const historyMsgs = Array.isArray(opts.history)
+    ? opts.history.filter(m => m && m.role && m.content).map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: sanitizeForSentinel(String(m.content)),
+      }))
+    : [];
   const body = {
     model: model || '/opt/models/qwen3-32b',
     max_tokens: opts.max_tokens || (thinkingEnabled ? 16384 : 8192),
     messages: [
       { role: 'system', content: sanitizeForSentinel(systemPrompt) },
+      ...historyMsgs,
       { role: 'user', content: sanitizeForSentinel(userMessage) },
     ],
     stream,
@@ -1212,11 +1237,18 @@ export async function callLLMStream(config, systemPrompt, userMessage, onToken, 
     // 3. Otherwise default to 8192 (full context for specialist agents)
     const effectiveMaxTokens = opts.max_tokens || (thinkingEnabled ? 8192 : 8192);
 
+    const nhaHistory = Array.isArray(opts.history)
+      ? opts.history.filter(m => m && m.role && m.content).map(m => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: sanitize(String(m.content)),
+        }))
+      : [];
     const nhaBody = {
       model: model || '/opt/models/qwen3-32b',
       max_tokens: effectiveMaxTokens,
       messages: [
         { role: 'system', content: sanitize(systemPrompt) },
+        ...nhaHistory,
         { role: 'user', content: sanitize(userMessage) },
       ],
       stream: false,
