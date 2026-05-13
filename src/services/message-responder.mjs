@@ -1908,6 +1908,52 @@ class TelegramResponder {
   async _tryDirectFreshCalendarAction(userMessage, config) {
     if (!userMessage || typeof userMessage !== 'string') return null;
     const lower = userMessage.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const chatId = this._lastDirectAuditChatId;
+    const { executeTool: _executeToolPre } = await import('./tool-executor.mjs');
+
+    // ─── ANAPHORIC delete + CONFIRMATION yes ────────────────────────────────
+    // If the previous turn ran a LIST/LAST-SHOWN and the user now says
+    // "cancellalo / eliminalo / quello / si / conferma / fallo", resolve the
+    // referent from this._lastContextByChatId[chatId].lastCalendarEvents.
+    const isAnaphoric = /\b(cancell|elimin|rimuov)[aeiloy]+(lo|la|li|le|gli)?\b/.test(lower)
+      && !this._extractCalendarProposal(userMessage).date
+      && !this._extractCalendarProposal(userMessage).title;
+    const isYesConfirm = /^\s*(s[ìi]\b|si\s|sì\s|ok\b|okay\b|certo\b|certamente\b|d'?accordo\b|fai|fallo|procedi|esegui|conferm[oa]|yes\b|yep\b|confirm\b|do\s*it|go\s*ahead)/i.test(userMessage.trim());
+    if (chatId && (isAnaphoric || isYesConfirm)) {
+      const ctx = this._lastContextByChatId[chatId] || {};
+      const pendingEvents = ctx.lastCalendarEvents || ctx.pendingDeleteEvents || [];
+      // Strict: only auto-execute if the previous turn LIST/proposal had a
+      // single deletable event, or if pendingDelete is explicitly set.
+      const eligible = ctx.pendingDeleteEvents && ctx.pendingDeleteEvents.length > 0
+        ? ctx.pendingDeleteEvents
+        : (pendingEvents.length === 1 ? pendingEvents : null);
+      if (eligible && eligible.length > 0) {
+        let ok = 0, ko = 0;
+        const failed = [];
+        for (const ev of eligible) {
+          if (!ev.eventId) { ko++; failed.push(ev.summary || '(no id)'); continue; }
+          try {
+            await _executeToolPre('calendar_delete', { eventId: ev.eventId }, config);
+            ok++;
+          } catch (e) {
+            ko++;
+            failed.push(`${ev.summary || ev.eventId} (${e.message?.slice(0, 60) || 'err'})`);
+          }
+        }
+        // Clear the pending state so we don't double-delete on next yes.
+        delete this._lastContextByChatId[chatId].pendingDeleteEvents;
+        delete this._lastContextByChatId[chatId].lastCalendarEvents;
+        try { (await import('./telegram-context.mjs')).saveTelegramContext(this._lastContextByChatId); } catch {}
+
+        const subject = eligible.length === 1 ? `"${eligible[0].summary}"` : `${eligible.length} appuntamenti`;
+        const lines = [`Ho cancellato ${subject}.`];
+        if (ko > 0) lines.push(`Non sono riuscito a cancellarne ${ko}: ${failed.slice(0, 3).join(', ')}`);
+        this._recordAudit(chatId, { tool: 'calendar_delete', success: ok > 0, summary: `cancellati ${ok}` });
+        return { action: 'calendar_delete', success: ok > 0, message: lines.join('\n') };
+      }
+      // No eligible referent — fall through; the LLM will ask for clarification.
+    }
+
 
     const MONTHS_IT = { gennaio:1, febbraio:2, marzo:3, aprile:4, maggio:5, giugno:6, luglio:7, agosto:8, settembre:9, ottobre:10, novembre:11, dicembre:12 };
     const MONTHS_EN = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12, jan:1, feb:2, mar:3, apr:4, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
@@ -2090,54 +2136,44 @@ class TelegramResponder {
 
     // ─── LIST intents ──────────────────────────────────────────────────────
     if (isList && !isDelete && !isVerify && !isCreate && !isMove) {
-      // "appuntamenti di oggi"
-      if (/\b(oggi|today)\b/.test(lower)) {
+      // Helper that runs the tool, parses the events and remembers them for
+      // anaphoric resolution in the NEXT turn ("cancellalo", "spostali tutti").
+      const runListAndRemember = async (toolName, args, actionKey) => {
         try {
-          const out = await executeTool('calendar_today', {}, config);
-          return { action: 'calendar_today', success: true, message: String(out) };
-        } catch (e) { return { action: 'calendar_today', success: false, message: `Errore: ${e.message}` }; }
-      }
-      // "appuntamenti di domani"
-      if (/\b(domani|tomorrow)\b/.test(lower)) {
-        try {
-          const out = await executeTool('calendar_tomorrow', {}, config);
-          return { action: 'calendar_tomorrow', success: true, message: String(out) };
-        } catch (e) { return { action: 'calendar_tomorrow', success: false, message: `Errore: ${e.message}` }; }
-      }
-      // "appuntamenti della settimana"
-      if (/\b(settimana|week|questa\s+settimana|this\s+week)\b/.test(lower)) {
-        try {
-          const out = await executeTool('calendar_week', {}, config);
-          return { action: 'calendar_week', success: true, message: String(out) };
-        } catch (e) { return { action: 'calendar_week', success: false, message: `Errore: ${e.message}` }; }
-      }
-      // "appuntamenti di maggio" — month name + optional year
+          const out = await executeTool(toolName, args, config);
+          const events = this._parseEventsFromToolOutput(String(out));
+          if (chatId) {
+            const prev = this._lastContextByChatId[chatId] || {};
+            this._lastContextByChatId[chatId] = {
+              ...prev,
+              lastCalendarEvents: events,
+              lastCalendarListAt: Date.now(),
+              lastCalendarSource: { tool: toolName, args },
+            };
+            try { (await import('./telegram-context.mjs')).saveTelegramContext(this._lastContextByChatId); } catch {}
+          }
+          return { action: actionKey, success: true, message: String(out) };
+        } catch (e) { return { action: actionKey, success: false, message: `Errore: ${e.message}` }; }
+      };
+
+      if (/\b(oggi|today)\b/.test(lower))
+        return await runListAndRemember('calendar_today', {}, 'calendar_today');
+      if (/\b(domani|tomorrow)\b/.test(lower))
+        return await runListAndRemember('calendar_tomorrow', {}, 'calendar_tomorrow');
+      if (/\b(settimana|week|questa\s+settimana|this\s+week)\b/.test(lower))
+        return await runListAndRemember('calendar_week', {}, 'calendar_week');
       const monthMatch = lower.match(new RegExp(`\\b(${Object.keys(MONTH_MAP).join('|')})(?:\\s+(20\\d{2}))?\\b`));
       if (monthMatch) {
         const monthNum = MONTH_MAP[monthMatch[1]];
         const yearNum = parseInt(monthMatch[2] || String(new Date().getFullYear()), 10);
-        // calendar_month accepts a month string like "2026-05"
         const monthStr = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
-        try {
-          const out = await executeTool('calendar_month', { month: monthStr }, config);
-          return { action: 'calendar_month', success: true, message: String(out) };
-        } catch (e) { return { action: 'calendar_month', success: false, message: `Errore: ${e.message}` }; }
+        return await runListAndRemember('calendar_month', { month: monthStr }, 'calendar_month');
       }
-      // "appuntamenti del 15 maggio" — specific date
       const dateExtracted = this._extractCalendarProposal(userMessage);
-      if (dateExtracted.date) {
-        try {
-          const out = await executeTool('calendar_date', { date: dateExtracted.date }, config);
-          return { action: 'calendar_date', success: true, message: String(out) };
-        } catch (e) { return { action: 'calendar_date', success: false, message: `Errore: ${e.message}` }; }
-      }
-      // Generic "appuntamenti prossimi" → upcoming 48h
-      if (/\b(prossim|next|upcoming|in\s+arrivo)/.test(lower)) {
-        try {
-          const out = await executeTool('calendar_upcoming', { hours: 48 }, config);
-          return { action: 'calendar_upcoming', success: true, message: String(out) };
-        } catch (e) { return { action: 'calendar_upcoming', success: false, message: `Errore: ${e.message}` }; }
-      }
+      if (dateExtracted.date)
+        return await runListAndRemember('calendar_date', { date: dateExtracted.date }, 'calendar_date');
+      if (/\b(prossim|next|upcoming|in\s+arrivo)/.test(lower))
+        return await runListAndRemember('calendar_upcoming', { hours: 48 }, 'calendar_upcoming');
       // Fall through — let the LLM handle ambiguous list requests.
     }
 
