@@ -1160,19 +1160,42 @@ class TelegramResponder {
         // appointments of May". By running the calendar tool server-side, the
         // user always sees REAL data — never fabricated.
         this._lastDirectAuditChatId = chatId;
+
+        // ── UNIVERSAL ANAPHORIC PRE-STEP (v16.0.17) ──
+        // Same logic as tryDirectActionAll on the chat web: intercept
+        // anaphoric commands ("cancellalo", "il primo", "si") BEFORE the
+        // per-domain handlers, since the calendar regex doesn't catch
+        // pronouns and the LLM otherwise hallucinates.
+        let directFresh = null;
+        try {
+          const anaphor = this._detectAnaphoricAction(cleanText);
+          if (anaphor) {
+            const resolved = this._resolveAnaphoric(null, cleanText);
+            if (resolved?.item) {
+              directFresh = await this._executeAnaphoricVerb(anaphor, resolved.kind, resolved.item, cleanText, this.config);
+            } else {
+              this.log(`[Telegram] anaphoric verb=${anaphor} but no item to resolve`);
+            }
+          }
+        } catch (e) {
+          this.log(`[Telegram] anaphoric dispatcher error: ${e.message}`);
+        }
+
         // Run the per-domain direct-action dispatcher. First match wins; falls
         // through to LLM if no handler claims the message.
         // Fast-path specialised handlers (regex-driven, lower latency for the
         // common cases), then the universal dispatcher that covers ALL 50+
         // mutation tools via a single LLM-NLU+deterministic-execute pass.
-        const directFresh =
-          await this._tryDirectFreshCalendarAction(cleanText, this.config) ||
-          await this._tryDirectFreshEmailAction(cleanText, this.config) ||
-          await this._tryDirectFreshTaskAction(cleanText, this.config) ||
-          await this._tryDirectFreshNoteAction(cleanText, this.config) ||
-          await this._tryDirectFreshReminderAction(cleanText, this.config) ||
-          await this._tryDirectFreshSlackAction(cleanText, this.config) ||
-          await this._tryDirectFreshUniversalAction(cleanText, this.config);
+        if (!directFresh) {
+          directFresh =
+            await this._tryDirectFreshCalendarAction(cleanText, this.config) ||
+            await this._tryDirectFreshEmailAction(cleanText, this.config) ||
+            await this._tryDirectFreshTaskAction(cleanText, this.config) ||
+            await this._tryDirectFreshNoteAction(cleanText, this.config) ||
+            await this._tryDirectFreshReminderAction(cleanText, this.config) ||
+            await this._tryDirectFreshSlackAction(cleanText, this.config) ||
+            await this._tryDirectFreshUniversalAction(cleanText, this.config);
+        }
         if (directFresh) {
           this.log(`[Telegram] ${fromUser}: direct-fresh ${directFresh.action} → ${directFresh.success ? 'OK' : 'FAIL'}`);
           const personaName = this.config.responder?.telegram?.botName || this.config.responder?.botName || '';
@@ -1700,7 +1723,14 @@ class TelegramResponder {
       return { from, to: new Date(from.getTime() + 86400000) };
     }
     if (toolName === 'calendar_week') {
-      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Respect optional startDate (e.g. for "settimana prossima").
+      let from;
+      if (args?.startDate && /^\d{4}-\d{2}-\d{2}$/.test(args.startDate)) {
+        const [yy, mm, dd] = args.startDate.split('-').map(n => parseInt(n, 10));
+        from = new Date(yy, mm - 1, dd);
+      } else {
+        from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      }
       return { from, to: new Date(from.getTime() + 7 * 86400000) };
     }
     if (toolName === 'calendar_month') {
@@ -2543,6 +2573,26 @@ class TelegramResponder {
         return await runListAndRemember('calendar_today', {}, 'calendar_today');
       if (/\b(domani|tomorrow)\b/.test(lower))
         return await runListAndRemember('calendar_tomorrow', {}, 'calendar_tomorrow');
+      // "settimana prossima / next week / settimana che viene" → calendar_week
+      // starting next Monday. Without this offset, calendar_week always shows
+      // the CURRENT week, which is wrong for "settimana prossima" and lets
+      // the LLM hallucinate a fake list of upcoming events.
+      if (/\b(settimana\s+(prossima|che\s+viene|seguente)|next\s+week|prossima\s+settimana)\b/.test(lower)) {
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0=sun..6=sat
+        const daysUntilMonday = ((1 - dayOfWeek + 7) % 7) || 7;
+        const nextMonday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + daysUntilMonday);
+        const startDate = nextMonday.toISOString().slice(0, 10);
+        return await runListAndRemember('calendar_week', { startDate }, 'calendar_week_next');
+      }
+      if (/\b(settimana\s+scorsa|last\s+week|scorsa\s+settimana)\b/.test(lower)) {
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        const daysToLastMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1) + 7;
+        const lastMonday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysToLastMonday);
+        const startDate = lastMonday.toISOString().slice(0, 10);
+        return await runListAndRemember('calendar_week', { startDate }, 'calendar_week_last');
+      }
       if (/\b(settimana|week|questa\s+settimana|this\s+week)\b/.test(lower))
         return await runListAndRemember('calendar_week', {}, 'calendar_week');
       const monthMatch = lower.match(new RegExp(`\\b(${Object.keys(MONTH_MAP).join('|')})(?:\\s+(20\\d{2}))?\\b`));
