@@ -2018,11 +2018,45 @@ export async function executeTool(action, params, config) {
 
     case 'calendar_move': {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await updateEvent(config, 'primary', params.eventId, {
-        start: { dateTime: new Date(params.newStart).toISOString(), timeZone: tz },
-        end: { dateTime: new Date(params.newEnd).toISOString(), timeZone: tz },
+      // ── Resolve eventId from optional query/oldDate (v16.0.22) ──
+      // Agent models often pass {query: 'BMW', newStart} without an eventId.
+      // Instead of failing, resolve it here via listEvents so the move
+      // actually happens. Returns honest error if multiple/no matches.
+      let eventId = params.eventId;
+      if (!eventId && (params.query || params.title || params.oldDate)) {
+        const range = (() => {
+          if (params.oldDate && /^\d{4}-\d{2}-\d{2}$/.test(params.oldDate)) {
+            const [yy, mm, dd] = params.oldDate.split('-').map(n => parseInt(n, 10));
+            const from = new Date(yy, mm - 1, dd);
+            return { from, to: new Date(from.getTime() + 86400000) };
+          }
+          const from = new Date();
+          return { from, to: new Date(from.getTime() + 90 * 86400000) };
+        })();
+        const candidates = await listEvents(config, 'primary', range.from, range.to);
+        const q = String(params.query || params.title || '').toLowerCase();
+        const matching = q
+          ? candidates.filter(e => String(e.summary || '').toLowerCase().includes(q))
+          : candidates;
+        if (matching.length === 0) {
+          return `Error: no event found matching "${q || params.oldDate}" — calendar_move did NOT execute.`;
+        }
+        if (matching.length > 1) {
+          const list = matching.slice(0, 5).map((e, i) =>
+            `${i + 1}. ${(e.start || '').slice(0, 10)} ${e.summary}`).join('\n');
+          return `Error: multiple events match "${q}" — be more specific. Candidates:\n${list}`;
+        }
+        eventId = matching[0].id;
+      }
+      if (!eventId) return 'Error: eventId or query/title required.';
+      if (!params.newStart) return 'Error: newStart required.';
+      const newStartISO = new Date(params.newStart).toISOString();
+      const newEndISO = new Date(params.newEnd || (new Date(params.newStart).getTime() + 3600000)).toISOString();
+      await updateEvent(config, 'primary', eventId, {
+        start: { dateTime: newStartISO, timeZone: tz },
+        end:   { dateTime: newEndISO,   timeZone: tz },
       });
-      return `Event rescheduled to ${formatTime(params.newStart)} - ${formatTime(params.newEnd)}.`;
+      return `Event rescheduled to ${formatTime(newStartISO)} - ${formatTime(newEndISO)}.`;
     }
 
     case 'calendar_week': {

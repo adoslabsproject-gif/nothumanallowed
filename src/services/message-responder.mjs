@@ -752,7 +752,9 @@ class TelegramResponder {
   async start() {
     if (!this.enabled) return;
     this.running = true;
-    this.log('[Telegram] Responder started — polling for messages');
+    // Explicit version log at boot so the user can verify what's running.
+    // Critical when chasing "bot still mentes" — answers "are you on v16.0.21?".
+    this.log(`[Telegram] Responder started — VERSION ${VERSION} — polling for messages`);
     this._pollLoop();
     // Check for npm updates after 60s, then every 24h
     this._updateCheckTimer = setTimeout(() => this._scheduleUpdateCheck(), 60 * 1000);
@@ -774,8 +776,41 @@ class TelegramResponder {
 
   async _scheduleUpdateCheck() {
     await this._checkAndNotifyUpdate();
-    // Then every 24h
+    await this._checkLocalUpdateAndRestart();
+    // Then every 24h for the npm registry check + every 5 min for local install check
     this._updateCheckTimer = setInterval(() => this._checkAndNotifyUpdate(), 24 * 60 * 60 * 1000);
+    setInterval(() => this._checkLocalUpdateAndRestart(), 5 * 60 * 1000);
+  }
+
+  /**
+   * Detect that a NEW version of nha-cli has been installed on disk while
+   * this process is still running the OLD code in memory. When detected,
+   * exit cleanly so PM2 / launchd / the dispatcher respawns us on the
+   * latest code. Without this, the user runs `npm i -g nothumanallowed@latest`
+   * but the Telegram bot keeps mentes-ing with the old logic forever.
+   */
+  async _checkLocalUpdateAndRestart() {
+    try {
+      const fileURL = await import('url');
+      const here = fileURL.fileURLToPath(import.meta.url);
+      // ../../package.json relative to this file (services/message-responder.mjs)
+      const pkgPath = path.join(path.dirname(here), '..', '..', 'package.json');
+      if (!fs.existsSync(pkgPath)) return;
+      const onDisk = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version;
+      if (!onDisk || onDisk === VERSION) return;
+      this.log(`[Telegram] Detected new install: running v${VERSION}, on-disk v${onDisk}. Restarting to pick up new code…`);
+      // Notify any active chat that we're restarting (best-effort, fire and forget)
+      try {
+        const chatIds = getAllTelegramChatIds();
+        for (const chatId of chatIds.slice(0, 3)) {
+          this._telegramCall('sendMessage', { chat_id: parseInt(chatId, 10), text: `🔄 Aggiornamento NHA v${VERSION} → v${onDisk} in corso. Torno tra 2 secondi.` }).catch(() => {});
+        }
+      } catch {}
+      // Give the message a moment to flush, then exit. PM2 / dispatcher restarts us.
+      setTimeout(() => process.exit(0), 800);
+    } catch (e) {
+      this.log(`[Telegram] Local update check failed: ${e.message}`);
+    }
   }
 
   async _checkAndNotifyUpdate() {
