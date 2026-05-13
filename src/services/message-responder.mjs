@@ -2010,18 +2010,45 @@ class TelegramResponder {
     // If the previous turn ran a LIST/LAST-SHOWN and the user now says
     // "cancellalo / eliminalo / quello / si / conferma / fallo", resolve the
     // referent from this._lastContextByChatId[chatId].lastCalendarEvents.
-    const isAnaphoric = /\b(cancell|elimin|rimuov)[aeiloy]+(lo|la|li|le|gli)?\b/.test(lower)
+    // Wider regex: matches "cancellalo", "cancellali", "cancellatelo!",
+    // "eliminali tutti", with any trailing punctuation.
+    const isAnaphoric = /(cancell|elimin|rimuov)\w*\s*[!.?]?$/i.test(userMessage.trim())
       && !this._extractCalendarProposal(userMessage).date
       && !this._extractCalendarProposal(userMessage).title;
     const isYesConfirm = /^\s*(s[ìi]\b|si\s|sì\s|ok\b|okay\b|certo\b|certamente\b|d'?accordo\b|fai|fallo|procedi|esegui|conferm[oa]|yes\b|yep\b|confirm\b|do\s*it|go\s*ahead)/i.test(userMessage.trim());
-    if (chatId && (isAnaphoric || isYesConfirm)) {
-      const ctx = this._lastContextByChatId[chatId] || {};
+    if (isAnaphoric || isYesConfirm) {
+      // Look up the event list across multiple keys, in order of preference:
+      //   1. exact chatId (if the caller passed one)
+      //   2. any context key whose lastCalendarListAt is the most recent
+      // This fixes a class of bugs where the chat UI generates a fresh
+      // conversationId between turns, breaking the strict key lookup.
+      let ctx = chatId ? (this._lastContextByChatId[chatId] || {}) : {};
+      if (!ctx.lastCalendarEvents || ctx.lastCalendarEvents.length === 0) {
+        // Fallback: scan every stored context for the most recent calendar list.
+        let bestKey = null, bestAt = 0;
+        for (const [k, v] of Object.entries(this._lastContextByChatId)) {
+          if (Array.isArray(v?.lastCalendarEvents) && v.lastCalendarEvents.length > 0
+              && (v.lastCalendarListAt || 0) > bestAt) {
+            bestKey = k;
+            bestAt = v.lastCalendarListAt || 0;
+          }
+        }
+        if (bestKey) {
+          this.log(`[direct] anaphoric fallback: chatId=${chatId} empty, using bestKey=${bestKey} (${Date.now() - bestAt}ms ago)`);
+          ctx = this._lastContextByChatId[bestKey];
+        }
+      } else {
+        this.log(`[direct] anaphoric hit: chatId=${chatId} eventsCount=${ctx.lastCalendarEvents.length}`);
+      }
       const pendingEvents = ctx.lastCalendarEvents || ctx.pendingDeleteEvents || [];
       // Strict: only auto-execute if the previous turn LIST/proposal had a
       // single deletable event, or if pendingDelete is explicitly set.
       const eligible = ctx.pendingDeleteEvents && ctx.pendingDeleteEvents.length > 0
         ? ctx.pendingDeleteEvents
         : (pendingEvents.length === 1 ? pendingEvents : null);
+      if (!eligible) {
+        this.log(`[direct] anaphoric SKIP: ${isAnaphoric ? 'anaphoric' : 'yes-confirm'} matched but no eligible event. ctx keys: ${Object.keys(this._lastContextByChatId).join(',')}`);
+      }
       if (eligible && eligible.length > 0) {
         let ok = 0, ko = 0;
         const failed = [];
@@ -2237,16 +2264,18 @@ class TelegramResponder {
         try {
           const out = await executeTool(toolName, args, config);
           const events = this._parseEventsFromToolOutput(String(out));
-          if (chatId) {
-            const prev = this._lastContextByChatId[chatId] || {};
-            this._lastContextByChatId[chatId] = {
-              ...prev,
-              lastCalendarEvents: events,
-              lastCalendarListAt: Date.now(),
-              lastCalendarSource: { tool: toolName, args },
-            };
-            try { saveTelegramContext(this._lastContextByChatId); } catch {}
-          }
+          // Even without chatId, save to a global fallback bucket so the
+          // anaphoric resolution can still find it.
+          const persistKey = chatId || '__last_list__';
+          const prev = this._lastContextByChatId[persistKey] || {};
+          this._lastContextByChatId[persistKey] = {
+            ...prev,
+            lastCalendarEvents: events,
+            lastCalendarListAt: Date.now(),
+            lastCalendarSource: { tool: toolName, args },
+          };
+          this.log(`[direct] LIST stored: chatId=${persistKey} eventsCount=${events.length} tool=${toolName}`);
+          try { saveTelegramContext(this._lastContextByChatId); } catch (e) { this.log(`[direct] persist FAILED: ${e.message}`); }
           return { action: actionKey, success: true, message: String(out) };
         } catch (e) { return { action: actionKey, success: false, message: `Errore: ${e.message}` }; }
       };
