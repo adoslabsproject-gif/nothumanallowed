@@ -329,7 +329,7 @@ function isCompletedAction(text) {
   return DONE_SIGNALS.some(s => lower.includes(s));
 }
 
-async function callAgentWithTools(config, agentName, userMessage, languageOverride, preHistory) {
+async function callAgentWithTools(config, agentName, userMessage, languageOverride, preHistory, chatId) {
   const today = new Date().toISOString().split('T')[0];
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en';
@@ -397,12 +397,17 @@ async function callAgentWithTools(config, agentName, userMessage, languageOverri
       break;
     }
 
-    // Execute all tools
+    // Execute all tools — use the remembering variant so list-tools auto-
+    // populate the anaphoric cache (lastList_*). Critical for "Si spostalo"
+    // pattern: HERALD calls calendar_find inside the loop, the result must
+    // land in lastCalendarEvents so the next turn's anaphoric dispatcher
+    // can resolve "spostalo" deterministically.
+    const { executeToolAndRemember: _exec } = await import('./tool-executor.mjs');
     const toolResults = [];
     let authError = null;
     for (const { action, params } of actions) {
       try {
-        const result = await executeTool(action, params, config);
+        const result = await _exec(action, params, config, chatId);
         const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
         toolResults.push(`[${action}] ${resultStr}`);
       } catch (err) {
@@ -1275,7 +1280,7 @@ class TelegramResponder {
       } catch {}
 
       if (TOOL_AGENTS.has(agent)) {
-        const result = await callAgentWithTools(this.config, agent, enrichedMessage, detectedLang, preHistory);
+        const result = await callAgentWithTools(this.config, agent, enrichedMessage, detectedLang, preHistory, chatId);
         responseText = result.text;
         responseHistory = result.history;
       } else {
