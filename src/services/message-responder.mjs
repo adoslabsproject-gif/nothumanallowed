@@ -1596,19 +1596,150 @@ class TelegramResponder {
   }
 
   /**
-   * Detect a generic anaphoric DELETE/COMPLETE/REPLY/OPEN command.
-   * Returns the matched action verb or null.
+   * Detect a generic anaphoric verb. Covers 15 verbs in IT+EN.
+   * Order matters: more-specific patterns come BEFORE generic delete/edit
+   * (e.g. "spostalo" must NOT be classified as delete because of '...alo').
+   * Returns the verb string or null.
    */
   _detectAnaphoricAction(userMessage) {
     const t = (userMessage || '').trim();
     if (!t) return null;
-    const yes = /^\s*(s[ìi]\b|si\s|sì\s|ok\b|okay\b|certo\b|certamente\b|d'?accordo\b|fai|fallo|procedi|esegui|conferm[oa]|yes\b|yep\b|confirm\b|do\s*it|go\s*ahead)/i.test(t);
-    if (yes) return 'confirm';
+
+    // YES/CONFIRM — short standalone tokens
+    if (/^\s*(s[ìi]\b|si\s|sì\s|ok\b|okay\b|certo\b|certamente\b|d'?accordo\b|fai\b|fallo|procedi|esegui|conferm[oa]|yes\b|yep\b|confirm\b|do\s*it|go\s*ahead)/i.test(t)) return 'confirm';
+
+    // MOVE/RESCHEDULE — order: BEFORE delete, else "sposta" can be confused
+    if (/\b(spost[ao]l?[oaie]?|sposta|rimand|rinvi[ao]|riprogramm|posticip|sposta?lo|sposta?la|move|reschedul|postpone)\w*/i.test(t)) return 'move';
+
+    // RENAME
+    if (/\b(rinomin|rename|chiamalo|chiamala)\w*/i.test(t)) return 'rename';
+
+    // MARK READ / UNREAD (must come before generic "open/leggi")
+    if (/\b(segna(?:lo|la|li|le)?\s+come\s+(non\s+letto|unread)|mark\s+unread)\b/i.test(t)) return 'mark_unread';
+    if (/\b(segna(?:lo|la|li|le)?\s+come\s+letto|mark\s+(?:as\s+)?read|gi[àa]\s+letto|letto\s+gi[àa])\b/i.test(t)) return 'mark_read';
+
+    // ARCHIVE
+    if (/\b(archivi)\w*/i.test(t)) return 'archive';
+
+    // LABEL / TAG
+    if (/\b(etichett|categoriz|tag\s|aggiungi\s+(?:label|etichetta)|label\b)\w*/i.test(t)) return 'label';
+
+    // FORWARD
+    if (/\b(inoltra|inoltralo|inoltrala|forward|gira(?:lo|la)?)\w*/i.test(t)) return 'forward';
+
+    // SHARE
+    if (/\b(condivid|condividilo|condividila|share|invia\s+link)\w*/i.test(t)) return 'share';
+
+    // PRIORITY change
+    if (/\b(prioriti?z|priority|priorit[àa])\w*/i.test(t)) return 'priority';
+
+    // SNOOZE
+    if (/\b(snooze|rimanda\s+notifica|posticipa\s+(?:notifica|reminder|promemoria))\w*/i.test(t)) return 'snooze';
+
+    // UNDO
+    if (/\b(annulla|undo|disfa|disfa\s+l'?ultima)\w*/i.test(t)) return 'undo';
+
+    // EDIT/MODIFY — generic. Must come AFTER specific edits (rename/label/priority).
+    if (/\b(modifi|aggiorn|cambi(?!a\s+canale)|edit|update)\w*/i.test(t)) return 'edit';
+
+    // DELETE — generic
     if (/(cancell|elimin|rimuov|delete|remove)\w*\s*[!.?]?$/i.test(t)) return 'delete';
-    if (/(complet|don[ei]|spunt|finit|fatt)\w*\s*[!.?]?$/i.test(t)) return 'complete';
+
+    // COMPLETE / DONE
+    if (/(complet|don[ei]\b|spunt|finit|fatt)\w*\s*[!.?]?$/i.test(t)) return 'complete';
+
+    // REPLY
     if (/(rispond|reply|risp\b)\w*\s*[!.?]?$/i.test(t)) return 'reply';
-    if (/(apri|open|leggi|read|mostra|view)\w*\s*[!.?]?$/i.test(t)) return 'open';
+
+    // OPEN / VIEW / READ
+    if (/(apri|open|leggi|read|mostra|view|visualizz)\w*\s*[!.?]?$/i.test(t)) return 'open';
+
     return null;
+  }
+
+  /**
+   * Extract structured parameters for a given verb against a target item.
+   * Uses cheap regex first, then a tiny LLM NLU call when needed.
+   * Returns {} for verbs that don't need params (delete, complete, archive...).
+   */
+  async _extractParamsForVerb(verb, kind, userText, config) {
+    const text = String(userText || '');
+    // ── No-param verbs ────────────────────────────────────────────────────
+    if (['delete', 'complete', 'archive', 'mark_read', 'mark_unread', 'share', 'open', 'snooze', 'undo', 'confirm'].includes(verb)) {
+      return {};
+    }
+
+    // ── PRIORITY: regex extract high/medium/low ──────────────────────────
+    if (verb === 'priority') {
+      if (/\b(alta|high|urgent[ei]?|importante)\b/i.test(text)) return { priority: 'high' };
+      if (/\b(media|medium|normale)\b/i.test(text)) return { priority: 'medium' };
+      if (/\b(bassa|low|secondaria|non\s+urgente)\b/i.test(text)) return { priority: 'low' };
+      return {};
+    }
+
+    // ── LABEL: extract quoted or bare label after the keyword ─────────────
+    if (verb === 'label') {
+      const m = text.match(/(?:etichett[ao]|tag(?:ga)?(?:lo|la)?|label)\s+(?:come\s+|with\s+|as\s+)?["']?([\w\-#/]+)["']?/i);
+      if (m) return { label: m[1] };
+      return {};
+    }
+
+    // ── FORWARD: extract recipient email ─────────────────────────────────
+    if (verb === 'forward') {
+      const m = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+      if (m) return { to: m[0] };
+      return {};
+    }
+
+    // ── RENAME: extract new name (quoted or after "in/a") ─────────────────
+    if (verb === 'rename') {
+      const m1 = text.match(/(?:rinomina(?:lo|la)?|rename(?:\s+it)?|chiamal[oa])\s+(?:in\s+|a\s+|to\s+|as\s+)?["']([^"']+)["']/i);
+      if (m1) return { newName: m1[1] };
+      const m2 = text.match(/(?:rinomina(?:lo|la)?|rename(?:\s+it)?|chiamal[oa])\s+(?:in\s+|a\s+|to\s+|as\s+)?([\w\-./]+\.\w{2,5})/i);
+      if (m2) return { newName: m2[1] };
+      const m3 = text.match(/(?:rinomina(?:lo|la)?|rename(?:\s+it)?|chiamal[oa])\s+(?:in\s+|a\s+|to\s+|as\s+)([^\n!.?]{3,80})/i);
+      if (m3) return { newName: m3[1].trim() };
+      return {};
+    }
+
+    // ── MOVE: needs newStart/newEnd — use existing _nluExtractCalendarMove ──
+    if (verb === 'move' && kind === 'calendar') {
+      try {
+        const parsed = await this._nluExtractCalendarMove(text, config);
+        if (parsed) return { newStart: parsed.newStart, newEnd: parsed.newEnd };
+      } catch {}
+      return {};
+    }
+
+    // ── EDIT: free-form. Tiny LLM extractor returning a partial object ────
+    if (verb === 'edit') {
+      try {
+        const sys =
+          'You are a parameter extractor for an EDIT command. Given the user instruction and ' +
+          `the entity kind (${kind}), return STRICT JSON with the fields to update. ` +
+          'Fields by kind: ' +
+          'calendar={summary?,start?,end?,location?,description?}; ' +
+          'email={subject?,body?}; ' +
+          'task={description?,priority?,due?}; ' +
+          'contact={name?,email?,phone?}; ' +
+          'drive={name?}; note={title?,body?}; ' +
+          'reminder={message?,when?}; gtask={title?,due?}. ' +
+          'ONLY include fields the user explicitly mentioned. No extra prose.';
+        const raw = await callLLM(config, sys, text, { max_tokens: 200, temperature: 0.1 });
+        const m = raw.match(/\{[\s\S]*\}/);
+        if (m) return JSON.parse(m[0]);
+      } catch {}
+      return {};
+    }
+
+    // ── REPLY: body extraction — let downstream handler ask user if missing ──
+    if (verb === 'reply') {
+      const m = text.match(/(?:rispond[ie](?:gli)?|reply)\s+(?:con\s+|with\s+)?["']([^"']+)["']/i);
+      if (m) return { body: m[1] };
+      return {};
+    }
+
+    return {};
   }
 
   /**
@@ -1624,10 +1755,103 @@ class TelegramResponder {
       if (chatId) this._recordAudit(chatId, { tool: toolName, success, summary });
       return { action: toolName, success, message };
     };
+    const safe = async (toolName, args, okMsg, summary) => {
+      try { await executeTool(toolName, args, config); return auditAndReturn(toolName, true, okMsg, summary); }
+      catch (e) { return auditAndReturn(toolName, false, `Errore: ${e.message}`, ''); }
+    };
+    const id = item.eventId || item.messageId || item.fileId || item.taskId || item.id;
+    const label = item.subject || item.summary || item.name || item.title || item.description || item.message || String(id);
+    const params = await this._extractParamsForVerb(verb, kind, userText, config);
 
     // confirm = treat as the pending action (default: delete) when there's
     // a single recently-listed item.
     const effective = verb === 'confirm' ? 'delete' : verb;
+
+    // ── MOVE/RESCHEDULE ──────────────────────────────────────────────────
+    if (effective === 'move') {
+      if (kind === 'calendar' && id && params.newStart) {
+        return await safe('calendar_move',
+          { eventId: id, newStart: params.newStart, newEnd: params.newEnd || this._addMinutesIso(params.newStart, 60) },
+          `Spostato "${label}" a ${this._formatDateIT(params.newStart.slice(0, 10))} alle ${params.newStart.slice(11, 16)}.`, label);
+      }
+      if (kind === 'drive' && id && params.newName) {
+        return await safe('drive_move', { fileId: id, folderId: params.newName }, `Spostato "${label}".`, label);
+      }
+      if (!params.newStart) {
+        return { action: 'move_pending', success: false, message: `A quando vuoi spostare "${label}"? Es. "venerdì 23 maggio alle 15".` };
+      }
+    }
+
+    // ── RENAME ────────────────────────────────────────────────────────────
+    if (effective === 'rename' && params.newName) {
+      if (kind === 'drive' && id) return await safe('drive_rename', { fileId: id, newName: params.newName }, `Rinominato "${label}" → "${params.newName}".`, params.newName);
+      if (kind === 'note' && id) return await safe('note_update', { id, title: params.newName }, `Rinominata la nota "${label}" → "${params.newName}".`, params.newName);
+      if (kind === 'contact' && id) return await safe('contact_update', { id, name: params.newName }, `Rinominato il contatto "${label}" → "${params.newName}".`, params.newName);
+      if (kind === 'task' && id) return await safe('task_edit', { id, description: params.newName }, `Rinominato il task → "${params.newName}".`, params.newName);
+    }
+    if (effective === 'rename' && !params.newName) {
+      return { action: 'rename_pending', success: false, message: `Come vuoi rinominare "${label}"?` };
+    }
+
+    // ── EDIT (free-form fields) ──────────────────────────────────────────
+    if (effective === 'edit' && Object.keys(params).length > 0 && id) {
+      if (kind === 'calendar') return await safe('calendar_update', { eventId: id, ...params }, `Aggiornato "${label}".`, label);
+      if (kind === 'email')    return await safe('gmail_draft_update', { messageId: id, ...params }, `Aggiornata la bozza email.`, label);
+      if (kind === 'task')     return await safe('task_edit', { id, ...params }, `Aggiornato il task "${label}".`, label);
+      if (kind === 'contact')  return await safe('contact_update', { id, ...params }, `Aggiornato il contatto "${label}".`, label);
+      if (kind === 'note')     return await safe('note_update', { id, ...params }, `Aggiornata la nota "${label}".`, label);
+      if (kind === 'reminder') return await safe('reminder_update', { id, ...params }, `Aggiornato il promemoria.`, label);
+      if (kind === 'gtask')    return await safe('gtask_edit', { id, ...params }, `Aggiornato il task Google.`, label);
+      if (kind === 'drive' && params.name) return await safe('drive_rename', { fileId: id, newName: params.name }, `Rinominato il file → "${params.name}".`, params.name);
+    }
+    if (effective === 'edit' && Object.keys(params).length === 0) {
+      return { action: 'edit_pending', success: false, message: `Cosa vuoi modificare di "${label}"? (es. titolo, orario, descrizione, priorità)` };
+    }
+
+    // ── MARK READ/UNREAD (email) ─────────────────────────────────────────
+    if (effective === 'mark_read' && kind === 'email' && id) {
+      return await safe('gmail_mark_read', { messageId: id }, `Segnata come letta: "${label}".`, label);
+    }
+    if (effective === 'mark_unread' && kind === 'email' && id) {
+      return await safe('gmail_mark_unread', { messageId: id }, `Segnata come NON letta: "${label}".`, label);
+    }
+
+    // ── ARCHIVE ──────────────────────────────────────────────────────────
+    if (effective === 'archive') {
+      if (kind === 'email' && id) return await safe('gmail_archive', { messageId: id }, `Archiviata email "${label}".`, label);
+      if (kind === 'task'  && id) return await safe('task_archive', { id }, `Archiviato task "${label}".`, label);
+    }
+
+    // ── LABEL/TAG ────────────────────────────────────────────────────────
+    if (effective === 'label' && params.label) {
+      if (kind === 'email' && id) return await safe('gmail_label', { messageId: id, label: params.label }, `Aggiunta etichetta "${params.label}" a "${label}".`, params.label);
+      if (kind === 'task'  && id) return await safe('task_tag', { id, tag: params.label }, `Aggiunto tag "${params.label}" al task.`, params.label);
+    }
+    if (effective === 'label' && !params.label) {
+      return { action: 'label_pending', success: false, message: `Quale etichetta vuoi applicare a "${label}"?` };
+    }
+
+    // ── FORWARD (email) ──────────────────────────────────────────────────
+    if (effective === 'forward' && kind === 'email' && id) {
+      if (!params.to) return { action: 'forward_pending', success: false, message: `A chi vuoi inoltrare "${label}"?` };
+      return await safe('gmail_forward', { messageId: id, to: params.to }, `Inoltrata "${label}" a ${params.to}.`, params.to);
+    }
+
+    // ── SHARE (drive, calendar) ──────────────────────────────────────────
+    if (effective === 'share') {
+      if (kind === 'drive' && id) return await safe('drive_share', { fileId: id }, `Condiviso "${label}" (link copiato).`, label);
+    }
+
+    // ── PRIORITY change (task) ───────────────────────────────────────────
+    if (effective === 'priority' && params.priority) {
+      if (kind === 'task' && id)  return await safe('task_edit', { id, priority: params.priority }, `Priorità di "${label}" → ${params.priority}.`, params.priority);
+      if (kind === 'gtask' && id) return await safe('gtask_edit', { id, priority: params.priority }, `Priorità task Google → ${params.priority}.`, params.priority);
+    }
+
+    // ── SNOOZE (reminder) ───────────────────────────────────────────────
+    if (effective === 'snooze' && kind === 'reminder' && id) {
+      return await safe('reminder_snooze', { id, minutes: 30 }, `Posticipato di 30 minuti il promemoria "${label}".`, label);
+    }
 
     // ── DELETE family ─────────────────────────────────────────────────────
     if (effective === 'delete') {

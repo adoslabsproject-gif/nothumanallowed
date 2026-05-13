@@ -3191,6 +3191,119 @@ export async function executeTool(action, params, config) {
       return `File ${params.fileId} moved to trash.`;
     }
 
+    case 'drive_rename': {
+      if (!params.fileId || !params.newName) return 'Error: fileId and newName required.';
+      const token = await (await import('./token-store.mjs')).getAccessToken(config);
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${params.fileId}?fields=id,name,webViewLink`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: params.newName }),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Drive rename ${res.status}: ${err.slice(0, 200)}`);
+      }
+      const data = await res.json();
+      return `Renamed: ${data.name} — ${data.webViewLink || data.id}`;
+    }
+
+    case 'drive_move': {
+      if (!params.fileId || !params.folderId) return 'Error: fileId and folderId required.';
+      const token = await (await import('./token-store.mjs')).getAccessToken(config);
+      // Need to first get current parents to remove them
+      const cur = await fetch(`https://www.googleapis.com/drive/v3/files/${params.fileId}?fields=parents`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const curData = await cur.json();
+      const oldParents = (curData.parents || []).join(',');
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${params.fileId}?addParents=${params.folderId}&removeParents=${oldParents}&fields=id,name,parents`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Drive move ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      return `Moved: ${(await res.json()).name}`;
+    }
+
+    case 'drive_share': {
+      if (!params.fileId) return 'Error: fileId required.';
+      const token = await (await import('./token-store.mjs')).getAccessToken(config);
+      const role = params.role || 'reader';
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${params.fileId}/permissions`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'anyone', role }),
+      });
+      if (!res.ok) throw new Error(`Drive share ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      const meta = await fetch(`https://www.googleapis.com/drive/v3/files/${params.fileId}?fields=webViewLink,name`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const m = await meta.json();
+      return `Shared "${m.name}" (${role}): ${m.webViewLink}`;
+    }
+
+    case 'gmail_label': {
+      if (!params.messageId || !params.label) return 'Error: messageId and label required.';
+      const token = await (await import('./token-store.mjs')).getAccessToken(config);
+      // Find or create the label by name
+      const labelsRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', { headers: { 'Authorization': `Bearer ${token}` } });
+      const labelsData = await labelsRes.json();
+      let labelId = (labelsData.labels || []).find(l => l.name.toLowerCase() === params.label.toLowerCase())?.id;
+      if (!labelId) {
+        const createRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: params.label, labelListVisibility: 'labelShow', messageListVisibility: 'show' }),
+        });
+        if (!createRes.ok) throw new Error(`Label create ${createRes.status}`);
+        labelId = (await createRes.json()).id;
+      }
+      const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${params.messageId}/modify`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addLabelIds: [labelId] }),
+      });
+      if (!res.ok) throw new Error(`Gmail label ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      return `Applied label "${params.label}" to message.`;
+    }
+
+    case 'gmail_forward': {
+      if (!params.messageId || !params.to) return 'Error: messageId and to required.';
+      const { getMessage, sendEmail } = await import('./google-gmail.mjs');
+      const orig = await getMessage(config, params.messageId);
+      const body = `\n\n---------- Messaggio inoltrato ----------\nDa: ${orig.from}\nData: ${orig.date}\nOggetto: ${orig.subject}\n\n${orig.body}`;
+      await sendEmail(config, {
+        to: params.to,
+        subject: `Fwd: ${orig.subject}`,
+        body: (params.note || '') + body,
+      });
+      return `Forwarded "${orig.subject}" to ${params.to}.`;
+    }
+
+    case 'gtask_update': {
+      if (!params.id) return 'Error: id required.';
+      const token = await (await import('./token-store.mjs')).getAccessToken(config);
+      const listId = params.listId || '@default';
+      const patch = {};
+      if (params.title) patch.title = params.title;
+      if (params.due)   patch.due = new Date(params.due).toISOString();
+      if (params.notes) patch.notes = params.notes;
+      const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error(`GTask update ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      return `Updated Google Task.`;
+    }
+
+    case 'gtask_delete': {
+      if (!params.id) return 'Error: id required.';
+      const token = await (await import('./token-store.mjs')).getAccessToken(config);
+      const listId = params.listId || '@default';
+      const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks/${params.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok && res.status !== 204) throw new Error(`GTask delete ${res.status}`);
+      return `Deleted Google Task.`;
+    }
+
     case 'drive_info': {
       if (!params.fileId) return 'Error: fileId required.';
       const drv = await import('./google-drive.mjs');
