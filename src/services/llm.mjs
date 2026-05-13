@@ -495,12 +495,23 @@ export async function callGemini(apiKey, model, systemPrompt, userMessage, _stre
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
+// OpenAI-compatible history mapper — used by DeepSeek/Grok/Mistral/Cohere.
+function _openaiHistory(opts) {
+  return Array.isArray(opts?.history)
+    ? opts.history.filter(m => m && m.role && m.content).map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: String(m.content),
+      }))
+    : [];
+}
+
 export async function callDeepSeek(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
   const body = {
     model: model || 'deepseek-chat',
     max_tokens: opts.max_tokens || 8192,
     messages: [
       { role: 'system', content: systemPrompt },
+      ..._openaiHistory(opts),
       { role: 'user', content: userMessage },
     ],
     stream,
@@ -529,6 +540,7 @@ export async function callGrok(apiKey, model, systemPrompt, userMessage, stream 
     max_tokens: opts.max_tokens || 8192,
     messages: [
       { role: 'system', content: systemPrompt },
+      ..._openaiHistory(opts),
       { role: 'user', content: userMessage },
     ],
     stream,
@@ -557,6 +569,7 @@ export async function callMistral(apiKey, model, systemPrompt, userMessage, stre
     max_tokens: opts.max_tokens || 8192,
     messages: [
       { role: 'system', content: systemPrompt },
+      ..._openaiHistory(opts),
       { role: 'user', content: userMessage },
     ],
     stream,
@@ -580,10 +593,18 @@ export async function callMistral(apiKey, model, systemPrompt, userMessage, stre
 }
 
 export async function callCohere(apiKey, model, systemPrompt, userMessage, _stream = false, opts = {}) {
+  // Cohere uses a 'chat_history' array with role: USER/CHATBOT (uppercase).
+  const cohereHistory = Array.isArray(opts.history)
+    ? opts.history.filter(m => m && m.role && m.content).map(m => ({
+        role: m.role === 'assistant' ? 'CHATBOT' : 'USER',
+        message: String(m.content),
+      }))
+    : [];
   const body = {
     model: model || 'command-r-plus',
     max_tokens: opts.max_tokens || 8192,
     preamble: systemPrompt,
+    chat_history: cohereHistory,
     message: userMessage,
   };
   if (opts.temperature !== undefined) body.temperature = opts.temperature;

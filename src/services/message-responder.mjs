@@ -23,12 +23,37 @@ import { VERSION } from '../constants.mjs';
 // (telegram, discord, chat web, AWF agents). Lets the user ask "what have you
 // done today?" from any surface and get a consistent answer.
 const _GLOBAL_AUDIT_FILE = path.join(os.homedir(), '.nha', 'audit-log.jsonl');
+const _AUDIT_MAX_LINES = 10000;          // rotate at 10k lines (~1MB JSONL)
+const _AUDIT_ARCHIVE_PREFIX = 'audit-log-';
+
+function _rotateAuditIfNeeded() {
+  try {
+    if (!fs.existsSync(_GLOBAL_AUDIT_FILE)) return;
+    const stat = fs.statSync(_GLOBAL_AUDIT_FILE);
+    // Quick check: skip the line count unless file is bigger than ~1.5MB
+    if (stat.size < 1_500_000) return;
+    const text = fs.readFileSync(_GLOBAL_AUDIT_FILE, 'utf-8');
+    const lines = text.split('\n').filter(Boolean);
+    if (lines.length <= _AUDIT_MAX_LINES) return;
+    // Archive older half, keep most recent _AUDIT_MAX_LINES.
+    const tail = lines.slice(-_AUDIT_MAX_LINES);
+    const archived = lines.slice(0, lines.length - _AUDIT_MAX_LINES);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const archiveFile = path.join(path.dirname(_GLOBAL_AUDIT_FILE), `${_AUDIT_ARCHIVE_PREFIX}${ts}.jsonl`);
+    fs.writeFileSync(archiveFile, archived.join('\n') + '\n');
+    fs.writeFileSync(_GLOBAL_AUDIT_FILE, tail.join('\n') + '\n');
+  } catch {}
+}
+
 function _appendGlobalAudit(entry) {
   try {
     fs.mkdirSync(path.dirname(_GLOBAL_AUDIT_FILE), { recursive: true });
     fs.appendFileSync(_GLOBAL_AUDIT_FILE, JSON.stringify(entry) + '\n');
+    // Rotate occasionally (cheap stat-check; full scan only if size > 1.5MB).
+    if (Math.random() < 0.01) _rotateAuditIfNeeded();
   } catch {}
 }
+
 function _readGlobalAudit(limitTail = 100) {
   try {
     if (!fs.existsSync(_GLOBAL_AUDIT_FILE)) return [];
@@ -38,6 +63,20 @@ function _readGlobalAudit(limitTail = 100) {
       .map(l => { try { return JSON.parse(l); } catch { return null; } })
       .filter(Boolean);
   } catch { return []; }
+}
+
+/**
+ * Query the audit log with filters. Exported for the HTTP /api/audit/query
+ * endpoint. Supports filtering by tool, channel, since timestamp.
+ */
+export function queryAuditLog({ tool, channel, since, limit = 100 } = {}) {
+  const all = _readGlobalAudit(10000);
+  return all.filter(e => {
+    if (tool && e.tool !== tool) return false;
+    if (channel && e.channel !== channel) return false;
+    if (since && e.ts < since) return false;
+    return true;
+  }).slice(-limit);
 }
 
 // ── Agent Routing (keyword-based, zero LLM calls) ───────────────────────────
@@ -1200,6 +1239,18 @@ class TelegramResponder {
       const auditNote = this._renderAuditForPrompt(chatId);
       if (auditNote) enrichedMessage = auditNote + enrichedMessage;
 
+      // ── User memory (Fix 3+D v16.0.13) — cross-channel persistent context.
+      // Same memory file that's used by the chat web UI. The user can
+      // `nha memory add "I prefer concise answers"` once and EVERY channel
+      // honors it.
+      try {
+        const { buildMemoryPrefix, autoLearnFromTurn } = await import('./user-memory.mjs');
+        const memPrefix = buildMemoryPrefix();
+        if (memPrefix) enrichedMessage = memPrefix + enrichedMessage;
+        // Auto-learn — fire and forget, doesn't block the response.
+        autoLearnFromTurn(cleanText, this.config).catch(() => null);
+      } catch {}
+
       if (TOOL_AGENTS.has(agent)) {
         const result = await callAgentWithTools(this.config, agent, enrichedMessage, detectedLang, preHistory);
         responseText = result.text;
@@ -1987,7 +2038,7 @@ class TelegramResponder {
         // Clear the pending state so we don't double-delete on next yes.
         delete this._lastContextByChatId[chatId].pendingDeleteEvents;
         delete this._lastContextByChatId[chatId].lastCalendarEvents;
-        try { (await import('./telegram-context.mjs')).saveTelegramContext(this._lastContextByChatId); } catch {}
+        try { saveTelegramContext(this._lastContextByChatId); } catch {}
 
         const subject = eligible.length === 1 ? `"${eligible[0].summary}"` : `${eligible.length} appuntamenti`;
         const lines = [`Ho cancellato ${subject}.`];
@@ -2194,7 +2245,7 @@ class TelegramResponder {
               lastCalendarListAt: Date.now(),
               lastCalendarSource: { tool: toolName, args },
             };
-            try { (await import('./telegram-context.mjs')).saveTelegramContext(this._lastContextByChatId); } catch {}
+            try { saveTelegramContext(this._lastContextByChatId); } catch {}
           }
           return { action: actionKey, success: true, message: String(out) };
         } catch (e) { return { action: actionKey, success: false, message: `Errore: ${e.message}` }; }
@@ -2786,7 +2837,26 @@ class DiscordResponder {
       // Tool-capable agents use the full tool execution loop
       const TOOL_AGENTS = new Set(['herald', 'hermes', 'edi', 'jarvis', 'flux', 'echo', 'mercury', 'pipe', 'navi', 'link', 'prometheus', 'tempest']);
       const callFn = TOOL_AGENTS.has(agent) ? callAgentWithTools : callAgent;
-      const response = await callFn(this.config, agent, cleanText);
+      // Cross-channel user memory + audit log + auto-learn (v16.0.13)
+      let discordMsg = cleanText;
+      try {
+        const { buildMemoryPrefix, autoLearnFromTurn } = await import('./user-memory.mjs');
+        const memPrefix = buildMemoryPrefix();
+        if (memPrefix) discordMsg = memPrefix + discordMsg;
+        autoLearnFromTurn(cleanText, this.config).catch(() => null);
+      } catch {}
+      try {
+        const auditNote = _readGlobalAudit(15);
+        if (auditNote.length > 0) {
+          const lines = auditNote.slice(-10).map(e => {
+            const t = new Date(e.ts).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            const st = e.success === false ? '✗' : '✓';
+            return `- ${t} · ${e.tool} ${st} · ${e.summary || ''}`;
+          }).join('\n');
+          discordMsg = `[AZIONI RECENTI da altri canali]\n${lines}\n[FINE]\n\n${discordMsg}`;
+        }
+      } catch {}
+      const response = await callFn(this.config, agent, discordMsg);
 
       // Discord message limit is 2000 chars
       const truncated = response.length > 1900

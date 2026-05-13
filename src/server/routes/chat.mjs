@@ -229,43 +229,77 @@ export function register(router) {
       content: (h.content || '').replace(/!\[Screenshot\]\(data:image\/[^)]+\)/g, '[Screenshot taken]'),
     })).filter(m => m.content);
 
-    // ── Rolling summary (Fix 2) ──
-    // After a threshold of turns we generate (or reuse) a compact summary of
-    // everything OLDER than the recent window, persisted in the conversation
-    // object. The recent window stays as raw messages[]. This is the
-    // "memory like ChatGPT/Claude" pattern.
-    const RECENT = 12;
+    // ── Rolling summary (Fix 2) — TOKEN-based threshold ──
+    // Industry pattern (Claude context compaction, ChatGPT memory): trigger
+    // summary when the OLDER messages would consume more than a budget,
+    // measured in tokens (~chars/4). Provider-aware budget:
+    //   - anthropic / openai / gemini → 24k tokens raw before summary
+    //   - nha (Liara/Qwen 32B 32k ctx) → 8k tokens raw before summary
+    //   - others → 8k as safe default
+    // Plus per-turn cap of MAX_RECENT turns so latency stays bounded.
+    const provider = config.llm?.provider || (config.llm?.apiKey ? 'anthropic' : 'nha');
+    const TOKEN_BUDGET_BY_PROVIDER = {
+      anthropic: 24000, openai: 24000, gemini: 24000,
+      nha: 8000, deepseek: 16000, grok: 16000, mistral: 16000, cohere: 8000,
+    };
+    const tokenBudget = TOKEN_BUDGET_BY_PROVIDER[provider] || 8000;
+    const MAX_RECENT_TURNS = 30;     // hard cap (latency safeguard)
+    const approxTokens = (s) => Math.ceil((s || '').length / 4);
+
     let conversationSummary = '';
     let recentHistory = rawHistory;
-    if (rawHistory.length > RECENT) {
-      recentHistory = rawHistory.slice(-RECENT);
-      const older = rawHistory.slice(0, -RECENT);
-      // Try to reuse a cached summary from the conversation, regenerate if
-      // the older slice grew beyond what the cached summary covered.
-      let cachedConv = null;
-      if (body.conversationId) {
-        try { cachedConv = loadConversation(body.conversationId); } catch {}
+    if (rawHistory.length > 0) {
+      // Walk backwards accumulating tokens until we exceed the budget OR
+      // hit MAX_RECENT_TURNS. Everything BEFORE that index goes into summary.
+      let recentTokens = 0;
+      let splitIdx = 0;
+      for (let i = rawHistory.length - 1; i >= 0; i--) {
+        const t = approxTokens(rawHistory[i].content);
+        if (recentTokens + t > tokenBudget) { splitIdx = i + 1; break; }
+        if (rawHistory.length - i > MAX_RECENT_TURNS) { splitIdx = i + 1; break; }
+        recentTokens += t;
+        splitIdx = i;
       }
-      const cached = cachedConv?.rollingSummary;
-      if (cached && cached.coveredTurns === older.length) {
-        conversationSummary = cached.text;
-      } else {
-        // Generate a fresh summary via the same LLM. Compact, factual.
-        const summaryInput = older.map(m =>
-          `${m.role === 'user' ? 'Utente' : 'Assistente'}: ${m.content.slice(0, 600)}`
-        ).join('\n\n');
-        try {
-          conversationSummary = await callLLM(
-            config,
-            'Sei un sintetizzatore di conversazione. Riassumi in italiano in 200-400 token TUTTI i fatti, decisioni, preferenze utente, dati specifici (date, ID, nomi, numeri) emersi nella conversazione. Niente abbellimenti, solo informazione utile per ricostruire il contesto.',
-            summaryInput,
-            { max_tokens: 600, temperature: 0.2 },
-          );
-          if (cachedConv) {
-            cachedConv.rollingSummary = { text: conversationSummary, coveredTurns: older.length, at: new Date().toISOString() };
-            try { saveConversation(cachedConv); } catch {}
-          }
-        } catch { /* if summary fails, just skip it — recent history is enough */ }
+      recentHistory = rawHistory.slice(splitIdx);
+      const older = rawHistory.slice(0, splitIdx);
+
+      if (older.length > 0) {
+        // Reuse cached summary when the older slice hasn't grown.
+        let cachedConv = null;
+        if (body.conversationId) {
+          try { cachedConv = loadConversation(body.conversationId); } catch {}
+        }
+        const cached = cachedConv?.rollingSummary;
+        if (cached && cached.coveredTurns === older.length) {
+          conversationSummary = cached.text;
+        } else {
+          // Build summary input in user language. Trim individual turns to
+          // 1200 chars each (older context loses fine-grained details).
+          const summaryInput = older.map(m =>
+            `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 1200)}`
+          ).join('\n\n');
+          const langLabel = userLang === 'it' ? 'in italiano' : `in ${userLang}`;
+          try {
+            conversationSummary = await callLLM(
+              config,
+              `You are a conversation summarizer. Summarize ${langLabel} in 200-500 tokens ALL facts, decisions, user preferences, specific data (dates, IDs, names, numbers, file paths, URLs) that emerged. No fluff, only information useful to reconstruct context. Preserve the language the user spoke in.`,
+              summaryInput,
+              { max_tokens: 700, temperature: 0.2 },
+            );
+            // Meta-compress: if the previous cached summary exists AND together
+            // with new content the result would balloon, replace fully with the
+            // new compact one (we just generated it from full older slice).
+            if (cachedConv) {
+              cachedConv.rollingSummary = {
+                text: conversationSummary,
+                coveredTurns: older.length,
+                coveredTokens: older.reduce((a, m) => a + approxTokens(m.content), 0),
+                at: new Date().toISOString(),
+              };
+              try { saveConversation(cachedConv); } catch {}
+            }
+          } catch { /* if summary fails, just skip it — recent history is enough */ }
+        }
       }
     }
 
@@ -278,9 +312,11 @@ export function register(router) {
     // ── User memory (Fix 3) — persistent across conversations + channels ──
     // Loaded from ~/.nha/user-memory.md, prepended to the system prompt.
     try {
-      const { buildMemoryPrefix } = await import('../../services/user-memory.mjs');
+      const { buildMemoryPrefix, autoLearnFromTurn } = await import('../../services/user-memory.mjs');
       const memPrefix = buildMemoryPrefix();
       if (memPrefix) effectiveSystemPrompt = `${memPrefix}${effectiveSystemPrompt || ''}`;
+      // Auto-learn — fire and forget, doesn't block the response.
+      autoLearnFromTurn(msg, config).catch(() => null);
     } catch {}
 
     // The final user message — keep the per-turn language tag close to the

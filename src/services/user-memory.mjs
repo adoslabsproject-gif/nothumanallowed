@@ -78,3 +78,51 @@ export function buildMemoryPrefix() {
   }
   return `[USER MEMORY — persistent across all conversations]\n${raw}\n[END USER MEMORY]\n\n`;
 }
+
+/**
+ * Auto-extract memorable facts from a user turn and append them to memory.
+ * Mirrors ChatGPT's "Memory" auto-learn: scans the message for explicit
+ * "remember that..." / "ricorda che..." instructions AND for implicit
+ * personal facts (name, location, role, preferences, deadlines, contacts).
+ *
+ * Designed to be CHEAP: runs ONLY when the user message contains a likely
+ * signal ("ricord", "remember", "preferisco", "mi chiamo", "lavoro come",
+ * "ho un appuntamento", "uso sempre", etc.). Skips noise.
+ *
+ * @param {string} userText
+ * @param {object} config — NHA config (needs llm provider)
+ * @returns {Promise<string|null>} the new memory line if learned, else null
+ */
+export async function autoLearnFromTurn(userText, config) {
+  if (!userText || typeof userText !== 'string' || userText.length < 8) return null;
+  // Cheap pre-filter — only call the LLM if the text plausibly contains a fact.
+  const trigger = /\b(ricord[aiy]|memorizz[aiy]|salv[aiy]\s+che|tieni\s+a\s+mente|prefer(isco|isci)|mi\s+chiamo|sono\s+(un|una)\b|lavoro\s+(come|presso|in)\b|abito\s+(a|in)\b|vivo\s+(a|in)\b|uso\s+sempre|preferenza|impostazione|deadline|scadenza|ho\s+un\s+(appuntament|incontro)|il\s+mio\s+(nome|email|telefon|indirizz)|api\s+key|password|remember\s+that|please\s+remember|note\s+that|my\s+name\s+is|i\s+work\s+as|i\s+live\s+in|i\s+prefer|i\s+use\s+always)\b/i;
+  if (!trigger.test(userText)) return null;
+
+  try {
+    const { callLLM } = await import('./llm.mjs');
+    const systemPrompt =
+      'You are a memory extractor. Read the user message and decide if there is ONE durable fact, preference, or piece of personal context worth remembering across future conversations. ' +
+      'Return STRICT JSON: {"memorable": true|false, "fact": "concise fact in the user language, max 140 chars"} or {"memorable": false}. ' +
+      'Memorable: name, role, location, language preference, communication style, recurring contacts, long-term projects, API keys/IDs (only id, NOT secrets), tools they use, hard preferences. ' +
+      'NOT memorable: greetings, transient questions, one-off tasks, weather, news, anything that expires within a day. ' +
+      'NEVER fabricate facts that the user did not explicitly state.';
+    const raw = await callLLM(config, systemPrompt, userText, { max_tokens: 150, temperature: 0.1 });
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    if (!parsed.memorable || !parsed.fact || typeof parsed.fact !== 'string') return null;
+    const fact = parsed.fact.trim().slice(0, 140);
+    if (!fact) return null;
+    // Deduplicate: skip if a near-identical fact is already in memory.
+    const existing = loadUserMemory().toLowerCase();
+    const factLow = fact.toLowerCase();
+    // Very rough dedup: if the first 30 chars of the new fact appear in
+    // memory already, skip. Avoid LLM-driven dedup loop (would be expensive).
+    if (factLow.length > 20 && existing.includes(factLow.slice(0, Math.min(30, factLow.length)))) {
+      return null;
+    }
+    addUserMemory(`(auto) ${fact}`);
+    return fact;
+  } catch { return null; }
+}

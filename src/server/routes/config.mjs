@@ -32,6 +32,24 @@ export function register(router) {
     sendJSON(res, 200, { ok: true, version: VERSION, ts: Date.now() });
   });
 
+  // GET /api/audit/query — query the cross-channel audit log.
+  // Optional query params: tool, channel, since (ms timestamp), limit.
+  router.get('/api/audit/query', async (req, res) => {
+    try {
+      const { queryAuditLog } = await import('../../services/message-responder.mjs');
+      const url = new URL(req.url, 'http://localhost');
+      const entries = queryAuditLog({
+        tool: url.searchParams.get('tool') || undefined,
+        channel: url.searchParams.get('channel') || undefined,
+        since: url.searchParams.get('since') ? parseInt(url.searchParams.get('since'), 10) : undefined,
+        limit: parseInt(url.searchParams.get('limit') || '100', 10),
+      });
+      sendJSON(res, 200, { entries });
+    } catch (e) {
+      sendJSON(res, 500, { error: e.message });
+    }
+  });
+
   // GET /api/version/check
   //
   // Returns three version signals so the UI can distinguish three states:
