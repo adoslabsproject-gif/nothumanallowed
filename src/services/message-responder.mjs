@@ -2602,12 +2602,22 @@ class TelegramResponder {
       if (extracted.date || extracted.title) {
         let events = [];
         try {
+          const { listEvents } = await import('./google-calendar.mjs');
           if (extracted.date) {
-            const result = await executeTool('calendar_date', { date: extracted.date }, config);
-            events = this._parseEventsFromToolOutput(result);
+            const [yy, mm, dd] = extracted.date.split('-').map(n => parseInt(n, 10));
+            const from = new Date(yy, mm - 1, dd);
+            const to = new Date(from.getTime() + 86400000);
+            const evs = await listEvents(config, 'primary', from, to);
+            events = (evs || []).map(e => ({
+              eventId: e.id, summary: e.summary || '', time: (e.start || '').slice(11, 16),
+            }));
           } else if (extracted.title) {
-            const result = await executeTool('calendar_find', { query: extracted.title, daysAhead: 60 }, config);
-            events = this._parseEventsFromToolOutput(result);
+            const from = new Date();
+            const to = new Date(from.getTime() + 60 * 86400000);
+            const evs = await listEvents(config, 'primary', from, to);
+            events = (evs || []).map(e => ({
+              eventId: e.id, summary: e.summary || '', time: (e.start || '').slice(11, 16),
+            }));
           }
         } catch (e) {
           return { action: 'calendar_verify', success: false, message: `Errore durante la verifica: ${e.message}` };
@@ -2688,16 +2698,26 @@ class TelegramResponder {
     if (isMove && !isDelete && !isVerify && !isCreate) {
       const parsed = await this._nluExtractCalendarMove(userMessage, config);
       if (parsed && (parsed.title || parsed.oldDate) && parsed.newStart) {
-        // Find the source event.
+        // Find the source event — use listEvents directly (parser fails
+        // because calendar_date/find don't expose eventIds in their text).
         let candidates = [];
         try {
+          const { listEvents } = await import('./google-calendar.mjs');
           if (parsed.oldDate) {
-            const r = await executeTool('calendar_date', { date: parsed.oldDate }, config);
-            candidates = this._parseEventsFromToolOutput(r);
+            const [yy, mm, dd] = parsed.oldDate.split('-').map(n => parseInt(n, 10));
+            const from = new Date(yy, mm - 1, dd);
+            const to = new Date(from.getTime() + 86400000);
+            const evs = await listEvents(config, 'primary', from, to);
+            candidates = (evs || []).map(e => ({ eventId: e.id, summary: e.summary || '' }));
           }
           if (candidates.length === 0 && parsed.title) {
-            const r = await executeTool('calendar_find', { query: parsed.title, daysAhead: 60 }, config);
-            candidates = this._parseEventsFromToolOutput(r);
+            // Broad search across next 60 days
+            const from = new Date();
+            const to = new Date(from.getTime() + 60 * 86400000);
+            const evs = await listEvents(config, 'primary', from, to);
+            candidates = (evs || [])
+              .filter(e => String(e.summary || '').toLowerCase().includes(parsed.title.toLowerCase()))
+              .map(e => ({ eventId: e.id, summary: e.summary || '' }));
           }
         } catch (e) {
           return { action: 'calendar_move', success: false, message: `Errore nella ricerca dell'evento: ${e.message}` };
@@ -2909,13 +2929,23 @@ class TelegramResponder {
 
       let candidates = [];
       try {
+        const { listEvents } = await import('./google-calendar.mjs');
         if (extracted.date) {
-          const result = await executeTool('calendar_date', { date: extracted.date }, config);
-          candidates = this._parseEventsFromToolOutput(result);
+          const [yy, mm, dd] = extracted.date.split('-').map(n => parseInt(n, 10));
+          const from = new Date(yy, mm - 1, dd);
+          const to = new Date(from.getTime() + 86400000);
+          const evs = await listEvents(config, 'primary', from, to);
+          candidates = (evs || []).map(e => ({
+            eventId: e.id, summary: e.summary || '', time: (e.start || '').slice(11, 16),
+          }));
         }
         if (candidates.length === 0 && extracted.title) {
-          const result = await executeTool('calendar_find', { query: extracted.title, daysAhead: 60 }, config);
-          candidates = this._parseEventsFromToolOutput(result);
+          const from = new Date();
+          const to = new Date(from.getTime() + 60 * 86400000);
+          const evs = await listEvents(config, 'primary', from, to);
+          candidates = (evs || [])
+            .filter(e => String(e.summary || '').toLowerCase().includes(extracted.title.toLowerCase()))
+            .map(e => ({ eventId: e.id, summary: e.summary || '', time: (e.start || '').slice(11, 16) }));
         }
       } catch (err) {
         this.log(`[Telegram] direct-fresh delete lookup failed: ${err.message}`);
