@@ -29,6 +29,13 @@ export function setupWebSocket(server) {
     ws.send(JSON.stringify({ type: 'connected', ts: Date.now() }));
     ws.send(JSON.stringify({ type: 'version', version: VERSION }));
 
+    // ── Heartbeat: ping every 30 s so the OS / proxy / browser don't
+    // close the connection for inactivity. The client just discards the
+    // ping frame; pongs come back automatically per RFC 6455. We also
+    // track `isAlive` to detect stale clients and drop them.
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data.toString());
@@ -38,6 +45,21 @@ export function setupWebSocket(server) {
 
     ws.on('error', () => {});
   });
+
+  // Server-wide heartbeat loop: every 30 s, ping all clients and prune the ones
+  // that didn't pong since the last cycle (they're stale).
+  const heartbeatInterval = setInterval(() => {
+    if (!wss) return;
+    for (const client of wss.clients) {
+      if (client.isAlive === false) {
+        try { client.terminate(); } catch {}
+        continue;
+      }
+      client.isAlive = false;
+      try { client.ping(); } catch {}
+    }
+  }, 30_000);
+  wss.on('close', () => clearInterval(heartbeatInterval));
 
   // ── Terminal WS — interactive shell ──
   wssTerminal = new WebSocketServer({ noServer: true });
