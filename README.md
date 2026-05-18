@@ -2,9 +2,9 @@
 
 > **Your AI assistant. On your machine. Your data, your rules.**
 
-NHA is a local AI assistant with 80 tools (Gmail, Calendar, Drive, GitHub, Slack, browser, code, files), 38 specialist agents, and three visual builders (Studio, AWF, WebCraft) — all inside a web UI you open on `localhost`.
+NHA is a local AI assistant with **100+ tools** (Gmail, Calendar, Drive, GitHub, Slack, browser, code, files), **38 specialist agents**, and three visual builders (Studio, AWF, **WebCraft**) — all inside a web UI you open on `localhost`. **v16.0.58.**
 
-**Free.** No API key required (Liara is the built-in free tier — Qwen3 32B on our GPU).
+**Free.** No API key required (Liara is the built-in free tier — Qwen3 32B on our GPU). Or bring your own: Anthropic, OpenAI, **OpenRouter (100+ models with one key)**, Gemini, Mistral, DeepSeek, Grok, Cohere, local Ollama.
 **Local.** Your data never leaves your PC. Email/Calendar OAuth tokens stay in `~/.nha/`.
 **Open-source.** MIT license. Verifiable SHA-256 on every release.
 
@@ -69,10 +69,10 @@ Done. No tracking files, no cloud account to close, no leftover services.
 
 | Component | What it does |
 |---|---|
-| **Chat** | Ask anything in natural language. 80 tools available: Gmail, Calendar, Drive, Contacts, GitHub, Notion, Slack, browser, code execution, file ops, web search. |
+| **Chat** | Ask anything in natural language. 100+ tools available: Gmail, Calendar, Drive, Contacts, GitHub, Notion, Slack, browser (with HTTP fetch fallback when Chrome missing — works on Termux), code execution, file ops, web search. |
 | **Studio** | Visual multi-agent pipeline. Describe a complex task → Studio plans a pipeline of specialist agents → live animated canvas of execution → export to PDF / Excel / CSV. |
 | **AWF** | Visual workflow editor with 34 nodes (8 triggers, 14 actions, 6 AI, 6 logic). Drag-and-drop, live step streaming, conditional breakpoints, variable watcher, edit-and-resume, step diff. |
-| **WebCraft** | Build full-stack web apps by chatting. Express + database + JWT auth + live sandbox. AI agent suggests fixes and new features. Diff viewer, snapshot/rollback. |
+| **WebCraft** | Build full-stack web apps by chatting. Express + database + JWT auth + live sandbox. **Antifragile sandbox** with 25 runtime shims (no `npm install` needed for common deps). Problems Panel (VSCode-style) with click-to-jump and squiggly error markers. CSS auto-extension via LLM (iterates until 100% coverage). |
 | **38 agents** | SABER (security), JARVIS (architecture), ORACLE (data), FORGE (devops), SCHEHERAZADE (docs), HERALD (mediation), 32 more. CLI: `nha ask <agent> "..."`. |
 
 ---
