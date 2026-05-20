@@ -125,6 +125,10 @@ function findChromePath() {
       '/snap/bin/chromium',
       '/usr/bin/brave-browser',
       '/usr/bin/microsoft-edge',
+      // Termux on Android — chromium installed via "pkg install chromium"
+      '/data/data/com.termux/files/usr/bin/chromium',
+      '/data/data/com.termux/files/usr/bin/chromium-browser',
+      '/data/data/com.termux/files/usr/bin/google-chrome',
     ],
     win32: [
       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -657,6 +661,104 @@ async function getBrowser() {
  * @param {boolean} [options.waitForLoad] - Wait for page load event (default true)
  * @returns {Promise<{ title: string, url: string, status: number }>}
  */
+/**
+ * Lightweight HTTP fallback when Chrome/Chromium is not available.
+ * Uses fetch() + regex-based HTML→text extraction. No JS rendering, no clicks.
+ * Good enough for: news sites, blog posts, static pages, API responses,
+ * documentation pages. NOT good for: SPAs, login flows, dynamic dashboards.
+ */
+async function browserOpenViaFetch(url, options = {}) {
+  const timeout = options.timeout || 15000;
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeout);
+    const res = await fetch(url, {
+      redirect: 'follow',
+      signal: ac.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,it;q=0.8',
+      },
+    });
+    clearTimeout(timer);
+
+    const status = res.status;
+    const finalUrl = res.url || url;
+    const ct = res.headers.get('content-type') || '';
+    const isHtml = /html/i.test(ct);
+    const raw = await res.text();
+
+    if (!isHtml) {
+      return {
+        title: finalUrl,
+        url: finalUrl,
+        status,
+        mode: 'fetch-fallback',
+        warning: 'Chrome not installed — used HTTP fetch. No JS rendering. Limited interactivity.',
+        content: raw.slice(0, 50_000),
+      };
+    }
+
+    // Extract title
+    const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : finalUrl;
+
+    // Extract main text content: strip script/style/svg/comments, then strip tags
+    let textContent = raw
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ')
+      .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+      .replace(/<header\b[^>]*>[\s\S]*?<\/header>/gi, ' ')   // strip nav/header noise
+      .replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gi, ' ')
+      .replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gi, ' ')
+      .replace(/<aside\b[^>]*>[\s\S]*?<\/aside>/gi, ' ');
+
+    // Extract headlines + links separately for news sites
+    const headlines = [];
+    const linkRe = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let lm;
+    while ((lm = linkRe.exec(raw)) !== null && headlines.length < 50) {
+      const linkText = lm[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const href = lm[1];
+      if (linkText.length > 20 && linkText.length < 200 && !href.startsWith('#') && !href.startsWith('javascript:')) {
+        const absHref = href.startsWith('http') ? href : new URL(href, finalUrl).toString();
+        headlines.push({ text: linkText, url: absHref });
+      }
+    }
+
+    // Strip remaining tags to get plain text
+    textContent = textContent
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#x?[0-9a-f]+;/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return {
+      title,
+      url: finalUrl,
+      status,
+      mode: 'fetch-fallback',
+      warning: 'Chrome/Chromium not installed — used HTTP fetch fallback. No JS rendering, no interactive clicks/forms. To install: macOS use brew, Linux apt-get, Termux "pkg install chromium".',
+      headlines: headlines.slice(0, 30),
+      content: textContent.slice(0, 30_000),
+    };
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      return { error: true, message: `HTTP fetch timeout after ${timeout / 1000}s. The site may be slow or blocking the request.` };
+    }
+    return { error: true, message: `HTTP fetch failed: ${e.message}. ${/ENOTFOUND|ECONNREFUSED/.test(e.message) ? 'Network or DNS issue.' : ''}` };
+  }
+}
+
 export async function browserOpen(url, options = {}) {
   // SSRF check
   const check = await isSafeUrl(url);
@@ -664,7 +766,23 @@ export async function browserOpen(url, options = {}) {
     return { error: true, message: `SSRF blocked: ${check.reason}` };
   }
 
-  const browser = await getBrowser();
+  // Fast fallback: if Chrome/Chromium is not installed (e.g. Termux on Android),
+  // do a plain HTTP fetch and extract text content. Limited (no JS rendering,
+  // no clicks), but works for news sites / blog posts / static pages.
+  if (!findChromePath()) {
+    return browserOpenViaFetch(url, options);
+  }
+
+  let browser;
+  try {
+    browser = await getBrowser();
+  } catch (e) {
+    // Chrome detection failed at launch — same fallback
+    if (/Chrome\/Chromium not found/i.test(e.message || '')) {
+      return browserOpenViaFetch(url, options);
+    }
+    throw e;
+  }
   const timeout = options.timeout || NAV_TIMEOUT_MS;
   const waitForLoad = options.waitForLoad !== false;
 

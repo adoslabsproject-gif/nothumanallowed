@@ -563,6 +563,102 @@ export async function callGrok(apiKey, model, systemPrompt, userMessage, stream 
   return data.choices?.[0]?.message?.content || '';
 }
 
+/**
+ * Auto-prefix a model name for OpenRouter. OpenRouter requires `vendor/model`
+ * format (e.g. `anthropic/claude-sonnet-4.5`). Agent cards in NHA often have
+ * bare model names like `claude-sonnet-4-20250514` or `gpt-4o`. Without the
+ * prefix, OpenRouter falls back to an OpenAI-like endpoint that returns a
+ * misleading "Incorrect API key provided" error (it's actually a model
+ * routing issue). We auto-prefix by inspecting the bare model name.
+ */
+export function _autoPrefixOpenRouterModel(model) {
+  if (!model || typeof model !== 'string') return 'anthropic/claude-sonnet-4.5';
+  // Already in vendor/model format — leave alone
+  if (model.includes('/')) return model;
+  const lower = model.toLowerCase();
+  // Anthropic Claude family
+  if (lower.startsWith('claude')) return 'anthropic/' + model;
+  // OpenAI GPT family
+  if (lower.startsWith('gpt') || lower.startsWith('o1') || lower.startsWith('o3') || lower.startsWith('o4') || lower.startsWith('chatgpt') || lower === 'davinci' || lower === 'curie') return 'openai/' + model;
+  // Google Gemini family
+  if (lower.startsWith('gemini') || lower.startsWith('palm')) return 'google/' + model;
+  // Meta Llama family
+  if (lower.startsWith('llama') || lower.startsWith('codellama')) return 'meta-llama/' + model;
+  // DeepSeek
+  if (lower.startsWith('deepseek')) return 'deepseek/' + model;
+  // Mistral / Mixtral
+  if (lower.startsWith('mistral') || lower.startsWith('mixtral') || lower.startsWith('codestral')) return 'mistralai/' + model;
+  // Qwen
+  if (lower.startsWith('qwen')) return 'qwen/' + model;
+  // xAI Grok
+  if (lower.startsWith('grok')) return 'x-ai/' + model;
+  // Cohere
+  if (lower.startsWith('command') || lower.startsWith('cohere')) return 'cohere/' + model;
+  // Unknown vendor — default to anthropic prefix (most likely sandbox use case)
+  return 'anthropic/' + model;
+}
+
+/**
+ * OpenRouter — aggregator that exposes 100+ models (Claude, GPT, Gemini,
+ * Mistral, Llama, Qwen, DeepSeek, etc.) via a single OpenAI-compatible API.
+ * Endpoint: https://openrouter.ai/api/v1/chat/completions
+ * Model names: "anthropic/claude-sonnet-4.5", "openai/gpt-4o", "google/gemini-2.5-pro"...
+ */
+export async function callOpenRouter(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
+  const originalModel = model;
+  model = _autoPrefixOpenRouterModel(model);
+  if (process.env.NHA_LOG_OPENROUTER === '1') {
+    console.error(`[openrouter] model resolved: "${originalModel}" → "${model}"`);
+  }
+  const body = {
+    model: model || 'anthropic/claude-sonnet-4.5',
+    max_tokens: opts.max_tokens || 8192,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ..._openaiHistory(opts),
+      { role: 'user', content: userMessage },
+    ],
+    stream,
+  };
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      // OpenRouter recommends these for proper attribution + ranking
+      'HTTP-Referer': 'https://nothumanallowed.com',
+      'X-Title': 'NotHumanAllowed CLI',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    // OpenRouter passes through provider-side errors verbatim. The most confusing
+    // case is "platform.openai.com" 401 — this means: OpenRouter forwarded the
+    // request to OpenAI in BYOK mode (Bring Your Own Key) and OpenAI rejected
+    // the key. We DO NOT silently swap the user's model — they chose it on purpose.
+    let hint = '';
+    if (res.status === 401) {
+      if (/platform\.openai\.com/i.test(err)) {
+        hint = `\n  → BYOK mode rejected: model "${model}" is being routed via OpenAI in BYOK (Bring Your Own Key) mode, and the OpenAI key configured on your OpenRouter account is invalid or missing.\n     Fix (keep using ${model}):\n       1. Go to openrouter.ai/settings/integrations\n       2. Either DISABLE the OpenAI integration (so OpenRouter uses its own credit), OR add a valid OpenAI key there.\n     Note: NHA will NOT silently switch to a different model — your config stays as you set it.`;
+      } else {
+        hint = '\n  → 401 from OpenRouter: your sk-or-v1-... key is invalid/expired. Regenerate at openrouter.ai/keys and run `nha config set key <new-key>`.';
+      }
+    } else if (res.status === 404) {
+      hint = `\n  → 404 from OpenRouter: model "${model}" does not exist. See openrouter.ai/models for valid IDs (need vendor prefix like "openai/", "anthropic/", "google/").`;
+    } else if (res.status === 402) {
+      hint = '\n  → 402 from OpenRouter: insufficient credits. Top up at openrouter.ai/credits.';
+    } else if (res.status === 429) {
+      hint = '\n  → 429 from OpenRouter: rate limited. Wait a few seconds or upgrade your tier at openrouter.ai/settings.';
+    }
+    throw new Error(`OpenRouter ${res.status}: ${err}${hint}`);
+  }
+  if (stream) return streamSSE(res, 'openai');
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
 export async function callMistral(apiKey, model, systemPrompt, userMessage, stream = false, opts = {}) {
   const body = {
     model: model || 'mistral-large-latest',
@@ -753,6 +849,7 @@ const PROVIDERS = {
   grok: callGrok,
   mistral: callMistral,
   cohere: callCohere,
+  openrouter: callOpenRouter,
 };
 
 export function getProviderCall(provider) {
@@ -786,6 +883,15 @@ export async function callLLMWithTools(config, systemPrompt, messages, tools, on
   // OpenAI native function calling
   if (provider === 'openai') {
     return _callOpenAIWithTools(apiKey, model, systemPrompt, messages, tools, onText, onToolCall, opts);
+  }
+
+  // OpenRouter — uses OpenAI-compatible function calling schema. We reuse the
+  // OpenAI tool-call implementation but point to OpenRouter's endpoint and
+  // auto-prefix the model (anthropic/, openai/, etc) so bare names from agent
+  // cards work without manual edit.
+  if (provider === 'openrouter') {
+    const orModel = _autoPrefixOpenRouterModel(model);
+    return _callOpenAIWithTools(apiKey, orModel, systemPrompt, messages, tools, onText, onToolCall, { ...opts, baseUrl: 'https://openrouter.ai/api/v1', referer: 'https://nothumanallowed.com', xTitle: 'NotHumanAllowed CLI' });
   }
 
   // Other providers: fallback to text-based tool calling (old system)
@@ -972,12 +1078,29 @@ async function _callOpenAIWithTools(apiKey, model, systemPrompt, messages, tools
       stream: true,
     };
 
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Support baseUrl override so OpenRouter (OpenAI-compatible) can reuse this loop.
+    const endpoint = (opts.baseUrl || 'https://api.openai.com/v1') + '/chat/completions';
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+    if (opts.referer) headers['HTTP-Referer'] = opts.referer;
+    if (opts.xTitle) headers['X-Title'] = opts.xTitle;
+    const res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      headers,
       body: JSON.stringify(body),
     });
-    if (!res.ok) { const err = await res.text(); throw new Error(`OpenAI ${res.status}: ${err}`); }
+    if (!res.ok) {
+      const err = await res.text();
+      const isOR = !!opts.baseUrl;
+      let hint = '';
+      if (isOR && res.status === 401 && /platform\.openai\.com/i.test(err)) {
+        hint = `\n  → BYOK mode rejected for model "${body.model}". OpenRouter forwarded the request to OpenAI in BYOK (Bring Your Own Key) mode, and the OpenAI key on your OpenRouter account is invalid/missing.\n     Fix: openrouter.ai/settings/integrations → either DISABLE the OpenAI integration (so OpenRouter uses its own credit), OR add a valid OpenAI key there. NHA will keep your chosen model.`;
+      } else if (isOR && res.status === 404) {
+        hint = `\n  → 404 from OpenRouter: model "${body.model}" not found. Must be in vendor/model format (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4.5").`;
+      } else if (isOR && res.status === 402) {
+        hint = '\n  → 402 from OpenRouter: insufficient credits. Top up at openrouter.ai/credits.';
+      }
+      throw new Error(`${isOR ? 'OpenRouter' : 'OpenAI'} ${res.status}: ${err}${hint}`);
+    }
 
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -1053,6 +1176,7 @@ export function getApiKey(config, provider) {
     grok: config.llm.grokKey || config.llm.apiKey,
     mistral: config.llm.mistralKey || config.llm.apiKey,
     cohere: config.llm.cohereKey || config.llm.apiKey,
+    openrouter: config.llm.openrouterKey || config.llm.openrouter_key || config.llm.apiKey,
   };
   return keyMap[provider] || config.llm.apiKey;
 }
@@ -1333,16 +1457,23 @@ function buildRequestBody(provider, model, systemPrompt, userMessage, stream) {
       stream,
     };
   }
-  // OpenAI-compatible format (OpenAI, DeepSeek, Grok, Mistral)
+  // OpenAI-compatible format (OpenAI, OpenRouter, DeepSeek, Grok, Mistral)
   const modelDefaults = {
     nha: '/opt/models/qwen3-32b',
     openai: 'gpt-4o',
+    openrouter: 'anthropic/claude-sonnet-4.5',
     deepseek: 'deepseek-chat',
     grok: 'grok-3-latest',
     mistral: 'mistral-large-latest',
   };
+  let resolvedModel = model || modelDefaults[provider] || 'gpt-4o';
+  // OpenRouter requires vendor/model format. Auto-prefix bare names so users
+  // who set "gpt-4o" or "claude-sonnet-4.5" don't hit a misleading 404/401.
+  if (provider === 'openrouter' && resolvedModel && !resolvedModel.includes('/')) {
+    resolvedModel = _autoPrefixOpenRouterModel(resolvedModel);
+  }
   const req = {
-    model: model || modelDefaults[provider] || 'gpt-4o',
+    model: resolvedModel,
     max_tokens: 8192,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -1350,7 +1481,6 @@ function buildRequestBody(provider, model, systemPrompt, userMessage, stream) {
     ],
     stream,
   };
-  // NHA: add thinking control
   if (provider === 'nha') {
     req.chat_template_kwargs = { enable_thinking: false };
   }
@@ -1363,11 +1493,16 @@ function getProviderUrl(provider, model, apiKey) {
     nha: 'https://nothumanallowed.com/api/v1/liara/chat',
     anthropic: 'https://api.anthropic.com/v1/messages',
     openai: 'https://api.openai.com/v1/chat/completions',
+    openrouter: 'https://openrouter.ai/api/v1/chat/completions',
     deepseek: 'https://api.deepseek.com/v1/chat/completions',
     grok: 'https://api.x.ai/v1/chat/completions',
     mistral: 'https://api.mistral.ai/v1/chat/completions',
+    cohere: 'https://api.cohere.ai/v2/chat',
   };
-  return urls[provider] || urls.openai;
+  if (!urls[provider]) {
+    throw new Error(`Unknown provider "${provider}". Refusing to silently fall back to OpenAI — set a known provider via "nha config set provider <name>".`);
+  }
+  return urls[provider];
 }
 
 /** Get provider request headers */
@@ -1380,7 +1515,15 @@ function getProviderHeaders(provider, apiKey) {
     };
   }
   if (provider === 'nha') {
-    return { 'Content-Type': 'application/json' }; // No auth needed for free tier
+    return { 'Content-Type': 'application/json' };
+  }
+  if (provider === 'openrouter') {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://nothumanallowed.com',
+      'X-Title': 'NotHumanAllowed CLI',
+    };
   }
   return {
     'Content-Type': 'application/json',

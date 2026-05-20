@@ -12,8 +12,13 @@ import os from 'os';
 import { saveTokens, loadTokens, deleteTokens } from './token-store.mjs';
 import { info, ok, fail, warn } from '../ui.mjs';
 
-// NHA published OAuth client (Desktop app type — client_id is not a secret)
-const DEFAULT_CLIENT_ID = '516893094132-8u2jf6h6h3j6h8j9k0l1m2n3o4p5q6r7.apps.googleusercontent.com'; // NHA Official OAuth Client
+// IMPORTANT: NHA does NOT ship a default Google OAuth client ID.
+// The previous placeholder (516893094132-8u2jf...) was a fake-looking value
+// that always returned `invalid_client` from Google. Each user must register
+// their own OAuth client in Google Cloud Console — this is by design for
+// privacy (no shared client app), and it's a one-time 3-minute setup.
+// See https://nothumanallowed.com/docs/google for the full guide.
+const DEFAULT_CLIENT_ID = '';
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/gmail.send',
@@ -221,14 +226,27 @@ export async function runAuthFlow(config, manual = false) {
 
   if (!clientId) {
     fail('Google OAuth client ID not configured.');
-    info('Get credentials from Google Cloud Console:');
-    info('  1. Go to https://console.cloud.google.com/apis/credentials');
-    info('  2. Create an OAuth 2.0 Client ID (Desktop app type)');
-    info('  3. Enable Gmail API and Calendar API');
-    info('  4. Run:');
+    info('');
+    info('NHA does not ship a shared OAuth client (your data never goes through');
+    info('our servers — Gmail/Calendar API calls go from your PC directly to');
+    info('Google). You need a 3-minute one-time setup of your own OAuth client.');
+    info('');
+    info('STEPS:');
+    info('  1. Open https://console.cloud.google.com/apis/credentials');
+    info('  2. Click + CREATE CREDENTIALS → OAuth client ID');
+    info('  3. Application type: "Desktop app", give it a name (e.g. "NHA local")');
+    info('  4. Click CREATE. Google shows you Client ID + Client Secret.');
+    info('  5. Enable the APIs you need:');
+    info('     - Gmail API:   https://console.cloud.google.com/apis/library/gmail.googleapis.com');
+    info('     - Calendar:    https://console.cloud.google.com/apis/library/calendar-json.googleapis.com');
+    info('     - Drive:       https://console.cloud.google.com/apis/library/drive.googleapis.com');
+    info('     - People API:  https://console.cloud.google.com/apis/library/people.googleapis.com');
+    info('  6. Save the credentials in NHA:');
     info('     nha config set google-client-id YOUR_CLIENT_ID');
     info('     nha config set google-client-secret YOUR_CLIENT_SECRET');
-    info('  5. Run: nha google auth');
+    info('  7. Re-run: nha google auth');
+    info('');
+    info('Full guide with screenshots: https://nothumanallowed.com/docs/google');
     return false;
   }
 

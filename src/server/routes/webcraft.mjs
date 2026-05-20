@@ -142,6 +142,34 @@ class SandboxManager {
       return;
     }
 
+    // ── Phase 0: Pre-flight repair ───────────────────────────────────────
+    // Before anything else, check that package.json on disk is valid JSON.
+    // If a previous LLM generation wrote a corrupt file (e.g. an HTTP error
+    // response leaked as content), Node's package_json_reader would crash
+    // with SyntaxError before we even get to load shims. Repair in place.
+    const pkgPath = path.join(projectDir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkgRaw = fs.readFileSync(pkgPath, 'utf-8');
+      let needsRepair = false;
+      let reason = '';
+      if (_looksLikeLLMError(pkgRaw)) {
+        needsRepair = true;
+        reason = 'content looks like an LLM API error response (Access denied / Rate limit / HTML block page)';
+      } else {
+        try { JSON.parse(pkgRaw); }
+        catch (e) { needsRepair = true; reason = `invalid JSON: ${e.message}`; }
+      }
+      if (needsRepair) {
+        emit({ type: 'warn', msg: `package.json corrupt (${reason}) — auto-repairing with minimal fallback so the sandbox can boot.` });
+        const projectName = path.basename(projectDir);
+        fs.writeFileSync(pkgPath, _fallbackPackageJson(projectName), 'utf-8');
+        emit({ type: 'status', msg: `package.json repaired. Original corrupt content backed up to package.json.corrupt-${Date.now()}` });
+        try {
+          fs.writeFileSync(pkgPath + '.corrupt-' + Date.now(), pkgRaw, 'utf-8');
+        } catch {}
+      }
+    }
+
     // ── Phase 1: Shims ────────────────────────────────────────────────────
     emit({ type: 'phase', phase: 'shims', msg: 'Injecting runtime shims (pg, redis, mongoose, helmet...)' });
     const shimDir = path.join(projectDir, '.nha-shims');
@@ -155,19 +183,154 @@ class SandboxManager {
     }
     emit({ type: 'status', msg: `Entry point: ${entryFile}` });
 
-    // ── Phase 2: Dependencies ─────────────────────────────────────────────
+    // Pre-flight: validate ALL .js/.mjs/.cjs/.jsx files in the project with
+    // acorn. If any are corrupted (partial stream / HTTP error leaked as code),
+    // quarantine them with a minimal stub. This catches LLM stream interruptions
+    // in route handlers (routes/auth.js, routes/billing.js, etc.) — not just
+    // the entry file.
+    const repaired = [];
+    const codeExts = new Set(['.js', '.mjs', '.cjs', '.jsx']);
+    const scanSkip = new Set(['node_modules', '.git', '.nha-shims', 'dist', 'build', '.next', 'coverage']);
+    const projectBase = path.basename(projectDir);
+    const stack = [projectDir];
+    while (stack.length) {
+      const cur = stack.pop();
+      let entries;
+      try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+      for (const ent of entries) {
+        if (scanSkip.has(ent.name) || ent.name.startsWith('.')) continue;
+        const abs = path.join(cur, ent.name);
+        if (ent.isDirectory()) { stack.push(abs); continue; }
+        if (!codeExts.has(path.extname(ent.name))) continue;
+        try {
+          const content = fs.readFileSync(abs, 'utf-8');
+          const relName = path.relative(projectDir, abs);
+          const sanitized = _sanitizeGeneratedFile(relName, content, projectBase);
+          if (sanitized !== content) {
+            fs.writeFileSync(abs + '.corrupt-' + Date.now(), content, 'utf-8');
+            fs.writeFileSync(abs, sanitized, 'utf-8');
+            repaired.push(relName);
+          }
+        } catch {}
+      }
+    }
+    if (repaired.length > 0) {
+      emit({ type: 'warn', msg: `Pre-flight repair: ${repaired.length} file${repaired.length === 1 ? '' : 's'} quarantined (corrupted content) → ${repaired.join(', ')}. Re-generate from chat to restore them.` });
+    }
+
+    // Pre-flight: create missing data dirs/files referenced by code.
+    // LLMs frequently generate `fs.writeFile('data/users.json', ...)` without
+    // creating data/ first → ENOENT crash on boot. Scan code for these
+    // references and seed empty placeholders BEFORE the sandbox starts.
+    try {
+      const dataFiles = _detectMissingDataFiles(projectDir);
+      if (dataFiles.length > 0) {
+        emit({ type: 'status', msg: `Pre-flight: seeded ${dataFiles.length} data file${dataFiles.length === 1 ? '' : 's'} → ${dataFiles.slice(0, 5).join(', ')}${dataFiles.length > 5 ? '...' : ''}` });
+      }
+    } catch {}
+
+    // Pre-flight: auto-extend CSS until 100% coverage (or LLM stops making
+    // progress). Target = 100%; max 5 passes as safety; early-exit if two
+    // consecutive passes don't reduce missing count (LLM stuck) or LLM fails.
+    // Goal: ZERO uncovered selectors when the LLM is capable of producing them.
+    try {
+      const projectName = path.basename(projectDir);
+      const cfg = loadConfig();
+      const maxPasses = 5;
+      let totalCovered = 0;
+      let prevMissing = Infinity;
+      let stuckPasses = 0;
+      for (let pass = 1; pass <= maxPasses; pass++) {
+        const styleResult = await _autoExtendStylesIfNeeded(projectName, cfg, emit, { minCoverage: 1.0 });
+        if (!styleResult.extended) {
+          if (styleResult.reason === 'coverage acceptable') break;  // already 100%
+          // LLM failed or skipped — stop loop
+          break;
+        }
+        const newlyCovered = (styleResult.missingBefore || 0) - (styleResult.missingAfter || 0);
+        totalCovered += newlyCovered;
+        const missingNow = styleResult.missingAfter || 0;
+        emit({ type: 'status', msg: `Pass ${pass}/${maxPasses}: ${styleResult.file} extended — ${newlyCovered} new selectors covered (${missingNow} still missing, ${((styleResult.coverageAfter || 0) * 100).toFixed(0)}% coverage).` });
+        if (missingNow === 0) {
+          emit({ type: 'status', msg: `100% CSS coverage reached after ${pass} pass${pass === 1 ? '' : 'es'}. Total ${totalCovered} selectors covered.` });
+          break;
+        }
+        if (missingNow >= prevMissing) {
+          stuckPasses++;
+          if (stuckPasses >= 2) {
+            emit({ type: 'warn', msg: `LLM stopped making progress on extension (${missingNow} selectors still missing — likely pseudo-classes or JS-state classes the model can't infer). Stopping at ${((styleResult.coverageAfter || 0) * 100).toFixed(0)}%.` });
+            break;
+          }
+        } else {
+          stuckPasses = 0;
+        }
+        prevMissing = missingNow;
+      }
+    } catch (e) {
+      emit({ type: 'warn', msg: `Auto-extend styles failed: ${(e.message || e).slice(0, 200)}` });
+    }
+
+    // Pre-flight: complete missing CSS/JS assets via sibling fill + LLM gen.
+    // Replaces the previous "empty placeholder" strategy with real content
+    // when available. LLM calls capped at 8 files per boot to keep latency
+    // bounded; anything beyond falls back to stub (logged).
+    try {
+      const projectName = path.basename(projectDir);
+      const cfg = loadConfig();
+      const completionReport = await _completeMissingAssets(projectName, cfg, emit);
+      const total = completionReport.siblingFills.length + completionReport.llmFills.length + completionReport.stubFallbacks.length;
+      if (total > 0) {
+        emit({ type: 'status', msg: `Pre-flight asset completion: ${completionReport.siblingFills.length} from siblings, ${completionReport.llmFills.length} via LLM, ${completionReport.stubFallbacks.length} as stubs.` });
+      }
+    } catch (e) {
+      emit({ type: 'warn', msg: `Asset completion failed: ${(e.message || e).slice(0, 200)}` });
+    }
+
+    // Pre-flight: repair unsafe err.X / error.X access in route handlers.
+    // LLMs write `res.send(err.stack)` without null-checking err → 500 on
+    // every request when error middleware signature is wrong (3 args not 4).
+    try {
+      const errRepaired = _repairUnsafeErrAccess(projectDir);
+      if (errRepaired.length > 0) {
+        const fileList = errRepaired.slice(0, 5).map(r => `${r.file} (${r.edits} fixes)`).join(', ');
+        emit({ type: 'status', msg: `Pre-flight: null-checked ${errRepaired.reduce((s, r) => s + r.edits, 0)} unsafe err/error accesses in ${errRepaired.length} file${errRepaired.length === 1 ? '' : 's'} → ${fileList}${errRepaired.length > 5 ? '...' : ''}` });
+      }
+    } catch {}
+
+    // ── Phase 2: Dependencies (pre-scan + batch install) ──────────────────
+    // Pre-scan the project source files for require()/import statements and
+    // diff against package.json + node_modules. Install everything missing in
+    // ONE batch BEFORE spawning the sandbox, so the Tier 1 retry-on-crash
+    // becomes a fallback, not the main code path.
     if (fs.existsSync(path.join(projectDir, 'package.json'))) {
+      const scanned = _scanProjectImports(projectDir);
+      const declared = _declaredDeps(projectDir);
+      const installed = _installedDeps(projectDir);
+      const missing = [...scanned].filter(m => !declared.has(m) && !installed.has(m) && !_SHIMMED_MODULES.has(m));
+
+      if (missing.length > 0) {
+        emit({ type: 'phase', phase: 'deps-prescan', msg: `Pre-scan: ${missing.length} missing module${missing.length === 1 ? '' : 's'} → ${missing.slice(0, 8).join(', ')}${missing.length > 8 ? '...' : ''}` });
+      }
+
       emit({ type: 'phase', phase: 'deps', msg: 'Installing dependencies...' });
+      const installCmd = missing.length > 0
+        ? `npm install --save --prefer-offline --no-audit --no-fund ${missing.map(m => JSON.stringify(m)).join(' ')} 2>&1`
+        : 'npm install --prefer-offline --no-audit --no-fund 2>&1';
       try {
-        const { stdout } = await execAsync('npm install --prefer-offline --no-audit --no-fund 2>&1', {
+        const { stdout } = await execAsync(installCmd, {
           cwd: projectDir,
-          timeout: 120_000,
+          timeout: 180_000,
           env: { ...process.env, NODE_ENV: 'development' },
         });
         const added = stdout.match(/added (\d+) package/)?.[1] || '0';
-        emit({ type: 'status', msg: `Dependencies installed (${added} packages)` });
+        emit({ type: 'status', msg: `Dependencies installed (${added} packages${missing.length ? `, batch: ${missing.join(', ')}` : ''})` });
       } catch (e) {
-        emit({ type: 'warn', msg: `npm install warning: ${e.message.slice(0, 300)}` });
+        const diag = _classifyInstallError(e);
+        emit({ type: 'warn', msg: `npm install failed — reason: ${diag.reason}. ${diag.hint}` });
+        if (diag.offlineFallback) {
+          emit({ type: 'status', msg: 'Activating NHA_OFFLINE_SHIM=1 fallback for missing modules.' });
+          this._offlineShim = true;
+        }
       }
     }
 
@@ -201,14 +364,16 @@ class SandboxManager {
 
     // Capture stderr for missing module detection
     let stderrBuf = '';
+    const childEnv = {
+      ...process.env,
+      PORT: String(port),
+      NODE_ENV: 'development',
+      NHA_SANDBOX: '1',
+    };
+    if (this._offlineShim) childEnv.NHA_OFFLINE_SHIM = '1';
     const proc = spawn('node', [patchedEntry], {
       cwd: projectDir,
-      env: {
-        ...process.env,
-        PORT: String(port),
-        NODE_ENV: 'development',
-        NHA_SANDBOX: '1',
-      },
+      env: childEnv,
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -262,6 +427,52 @@ class SandboxManager {
         emit({ type: 'phase', phase: 'ready', msg: `Server running on port ${port}` });
         emit({ type: 'ready', port });
       }
+      // ── HTTP probe: actually fetch GET / and report what came back ─────
+      // Tells the user IMMEDIATELY if the sandbox bound the port but serves
+      // a 404 / empty body / wrong content-type. Otherwise they see "ready"
+      // but the iframe is black/blank and can't tell why.
+      try {
+        const probeRes = await fetch(`http://127.0.0.1:${port}/`, {
+          signal: AbortSignal.timeout(5000),
+          redirect: 'manual',
+        }).catch(e => ({ _err: e.message }));
+        if (probeRes._err) {
+          emit({ type: 'warn', msg: `Probe GET /: ${probeRes._err}. The port is bound but the app doesn't respond on / — check your route handlers.` });
+        } else {
+          const ct = probeRes.headers.get('content-type') || '(none)';
+          const status = probeRes.status;
+          const body = await probeRes.text().catch(() => '');
+          const len = body.length;
+          const isHtml = /text\/html/i.test(ct);
+          const isJson = /application\/json/i.test(ct);
+          const preview = body.slice(0, 200).replace(/\s+/g, ' ').trim();
+          emit({ type: 'log', msg: `[probe] GET / → ${status} (${ct}, ${len} bytes)` });
+          if (status >= 400) {
+            // Show the actual error body so the user knows WHAT went wrong,
+            // not just the status code. 500s from Express handlers often
+            // include the stack trace or error message in the body.
+            const bodyPreview = body.slice(0, 800).trim();
+            emit({ type: 'error', msg: `Probe: GET / returned ${status}. Response body:\n${bodyPreview}` });
+            if (status === 500) {
+              emit({ type: 'warn', msg: `500 Internal Server Error usually means the route handler threw. Common causes: missing await on async function, JSON.parse on empty file, undefined variable, DB connection failure. Check stderr logs above for the actual stack trace.` });
+            } else if (status === 404) {
+              emit({ type: 'warn', msg: `404 means no route matches "/". Add app.get('/', ...) returning HTML, or app.use(express.static('public')) if you have an index.html in public/.` });
+            }
+          } else if (len === 0) {
+            emit({ type: 'warn', msg: `Probe: GET / returned empty body (${status}). The route exists but sends no response — check that you call res.send() / res.json() / res.end().` });
+          } else if (isHtml && !/<\w+/.test(body)) {
+            emit({ type: 'warn', msg: `Probe: GET / claims text/html but has no HTML tags. Preview: "${preview}". Likely a plain text leaked into the response.` });
+          } else if (isJson) {
+            emit({ type: 'status', msg: `Probe: GET / returns JSON. Browser preview will show raw JSON, not a rendered page. Consider serving an index.html with app.use(express.static('public')) or add a / route returning HTML.` });
+          } else if (isHtml) {
+            emit({ type: 'status', msg: `Probe: GET / returns HTML (${len} bytes). Iframe preview should render fine.` });
+          } else {
+            emit({ type: 'log', msg: `[probe] body preview: ${preview}` });
+          }
+        }
+      } catch (e) {
+        emit({ type: 'log', msg: `[probe] failed: ${e.message}` });
+      }
       return;
     }
 
@@ -291,25 +502,94 @@ class SandboxManager {
       emit({ type: 'warn', msg: 'Process exited but stderr is EMPTY — could be: process killed by OS, spawn failed before any output, or stdio mis-routed. Run "node .nha-launcher.js" manually in the project dir to reproduce.' });
     }
 
-    // ── Tier 1: missing module → npm install + retry ─────────────────────
-    const missingMatch = stderrBuf.match(/Cannot find module ['"]([^'"]+)['"]/);
-    if (missingMatch && _attempt < MAX_RETRIES) {
-      const missingMod = missingMatch[1];
-      if (!missingMod.startsWith('.') && !missingMod.startsWith('/') && !missingMod.startsWith('node:')) {
-        const pkgName = missingMod.startsWith('@') ? missingMod.split('/').slice(0, 2).join('/') : missingMod.split('/')[0];
-        emit({ type: 'phase', phase: 'autofix', msg: `Missing module "${pkgName}" — installing...` });
-        try {
-          await execAsync(`npm install --save ${pkgName} --no-audit --no-fund`, {
-            cwd: projectDir,
-            timeout: 60_000,
-            env: { ...process.env, NODE_ENV: 'development' },
-          });
-          emit({ type: 'status', msg: `Installed ${pkgName} — retrying (attempt ${_attempt + 1}/${MAX_RETRIES})...` });
+    // ── Tier 1: missing module → batch install all missing + retry ───────
+    // The pre-scan in Phase 2 catches most cases. Tier 1 here is the safety
+    // net for files generated AFTER pre-scan (e.g. user added a require()
+    // during chat) or for transitive crashes that surface only at runtime.
+    const rawMissing = [...stderrBuf.matchAll(/Cannot find module ['"]([^'"]+)['"]/g)]
+      .map(m => m[1])
+      .filter(m => !m.startsWith('.') && !m.startsWith('/') && !m.startsWith('node:'))
+      .map(m => m.startsWith('@') ? m.split('/').slice(0, 2).join('/') : m.split('/')[0])
+      // Drop Node.js built-ins — they're in the runtime, can't be installed
+      .filter(m => !_NODE_BUILTINS.has(m));
+    // Resolve LLM hallucinated aliases (jwt → jsonwebtoken, bcrypt → bcryptjs)
+    const missingModules = rawMissing.map(m => _PACKAGE_ALIASES.get(m) || m);
+    // Detect aliases — if the shim already covers the resolved name, no install needed
+    const aliasedFromShim = rawMissing.filter(m => {
+      const real = _PACKAGE_ALIASES.get(m);
+      return real && _SHIMMED_MODULES.has(real);
+    });
+    if (aliasedFromShim.length > 0) {
+      emit({ type: 'warn', msg: `LLM hallucinated package names: ${aliasedFromShim.join(', ')} — the runtime shim already aliases these. If you still see this crash, the shim wasn't re-generated. Restart "nha ui".` });
+    }
+    const uniqueMissing = [...new Set(missingModules)].filter(m => !_SHIMMED_MODULES.has(m));
+    if (uniqueMissing.length > 0 && _attempt < MAX_RETRIES) {
+      emit({ type: 'phase', phase: 'autofix', msg: `Missing module${uniqueMissing.length === 1 ? '' : 's'}: ${uniqueMissing.join(', ')} — batch installing...` });
+      try {
+        await execAsync(`npm install --save --no-audit --no-fund ${uniqueMissing.map(m => JSON.stringify(m)).join(' ')}`, {
+          cwd: projectDir,
+          timeout: 120_000,
+          env: { ...process.env, NODE_ENV: 'development' },
+        });
+        emit({ type: 'status', msg: `Installed ${uniqueMissing.join(', ')} — retrying (attempt ${_attempt + 1}/${MAX_RETRIES})...` });
+        return this.start(projectName, projectDir, emit, _attempt + 1);
+      } catch (installErr) {
+        const diag = _classifyInstallError(installErr);
+        emit({ type: 'warn', msg: `Batch install failed — reason: ${diag.reason}. ${diag.hint}` });
+        if (diag.offlineFallback) {
+          emit({ type: 'status', msg: `Activating NHA_OFFLINE_SHIM=1 fallback — retrying with offline shim...` });
+          this._offlineShim = true;
           return this.start(projectName, projectDir, emit, _attempt + 1);
-        } catch (installErr) {
-          emit({ type: 'warn', msg: `Failed to install ${pkgName}: ${installErr.message.slice(0, 200)}` });
         }
       }
+    }
+
+    // ── Tier 1b: ENOENT on file write → create missing path + retry ──────
+    // Deterministic. LLM SaaS code often writes to data/users.json without
+    // mkdir -p data/ first → ENOENT. We detect, create the dir + empty
+    // placeholder JSON, and retry. Zero LLM call needed.
+    const enoentMatch = stderrBuf.match(/ENOENT[^']*open\s+['"]([^'"]+)['"]/);
+    if (enoentMatch && _attempt < MAX_RETRIES) {
+      const missingPath = enoentMatch[1];
+      // Only auto-create if path is inside the project
+      const projectAbs = path.resolve(projectDir);
+      const missingAbs = path.resolve(missingPath);
+      if (missingAbs.startsWith(projectAbs)) {
+        emit({ type: 'phase', phase: 'autofix', msg: `ENOENT on ${missingPath} — creating directory + empty placeholder...` });
+        try {
+          ensureDir(path.dirname(missingAbs));
+          if (!fs.existsSync(missingAbs)) {
+            const ext = path.extname(missingAbs).toLowerCase();
+            let stub = '';
+            if (ext === '.json') stub = /users|posts|items|list|todos|comments|orders|products/i.test(missingPath) ? '[]' : '{}';
+            else if (ext === '.sqlite' || ext === '.db') { /* skip binary */ }
+            else stub = '';
+            if (ext !== '.sqlite' && ext !== '.db') fs.writeFileSync(missingAbs, stub, 'utf-8');
+          }
+          emit({ type: 'status', msg: `Created ${missingPath} — retrying (attempt ${_attempt + 1}/${MAX_RETRIES})...` });
+          return this.start(projectName, projectDir, emit, _attempt + 1);
+        } catch (e) {
+          emit({ type: 'warn', msg: `Failed to create ${missingPath}: ${e.message.slice(0, 200)}` });
+        }
+      }
+    } else if (missingModules.length > 0 && uniqueMissing.length === 0) {
+      // All missing modules are shimmable in THIS version of the CLI. If we
+      // reached this branch, the user has an OLDER CLI installed that doesn't
+      // know about these shims yet. Surface this loudly with the exact upgrade
+      // command — DON'T leave the user staring at a generic crash.
+      emit({ type: 'error', msg:
+        `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠ IL TUO NHA È OBSOLETO — questo crash è già fixato nell'ultima versione.\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Moduli mancanti che la nuova versione gestisce automaticamente:\n` +
+        `  → ${missingModules.join(', ')}\n\n` +
+        `Aggiorna NHA (3 comandi):\n` +
+        `  1. npm install -g nothumanallowed@latest\n` +
+        `  2. pkill -f "nha-launcher" ; pkill -f "node.*nha"\n` +
+        `  3. nha ui\n\n` +
+        `Verifica versione dopo: nha --version (deve essere >= 16.0.25)\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+      });
     }
 
     // ── Tier 2: runtime errors that need code fix (require/import mismatch,
@@ -514,12 +794,36 @@ ${original.slice(0, 12_000)}`;
             let fixed = '';
             await callLLMStream(loadConfig(), 'You are a precise code repair assistant. Output only the corrected file, no explanation.', fixPrompt, (c) => { fixed += c; }, { max_tokens: 16384 });
             fixed = fixed.replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
-            if (fixed.length > 20 && fixed !== original) {
-              fs.writeFileSync(abs, fixed, 'utf-8');
-              emit({ type: 'status', msg: `Auto-fix: ✓ repaired ${rel} (${fixed.length} chars)` });
-              anyFixed = true;
+
+            // VALIDATION: prevent rollback hell. Reject the LLM output if:
+            //   1. Empty / too short (< 20 chars or < 30% of original)
+            //   2. Identical to original (no fix attempted)
+            //   3. Looks like LLM error response leaked
+            //   4. Syntax-checkable file (.js/.mjs) that doesn't parse — would be worse than original
+            const tooShort = fixed.length < 20 || fixed.length < original.length * 0.3;
+            const isErrorLeak = _looksLikeLLMError(fixed);
+            let syntaxBroken = false;
+            if (!tooShort && !isErrorLeak && (rel.endsWith('.js') || rel.endsWith('.mjs') || rel.endsWith('.cjs'))) {
+              try { new Function(fixed); } catch (synErr) {
+                // Try with sourceType:module via acorn before declaring broken
+                try { acorn.parse(fixed, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true }); }
+                catch { syntaxBroken = true; }
+              }
+            }
+            if (tooShort || isErrorLeak || syntaxBroken || fixed === original) {
+              // Backup the LLM attempt for debugging, but DON'T overwrite the file
+              try { fs.writeFileSync(abs + '.llm-rejected-' + Date.now(), fixed, 'utf-8'); } catch {}
+              const reason = tooShort ? `output too short (${fixed.length} vs ${original.length} chars)`
+                            : isErrorLeak ? 'output looks like an LLM/provider error response'
+                            : syntaxBroken ? 'output has worse syntax errors than input'
+                            : 'no change';
+              emit({ type: 'warn', msg: `Auto-fix REJECTED for ${rel}: ${reason}. Original file preserved.` });
             } else {
-              emit({ type: 'warn', msg: `Auto-fix: LLM returned no useful change for ${rel}` });
+              // Backup original before overwriting
+              try { fs.writeFileSync(abs + '.before-autofix-' + Date.now(), original, 'utf-8'); } catch {}
+              fs.writeFileSync(abs, fixed, 'utf-8');
+              emit({ type: 'status', msg: `Auto-fix: ✓ repaired ${rel} (${original.length} → ${fixed.length} chars)` });
+              anyFixed = true;
             }
           } catch (e) {
             emit({ type: 'warn', msg: `Auto-fix: LLM repair of ${rel} failed — ${(e.message || '').slice(0, 200)}` });
@@ -597,7 +901,8 @@ const ProjectStore = {
       if (!_isSafePath(f.name)) continue;
       const abs = path.join(dir, f.name);
       ensureDir(path.dirname(abs));
-      fs.writeFileSync(abs, f.content ?? '', 'utf-8');
+      const sanitized = _sanitizeGeneratedFile(f.name, f.content ?? '', projectName);
+      fs.writeFileSync(abs, sanitized, 'utf-8');
     }
     const meta = {
       description: description ?? '',
@@ -1005,7 +1310,9 @@ RULES:
         return 'OK — edit applied (fuzzy match)';
       }
       emit({ type: 'tool', op: 'edit', path: relPath, result: 'old_not_found' });
-      return 'Error: old_text not found in file. Use read_file to see the EXACT current content, copy the exact lines, and retry.';
+      // Include the actual file content in the error response so the LLM can
+      // produce a correct old_text on retry without needing a separate read_file.
+      return `Error: old_text not found in file.\n\nCURRENT CONTENT OF ${relPath}:\n\`\`\`\n${src.slice(0, 16000)}\n\`\`\`\n\nPick the EXACT lines you want to replace from above, copy them as old_text, and retry edit_file.`;
     }
 
     if (toolName === 'create_file') {
@@ -1090,9 +1397,11 @@ RULES:
     return `Error: unknown tool ${toolName}`;
   }
 
-  // Try native tool calling first (Anthropic, OpenAI)
+  // Try native tool calling first. Providers that support OpenAI-style native
+  // tool_use: Anthropic, OpenAI, and OpenRouter (which proxies to Claude/GPT/etc.
+  // with the same OpenAI-compatible schema).
   const provider = config.llm?.provider || 'anthropic';
-  const useNativeTools = provider === 'anthropic' || provider === 'openai';
+  const useNativeTools = provider === 'anthropic' || provider === 'openai' || provider === 'openrouter';
 
   if (useNativeTools) {
     const systemPrompt = buildSystemPrompt();
@@ -1105,9 +1414,30 @@ RULES:
     );
   } else {
     // Fallback for other providers — use old text-based <tool> system
-    // (kept for backward compatibility with Gemini, DeepSeek, etc.)
+    // (kept for backward compatibility with Gemini, DeepSeek, Liara, etc.)
     let conversationHistory = [{ role: 'user', content: userContent }];
     emit({ type: 'text', token: 'Note: Using text-based tools (native tool calling not available for this provider).\n' });
+    // Inject text-based tool-format instructions into the user message so the
+    // LLM emits calls in a format the parser recognizes. The parser now ALSO
+    // accepts OpenAI/Anthropic-style nude JSON, but the wrapper form is more
+    // robust against truncation.
+    const textBasedFormat = `
+TOOL CALL FORMAT (CRITICAL):
+You MUST emit tool calls using THIS exact format (one per line, on its own line):
+
+<tool>{"op": "read", "path": "public/index.html"}</tool>
+<tool>{"op": "edit", "path": "public/index.html", "old": "exact old text", "new": "new text"}</tool>
+<tool>{"op": "write", "path": "public/css/main.css", "content": "body { ... }"}</tool>
+<tool>{"op": "check", "path": "server.js"}</tool>
+
+Valid ops: read, edit, write, delete, list, search, run, check, sandbox
+
+DO NOT write things like {"tool": "read_file", "args": {...}} — that format is for
+OpenAI-native providers, not for you. Use <tool>{"op": "read", "path": "..."}</tool>.
+
+After ALL fixes are done, emit <done/> on its own line.
+`;
+    conversationHistory[0].content = (typeof conversationHistory[0].content === 'string' ? conversationHistory[0].content : userContent) + '\n\n' + textBasedFormat;
     // Minimal old-style loop with <tool> tags — simplified
     for (let step = 0; step < MAX_STEPS; step++) {
       if (isAborted()) break;
@@ -1131,31 +1461,25 @@ RULES:
     // Check if agent signaled completion
     const isDone = stepResponse.includes('<done/>') || stepResponse.includes('<done />');
 
-    // Extract and execute ALL tool calls from this step
-    // First try matched pairs, then handle truncated (unclosed) tool tags
-    const toolRegex = /<tool>([\s\S]*?)<\/tool>/g;
-    let match;
+    // Extract and execute ALL tool calls from this step.
+    // Accept THREE wire formats (LLM providers vary wildly):
+    //   1. NHA native:    <tool>{"op":"read","path":"..."}</tool>
+    //   2. OpenAI-style:  {"tool":"read_file","args":{"file_path":"..."}}
+    //   3. Anthropic-style: <tool>{"name":"read_file","input":{"path":"..."}}</tool>
+    // Normalize all three into the internal {op, path, ...} shape before dispatch.
+    const toolCalls = _extractAllToolCalls(stepResponse);
     const toolResults = [];
-    const matchedRanges = [];
+    const matchedRanges = toolCalls.matchedRanges;
 
-    while ((match = toolRegex.exec(stepResponse)) !== null) {
-      matchedRanges.push([match.index, match.index + match[0].length]);
+    for (const rawCall of toolCalls.calls) {
       let toolCall;
       try {
-        let raw = match[1].trim();
-        raw = raw.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-        toolCall = JSON.parse(raw);
-      } catch {
-        // LLM often puts raw HTML/code inside JSON values without proper escaping.
-        // Extract fields manually using a robust regex-based parser.
-        try {
-          toolCall = _parseToolCallRobust(match[1].trim());
-        } catch (parseErr2) {
-          console.error('[TOOL-PARSE] JSON parse failed even after robust parse:', parseErr2.message, 'raw:', match[1].slice(0, 200));
-          toolResults.push({ op: 'error', result: 'JSON parse failed' });
-          emit({ type: 'tool', op: 'parse_error', path: '', result: 'json_parse_failed' });
-          continue;
-        }
+        toolCall = _normalizeToolCall(rawCall);
+      } catch (parseErr) {
+        console.error('[TOOL-PARSE] failed:', parseErr.message, 'raw:', JSON.stringify(rawCall).slice(0, 200));
+        toolResults.push({ op: 'error', result: 'parse_failed' });
+        emit({ type: 'tool', op: 'parse_error', path: '', result: 'parse_failed' });
+        continue;
       }
 
       const { op, path: relPath, old: oldStr, new: newStr, content, newPath, query, glob: globPat, cmd } = toolCall;
@@ -1266,8 +1590,18 @@ RULES:
             toolResults.push({ op: 'edit', path: relPath, result: 'ok' });
             emit({ type: 'tool', op: 'edit', path: relPath, result: 'ok', oldSnippet: oldStr.slice(0, 2000), newSnippet: newStr?.slice(0, 2000) });
           } else {
-            // No match — return error, let the agent retry with correct text
-            toolResults.push({ op: 'edit', path: relPath, result: 'old_not_found — your old text does not match the file. Use read tool to see the EXACT current content, then copy-paste the exact lines and retry.' });
+            // No match — auto-read the file and INCLUDE its content in the
+            // feedback. Without this, the LLM at the next step is blind and
+            // can't correct the old_text. Critical fix for text-based mode
+            // where the LLM doesn't see tool results between calls.
+            const fileContentForRetry = src.slice(0, 16000);
+            toolResults.push({
+              op: 'edit',
+              path: relPath,
+              result: 'old_not_found',
+              hint: 'Your old_text did NOT match the file. The CURRENT file content is included below — copy the EXACT lines you want to replace and retry edit with that exact text as old.',
+              content: fileContentForRetry,
+            });
             emit({ type: 'tool', op: 'edit', path: relPath, result: 'old_not_found', oldSnippet: oldStr.slice(0, 200) });
           }
         }
@@ -1529,11 +1863,16 @@ RULES:
       break;
     }
 
-    // Build tool results feedback for next iteration
+    // Build tool results feedback for next iteration.
+    // CRITICAL: when edit fails with old_not_found, include the CURRENT
+    // file content so the LLM can produce a correct old_text on retry.
+    // Without this, text-based mode loops forever on the same wrong old_text.
     const feedbackParts = toolResults.map((r) => {
       let msg = `[${r.op}] ${r.path || ''}: ${r.result}`;
-      if (r.op === 'read' && r.content) msg += `\n\`\`\`\n${r.content}\n\`\`\``;
-      if (r.hint) msg += ` — ${r.hint}`;
+      if (r.hint) msg += `\n  HINT: ${r.hint}`;
+      if (r.content) {
+        msg += `\n\nCURRENT CONTENT OF ${r.path}:\n\`\`\`\n${r.content}\n\`\`\`\n\nTo fix: pick the exact lines you want to replace from above, use them as "old", and retry the edit.`;
+      }
       return msg;
     });
 
@@ -2850,48 +3189,59 @@ export function register(router) {
   }
 
   router.post('/api/studio/webcraft/lint', async (req, res) => {
+    // ROBUST lint endpoint — NEVER returns 500. If any linter crashes,
+    // returns 200 with empty diagnostics + the error logged. A failed lint
+    // must not break the IDE streaming flow.
     try {
       const { projectName, path: relPath } = await parseBody(req);
       if (!projectName || !relPath) return sendError(res, 400, 'projectName and path required');
-      const content = ProjectStore.readFile(projectName, relPath);
-      if (content === null) return sendJSON(res, 200, { diagnostics: [] });
+      let content;
+      try { content = ProjectStore.readFile(projectName, relPath); }
+      catch { content = null; }
+      if (content === null || content === undefined) return sendJSON(res, 200, { diagnostics: [] });
 
       const ext = (relPath.split('.').pop() || '').toLowerCase();
       let diagnostics = [];
 
-      // JavaScript / JSX — try TypeScript checkJs first, fallback to acorn
+      // Each linter wrapped individually — a crash in one doesn't kill the others
       if (['js', 'mjs', 'jsx', 'cjs'].includes(ext)) {
-        const projectDir = ProjectStore.dir(projectName);
-        const tsDiags = await lintJSWithTypeScript(projectDir, relPath);
-        diagnostics = tsDiags || lintJS(content, relPath, projectName);
-      }
-
-      // JSON — parse errors with precise location
-      if (ext === 'json') {
-        try { JSON.parse(content); } catch (e) {
-          const posMatch = e.message.match(/position (\d+)/i);
-          const pos = posMatch ? parseInt(posMatch[1]) : 0;
-          const before = content.slice(0, pos).split('\n');
-          diagnostics.push({
-            from: { line: before.length, col: (before[before.length - 1] || '').length },
-            severity: 'error',
-            message: e.message,
-          });
+        try {
+          const projectDir = ProjectStore.dir(projectName);
+          const tsDiags = await lintJSWithTypeScript(projectDir, relPath).catch(() => null);
+          diagnostics = tsDiags || lintJS(content, relPath, projectName) || [];
+        } catch (e) {
+          console.error('[lint] JS linter crashed for', relPath, ':', e.message);
+          diagnostics = [];
         }
-      }
-
-      // CSS — brace balance + property validation
-      if (ext === 'css') {
-        diagnostics = lintCSS(content);
-      }
-
-      // HTML/HTM — tag balance + reference validation
-      if (ext === 'html' || ext === 'htm') {
-        diagnostics = lintHTML(content, relPath, projectName);
+      } else if (ext === 'json') {
+        try {
+          JSON.parse(content);
+        } catch (e) {
+          try {
+            const posMatch = e.message.match(/position (\d+)/i);
+            const pos = posMatch ? parseInt(posMatch[1]) : 0;
+            const before = content.slice(0, pos).split('\n');
+            diagnostics.push({
+              from: { line: before.length, col: (before[before.length - 1] || '').length },
+              severity: 'error',
+              message: e.message,
+            });
+          } catch {}
+        }
+      } else if (ext === 'css') {
+        try { diagnostics = lintCSS(content) || []; }
+        catch (e) { console.error('[lint] CSS linter crashed:', e.message); diagnostics = []; }
+      } else if (ext === 'html' || ext === 'htm') {
+        try { diagnostics = lintHTML(content, relPath, projectName) || []; }
+        catch (e) { console.error('[lint] HTML linter crashed:', e.message); diagnostics = []; }
       }
 
       sendJSON(res, 200, { diagnostics });
-    } catch (e) { sendError(res, 500, e.message); }
+    } catch (e) {
+      // Even the outer catch returns 200 — lint failures must not break the IDE
+      console.error('[lint] outer error:', e.message);
+      sendJSON(res, 200, { diagnostics: [], error: e.message });
+    }
   });
 
   // ── File write (from IDE editor) ──────────────────────────────────────────
@@ -3205,6 +3555,45 @@ ${original.slice(0, 12_000)}`;
     } catch (e) { console.error('[scan] CRASH:', e); sendError(res, 500, e.message); }
   });
 
+  // ── Auto-extend CSS when coverage is below threshold ──────────────────────
+  router.post('/api/studio/webcraft/extend-styles', async (req, res) => {
+    try {
+      const { projectName, minCoverage } = await parseBody(req);
+      if (!projectName) return sendError(res, 400, 'projectName required');
+      const config = loadConfig();
+      const result = await _autoExtendStylesIfNeeded(projectName, config, null, { minCoverage: minCoverage ?? 0.6 });
+      sendJSON(res, 200, result);
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
+  // ── Smart asset completion (sibling fill + LLM generation) ────────────────
+  // For missing CSS/JS referenced in HTML: first try copying from sibling
+  // files with real content (deterministic, instant), then LLM-generate
+  // anything still missing. Falls back to stub only when both fail.
+  router.post('/api/studio/webcraft/complete', async (req, res) => {
+    try {
+      const { projectName } = await parseBody(req);
+      if (!projectName) return sendError(res, 400, 'projectName required');
+      const config = loadConfig();
+      const report = await _completeMissingAssets(projectName, config, null);
+      sendJSON(res, 200, report);
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
+  // ── Deterministic auto-repair (zero LLM, pure code) ────────────────────────
+  // Handles the common bug classes that the LLM gets wrong:
+  //   1. Mismatched/unclosed HTML tags  → balance via tag stack
+  //   2. Referenced files not found     → create empty placeholders
+  // No tool calling, no streaming, no LLM. Synchronous fixes.
+  router.post('/api/studio/webcraft/auto-repair', async (req, res) => {
+    try {
+      const { projectName } = await parseBody(req);
+      if (!projectName) return sendError(res, 400, 'projectName required');
+      const result = autoRepairProject(projectName);
+      sendJSON(res, 200, result);
+    } catch (e) { sendError(res, 500, e.message); }
+  });
+
   // ── Syntax check ──────────────────────────────────────────────────────────
   router.post('/api/studio/webcraft/syntax-check', async (req, res) => {
     try {
@@ -3233,6 +3622,1125 @@ function _safeName(name) {
  * This extracts "op", "path", "old", "new", "content", "query", "cmd" etc. by finding
  * the key-value boundaries manually.
  */
+// ─────────────────────────────────────────────────────────────────────────────
+// DETERMINISTIC AUTO-REPAIR
+// Fixes common bug classes (mismatched HTML tags, missing CSS/JS files) using
+// pure code — NO LLM call. The LLM-based "Fix" button is fragile when the
+// provider doesn't support native tool calling; this deterministic pass runs
+// first and resolves 80% of common project errors instantly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _HTML_VOID = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
+  'param', 'source', 'track', 'wbr',
+]);
+
+/**
+ * Balance HTML tags in `html` by tracking open/close via a pushdown stack.
+ * Returns { fixed, balanced, edits } where:
+ *   - fixed: the corrected HTML string
+ *   - balanced: true if tags were already balanced or fixable, false if too broken
+ *   - edits: list of human-readable changes (for logging)
+ */
+export function _balanceHtmlTags(html) {
+  const edits = [];
+  // Strip comments and scripts/styles to avoid false matches in their content
+  const placeholders = [];
+  let work = html
+    .replace(/<!--[\s\S]*?-->/g, (m) => { placeholders.push(m); return `__NHA_PH_${placeholders.length - 1}__`; })
+    .replace(/<(script|style)([^>]*)>([\s\S]*?)<\/\1>/gi, (m) => { placeholders.push(m); return `__NHA_PH_${placeholders.length - 1}__`; });
+
+  const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?>/g;
+  const stack = [];
+  let outStr = '';
+  let lastIdx = 0;
+  let match;
+
+  while ((match = tagRe.exec(work)) !== null) {
+    const tag = match[0];
+    const name = match[1].toLowerCase();
+    const isClose = tag.startsWith('</');
+    const isSelfClose = tag.endsWith('/>') || _HTML_VOID.has(name);
+
+    outStr += work.slice(lastIdx, match.index);
+
+    if (isClose) {
+      // Find matching open in stack
+      let depth = stack.length - 1;
+      let foundAt = -1;
+      while (depth >= 0) {
+        if (stack[depth].name === name) { foundAt = depth; break; }
+        depth--;
+      }
+      if (foundAt === -1) {
+        // Stray close — drop it
+        edits.push(`Removed stray </${name}>`);
+        // Skip writing this tag
+        lastIdx = match.index + tag.length;
+        continue;
+      }
+      // Auto-close anything above the match
+      while (stack.length - 1 > foundAt) {
+        const top = stack.pop();
+        outStr += `</${top.name}>`;
+        edits.push(`Auto-closed <${top.name}> before </${name}>`);
+      }
+      stack.pop();
+      outStr += tag;
+    } else if (isSelfClose) {
+      outStr += tag;
+    } else {
+      stack.push({ name, idx: match.index });
+      outStr += tag;
+    }
+    lastIdx = match.index + tag.length;
+  }
+  outStr += work.slice(lastIdx);
+
+  // Close any remaining open tags at the very end
+  while (stack.length > 0) {
+    const top = stack.pop();
+    // Insert closing tags before </body> or </html> if present, else at end
+    const bodyClose = outStr.lastIndexOf('</body>');
+    const htmlClose = outStr.lastIndexOf('</html>');
+    let insertAt = outStr.length;
+    if (bodyClose !== -1 && top.name !== 'body' && top.name !== 'html') insertAt = bodyClose;
+    else if (htmlClose !== -1 && top.name !== 'html') insertAt = htmlClose;
+    outStr = outStr.slice(0, insertAt) + `</${top.name}>` + outStr.slice(insertAt);
+    edits.push(`Auto-closed <${top.name}> at end of document`);
+  }
+
+  // Restore placeholders
+  const fixed = outStr.replace(/__NHA_PH_(\d+)__/g, (_, i) => placeholders[+i] || '');
+  return { fixed, balanced: true, edits };
+}
+
+/**
+ * Extract <link href="..."> and <script src="..."> + <img src="..."> targets
+ * from HTML. Returns relative paths that point inside the project.
+ */
+function _extractHtmlAssetRefs(html) {
+  const refs = [];
+  const linkRe = /<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  const scriptRe = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  let m;
+  while ((m = linkRe.exec(html)) !== null) refs.push({ kind: 'css', href: m[1] });
+  while ((m = scriptRe.exec(html)) !== null) refs.push({ kind: 'js', href: m[1] });
+  return refs;
+}
+
+function _normalizeAssetPath(href, htmlRelPath) {
+  // Strip query/hash
+  let p = href.replace(/[?#].*$/, '');
+  // Skip external (http://, https://, //, data:)
+  if (/^(?:https?:)?\/\//.test(p) || p.startsWith('data:') || p.startsWith('//')) return null;
+  // Absolute paths starting with / are project-root-relative
+  if (p.startsWith('/')) return p.slice(1);
+  // Relative paths — resolve against the HTML file's directory
+  const htmlDir = path.dirname(htmlRelPath);
+  return path.posix.normalize(path.posix.join(htmlDir, p));
+}
+
+function _placeholderContent(kind, refPath) {
+  if (kind === 'css') {
+    return `/* nha-webcraft: auto-created placeholder for ${refPath}\n   The HTML referenced this file but it didn't exist. This is a\n   minimal stub to keep the sandbox bootable. Add real styles via chat. */\n\n/* base reset */\n* { box-sizing: border-box; }\nbody { margin: 0; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }\n`;
+  }
+  if (kind === 'js') {
+    return `// nha-webcraft: auto-created placeholder for ${refPath}\n// The HTML referenced this file but it didn't exist. This is a\n// minimal stub to keep the sandbox bootable. Add real logic via chat.\nconsole.log('[${refPath}] placeholder loaded');\n`;
+  }
+  return '';
+}
+
+/**
+ * Scan all .js/.mjs/.ts files for filesystem paths referenced in string
+ * literals (typically used for file-based storage by LLM-generated SaaS code:
+ * fs.writeFile('data/users.json', ...), fs.readFile('db/posts.json'), etc).
+ * Creates missing directories + empty JSON placeholders so the app can boot
+ * instead of crashing with ENOENT on first write.
+ */
+/**
+ * Auto-repair unsafe `err.X` and similar null-deref patterns in route handlers.
+ * The most common LLM-generated bug: error middleware that does `res.send(err.stack)`
+ * but `err` is undefined because the middleware signature is wrong (only 3 args
+ * instead of 4). Result: 500 on EVERY request including static files.
+ *
+ * Pattern fixed:
+ *   err.stack       → (err && err.stack)          if not already null-checked
+ *   err.message     → (err && err.message)        same
+ *   error.stack     → (error && error.stack)      same
+ *   error.message   → (error && error.message)    same
+ *
+ * Skips matches already guarded (`err && err.stack`, `err?.stack`, `err?.message`).
+ */
+export function _repairUnsafeErrAccess(projectDir) {
+  const repaired = [];
+  const exts = new Set(['.js', '.mjs', '.cjs']);
+  const skipDirs = new Set(['node_modules', '.git', '.nha-shims', 'dist', 'build', '.next', 'public']);
+  // Match `IDENT.PROP` where PROP is stack|message and IDENT is err|error|e.
+  // Negative lookbehind: skip if preceded by `&&`, `||`, `?.`, `(`, `:`, `,`.
+  // Use a global regex and inspect context manually.
+  const targetIdents = ['err', 'error', 'e'];
+  const targetProps = ['stack', 'message', 'code', 'statusCode', 'name'];
+
+  const stack = [projectDir];
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+    for (const ent of entries) {
+      if (skipDirs.has(ent.name) || ent.name.startsWith('.')) continue;
+      const abs = path.join(cur, ent.name);
+      if (ent.isDirectory()) { stack.push(abs); continue; }
+      if (!exts.has(path.extname(ent.name))) continue;
+      let content;
+      try { content = fs.readFileSync(abs, 'utf-8'); } catch { continue; }
+
+      let changed = content;
+      const edits = [];
+
+      for (const ident of targetIdents) {
+        for (const prop of targetProps) {
+          // Match unsafe access: `ident.prop` not preceded by `&&`, `?`, `||`
+          // Use a simpler regex + manual filter for surrounding context
+          const re = new RegExp(`\\b${ident}\\.${prop}\\b`, 'g');
+          changed = changed.replace(re, (match, offset, str) => {
+            // Check context preceding this match
+            const before = str.slice(Math.max(0, offset - 40), offset);
+            // Already guarded patterns — skip
+            if (/&&\s*$/.test(before)) return match;
+            if (/\?\.$/.test(before.slice(-2))) return match;
+            if (/\?\s*$/.test(before)) return match;
+            if (/\|\|\s*$/.test(before)) return match;
+            // Inside object literal key (e.g., `{ stack: err.stack }`) is harmless
+            // when it's the value. We still wrap because the assignment crashes too.
+            // Inside a string literal — skip
+            const lineStart = str.lastIndexOf('\n', offset) + 1;
+            const lineUpTo = str.slice(lineStart, offset);
+            const singleQuotes = (lineUpTo.match(/(?<!\\)'/g) || []).length;
+            const doubleQuotes = (lineUpTo.match(/(?<!\\)"/g) || []).length;
+            const backticks = (lineUpTo.match(/(?<!\\)`/g) || []).length;
+            if (singleQuotes % 2 !== 0 || doubleQuotes % 2 !== 0 || backticks % 2 !== 0) return match;
+            // Inside a comment — skip
+            if (/\/\/[^\n]*$/.test(lineUpTo)) return match;
+            // Already inside an existing parens guard like `(err && err.stack)` — skip
+            const wider = str.slice(Math.max(0, offset - 60), offset);
+            if (new RegExp(`\\b${ident}\\s*&&\\s*$`).test(wider)) return match;
+            // Wrap in null-check
+            edits.push(`${ident}.${prop} → (${ident} && ${ident}.${prop})`);
+            return `(${ident} && ${ident}.${prop})`;
+          });
+        }
+      }
+
+      if (changed !== content && edits.length > 0) {
+        try {
+          fs.writeFileSync(abs + '.before-err-repair-' + Date.now(), content, 'utf-8');
+          fs.writeFileSync(abs, changed, 'utf-8');
+          const rel = path.relative(projectDir, abs).replace(/\\/g, '/');
+          repaired.push({ file: rel, edits: edits.length, samples: edits.slice(0, 3) });
+        } catch {}
+      }
+    }
+  }
+  return repaired;
+}
+
+export function _detectMissingDataFiles(projectDir) {
+  const created = [];
+  const exts = new Set(['.js', '.mjs', '.cjs', '.ts']);
+  const skipDirs = new Set(['node_modules', '.git', '.nha-shims', 'dist', 'build', '.next', 'public']);
+  // Match string literals that look like project-relative storage paths:
+  //   "data/users.json", './db/posts.json', "uploads/", "logs/app.log"
+  // Skip absolute paths, URLs, node_modules/, dotfiles.
+  const re = /['"`](?:\.\/)?((?:data|db|storage|uploads|logs|tmp|cache|sessions)\/[A-Za-z0-9_\-./]+)['"`]/g;
+  const stack = [projectDir];
+  const seen = new Set();
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+    for (const ent of entries) {
+      if (skipDirs.has(ent.name) || ent.name.startsWith('.')) continue;
+      const abs = path.join(cur, ent.name);
+      if (ent.isDirectory()) { stack.push(abs); continue; }
+      if (!exts.has(path.extname(ent.name))) continue;
+      let content;
+      try { content = fs.readFileSync(abs, 'utf-8'); } catch { continue; }
+      let m;
+      re.lastIndex = 0;
+      while ((m = re.exec(content)) !== null) {
+        const rel = m[1].replace(/\\/g, '/');
+        if (seen.has(rel)) continue;
+        seen.add(rel);
+        const fullPath = path.join(projectDir, rel);
+        try {
+          ensureDir(path.dirname(fullPath));
+          // Only create file if it looks like a file (has extension) and doesn't exist
+          if (path.extname(rel) && !fs.existsSync(fullPath)) {
+            const ext = path.extname(rel).toLowerCase();
+            let stub = '';
+            if (ext === '.json') stub = rel.includes('users') || rel.includes('posts') || rel.includes('items') || rel.includes('list') ? '[]' : '{}';
+            else if (ext === '.txt' || ext === '.log') stub = '';
+            else if (ext === '.sqlite' || ext === '.db') continue; // skip binary
+            else stub = '';
+            fs.writeFileSync(fullPath, stub, 'utf-8');
+            created.push(rel);
+          }
+        } catch {}
+      }
+    }
+  }
+  return created;
+}
+
+// Names that imply specific functionality — sibling fill is forbidden because
+// the file MUST have specific content, not a generic copy of style.css.
+// LLM generation is preferred for these.
+const _SEMANTIC_FILE_NAMES = new Set([
+  'animations', 'animation', 'transitions', 'transition',
+  'theme', 'themes', 'dark', 'light',
+  'charts', 'chart', 'graphs', 'graph', 'plot',
+  'auth', 'authentication', 'login', 'signup', 'register',
+  'dashboard', 'admin', 'profile',
+  'portfolio', 'gallery', 'projects',
+  'reset', 'normalize', 'print',
+  'mobile', 'responsive', 'desktop',
+]);
+
+function _hasSemanticName(filePath) {
+  const base = path.basename(filePath).replace(/\.[^.]+$/, '').toLowerCase();
+  return _SEMANTIC_FILE_NAMES.has(base);
+}
+
+/**
+ * Score how similar two filenames are. Returns 0..1.
+ * "main.css" vs "style.css" → some score based on prefix/suffix shared chars.
+ */
+function _fileSimilarity(a, b) {
+  const aBase = a.replace(/\.[^.]+$/, '').toLowerCase();
+  const bBase = b.replace(/\.[^.]+$/, '').toLowerCase();
+  if (aBase === bBase) return 1;
+  // Common CSS naming variants get a boost
+  const cssAliases = ['main', 'style', 'styles', 'app', 'index', 'global'];
+  const jsAliases = ['main', 'app', 'index', 'script', 'scripts', 'bundle'];
+  const aliases = a.endsWith('.css') ? cssAliases : a.endsWith('.js') ? jsAliases : [];
+  if (aliases.includes(aBase) && aliases.includes(bBase)) return 0.8;
+  // Simple Levenshtein-ish: count common chars at start/end
+  let prefix = 0;
+  while (prefix < aBase.length && prefix < bBase.length && aBase[prefix] === bBase[prefix]) prefix++;
+  let suffix = 0;
+  while (suffix < aBase.length - prefix && suffix < bBase.length - prefix && aBase[aBase.length - 1 - suffix] === bBase[bBase.length - 1 - suffix]) suffix++;
+  return (prefix + suffix) / Math.max(aBase.length, bBase.length);
+}
+
+/**
+ * Find a sibling file with real content that could fill in for a missing asset.
+ * E.g. missing `public/css/main.css` but `public/css/style.css` exists with
+ * 8459 bytes — that's almost certainly what the LLM meant.
+ */
+function _findSiblingFile(projectDir, missingRel, exclude) {
+  // Refuse sibling fill for semantic file names — they need real content
+  // matching the name's intent, not a copy of style.css.
+  if (_hasSemanticName(missingRel)) return null;
+  const missingAbs = path.join(projectDir, missingRel);
+  const dir = path.dirname(missingAbs);
+  const ext = path.extname(missingRel).toLowerCase();
+  if (!fs.existsSync(dir)) return null;
+  let entries;
+  try { entries = fs.readdirSync(dir); } catch { return null; }
+  const excludeSet = exclude instanceof Set ? exclude : new Set();
+  const candidates = [];
+  for (const name of entries) {
+    if (path.extname(name).toLowerCase() !== ext) continue;
+    if (name === path.basename(missingRel)) continue;
+    const abs = path.join(dir, name);
+    // Skip files we just filled in this session (avoid filling A from B
+    // when B was itself just filled from C — produces semantic duplicates)
+    const relFromProject = path.relative(projectDir, abs).replace(/\\/g, '/');
+    if (excludeSet.has(relFromProject)) continue;
+    let stat;
+    try { stat = fs.statSync(abs); } catch { continue; }
+    if (!stat.isFile() || stat.size < 200) continue;
+    // Skip nha-generated placeholders (small + commented)
+    try {
+      const head = fs.readFileSync(abs, 'utf-8').slice(0, 200);
+      if (/nha-webcraft:.*auto-created placeholder/i.test(head)) continue;
+      // Skip files with semantic names — they have specific purpose
+      if (_hasSemanticName(name)) continue;
+    } catch { continue; }
+    const sim = _fileSimilarity(path.basename(missingRel), name);
+    candidates.push({ name, abs, size: stat.size, similarity: sim });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => (b.similarity * b.size) - (a.similarity * a.size));
+  return candidates[0];
+}
+
+/**
+ * Build a focused LLM prompt to generate a single missing file. Includes the
+ * HTML that references it (for context) and other files in the project as
+ * style reference. Returns the prompt strings; caller invokes callLLM.
+ */
+function _buildCompletionPrompt(projectDir, missingRel, referencedFrom) {
+  const ext = path.extname(missingRel).toLowerCase();
+  const kind = ext === '.css' ? 'CSS stylesheet' : ext === '.js' ? 'JavaScript file' : 'asset file';
+  let htmlSnippet = '';
+  try {
+    if (referencedFrom) {
+      const html = fs.readFileSync(path.join(projectDir, referencedFrom), 'utf-8');
+      htmlSnippet = html.slice(0, 4000);
+    }
+  } catch {}
+  // Find sibling files of same kind for style reference
+  const siblings = [];
+  try {
+    const dir = path.dirname(path.join(projectDir, missingRel));
+    if (fs.existsSync(dir)) {
+      for (const name of fs.readdirSync(dir).slice(0, 5)) {
+        if (path.extname(name).toLowerCase() !== ext) continue;
+        const abs = path.join(dir, name);
+        try {
+          const content = fs.readFileSync(abs, 'utf-8');
+          if (/nha-webcraft:.*placeholder/i.test(content.slice(0, 200))) continue;
+          siblings.push({ name, preview: content.slice(0, 1500) });
+        } catch {}
+      }
+    }
+  } catch {}
+  const siblingCtx = siblings.length
+    ? '\n\nOther ' + kind + ' files in the project (for style/convention reference):\n' +
+      siblings.map(s => '### ' + s.name + '\n' + s.preview).join('\n\n')
+    : '';
+  const sys = 'You are an expert frontend developer. Generate the complete contents of a single file. Output ONLY the file content — no markdown fences, no explanations, no preamble. The output will be written directly to disk.';
+  const user = 'Generate the full contents of `' + missingRel + '` for a web project.\n\n' +
+    (htmlSnippet ? 'The file is referenced by `' + referencedFrom + '`:\n```\n' + htmlSnippet + '\n```' : '') +
+    siblingCtx +
+    '\n\nProduce production-quality ' + kind + ' that is coherent with the rest of the project.';
+  return { sys, user };
+}
+
+/**
+ * Complete missing assets in a project: first try sibling fill (deterministic),
+ * then fall back to LLM generation. Returns a report of what was filled and how.
+ */
+export async function _completeMissingAssets(projectName, config, emit) {
+  const dir = ProjectStore.dir(projectName);
+  if (!fs.existsSync(dir)) throw new Error('project not found');
+  const report = { siblingFills: [], llmFills: [], stillMissing: [], stubFallbacks: [] };
+
+  // Discover every HTML asset reference and whether the target exists
+  const htmlFiles = [];
+  const stack = [dir];
+  const skipDirs = new Set(['node_modules', '.git', '.nha-shims', 'dist', 'build', '.next']);
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+    for (const ent of entries) {
+      if (skipDirs.has(ent.name) || ent.name.startsWith('.')) continue;
+      const abs = path.join(cur, ent.name);
+      if (ent.isDirectory()) { stack.push(abs); continue; }
+      const ext = path.extname(ent.name).toLowerCase();
+      if (ext === '.html' || ext === '.htm') htmlFiles.push(abs);
+    }
+  }
+
+  const missingByPath = new Map();
+  for (const htmlAbs of htmlFiles) {
+    let html;
+    try { html = fs.readFileSync(htmlAbs, 'utf-8'); } catch { continue; }
+    const htmlRel = path.relative(dir, htmlAbs).replace(/\\/g, '/');
+    const refs = _extractHtmlAssetRefs(html);
+    for (const ref of refs) {
+      const target = _normalizeAssetPath(ref.href, htmlRel);
+      if (!target) continue;
+      const targetAbs = path.join(dir, target);
+      // Treat existing-but-placeholder as missing
+      let isPlaceholder = false;
+      if (fs.existsSync(targetAbs)) {
+        try {
+          const head = fs.readFileSync(targetAbs, 'utf-8').slice(0, 200);
+          isPlaceholder = /nha-webcraft:.*placeholder/i.test(head);
+        } catch {}
+        if (!isPlaceholder) continue;
+      }
+      if (!missingByPath.has(target)) {
+        missingByPath.set(target, { kind: ref.kind, referencedFrom: htmlRel, isPlaceholder });
+      }
+    }
+  }
+
+  if (missingByPath.size === 0) {
+    return report;
+  }
+
+  if (emit) emit({ type: 'status', msg: 'Completing ' + missingByPath.size + ' missing/placeholder asset' + (missingByPath.size === 1 ? '' : 's') + '...' });
+
+  // Phase 1: HTML reference rewrite (NO file duplication).
+  // When `main.css` is referenced but missing AND `style.css` exists in the
+  // same dir with real content, the correct fix is NOT to copy style.css
+  // into main.css (creates a duplicate with mismatched semantic name) but
+  // to REWRITE the HTML <link href="main.css"> → <link href="style.css">.
+  // This preserves the LLM's actual file structure.
+  report.htmlRewrites = report.htmlRewrites || [];
+  const referencedFromMap = new Map();  // htmlPath → list of {oldHref, newHref}
+  const stillMissing = [];
+  for (const [target, info] of missingByPath) {
+    const sibling = _findSiblingFile(dir, target, new Set());
+    if (sibling) {
+      // Don't copy. Rewrite the HTML reference to point to the real file.
+      const newRef = path.posix.relative(
+        path.dirname(info.referencedFrom),
+        path.relative(dir, sibling.abs).replace(/\\/g, '/')
+      ) || path.basename(sibling.name);
+      const htmlRewrite = { from: info.referencedFrom, oldHref: target, newHref: newRef, sibling: sibling.name };
+      if (!referencedFromMap.has(info.referencedFrom)) referencedFromMap.set(info.referencedFrom, []);
+      referencedFromMap.get(info.referencedFrom).push(htmlRewrite);
+      report.htmlRewrites.push(htmlRewrite);
+      if (emit) emit({ type: 'status', msg: `HTML rewrite: ${info.referencedFrom} → ${target} now points to ${sibling.name} (${sibling.size} bytes, real content)` });
+      continue;
+    }
+    stillMissing.push({ target, ...info });
+  }
+
+  // Apply HTML rewrites (one pass per file)
+  for (const [htmlRel, rewrites] of referencedFromMap) {
+    try {
+      const htmlAbs = path.join(dir, htmlRel);
+      let html = fs.readFileSync(htmlAbs, 'utf-8');
+      for (const r of rewrites) {
+        // Rewrite both `href="X"` and `src="X"` for the old asset path.
+        // Handle both relative ('css/main.css') and absolute ('/css/main.css').
+        const oldBase = path.basename(r.oldHref);
+        const re = new RegExp(`(href|src)=(["'])([^"']*${oldBase.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})\\2`, 'g');
+        html = html.replace(re, (_m, attr, q) => `${attr}=${q}${r.newHref}${q}`);
+      }
+      fs.writeFileSync(htmlAbs, html, 'utf-8');
+    } catch (e) {
+      if (emit) emit({ type: 'warn', msg: `Failed to rewrite ${htmlRel}: ${e.message}` });
+    }
+  }
+
+  // Phase 2: LLM completion for remaining (one call per file, max 8 files)
+  const maxLLM = 8;
+  for (const m of stillMissing.slice(0, maxLLM)) {
+    try {
+      const { sys, user } = _buildCompletionPrompt(dir, m.target, m.referencedFrom);
+      if (emit) emit({ type: 'status', msg: 'LLM-completing: ' + m.target + ' (referenced by ' + m.referencedFrom + ')' });
+      let body = '';
+      await callLLMStream(config, sys, user, (chunk) => { body += chunk; }, { max_tokens: 4096 });
+      // Strip markdown fences if LLM leaked them
+      body = body.replace(/^```[a-zA-Z]*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
+      // Reject LLM error responses leaked as content
+      if (_looksLikeLLMError(body) || body.length < 50) {
+        report.stillMissing.push(m.target);
+        // Fallback to stub placeholder
+        const targetAbs = path.join(dir, m.target);
+        ensureDir(path.dirname(targetAbs));
+        fs.writeFileSync(targetAbs, _placeholderContent(m.kind, m.target), 'utf-8');
+        report.stubFallbacks.push(m.target);
+        continue;
+      }
+      const targetAbs = path.join(dir, m.target);
+      ensureDir(path.dirname(targetAbs));
+      fs.writeFileSync(targetAbs, body, 'utf-8');
+      report.llmFills.push({ target: m.target, length: body.length });
+    } catch (e) {
+      report.stillMissing.push(m.target);
+      if (emit) emit({ type: 'warn', msg: 'LLM completion failed for ' + m.target + ': ' + (e.message || e).slice(0, 100) });
+    }
+  }
+
+  // Phase 3: anything beyond the LLM cap → stub
+  for (const m of stillMissing.slice(maxLLM)) {
+    try {
+      const targetAbs = path.join(dir, m.target);
+      ensureDir(path.dirname(targetAbs));
+      fs.writeFileSync(targetAbs, _placeholderContent(m.kind, m.target), 'utf-8');
+      report.stubFallbacks.push(m.target);
+    } catch {}
+  }
+
+  return report;
+}
+
+/**
+ * Analyze CSS coverage for an HTML project. Returns the percentage of HTML
+ * classes/ids that have at least one matching CSS rule.
+ *
+ * Returns {
+ *   coverage: 0..1,
+ *   htmlSelectors: ['.cta', '.hero', '#main', ...],  // all unique selectors in HTML
+ *   cssSelectors: Set of selectors that have CSS rules
+ *   missing: ['.testimonial', '.pricing-card', ...]  // HTML selectors with no CSS
+ *   tagCount: number of HTML elements found
+ *   cssRuleCount: number of rules in all CSS files
+ *   imgCount: number of <img> tags
+ *   hasImgRule: boolean — does any CSS rule target `img` with max-width?
+ * }
+ */
+export function _analyzeCssCoverage(projectDir) {
+  const result = {
+    coverage: 1,
+    htmlSelectors: [],
+    cssSelectors: new Set(),
+    missing: [],
+    tagCount: 0,
+    cssRuleCount: 0,
+    imgCount: 0,
+    hasImgRule: false,
+    cssFiles: [],
+    htmlFiles: [],
+  };
+
+  // Gather all HTML and CSS files
+  const stack = [projectDir];
+  const skipDirs = new Set(['node_modules', '.git', '.nha-shims', 'dist', 'build', '.next']);
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+    for (const ent of entries) {
+      if (skipDirs.has(ent.name) || ent.name.startsWith('.')) continue;
+      const abs = path.join(cur, ent.name);
+      if (ent.isDirectory()) { stack.push(abs); continue; }
+      const ext = path.extname(ent.name).toLowerCase();
+      if (ext === '.html' || ext === '.htm') result.htmlFiles.push(abs);
+      else if (ext === '.css') result.cssFiles.push(abs);
+    }
+  }
+
+  if (result.htmlFiles.length === 0) return result;
+
+  // Extract HTML classes/ids
+  const htmlSelectorSet = new Set();
+  for (const htmlAbs of result.htmlFiles) {
+    let html;
+    try { html = fs.readFileSync(htmlAbs, 'utf-8'); } catch { continue; }
+    // Count tags
+    const tagMatches = html.match(/<[a-zA-Z][a-zA-Z0-9-]*/g) || [];
+    result.tagCount += tagMatches.length;
+    // Count img tags specifically
+    result.imgCount += (html.match(/<img\b/gi) || []).length;
+    // Extract classes
+    const classRe = /\bclass\s*=\s*["']([^"']+)["']/g;
+    let m;
+    while ((m = classRe.exec(html)) !== null) {
+      for (const cls of m[1].split(/\s+/)) {
+        if (cls.trim()) htmlSelectorSet.add('.' + cls.trim());
+      }
+    }
+    // Extract IDs
+    const idRe = /\bid\s*=\s*["']([^"']+)["']/g;
+    while ((m = idRe.exec(html)) !== null) {
+      if (m[1].trim()) htmlSelectorSet.add('#' + m[1].trim());
+    }
+  }
+  result.htmlSelectors = [...htmlSelectorSet];
+
+  if (result.htmlSelectors.length === 0) {
+    result.coverage = 1;
+    return result;
+  }
+
+  // Extract CSS selectors (simple: split on { and look at preceding token)
+  for (const cssAbs of result.cssFiles) {
+    let css;
+    try { css = fs.readFileSync(cssAbs, 'utf-8'); } catch { continue; }
+    // Strip comments
+    css = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    // Find rule blocks: anything before { ... }
+    const ruleRe = /([^{}]+)\{[^{}]*\}/g;
+    let m;
+    while ((m = ruleRe.exec(css)) !== null) {
+      result.cssRuleCount++;
+      const selectorList = m[1].trim();
+      if (selectorList.startsWith('@')) continue; // @media, @keyframes etc.
+      // Split combined selectors (.a, .b, .c) and extract bare class/id tokens
+      for (const sel of selectorList.split(',')) {
+        const trimmed = sel.trim();
+        // Find all .classname and #id tokens in this selector
+        const classM = trimmed.match(/\.[\w-]+/g) || [];
+        const idM = trimmed.match(/#[\w-]+/g) || [];
+        for (const t of [...classM, ...idM]) result.cssSelectors.add(t);
+        // Track if any rule targets `img`
+        if (/(^|[\s,>+~])img(\s*[.{#:]|\s*$)/.test(trimmed)) {
+          if (css.slice(m.index, m.index + m[0].length).match(/max-width|object-fit/)) {
+            result.hasImgRule = true;
+          }
+        }
+      }
+    }
+  }
+
+  // Compute coverage
+  for (const sel of result.htmlSelectors) {
+    if (!result.cssSelectors.has(sel)) result.missing.push(sel);
+  }
+  result.coverage = (result.htmlSelectors.length - result.missing.length) / result.htmlSelectors.length;
+
+  return result;
+}
+
+/**
+ * Auto-extend CSS by calling LLM when coverage is below threshold or layout
+ * is clearly broken (e.g. <img> tags with no max-width rule). No user prompt;
+ * triggers automatically in pre-flight.
+ */
+export async function _autoExtendStylesIfNeeded(projectName, config, emit, opts) {
+  opts = opts || {};
+  const minCoverage = opts.minCoverage ?? 0.6;
+  const dir = ProjectStore.dir(projectName);
+  if (!fs.existsSync(dir)) return { extended: false, reason: 'project not found' };
+
+  const analysis = _analyzeCssCoverage(dir);
+  if (analysis.htmlSelectors.length === 0) return { extended: false, reason: 'no HTML selectors' };
+
+  const needsExtend =
+    analysis.coverage < minCoverage ||
+    (analysis.imgCount >= 2 && !analysis.hasImgRule) ||
+    (analysis.tagCount > 50 && analysis.cssRuleCount < 20);
+
+  if (!needsExtend) {
+    return {
+      extended: false,
+      reason: 'coverage acceptable',
+      coverage: analysis.coverage,
+      missing: analysis.missing.length,
+    };
+  }
+
+  // Find the primary CSS file to extend (largest non-placeholder)
+  const cssCandidates = [];
+  for (const cssAbs of analysis.cssFiles) {
+    try {
+      const content = fs.readFileSync(cssAbs, 'utf-8');
+      if (/nha-webcraft:.*placeholder/i.test(content.slice(0, 200))) continue;
+      cssCandidates.push({ abs: cssAbs, size: content.length, content });
+    } catch {}
+  }
+  cssCandidates.sort((a, b) => b.size - a.size);
+  if (cssCandidates.length === 0) return { extended: false, reason: 'no real CSS files to extend' };
+
+  const target = cssCandidates[0];
+  const targetRel = path.relative(dir, target.abs).replace(/\\/g, '/');
+
+  // Build prompt with HTML samples + current CSS + missing selectors
+  let htmlSample = '';
+  for (const htmlAbs of analysis.htmlFiles.slice(0, 3)) {
+    try {
+      const c = fs.readFileSync(htmlAbs, 'utf-8');
+      htmlSample += `### ${path.relative(dir, htmlAbs)}\n${c.slice(0, 3500)}\n\n`;
+    } catch {}
+  }
+
+  // APPEND mode (16.0.57): output ONLY the new rules — server appends to
+  // existing file. Prevents monotonic regression (LLM truncating + losing
+  // existing rules) and dramatically reduces output token cost.
+  const sys = `You are an expert frontend designer. Generate ONLY new CSS rules to ADD to an existing stylesheet.
+
+CRITICAL RULES:
+- Output ONLY the new CSS rules — do NOT repeat any existing rules.
+- Do NOT output markdown fences, explanations, or comments about what you're doing.
+- The output will be APPENDED to an existing CSS file. Do not include @import, @charset, or any preamble.
+- Generate at least one rule for EVERY listed missing selector.
+
+DESIGN REQUIREMENTS:
+- WCAG AA contrast: text-on-bg ratio >= 4.5:1. NO washed-out pastels for text.
+- Vibrant accent colors (HSL S >= 60%, L 35-65%).
+- Match the existing CSS's design language (look at the colors/spacing in the existing rules).
+- Include responsive breakpoints (768px, 480px) where layout matters.
+- Hover/focus/transition states for interactive elements.`;
+  // Pick a sample of missing selectors that fits in token budget. We cap at
+  // 200 to keep one pass reasonable; remaining are picked up by next pass.
+  const passSelectors = analysis.missing.slice(0, 200);
+  const user =
+    `Existing CSS file: \`${targetRel}\` (${target.size} bytes, ${analysis.cssRuleCount} rules).\n\n` +
+    `Sample of existing rules (for design-language reference — DO NOT repeat in output):\n\`\`\`css\n${target.content.slice(0, 3000)}\n\`\`\`\n\n` +
+    `HTML context (snippet, for layout reference):\n${htmlSample.slice(0, 2500)}\n\n` +
+    `Generate NEW CSS rules that cover these ${passSelectors.length} currently-uncovered selectors (out of ${analysis.missing.length} total):\n${passSelectors.join(', ')}\n\n` +
+    `Output ONLY the new rules. Required additions if not already in existing CSS:\n` +
+    `- img { max-width: 100%; height: auto; object-fit: cover; display: block; }\n` +
+    `- footer { padding: 32px 16px; background: ...; color: ...; } (or similar — with visible contrast)\n` +
+    `- Responsive @media queries at 768px and 480px for grid/flex sections.\n` +
+    `Begin your output directly with the first CSS rule. No preamble.`;
+
+  const provider = config?.llm?.provider || 'unknown';
+  const model = config?.llm?.model || config?.llm?.[provider]?.model || 'default';
+  if (emit) emit({ type: 'status', msg: `CSS coverage ${(analysis.coverage * 100).toFixed(0)}% (${analysis.missing.length} selectors missing). Auto-extending ${targetRel} via ${provider}:${model} (timeout 60s)...` });
+
+  // Smart timeout: timeout ONLY if no bytes received for N seconds (provider
+  // stuck/dead), NOT if total elapsed exceeds N (the LLM might be legitimately
+  // streaming a large CSS file at 250 b/s for 90+ seconds). Absolute hard cap
+  // at 300s to prevent runaway.
+  let body = '';
+  let lastChunkAt = Date.now();
+  const startedAt = Date.now();
+  const noProgressTimeoutMs = 30_000;  // no bytes for 30s → timeout
+  const absoluteTimeoutMs = 300_000;   // 5min absolute cap
+  let earlyWarningEmitted = false;
+  let timedOut = false;
+  let aborted = false;
+  const abortController = new AbortController();
+
+  // Track byte velocity for an informative heartbeat: show b/s instead of
+  // misleading "0s since last chunk" (which is almost always 0 when streaming).
+  let prevBytes = 0;
+  let prevHeartbeatAt = startedAt;
+  const heartbeatInterval = setInterval(() => {
+    if (!emit) return;
+    const now = Date.now();
+    const elapsed = ((now - startedAt) / 1000).toFixed(0);
+    const bytesPerSec = Math.round((body.length - prevBytes) / Math.max(1, (now - prevHeartbeatAt) / 1000));
+    prevBytes = body.length;
+    prevHeartbeatAt = now;
+    emit({ type: 'status', msg: `LLM extend: ${elapsed}s elapsed, ${body.length} bytes received (${bytesPerSec} b/s)` });
+    if (!earlyWarningEmitted && body.length === 0 && now - startedAt > 15_000) {
+      earlyWarningEmitted = true;
+      emit({ type: 'warn', msg: `Provider ${provider} hasn't sent any data in 15s. If this is Liara, the free tier may be under load — try switching to Anthropic/OpenAI in Settings.` });
+    }
+    // No-progress timeout: only if STUCK (zero chunks for 30s)
+    if (now - lastChunkAt > noProgressTimeoutMs && body.length > 0) {
+      timedOut = true;
+      aborted = true;
+      abortController.abort();
+    }
+    // Absolute timeout
+    if (now - startedAt > absoluteTimeoutMs) {
+      timedOut = true;
+      aborted = true;
+      abortController.abort();
+    }
+  }, 5_000);
+
+  try {
+    await callLLMStream(config, sys, user, (chunk) => {
+      if (aborted) return;
+      body += chunk;
+      lastChunkAt = Date.now();
+    }, { max_tokens: 4096, signal: abortController.signal });
+  } catch (e) {
+    clearInterval(heartbeatInterval);
+    const errMsg = timedOut
+      ? `no chunks received for ${(noProgressTimeoutMs / 1000)}s — provider ${provider} appears stuck (received ${body.length} bytes before stalling)`
+      : (e.message || String(e)).slice(0, 200);
+    if (emit) {
+      emit({ type: 'warn', msg: `CSS extend failed: ${errMsg}` });
+      if (timedOut && body.length > 0) {
+        emit({ type: 'warn', msg: `Got ${body.length} bytes of partial CSS but provider stalled. Keeping current file unchanged. Try again or switch provider.` });
+      }
+    }
+    return { extended: false, reason: 'llm_failed', error: errMsg, partialBytes: body.length };
+  }
+  clearInterval(heartbeatInterval);
+
+  // Strip markdown fences from the appended rules (LLM sometimes adds them)
+  body = body.replace(/^```[a-zA-Z]*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
+  if (_looksLikeLLMError(body) || body.length < 200) {
+    if (emit) emit({ type: 'warn', msg: `CSS extend produced suspicious output (${body.length} bytes of new rules) — keeping original.` });
+    return { extended: false, reason: 'output_too_short_or_error' };
+  }
+
+  // APPEND mode (16.0.57): keep ALL existing rules intact, add new ones at end.
+  // Prevents monotonic regression where pass N replaces pass N-1's work with
+  // a smaller file. Combined content = original + delimiter comment + new rules.
+  const combined = target.content
+    + '\n\n/* === nha-webcraft: auto-extended rules (' + new Date().toISOString() + ') === */\n'
+    + body
+    + '\n';
+
+  try {
+    fs.writeFileSync(target.abs + '.before-extend-' + Date.now(), target.content, 'utf-8');
+    fs.writeFileSync(target.abs, combined, 'utf-8');
+  } catch (e) {
+    return { extended: false, reason: 'write_failed', error: e.message };
+  }
+
+  // Re-analyze to confirm improvement. APPEND mode guarantees coverage
+  // monotonically increases (or stays equal), never decreases.
+  const after = _analyzeCssCoverage(dir);
+  if (after.missing.length >= analysis.missing.length) {
+    // No progress despite append — LLM produced rules that don't match selectors.
+    // Roll back so the file doesn't bloat with useless rules.
+    try { fs.writeFileSync(target.abs, target.content, 'utf-8'); } catch {}
+    if (emit) emit({ type: 'warn', msg: `CSS extend rolled back: ${body.length} bytes of new rules added but no selectors covered (model output didn't match needed selectors).` });
+    return { extended: false, reason: 'no_coverage_gain', missingBefore: analysis.missing.length, missingAfter: after.missing.length };
+  }
+
+  if (emit) emit({ type: 'status', msg: `CSS extended: ${targetRel} ${target.size} → ${combined.length} bytes (appended ${body.length} bytes). Coverage ${(analysis.coverage * 100).toFixed(0)}% → ${(after.coverage * 100).toFixed(0)}%, ${analysis.missing.length} → ${after.missing.length} selectors missing.` });
+
+  return {
+    extended: true,
+    file: targetRel,
+    sizeBefore: target.size,
+    sizeAfter: combined.length,
+    appendedBytes: body.length,
+    coverageBefore: analysis.coverage,
+    coverageAfter: after.coverage,
+    missingBefore: analysis.missing.length,
+    missingAfter: after.missing.length,
+  };
+}
+
+export function autoRepairProject(projectName) {
+  const dir = ProjectStore.dir(projectName);
+  if (!fs.existsSync(dir)) throw new Error('project not found');
+
+  const repairs = [];
+  const filesRepaired = new Set();
+  const filesCreated = [];
+
+  // Phase 0: create missing data files referenced by code (data/X.json, etc)
+  const dataCreated = _detectMissingDataFiles(dir);
+  for (const f of dataCreated) {
+    filesCreated.push(f);
+    repairs.push({ file: f, kind: 'missing-data-file', source: 'code-reference' });
+  }
+
+  // Phase 0.5: null-check unsafe err.X access in route handlers
+  const errFixed = _repairUnsafeErrAccess(dir);
+  for (const r of errFixed) {
+    filesRepaired.add(r.file);
+    repairs.push({ file: r.file, kind: 'unsafe-err-access', edits: r.edits });
+  }
+
+  // Walk every HTML file in the project
+  const stack = [dir];
+  const skipDirs = new Set(['node_modules', '.git', '.nha-shims', 'dist', 'build', '.next']);
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+    for (const ent of entries) {
+      if (skipDirs.has(ent.name) || ent.name.startsWith('.')) continue;
+      const abs = path.join(cur, ent.name);
+      if (ent.isDirectory()) { stack.push(abs); continue; }
+      const ext = path.extname(ent.name).toLowerCase();
+      if (ext !== '.html' && ext !== '.htm') continue;
+
+      const rel = path.relative(dir, abs).replace(/\\/g, '/');
+      let html;
+      try { html = fs.readFileSync(abs, 'utf-8'); } catch { continue; }
+
+      // Phase A: balance tags
+      const { fixed, edits } = _balanceHtmlTags(html);
+      if (fixed !== html && edits.length > 0) {
+        fs.writeFileSync(abs, fixed, 'utf-8');
+        filesRepaired.add(rel);
+        repairs.push({ file: rel, kind: 'html-balance', edits });
+      }
+
+      // Phase B: create missing referenced assets
+      const refs = _extractHtmlAssetRefs(fixed);
+      for (const ref of refs) {
+        const target = _normalizeAssetPath(ref.href, rel);
+        if (!target) continue;
+        const targetAbs = path.join(dir, target);
+        if (fs.existsSync(targetAbs)) continue;
+        // Don't create node_modules / external dirs
+        if (target.startsWith('node_modules/') || target.includes('..')) continue;
+        try {
+          ensureDir(path.dirname(targetAbs));
+          fs.writeFileSync(targetAbs, _placeholderContent(ref.kind, ref.href), 'utf-8');
+          filesCreated.push(target);
+          repairs.push({ file: target, kind: 'missing-asset', source: rel, ref: ref.href });
+        } catch {}
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    filesRepaired: [...filesRepaired],
+    filesCreated,
+    repairs,
+    summary: `${filesRepaired.size} HTML balanced, ${filesCreated.length} placeholder files created`,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Map native tool names → internal NHA "op" codes. Both directions: the LLM
+// might emit either based on which provider's docs it was trained on.
+const _TOOL_NAME_TO_OP = new Map([
+  ['read_file', 'read'], ['read', 'read'],
+  ['edit_file', 'edit'], ['edit', 'edit'],
+  ['create_file', 'write'], ['write', 'write'], ['write_file', 'write'],
+  ['delete_file', 'delete'], ['delete', 'delete'],
+  ['list_files', 'list'], ['list', 'list'],
+  ['search_files', 'search'], ['search', 'search'],
+  ['run_command', 'run'], ['run', 'run'], ['shell', 'run'],
+  ['check_syntax', 'check'], ['check', 'check'],
+  ['restart_sandbox', 'sandbox'], ['sandbox', 'sandbox'],
+]);
+
+// Map common param-name variants used across LLM providers.
+const _PARAM_ALIASES = {
+  path: ['path', 'file_path', 'filepath', 'filename', 'file'],
+  old: ['old', 'old_text', 'old_string', 'oldText'],
+  new: ['new', 'new_text', 'new_string', 'newText', 'replacement'],
+  content: ['content', 'text', 'body', 'file_content'],
+  query: ['query', 'pattern', 'search', 'q'],
+  glob: ['glob', 'pattern', 'file_pattern'],
+  cmd: ['cmd', 'command', 'shell_command'],
+};
+
+function _pickParam(obj, kind) {
+  for (const alt of _PARAM_ALIASES[kind] || [kind]) {
+    if (obj && Object.prototype.hasOwnProperty.call(obj, alt) && obj[alt] !== undefined) {
+      return obj[alt];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Extract every tool-call-like JSON blob from an LLM response. Handles:
+ *   - <tool>{...}</tool>                — NHA native wrapper
+ *   - {"tool": "...", "args": {...}}    — OpenAI-style nude JSON
+ *   - {"name": "...", "input": {...}}   — Anthropic-style nude JSON
+ *   - ```json\n{...}\n```               — markdown-fenced JSON blocks
+ *
+ * Returns { calls: [raw objects], matchedRanges: [[start,end], ...] } so the
+ * caller can blank out the consumed regions from the visible text stream.
+ */
+export function _extractAllToolCalls(text) {
+  const calls = [];
+  const matchedRanges = [];
+
+  // Pass 1: <tool>...</tool> wrappers
+  const wrapRe = /<tool>([\s\S]*?)<\/tool>/g;
+  let m;
+  while ((m = wrapRe.exec(text)) !== null) {
+    matchedRanges.push([m.index, m.index + m[0].length]);
+    try {
+      let raw = m[1].trim().replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+      calls.push(JSON.parse(raw));
+    } catch {
+      try { calls.push(_parseToolCallRobust(m[1].trim())); } catch {}
+    }
+  }
+
+  // Pass 2: markdown-fenced JSON blocks ```json {...} ```
+  const fenceRe = /```(?:json)?\s*\n([\s\S]*?)\n```/g;
+  while ((m = fenceRe.exec(text)) !== null) {
+    // Skip if already inside a <tool> match
+    if (matchedRanges.some(([s, e]) => m.index >= s && m.index < e)) continue;
+    const body = m[1].trim();
+    if (!/^\s*\{/.test(body)) continue;
+    try {
+      const parsed = JSON.parse(body.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']'));
+      if (_looksLikeToolCall(parsed)) {
+        calls.push(parsed);
+        matchedRanges.push([m.index, m.index + m[0].length]);
+      }
+    } catch {}
+  }
+
+  // Pass 3: bare JSON objects with balanced braces — scan top-level.
+  // Find every '{' candidate not already consumed, then walk forward to find
+  // the matching '}' while respecting nested braces AND string literals.
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    if (matchedRanges.some(([s, e]) => i >= s && i < e)) continue;
+    // Must be at line start or after whitespace (avoid inline {expr}/object literals in code)
+    let prev = i - 1;
+    while (prev >= 0 && (text[prev] === ' ' || text[prev] === '\t')) prev--;
+    if (prev >= 0 && text[prev] !== '\n') continue;
+
+    const end = _findMatchingBrace(text, i);
+    if (end < 0) continue;
+    const candidate = text.slice(i, end + 1);
+    try {
+      const parsed = JSON.parse(candidate.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']'));
+      if (_looksLikeToolCall(parsed)) {
+        calls.push(parsed);
+        matchedRanges.push([i, end + 1]);
+        i = end;
+      }
+    } catch {}
+  }
+
+  return { calls, matchedRanges };
+}
+
+// Walk forward from openIdx (which must be '{') to find the matching '}'.
+// Respects nested braces, string literals (single & double quote), and escapes.
+// Returns -1 if no match found (unclosed).
+function _findMatchingBrace(text, openIdx) {
+  let depth = 0;
+  let inStr = false;
+  let strCh = '';
+  for (let i = openIdx; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (c === '\\') { i++; continue; }
+      if (c === strCh) inStr = false;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = true; strCh = c; continue; }
+    if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function _looksLikeToolCall(obj) {
+  if (!obj || typeof obj !== 'object') return false;
+  return (
+    'op' in obj ||
+    'tool' in obj ||
+    'name' in obj && ('input' in obj || 'arguments' in obj || 'args' in obj) ||
+    'function_call' in obj
+  );
+}
+
+/**
+ * Normalize a parsed tool-call object to NHA's internal shape:
+ *   { op, path, old, new, content, newPath, query, glob, cmd }
+ *
+ * Accepts:
+ *   - {op, path, ...}                             — already normalized
+ *   - {tool, args: {file_path, old_text, ...}}    — OpenAI-style
+ *   - {name, input: {...}} / {name, arguments}    — Anthropic-style
+ */
+export function _normalizeToolCall(raw) {
+  if (!raw || typeof raw !== 'object') throw new Error('not an object');
+
+  // Already in NHA native shape
+  if ('op' in raw && typeof raw.op === 'string') {
+    return raw;
+  }
+
+  // Extract tool name from various wire formats
+  const toolName = raw.tool || raw.name || raw.function_call?.name;
+  if (!toolName) throw new Error('no tool/op/name field');
+
+  const op = _TOOL_NAME_TO_OP.get(toolName);
+  if (!op) throw new Error(`unknown tool name: ${toolName}`);
+
+  // Extract args payload (OpenAI uses "args", Anthropic uses "input" or "arguments")
+  let args = raw.args || raw.input || raw.arguments || raw.parameters || {};
+  if (typeof args === 'string') {
+    try { args = JSON.parse(args); } catch { args = {}; }
+  }
+
+  return {
+    op,
+    path: _pickParam(args, 'path'),
+    old: _pickParam(args, 'old'),
+    new: _pickParam(args, 'new'),
+    content: _pickParam(args, 'content'),
+    query: _pickParam(args, 'query'),
+    glob: _pickParam(args, 'glob'),
+    cmd: _pickParam(args, 'cmd'),
+    newPath: args.newPath || args.new_path,
+  };
+}
+
 function _parseToolCallRobust(raw) {
   const result = {};
 
@@ -3366,6 +4874,38 @@ function _patchEntry(projectDir, entryFile, shimDir, port) {
     `process.env.HOST = '0.0.0.0';`,
     `process.env.NODE_ENV = 'development';`,
     `require('${shimAbs}');`,
+    `// Force-bind to NHA's assigned port even when the app hardcodes a port`,
+    `// like 3000/5000/8080. Monkey-patch http.Server.prototype.listen so the`,
+    `// FIRST positional numeric arg is replaced with our port. This prevents`,
+    `// "Connessione negata" when the iframe targets ${port} but the app picked`,
+    `// a different port internally.`,
+    `(function(){`,
+    `  const http = require('http');`,
+    `  const NHA_PORT = ${port};`,
+    `  const _origListen = http.Server.prototype.listen;`,
+    `  let _bound = false;`,
+    `  http.Server.prototype.listen = function(...args) {`,
+    `    if (_bound) return _origListen.apply(this, args);`,
+    `    if (typeof args[0] === 'object' && args[0] !== null && 'port' in args[0]) {`,
+    `      const requested = args[0].port;`,
+    `      if (requested !== NHA_PORT && requested !== 0) {`,
+    `        console.log('[nha-launcher] app requested port ' + requested + ', forcing to NHA_PORT=' + NHA_PORT);`,
+    `        args[0] = Object.assign({}, args[0], { port: NHA_PORT, host: '0.0.0.0' });`,
+    `      }`,
+    `    } else if (typeof args[0] === 'number' || typeof args[0] === 'string') {`,
+    `      const requested = parseInt(args[0]);`,
+    `      if (!isNaN(requested) && requested !== NHA_PORT && requested !== 0) {`,
+    `        console.log('[nha-launcher] app requested port ' + requested + ', forcing to NHA_PORT=' + NHA_PORT);`,
+    `        args[0] = NHA_PORT;`,
+    `        // If second positional was host, replace with 0.0.0.0; otherwise insert`,
+    `        if (typeof args[1] === 'string') args[1] = '0.0.0.0';`,
+    `        else if (typeof args[1] === 'function') args.splice(1, 0, '0.0.0.0');`,
+    `      }`,
+    `    }`,
+    `    _bound = true;`,
+    `    return _origListen.apply(this, args);`,
+    `  };`,
+    `})();`,
     `// Inject error reporter into HTML responses`,
     `const _nhaErrScript = require('fs').readFileSync('${path.join(shimDir, 'error-reporter.html').replace(/\\/g, '/')}', 'utf-8');`,
     `const _origWrite = require('http').ServerResponse.prototype.write;`,
@@ -3383,11 +4923,68 @@ function _patchEntry(projectDir, entryFile, shimDir, port) {
     `  } catch(e) {}`,
     `  return _origEnd.apply(this, arguments);`,
     `};`,
-    `// Strip X-Frame-Options so sandbox iframe works`,
+    `// Monkey-patch Express to neutralize next(falsy) — common LLM bug where`,
+    `// middleware calls next(err) with err === undefined for EVERY request,`,
+    `// causing 500 on all routes including static files. Express treats any`,
+    `// truthy first arg as an error; if it's falsy (null/undefined/0/''),`,
+    `// it's semantically equivalent to next() per Express docs. We rewrite.`,
+    `(function() {`,
+    `  const Module = require('module');`,
+    `  const _origLoad = Module._load;`,
+    `  function wrapMiddleware(fn) {`,
+    `    if (typeof fn !== 'function' || fn.length !== 3) return fn;`,
+    `    const wrapped = function(req, res, next) {`,
+    `      const safeNext = function(err) {`,
+    `        if (err === undefined || err === null || err === false || err === 0) return next();`,
+    `        return next(err);`,
+    `      };`,
+    `      try { return fn.call(this, req, res, safeNext); }`,
+    `      catch (e) { return next(e); }`,
+    `    };`,
+    `    wrapped._nhaWrapped = true;`,
+    `    return wrapped;`,
+    `  }`,
+    `  function patchExpressApp(express) {`,
+    `    if (!express || express._nhaPatched) return express;`,
+    `    try {`,
+    `      // express() returns an app; patch app.use to wrap middleware`,
+    `      const _origExpress = express;`,
+    `      const factory = function(...args) {`,
+    `        const app = _origExpress.apply(this, args);`,
+    `        if (app && typeof app.use === 'function' && !app._nhaUseWrapped) {`,
+    `          const _origUse = app.use;`,
+    `          app.use = function(...uArgs) {`,
+    `            const mapped = uArgs.map(a => (typeof a === 'function' && a.length === 3 && !a._nhaWrapped) ? wrapMiddleware(a) : a);`,
+    `            return _origUse.apply(this, mapped);`,
+    `          };`,
+    `          app._nhaUseWrapped = true;`,
+    `        }`,
+    `        return app;`,
+    `      };`,
+    `      // Preserve static props: Router, json(), urlencoded(), etc.`,
+    `      Object.assign(factory, _origExpress);`,
+    `      factory._nhaPatched = true;`,
+    `      return factory;`,
+    `    } catch { return express; }`,
+    `  }`,
+    `  Module._load = function(name, parent, isMain) {`,
+    `    const result = _origLoad.call(this, name, parent, isMain);`,
+    `    if (name === 'express') return patchExpressApp(result);`,
+    `    return result;`,
+    `  };`,
+    `})();`,
+    `// Strip headers that break sandbox iframe preview:`,
+    `//  - X-Frame-Options: blocks iframe embedding entirely`,
+    `//  - X-Content-Type-Options: nosniff: when LLM references /js/*.js files`,
+    `//    that don't exist, Express serves 404 HTML — but nosniff blocks the`,
+    `//    browser from executing them as scripts, leaving a blank page.`,
+    `//  - CSP frame-ancestors: same blocking effect as X-Frame-Options`,
     `const _origSetHeader = require('http').ServerResponse.prototype.setHeader;`,
     `require('http').ServerResponse.prototype.setHeader = function(name, val) {`,
-    `  if (name.toLowerCase() === 'x-frame-options') return this;`,
-    `  if (name.toLowerCase() === 'content-security-policy' && typeof val === 'string' && val.includes('frame-ancestors')) {`,
+    `  const lower = name.toLowerCase();`,
+    `  if (lower === 'x-frame-options') return this;`,
+    `  if (lower === 'x-content-type-options') return this;`,
+    `  if (lower === 'content-security-policy' && typeof val === 'string' && val.includes('frame-ancestors')) {`,
     `    val = val.replace(/frame-ancestors[^;]*(;|$)/gi, '');`,
     `    if (!val.trim()) return this;`,
     `  }`,
@@ -3399,7 +4996,310 @@ function _patchEntry(projectDir, entryFile, shimDir, port) {
   return '.nha-launcher.js';
 }
 
-function _writeShims(shimDir) {
+// Detect LLM API error responses that leaked into the file content. When the
+// LLM endpoint returns 4xx/5xx with a plaintext body (Cloudflare block, rate
+// limit, "Access temporarily denied"), the response often ends up saved as
+// file content. Those strings are short, don't start with valid syntax for
+// the file type, and contain specific marker phrases.
+const _LLM_ERROR_MARKERS = [
+  // "Access denied" / "Access temporarily denied"
+  /^\s*Access (temporarily )?denied/i,
+  // "Service Temporarily Unavailable", "Server Temporarily Unavailable",
+  // "Temporarily Unavailable" — common nginx/cloudflare/CDN 503 responses
+  /^\s*(Service |Server )?Temporarily Unavailable/i,
+  /^\s*Service Unavailable/i,
+  /^\s*Rate ?limit(ed)?/i,
+  /^\s*Internal Server Error/i,
+  /^\s*Too Many Requests/i,
+  /^\s*Bad Gateway/i,
+  /^\s*Gateway Timeout/i,
+  /^\s*Request Timeout/i,
+  /^\s*Not Found/i,
+  /^\s*Forbidden\b/i,
+  /^\s*Unauthorized\b/i,
+  /^\s*<!DOCTYPE html.*Cloudflare/is,
+  /^\s*<html.*<title>.*(Access|Forbidden|Error|Unavailable|Cloudflare)/is,
+  /^\s*\{?\s*"error"\s*:\s*"(rate.?limit|quota|unauthorized|temporarily)"/i,
+  /^\s*error code:\s*\d{3,4}/i,
+  // Standalone HTTP status phrase at the start of a code file is suspicious
+  /^\s*(HTTP\/[\d.]+\s+)?[45]\d{2}\s+/,
+  // NHA/Liara backend retry-wrapper errors leaked as file content:
+  //   "/* Retry: NHA Free 502: {"error":"Failed to reach Liara",...}"
+  //   "Retry: NHA 503", "// NHA Free Error 429"
+  /^\s*(?:\/\*\s*|\/\/\s*)?Retry:?\s*NHA(\s+Free)?(\s+\d{3})?/i,
+  /^\s*(?:\/\*\s*|\/\/\s*)?Failed to reach (Liara|NHA|OpenAI|Anthropic|Gemini|provider)/i,
+  /^\s*\{?\s*"error"\s*:\s*"Failed to reach/i,
+  // Plain "fetch failed", "ECONNRESET" etc. as first line of a code file
+  /^\s*(?:\/\*\s*|\/\/\s*)?(?:fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT)\b/i,
+];
+
+function _looksLikeLLMError(content) {
+  if (typeof content !== 'string') return false;
+  const head = content.slice(0, 500);
+  return _LLM_ERROR_MARKERS.some(re => re.test(head));
+}
+
+// Minimal package.json template — used when the LLM-generated one is corrupted.
+function _fallbackPackageJson(projectName) {
+  return JSON.stringify({
+    name: String(projectName || 'nha-project').toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+    version: '1.0.0',
+    description: 'NHA-generated project (package.json auto-repaired)',
+    main: 'index.js',
+    type: 'commonjs',
+    scripts: { start: 'node index.js' },
+    dependencies: {},
+  }, null, 2);
+}
+
+// Sanitize content before writing to disk. Rejects LLM error responses,
+// repairs corrupt JSON manifests, validates JS/TS with acorn, and falls back
+// to a safe placeholder when content is unsalvageable. This is the LAST line
+// of defense between the LLM API and the user's filesystem.
+function _sanitizeGeneratedFile(name, content, projectName) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const isJson = ext === 'json' || name.endsWith('package.json');
+  const isPkg = name === 'package.json' || name.endsWith('/package.json');
+  const isCode = ['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx'].includes(ext);
+
+  // Layer A: detect HTTP error responses leaked as file content
+  if (_looksLikeLLMError(content)) {
+    if (isPkg) return _fallbackPackageJson(projectName);
+    if (isCode) {
+      return `// nha-webcraft: this file's content from the LLM looked like an HTTP error response\n// (status leaked into stream — likely '${_extractLLMErrorHint(content)}').\n// File quarantined to keep the sandbox bootable. Re-generate from chat.\nmodule.exports = {};\n`;
+    }
+    return '<!-- nha-webcraft: LLM error response detected, content discarded. Re-generate from chat. -->';
+  }
+
+  // Layer B: validate JSON files
+  if (isJson) {
+    try { JSON.parse(content); }
+    catch {
+      if (isPkg) return _fallbackPackageJson(projectName);
+      try {
+        const repaired = content
+          .replace(/,\s*([}\]])/g, '$1')
+          .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":');
+        JSON.parse(repaired);
+        return repaired;
+      } catch {
+        return '{}';
+      }
+    }
+  }
+
+  // Layer C: validate JS/JSX/TS files with acorn — catches partial streams
+  // that ended mid-token, leftover HTML/error text mixed with code, etc.
+  if (isCode && content && content.trim()) {
+    try {
+      const parser = ext === 'jsx' || ext === 'tsx' ? acorn.Parser.extend(acornJsx()) : acorn;
+      parser.parse(content, {
+        ecmaVersion: 'latest',
+        sourceType: ['mjs'].includes(ext) ? 'module' : (/\bimport\s+|\bexport\s+/.test(content) ? 'module' : 'script'),
+        allowReturnOutsideFunction: true,
+        allowAwaitOutsideFunction: true,
+        allowHashBang: true,
+      });
+    } catch (parseErr) {
+      // Only quarantine if the error is at the VERY START of the file —
+      // this signals "the whole file is junk" (HTTP error / partial stream)
+      // rather than a normal bug at line 50 that user can fix.
+      const lineMatch = parseErr.message.match(/\((\d+):(\d+)\)/);
+      const startsAtTop = !lineMatch || parseInt(lineMatch[1]) <= 2;
+      if (startsAtTop && content.length < 5000) {
+        return `// nha-webcraft: this file failed to parse near the start (${parseErr.message}).\n// Likely a partial/corrupted stream from the LLM. Quarantined to keep sandbox bootable.\n// Re-generate from chat.\nmodule.exports = {};\n`;
+      }
+      // Otherwise let it through — it's a real code bug, the user will see it
+    }
+  }
+
+  return content;
+}
+
+function _extractLLMErrorHint(content) {
+  const head = content.slice(0, 200).replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+  return head.slice(0, 80) + (head.length > 80 ? '...' : '');
+}
+
+// Authoritative list of modules covered by our offline-safe shims.
+// Used by both the pre-scan (to skip them from npm install) and the Tier 1
+// retry (to detect "missing module" stderr that's already covered by a shim).
+export const _SHIMMED_MODULES = new Set([
+  'pg', 'redis', 'ioredis', 'helmet', 'mongoose', 'sequelize',
+  'dotenv', 'cors', 'morgan', 'body-parser', 'cookie-parser',
+  'compression', 'express-rate-limit', 'jsonwebtoken', 'bcryptjs', 'bcrypt',
+  'uuid', 'lodash', 'debug', 'chalk', 'multer', 'axios', 'express',
+  'marked', 'markdown-it',
+]);
+
+/** Read declared dependencies from package.json (deps + devDeps + peer). */
+function _declaredDeps(projectDir) {
+  const pkgPath = path.join(projectDir, 'package.json');
+  if (!fs.existsSync(pkgPath)) return new Set();
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    return new Set([
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.devDependencies || {}),
+      ...Object.keys(pkg.peerDependencies || {}),
+      ...Object.keys(pkg.optionalDependencies || {}),
+    ]);
+  } catch { return new Set(); }
+}
+
+/** List top-level node_modules entries already on disk. */
+function _installedDeps(projectDir) {
+  const nm = path.join(projectDir, 'node_modules');
+  if (!fs.existsSync(nm)) return new Set();
+  try {
+    const out = new Set();
+    for (const entry of fs.readdirSync(nm)) {
+      if (entry.startsWith('.')) continue;
+      if (entry.startsWith('@')) {
+        const scopedDir = path.join(nm, entry);
+        try {
+          for (const sub of fs.readdirSync(scopedDir)) out.add(`${entry}/${sub}`);
+        } catch {}
+      } else {
+        out.add(entry);
+      }
+    }
+    return out;
+  } catch { return new Set(); }
+}
+
+// Node.js built-in modules — these are part of the runtime, not npm packages.
+// `require('fs')` always works without installation. The pre-scan MUST exclude
+// these or it tries to `npm install fs` which is meaningless (or worse, picks
+// up a malicious typosquat). Authoritative list from Node 22 LTS docs.
+export const _NODE_BUILTINS = new Set([
+  'assert', 'async_hooks', 'buffer', 'child_process', 'cluster', 'console',
+  'constants', 'crypto', 'dgram', 'diagnostics_channel', 'dns', 'domain',
+  'events', 'fs', 'fs/promises', 'http', 'http2', 'https', 'inspector',
+  'inspector/promises', 'module', 'net', 'os', 'path', 'path/posix',
+  'path/win32', 'perf_hooks', 'process', 'punycode', 'querystring', 'readline',
+  'readline/promises', 'repl', 'stream', 'stream/consumers', 'stream/promises',
+  'stream/web', 'string_decoder', 'sys', 'timers', 'timers/promises', 'tls',
+  'trace_events', 'tty', 'url', 'util', 'util/types', 'v8', 'vm', 'wasi',
+  'worker_threads', 'zlib',
+]);
+
+// Common LLM hallucinations → real package name. The LLM sometimes invents
+// shorter aliases for popular packages. We map them transparently so the
+// generated code "just works" without npm install of fake packages.
+export const _PACKAGE_ALIASES = new Map([
+  ['jwt', 'jsonwebtoken'],
+  ['bcrypt', 'bcryptjs'],
+  ['mongo', 'mongoose'],
+  ['postgres', 'pg'],
+  ['postgresql', 'pg'],
+  ['mysql', 'mysql2'],
+  ['env', 'dotenv'],
+  ['util-lodash', 'lodash'],
+  ['express-cors', 'cors'],
+  ['express-helmet', 'helmet'],
+  ['express-body-parser', 'body-parser'],
+]);
+
+/** Walk project files and extract all bare-import module names. */
+export function _scanProjectImports(projectDir, maxFiles = 500, maxBytes = 200_000) {
+  const found = new Set();
+  const exts = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx']);
+  const skipDirs = new Set(['node_modules', '.git', '.nha-shims', 'dist', 'build', '.next', 'coverage']);
+  const reRequire = /\brequire\s*\(\s*['"]([^'".][^'"]*)['"]\s*\)/g;
+  const reImport = /\bimport\s+(?:[^'"]*\s+from\s+)?['"]([^'".][^'"]*)['"]/g;
+  const reImportSide = /\bimport\s*\(\s*['"]([^'".][^'"]*)['"]\s*\)/g;
+  const stack = [projectDir];
+  let scanned = 0;
+
+  while (stack.length && scanned < maxFiles) {
+    const dir = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (skipDirs.has(entry.name) || entry.name.startsWith('.')) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { stack.push(full); continue; }
+      if (!exts.has(path.extname(entry.name))) continue;
+      let content;
+      try {
+        const stat = fs.statSync(full);
+        if (stat.size > maxBytes) continue;
+        content = fs.readFileSync(full, 'utf-8');
+      } catch { continue; }
+      scanned++;
+      for (const re of [reRequire, reImport, reImportSide]) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(content)) !== null) {
+          const spec = m[1];
+          // Filter 1: node:fs, node:path etc.
+          if (spec.startsWith('node:')) continue;
+          // Get the bare package name (handle @scope/name and subpaths)
+          const pkg = spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
+          if (!pkg) continue;
+          // Filter 2: skip Node built-ins (fs, path, crypto, http, etc.)
+          if (_NODE_BUILTINS.has(pkg)) continue;
+          // Filter 3: resolve LLM-hallucinated aliases to real packages
+          const real = _PACKAGE_ALIASES.get(pkg) || pkg;
+          found.add(real);
+        }
+      }
+    }
+  }
+  return found;
+}
+
+/** Classify npm install errors into actionable categories. */
+export function _classifyInstallError(err) {
+  const msg = String(err?.message || err?.stderr || err?.stdout || err || '').toLowerCase();
+  if (/enotfound|etimedout|econnrefused|econnreset|network/.test(msg)) {
+    return { reason: 'offline (npm registry unreachable)', offlineFallback: true,
+      hint: 'Check VM network bridge/NAT, DNS, or corporate proxy (HTTP_PROXY/HTTPS_PROXY). Activating shim fallback.' };
+  }
+  // Distinguish "true E404" (package doesn't exist) from "offline cache miss"
+  // (--prefer-offline can produce 404-looking errors when registry is unreachable).
+  // True E404 also mentions "not in registry"; cache miss mentions "not in cache" or "ENETUNREACH".
+  if (/not in.*(cache|local)|ENETUNREACH|prefer.?offline.*not.*found/i.test(msg)) {
+    return { reason: 'offline cache miss (registry not reached, package not cached)', offlineFallback: true,
+      hint: 'npm --prefer-offline could not find the package in local cache and registry is unreachable. Activating shim fallback.' };
+  }
+  if (/e404|"npm error code e404"|notarget|404 not found|not found in the npm registry|package.*does not exist/i.test(msg)) {
+    return { reason: 'package does not exist on npm', offlineFallback: false,
+      hint: 'The package name from the LLM-generated code is likely a hallucination, or you are offline. Tier 2 LLM-rewrite will rename it, or shim layer will take over if available.' };
+  }
+  if (/eacces|eperm|permission denied/.test(msg)) {
+    return { reason: 'permissions denied', offlineFallback: false,
+      hint: 'Run `sudo chown -R $USER ~/.nha` or move the project out of a root-owned directory.' };
+  }
+  if (/engine|unsupported.*node|requires node/.test(msg)) {
+    return { reason: 'Node version mismatch', offlineFallback: false,
+      hint: 'The package requires a different Node version. Check `node --version` and consider using nvm.' };
+  }
+  if (/eintegrity|sha-?(?:1|512) integrity|tarball/.test(msg)) {
+    return { reason: 'package integrity failure', offlineFallback: false,
+      hint: 'Try `rm -rf node_modules package-lock.json && npm install` to clear the cache.' };
+  }
+  return { reason: 'unknown', offlineFallback: false,
+    hint: (err?.message || '').slice(0, 200) };
+}
+
+export function _writeShims(shimDir) {
+  // ── Functional offline-safe shims for the 14 most common npm dependencies.
+  // These are NOT no-ops: they implement enough of the real API to keep code
+  // generated by the LLM running even when npm install is unavailable (VMs
+  // without network, corporate proxies, CI cache misses, etc.).
+  //
+  // Categories:
+  //   • Storage stubs:    pg, redis, ioredis, mongoose, sequelize
+  //   • Security stubs:   helmet, jsonwebtoken, bcryptjs
+  //   • Express middlew:  cors, morgan, body-parser, cookie-parser,
+  //                       compression, express-rate-limit, multer
+  //   • Utility stubs:    dotenv, uuid, lodash, debug, chalk, axios
+  //
+  // Every shim exports both CJS `module.exports` AND `.default` so it works
+  // under both `require('x')` and `import x from 'x'` interop.
+
   // In-memory pg replacement
   const pgShim = `
 const EventEmitter = require('events');
@@ -3476,35 +5376,773 @@ handler.xssFilter = handler;
 module.exports = handler;
 `;
 
-  // Generic no-op shim for unknown enterprise deps
-  const noopShim = `module.exports = new Proxy({}, { get: () => new Proxy(() => {}, { get: (_, p) => p === 'then' ? undefined : new Proxy(() => {}, { get: (__, q) => q === 'then' ? undefined : () => {} }) }) });`;
+  // dotenv — actually parses .env files and sets process.env
+  const dotenvShim = `
+const fs = require('fs');
+const path = require('path');
+function parse(src) {
+  const out = {};
+  const s = src.toString();
+  const re = /^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*?)\\s*$/;
+  for (const raw of s.split(/\\r?\\n/)) {
+    if (!raw || raw.trim().startsWith('#')) continue;
+    const m = raw.match(re);
+    if (!m) continue;
+    let v = m[2];
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
+    out[m[1]] = v;
+  }
+  return out;
+}
+function config(opts) {
+  opts = opts || {};
+  try {
+    const p = opts.path || path.join(process.cwd(), '.env');
+    if (!fs.existsSync(p)) return { parsed: {} };
+    const parsed = parse(fs.readFileSync(p, 'utf-8'));
+    for (const k of Object.keys(parsed)) {
+      if (opts.override || !(k in process.env)) process.env[k] = parsed[k];
+    }
+    return { parsed };
+  } catch (e) { return { error: e }; }
+}
+module.exports = { config, parse };
+module.exports.default = module.exports;
+`;
 
-  fs.writeFileSync(path.join(shimDir, 'pg.js'), pgShim, 'utf-8');
-  fs.writeFileSync(path.join(shimDir, 'redis.js'), redisShim, 'utf-8');
-  fs.writeFileSync(path.join(shimDir, 'helmet.js'), helmetShim, 'utf-8');
-  fs.writeFileSync(path.join(shimDir, 'ioredis.js'), redisShim, 'utf-8');
-  fs.writeFileSync(path.join(shimDir, 'mongoose.js'), noopShim, 'utf-8');
-  fs.writeFileSync(path.join(shimDir, 'sequelize.js'), noopShim, 'utf-8');
+  // cors — full Express middleware factory
+  const corsShim = `
+function cors(opts) {
+  opts = opts || {};
+  const origin = opts.origin === undefined ? '*' : opts.origin;
+  const methods = opts.methods || 'GET,HEAD,PUT,PATCH,POST,DELETE';
+  const credentials = opts.credentials === true;
+  const allowedHeaders = opts.allowedHeaders || 'Content-Type,Authorization';
+  return function (req, res, next) {
+    const o = typeof origin === 'function' ? origin(req) : origin;
+    res.setHeader('Access-Control-Allow-Origin', Array.isArray(o) ? o.join(',') : o);
+    res.setHeader('Access-Control-Allow-Methods', methods);
+    res.setHeader('Access-Control-Allow-Headers', allowedHeaders);
+    if (credentials) res.setHeader('Access-Control-Allow-Credentials', 'true');
+    if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
+    next();
+  };
+}
+module.exports = cors;
+module.exports.default = cors;
+`;
 
-  // Shim index — overrides require() for known modules via Module._resolveFilename
+  // morgan — minimal request logger
+  const morganShim = `
+function morgan(format) {
+  return function (req, res, next) {
+    const start = Date.now();
+    res.on('finish', () => {
+      const ms = Date.now() - start;
+      console.log(\`[\${new Date().toISOString()}] \${req.method} \${req.url} \${res.statusCode} \${ms}ms\`);
+    });
+    next();
+  };
+}
+morgan.token = () => morgan;
+morgan.format = () => morgan;
+module.exports = morgan;
+module.exports.default = morgan;
+`;
+
+  // body-parser — JSON + urlencoded
+  const bodyParserShim = `
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > limit) { req.destroy(); return reject(new Error('Payload too large')); }
+      data += chunk;
+    });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
+function jsonMw(opts) {
+  const limit = (opts && opts.limit) ? 1024 * 1024 * 10 : 1024 * 1024;
+  return async function (req, res, next) {
+    if (!/json/i.test(req.headers['content-type'] || '')) return next();
+    try { const raw = await readBody(req, limit); req.body = raw ? JSON.parse(raw) : {}; next(); }
+    catch (e) { res.statusCode = 400; res.end('Invalid JSON'); }
+  };
+}
+function urlencodedMw(opts) {
+  return async function (req, res, next) {
+    if (!/x-www-form-urlencoded/i.test(req.headers['content-type'] || '')) return next();
+    try {
+      const raw = await readBody(req, 1024 * 1024);
+      const body = {};
+      for (const pair of raw.split('&')) {
+        const [k, v] = pair.split('=').map(decodeURIComponent);
+        if (k) body[k] = v || '';
+      }
+      req.body = body;
+      next();
+    } catch (e) { res.statusCode = 400; res.end('Invalid form data'); }
+  };
+}
+const bp = { json: jsonMw, urlencoded: urlencodedMw, raw: () => (req, res, next) => next(), text: () => (req, res, next) => next() };
+module.exports = bp;
+module.exports.default = bp;
+`;
+
+  // cookie-parser
+  const cookieParserShim = `
+function parse(str) {
+  const out = {};
+  if (!str) return out;
+  for (const pair of str.split(';')) {
+    const idx = pair.indexOf('=');
+    if (idx < 0) continue;
+    const k = pair.slice(0, idx).trim();
+    const v = pair.slice(idx + 1).trim();
+    out[k] = decodeURIComponent(v);
+  }
+  return out;
+}
+function cookieParser() {
+  return function (req, res, next) { req.cookies = parse(req.headers.cookie || ''); next(); };
+}
+module.exports = cookieParser;
+module.exports.default = cookieParser;
+`;
+
+  // compression — pass-through (no-op middleware, real compression needs zlib)
+  const compressionShim = `
+function compression() { return function (req, res, next) { next(); }; }
+module.exports = compression;
+module.exports.default = compression;
+`;
+
+  // express-rate-limit — in-memory bucket
+  const rateLimitShim = `
+function rateLimit(opts) {
+  opts = opts || {};
+  const max = opts.max || 100;
+  const windowMs = opts.windowMs || 60_000;
+  const store = new Map();
+  return function (req, res, next) {
+    const key = (req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anon') + ':' + (req.path || req.url || '/');
+    const now = Date.now();
+    const rec = store.get(key) || { count: 0, reset: now + windowMs };
+    if (now > rec.reset) { rec.count = 0; rec.reset = now + windowMs; }
+    rec.count++;
+    store.set(key, rec);
+    res.setHeader('X-RateLimit-Limit', String(max));
+    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, max - rec.count)));
+    if (rec.count > max) { res.statusCode = 429; return res.end('Too many requests'); }
+    next();
+  };
+}
+module.exports = rateLimit;
+module.exports.default = rateLimit;
+`;
+
+  // jsonwebtoken — HS256 sign/verify (sandbox-grade, NOT for production secrets)
+  const jwtShim = `
+const crypto = require('crypto');
+function b64url(buf) { return Buffer.from(buf).toString('base64').replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, ''); }
+function b64urlDecode(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Buffer.from(s, 'base64'); }
+function sign(payload, secret, opts) {
+  opts = opts || {};
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const p = Object.assign({}, payload);
+  if (opts.expiresIn) {
+    const sec = typeof opts.expiresIn === 'string' ? parseInt(opts.expiresIn) * (opts.expiresIn.endsWith('h') ? 3600 : opts.expiresIn.endsWith('d') ? 86400 : opts.expiresIn.endsWith('m') ? 60 : 1) : opts.expiresIn;
+    p.exp = Math.floor(Date.now() / 1000) + sec;
+  }
+  const h = b64url(JSON.stringify(header));
+  const b = b64url(JSON.stringify(p));
+  const sig = b64url(crypto.createHmac('sha256', String(secret)).update(h + '.' + b).digest());
+  return h + '.' + b + '.' + sig;
+}
+function verify(token, secret) {
+  const parts = String(token).split('.');
+  if (parts.length !== 3) throw new Error('jwt malformed');
+  const [h, b, s] = parts;
+  const expected = b64url(crypto.createHmac('sha256', String(secret)).update(h + '.' + b).digest());
+  if (expected !== s) throw new Error('invalid signature');
+  const payload = JSON.parse(b64urlDecode(b).toString('utf-8'));
+  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) throw new Error('jwt expired');
+  return payload;
+}
+function decode(token) { try { return JSON.parse(b64urlDecode(String(token).split('.')[1]).toString('utf-8')); } catch { return null; } }
+module.exports = { sign, verify, decode };
+module.exports.default = module.exports;
+`;
+
+  // bcryptjs — pbkdf2-based, NOT real bcrypt (sandbox-grade)
+  const bcryptShim = `
+const crypto = require('crypto');
+function hashSync(pwd, rounds) {
+  const salt = crypto.randomBytes(16);
+  const iter = Math.pow(2, Math.min(rounds || 10, 14));
+  const hash = crypto.pbkdf2Sync(String(pwd), salt, iter, 32, 'sha256');
+  return '$nha$' + iter + '$' + salt.toString('base64') + '$' + hash.toString('base64');
+}
+function compareSync(pwd, stored) {
+  const m = String(stored).match(/^\\$nha\\$(\\d+)\\$([^$]+)\\$(.+)$/);
+  if (!m) return false;
+  const iter = parseInt(m[1]);
+  const salt = Buffer.from(m[2], 'base64');
+  const expected = Buffer.from(m[3], 'base64');
+  const actual = crypto.pbkdf2Sync(String(pwd), salt, iter, 32, 'sha256');
+  return crypto.timingSafeEqual(expected, actual);
+}
+async function hash(pwd, rounds) { return hashSync(pwd, rounds); }
+async function compare(pwd, stored) { return compareSync(pwd, stored); }
+function genSaltSync() { return 10; }
+async function genSalt() { return 10; }
+module.exports = { hash, hashSync, compare, compareSync, genSalt, genSaltSync };
+module.exports.default = module.exports;
+`;
+
+  // uuid — v4 only
+  const uuidShim = `
+const crypto = require('crypto');
+function v4() {
+  const b = crypto.randomBytes(16);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = b.toString('hex');
+  return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+}
+function v1() { return v4(); }
+function validate(s) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(s)); }
+module.exports = { v1, v4, validate };
+module.exports.default = module.exports;
+`;
+
+  // lodash — minimal subset (the 95th-percentile-used functions)
+  const lodashShim = `
+const _ = {};
+_.isArray = Array.isArray;
+_.isObject = (x) => x !== null && typeof x === 'object';
+_.isString = (x) => typeof x === 'string';
+_.isNumber = (x) => typeof x === 'number' && !isNaN(x);
+_.isFunction = (x) => typeof x === 'function';
+_.isEmpty = (x) => x == null || (Array.isArray(x) && x.length === 0) || (typeof x === 'object' && Object.keys(x).length === 0) || (typeof x === 'string' && x.length === 0);
+_.get = (obj, path, def) => {
+  const keys = Array.isArray(path) ? path : String(path).split('.');
+  let cur = obj;
+  for (const k of keys) { if (cur == null) return def; cur = cur[k]; }
+  return cur === undefined ? def : cur;
+};
+_.set = (obj, path, val) => {
+  const keys = Array.isArray(path) ? path : String(path).split('.');
+  let cur = obj;
+  for (let i = 0; i < keys.length - 1; i++) { if (cur[keys[i]] == null) cur[keys[i]] = {}; cur = cur[keys[i]]; }
+  cur[keys[keys.length - 1]] = val;
+  return obj;
+};
+_.cloneDeep = (x) => JSON.parse(JSON.stringify(x));
+_.merge = (target, ...sources) => Object.assign(target, ...sources);
+_.pick = (obj, keys) => keys.reduce((o, k) => (k in obj ? (o[k] = obj[k], o) : o), {});
+_.omit = (obj, keys) => Object.keys(obj).reduce((o, k) => (!keys.includes(k) ? (o[k] = obj[k], o) : o), {});
+_.uniq = (arr) => [...new Set(arr)];
+_.uniqBy = (arr, fn) => { const seen = new Set(); return arr.filter(x => { const k = typeof fn === 'function' ? fn(x) : x[fn]; if (seen.has(k)) return false; seen.add(k); return true; }); };
+_.chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
+_.flatten = (arr) => arr.flat();
+_.flattenDeep = (arr) => arr.flat(Infinity);
+_.groupBy = (arr, fn) => arr.reduce((o, x) => { const k = typeof fn === 'function' ? fn(x) : x[fn]; (o[k] = o[k] || []).push(x); return o; }, {});
+_.sortBy = (arr, fn) => [...arr].sort((a, b) => { const av = typeof fn === 'function' ? fn(a) : a[fn]; const bv = typeof fn === 'function' ? fn(b) : b[fn]; return av < bv ? -1 : av > bv ? 1 : 0; });
+_.keyBy = (arr, fn) => arr.reduce((o, x) => { o[typeof fn === 'function' ? fn(x) : x[fn]] = x; return o; }, {});
+_.debounce = (fn, wait) => { let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; };
+_.throttle = (fn, wait) => { let last = 0; return function (...args) { const now = Date.now(); if (now - last >= wait) { last = now; fn.apply(this, args); } }; };
+_.range = (start, end, step) => { if (end === undefined) { end = start; start = 0; } step = step || 1; const out = []; for (let i = start; step > 0 ? i < end : i > end; i += step) out.push(i); return out; };
+_.sum = (arr) => arr.reduce((a, b) => a + b, 0);
+_.mean = (arr) => arr.length ? _.sum(arr) / arr.length : 0;
+_.max = (arr) => arr.length ? Math.max(...arr) : undefined;
+_.min = (arr) => arr.length ? Math.min(...arr) : undefined;
+_.capitalize = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase();
+_.camelCase = (s) => String(s).replace(/[-_\\s]+(.)?/g, (_m, c) => c ? c.toUpperCase() : '');
+_.kebabCase = (s) => String(s).replace(/([a-z])([A-Z])/g, '$1-$2').replace(/[\\s_]+/g, '-').toLowerCase();
+_.snakeCase = (s) => String(s).replace(/([a-z])([A-Z])/g, '$1_$2').replace(/[\\s-]+/g, '_').toLowerCase();
+module.exports = _;
+module.exports.default = _;
+`;
+
+  // debug — namespace-aware logger
+  const debugShim = `
+const enabled = (process.env.DEBUG || '').split(',').filter(Boolean);
+function isEnabled(ns) { return enabled.some(p => p === '*' || ns === p || (p.endsWith('*') && ns.startsWith(p.slice(0, -1)))); }
+function debug(namespace) {
+  const fn = function (...args) { if (isEnabled(namespace)) console.error('[' + namespace + ']', ...args); };
+  fn.namespace = namespace;
+  fn.enabled = isEnabled(namespace);
+  fn.extend = (ns) => debug(namespace + ':' + ns);
+  return fn;
+}
+debug.enable = (ns) => { enabled.push(...ns.split(',')); };
+debug.disable = () => { enabled.length = 0; };
+module.exports = debug;
+module.exports.default = debug;
+`;
+
+  // chalk — ANSI color codes
+  const chalkShim = `
+const codes = { reset: [0, 0], bold: [1, 22], dim: [2, 22], italic: [3, 23], underline: [4, 24],
+  black: [30, 39], red: [31, 39], green: [32, 39], yellow: [33, 39], blue: [34, 39], magenta: [35, 39], cyan: [36, 39], white: [37, 39], gray: [90, 39],
+  bgBlack: [40, 49], bgRed: [41, 49], bgGreen: [42, 49], bgYellow: [43, 49], bgBlue: [44, 49] };
+function wrap(open, close, text) { return '\\x1b[' + open + 'm' + text + '\\x1b[' + close + 'm'; }
+function build(styles) {
+  const fn = function (...args) {
+    let s = args.join(' ');
+    for (let i = styles.length - 1; i >= 0; i--) { const [o, c] = codes[styles[i]]; s = wrap(o, c, s); }
+    return s;
+  };
+  for (const k of Object.keys(codes)) Object.defineProperty(fn, k, { get: () => build([...styles, k]) });
+  return fn;
+}
+const chalk = build([]);
+chalk.level = 1;
+chalk.supportsColor = { level: 1, hasBasic: true };
+module.exports = chalk;
+module.exports.default = chalk;
+`;
+
+  // multer — file upload middleware (no-op, no actual disk write)
+  const multerShim = `
+function multer(opts) {
+  return {
+    single: () => (req, res, next) => { req.file = null; next(); },
+    array: () => (req, res, next) => { req.files = []; next(); },
+    fields: () => (req, res, next) => { req.files = {}; next(); },
+    any: () => (req, res, next) => { req.files = []; next(); },
+    none: () => (req, res, next) => next(),
+  };
+}
+multer.diskStorage = (opts) => ({ _kind: 'disk', opts });
+multer.memoryStorage = () => ({ _kind: 'memory' });
+module.exports = multer;
+module.exports.default = multer;
+`;
+
+  // express — minimal HTTP framework shim (route matching, middleware chain,
+  // req.params/query/body, res.json/send/status). Enough to boot a typical
+  // LLM-generated Express app even without express in node_modules.
+  const expressShim = `
+const http = require('http');
+const url = require('url');
+
+function parseBody(req) {
+  return new Promise((resolve) => {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      const ct = req.headers['content-type'] || '';
+      try {
+        if (/json/i.test(ct)) resolve(raw ? JSON.parse(raw) : {});
+        else if (/urlencoded/i.test(ct)) {
+          const o = {};
+          for (const p of raw.split('&')) { const [k, v] = p.split('=').map(decodeURIComponent); if (k) o[k] = v || ''; }
+          resolve(o);
+        } else resolve(raw);
+      } catch { resolve(raw); }
+    });
+  });
+}
+
+function compilePath(p) {
+  if (p instanceof RegExp) return { re: p, keys: [] };
+  const keys = [];
+  const re = '^' + String(p).replace(/:([^/]+)/g, (_m, k) => { keys.push(k); return '([^/]+)'; }) + '/?$';
+  return { re: new RegExp(re), keys };
+}
+
+function createApp() {
+  // Flat layer list — each handler is its own layer (matches Express semantics).
+  // Layer types: 'normal' (3-arg) or 'error' (4-arg). Path-mounted layers
+  // ('app.use("/api", router)') get a prefix that must match the URL.
+  const layers = [];
+  const settings = {};
+
+  function addLayer(method, re, keys, prefix, handler) {
+    const isErrHandler = typeof handler === 'function' && handler.length === 4;
+    layers.push({ method, re, keys, prefix, handler, isErrHandler });
+  }
+
+  function use(arg, ...rest) {
+    let prefix = '';
+    let handlers = rest;
+    if (typeof arg === 'function') {
+      handlers = [arg, ...rest];
+    } else {
+      prefix = String(arg).replace(/\\/+$/, '');
+    }
+    for (const h of handlers.flat()) {
+      if (typeof h !== 'function') continue;
+      addLayer('ALL', /.*/, [], prefix, h);
+    }
+    return app;
+  }
+  function addRoute(method) {
+    return (p, ...handlers) => {
+      const c = compilePath(p);
+      for (const h of handlers.flat()) {
+        if (typeof h !== 'function') continue;
+        addLayer(method, c.re, c.keys, '', h);
+      }
+      return app;
+    };
+  }
+  const app = async function (req, res) {
+    const parsed = url.parse(req.url, true);
+    req.path = parsed.pathname;
+    req.query = parsed.query;
+    if (['POST', 'PUT', 'PATCH'].includes(req.method)) req.body = await parseBody(req);
+    if (!res.json) {
+      res.json = function (obj) { this.setHeader('Content-Type', 'application/json'); this.end(JSON.stringify(obj)); return this; };
+      res.send = function (data) { if (typeof data === 'object') return this.json(data); this.end(String(data)); return this; };
+      res.status = function (n) { this.statusCode = n; return this; };
+      res.sendStatus = function (n) { this.statusCode = n; this.end(http.STATUS_CODES[n] || ''); return this; };
+      res.redirect = function (loc) { this.statusCode = 302; this.setHeader('Location', loc); this.end(); return this; };
+    }
+
+    // Real Express-style routing chain:
+    //   - 3-arg handlers run ONLY when err is null/undefined
+    //   - 4-arg handlers run ONLY when err is truthy
+    //   - Path-mounted middleware ('/api') only runs if req.path matches prefix
+    //   - Method-specific layers (GET/POST/...) only run for that method
+    let idx = 0;
+    function nextLayer(err) {
+      while (idx < layers.length) {
+        const layer = layers[idx++];
+        // Method filter
+        if (layer.method !== 'ALL' && layer.method !== req.method) continue;
+        // Path filter
+        if (layer.prefix) {
+          if (!req.path.startsWith(layer.prefix)) continue;
+          const remaining = req.path.slice(layer.prefix.length);
+          if (remaining && !remaining.startsWith('/')) continue;
+        } else if (layer.re && layer.method !== 'ALL') {
+          // Specific route — must match
+          const m = req.path.match(layer.re);
+          if (!m) continue;
+          req.params = {};
+          layer.keys.forEach((k, i) => { req.params[k] = m[i + 1]; });
+        }
+        // Error chain filter: skip normal handlers when in error, and skip
+        // error handlers when not in error. THIS is the fix for the MySaaS bug.
+        if (err && !layer.isErrHandler) continue;
+        if (!err && layer.isErrHandler) continue;
+
+        try {
+          if (layer.isErrHandler) {
+            return layer.handler(err, req, res, nextLayer);
+          }
+          return layer.handler(req, res, nextLayer);
+        } catch (e) { return nextLayer(e); }
+      }
+      // End of chain — default response
+      if (err) {
+        res.statusCode = err.status || err.statusCode || 500;
+        res.end('Error: ' + ((err && err.message) || String(err)));
+      } else {
+        res.statusCode = 404;
+        res.end('Cannot ' + req.method + ' ' + req.path);
+      }
+    }
+    nextLayer();
+  };
+  app.use = use;
+  app.get = addRoute('GET'); app.post = addRoute('POST'); app.put = addRoute('PUT');
+  app.delete = addRoute('DELETE'); app.patch = addRoute('PATCH'); app.options = addRoute('OPTIONS');
+  app.all = (path, ...handlers) => { const c = compilePath(path); stack.push({ method: 'ALL', re: c.re, keys: c.keys, handlers: handlers.flat() }); return app; };
+  app.set = (k, v) => { settings[k] = v; return app; };
+  app.get_setting = (k) => settings[k];
+  app.disable = (k) => { settings[k] = false; return app; };
+  app.enable = (k) => { settings[k] = true; return app; };
+  app.listen = function (port, cb) { const server = http.createServer(app); server.listen(port, cb); return server; };
+  return app;
+}
+
+const express = createApp;
+express.json = function (opts) { return async (req, res, next) => { if (/json/i.test(req.headers['content-type'] || '')) req.body = await parseBody(req); next(); }; };
+express.urlencoded = function (opts) { return async (req, res, next) => { if (/urlencoded/i.test(req.headers['content-type'] || '')) req.body = await parseBody(req); next(); }; };
+
+// MIME type table for static files
+const _MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.htm':  'text/html; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.js':   'application/javascript; charset=utf-8',
+  '.mjs':  'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif':  'image/gif',
+  '.webp': 'image/webp',
+  '.svg':  'image/svg+xml',
+  '.ico':  'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf':  'font/ttf',
+  '.otf':  'font/otf',
+  '.eot':  'application/vnd.ms-fontobject',
+  '.txt':  'text/plain; charset=utf-8',
+  '.xml':  'application/xml',
+  '.pdf':  'application/pdf',
+  '.map':  'application/json',
+  '.mp4':  'video/mp4',
+  '.webm': 'video/webm',
+  '.mp3':  'audio/mpeg',
+  '.wav':  'audio/wav',
+};
+
+// Real express.static implementation — serves files from disk with proper
+// MIME types. Supports index.html for directory requests, path traversal
+// protection. Falls through to next() when the file doesn't exist.
+express.static = function (root, opts) {
+  opts = opts || {};
+  const indexFile = opts.index === false ? null : (opts.index || 'index.html');
+  const rootAbs = require('path').resolve(root);
+  return function (req, res, next) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    try {
+      let relPath = decodeURIComponent((req.path || req.url || '/').split('?')[0]);
+      // Path traversal protection
+      if (relPath.includes('\\\\0') || relPath.includes('..')) return next();
+      if (relPath.startsWith('/')) relPath = relPath.slice(1);
+      const abs = require('path').resolve(rootAbs, relPath);
+      // Ensure resolved path stays within root
+      if (!abs.startsWith(rootAbs)) return next();
+      let stat;
+      try { stat = require('fs').statSync(abs); } catch { return next(); }
+      let filePath = abs;
+      if (stat.isDirectory()) {
+        if (!indexFile) return next();
+        filePath = require('path').join(abs, indexFile);
+        try { stat = require('fs').statSync(filePath); } catch { return next(); }
+        if (!stat.isFile()) return next();
+      }
+      const ext = require('path').extname(filePath).toLowerCase();
+      const mime = _MIME[ext] || 'application/octet-stream';
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Content-Length', String(stat.size));
+      res.setHeader('Cache-Control', 'public, max-age=0');
+      if (req.method === 'HEAD') return res.end();
+      require('fs').createReadStream(filePath).pipe(res);
+    } catch (e) {
+      return next();
+    }
+  };
+};
+
+express.Router = function () { const r = createApp(); return r; };
+module.exports = express;
+module.exports.default = express;
+`;
+
+  // marked — minimal Markdown → HTML parser. Real `marked` is 200KB+ but we
+  // only need basic parsing. Covers: headings, bold/italic, links, code blocks,
+  // lists, paragraphs, line breaks. Good enough for blog-style content.
+  const markedShim = `
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function parseMarkdown(md) {
+  if (!md) return '';
+  let html = String(md);
+  // Code blocks (must come first)
+  html = html.replace(/\\\`\\\`\\\`(\\\\w+)?\\n([\\s\\S]*?)\\n\\\`\\\`\\\`/g, (_, lang, code) => '<pre><code' + (lang ? ' class="language-' + lang + '"' : '') + '>' + escapeHtml(code) + '</code></pre>');
+  // Inline code
+  html = html.replace(/\\\`([^\\\`\\n]+)\\\`/g, '<code>$1</code>');
+  // Headings
+  html = html.replace(/^######\\s+(.+)$/gm, '<h6>$1</h6>');
+  html = html.replace(/^#####\\s+(.+)$/gm, '<h5>$1</h5>');
+  html = html.replace(/^####\\s+(.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^###\\s+(.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^##\\s+(.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^#\\s+(.+)$/gm, '<h1>$1</h1>');
+  // Bold + italic
+  html = html.replace(/\\*\\*\\*([^*]+)\\*\\*\\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+  html = html.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+  // Links + images
+  html = html.replace(/!\\[([^\\]]*)\\]\\(([^)]+)\\)/g, '<img src="$2" alt="$1">');
+  html = html.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2">$1</a>');
+  // Blockquotes
+  html = html.replace(/^>\\s+(.+)$/gm, '<blockquote>$1</blockquote>');
+  // Horizontal rules
+  html = html.replace(/^---+$/gm, '<hr>');
+  // Lists (simple)
+  html = html.replace(/^[\\*\\-]\\s+(.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>[\\s\\S]*?<\\/li>\\n?)+/g, (m) => '<ul>' + m.replace(/\\n/g, '') + '</ul>');
+  html = html.replace(/^\\d+\\.\\s+(.+)$/gm, '<li>$1</li>');
+  // Paragraphs (lines not in other elements)
+  const lines = html.split(/\\n\\n+/);
+  html = lines.map(line => {
+    line = line.trim();
+    if (!line) return '';
+    if (/^<(h[1-6]|ul|ol|pre|blockquote|hr|p|div)/.test(line)) return line;
+    return '<p>' + line + '</p>';
+  }).join('\\n');
+  return html;
+}
+function marked(md, opts) {
+  return parseMarkdown(md);
+}
+marked.parse = parseMarkdown;
+marked.setOptions = function () { return marked; };
+marked.use = function () { return marked; };
+marked.Renderer = function () {};
+marked.parseInline = function (md) {
+  let html = String(md || '');
+  html = html.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+  html = html.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+  html = html.replace(/\\\`([^\\\`]+)\\\`/g, '<code>$1</code>');
+  html = html.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2">$1</a>');
+  return html;
+};
+module.exports = marked;
+module.exports.marked = marked;
+module.exports.default = marked;
+`;
+
+  // axios — minimal fetch-based replacement
+  const axiosShim = `
+async function request(config) {
+  const url = typeof config === 'string' ? config : config.url;
+  const method = (typeof config === 'object' && config.method) || 'GET';
+  const headers = (typeof config === 'object' && config.headers) || {};
+  const body = typeof config === 'object' ? config.data : undefined;
+  const init = { method, headers: { ...headers }, };
+  if (body !== undefined) {
+    if (typeof body === 'object' && !(body instanceof URLSearchParams)) {
+      init.body = JSON.stringify(body);
+      if (!init.headers['Content-Type']) init.headers['Content-Type'] = 'application/json';
+    } else { init.body = body; }
+  }
+  const res = await fetch(url, init);
+  const ct = res.headers.get('content-type') || '';
+  const data = ct.includes('json') ? await res.json().catch(() => null) : await res.text();
+  if (res.status >= 400) { const err = new Error('Request failed with status code ' + res.status); err.response = { status: res.status, data, headers: Object.fromEntries(res.headers) }; throw err; }
+  return { data, status: res.status, statusText: res.statusText, headers: Object.fromEntries(res.headers) };
+}
+const axios = function (config) { return request(config); };
+axios.request = request;
+axios.get = (url, config) => request({ ...config, url, method: 'GET' });
+axios.post = (url, data, config) => request({ ...config, url, method: 'POST', data });
+axios.put = (url, data, config) => request({ ...config, url, method: 'PUT', data });
+axios.patch = (url, data, config) => request({ ...config, url, method: 'PATCH', data });
+axios.delete = (url, config) => request({ ...config, url, method: 'DELETE' });
+axios.create = (defaults) => axios;
+module.exports = axios;
+module.exports.default = axios;
+`;
+
+  // Generic no-op shim — deeply chainable proxy. Survives any .a().b.c().d
+  // access chain because every get/apply returns another proxy of the same shape.
+  const noopShim = `
+const noop = function () {};
+const handler = {
+  get(target, prop) {
+    if (prop === 'then' || prop === Symbol.toPrimitive || prop === Symbol.iterator) return undefined;
+    if (prop === 'default') return proxy;
+    if (prop === 'toString') return () => '[nha-noop]';
+    return proxy;
+  },
+  apply() { return proxy; },
+  construct() { return proxy; },
+};
+const proxy = new Proxy(noop, handler);
+module.exports = proxy;
+module.exports.default = proxy;
+`;
+
+  const shimFiles = {
+    'pg.js': pgShim,
+    'redis.js': redisShim,
+    'ioredis.js': redisShim,
+    'helmet.js': helmetShim,
+    'mongoose.js': noopShim,
+    'sequelize.js': noopShim,
+    'dotenv.js': dotenvShim,
+    'cors.js': corsShim,
+    'morgan.js': morganShim,
+    'body-parser.js': bodyParserShim,
+    'cookie-parser.js': cookieParserShim,
+    'compression.js': compressionShim,
+    'express-rate-limit.js': rateLimitShim,
+    'jsonwebtoken.js': jwtShim,
+    'bcryptjs.js': bcryptShim,
+    'bcrypt.js': bcryptShim,
+    'uuid.js': uuidShim,
+    'lodash.js': lodashShim,
+    'debug.js': debugShim,
+    'chalk.js': chalkShim,
+    'multer.js': multerShim,
+    'axios.js': axiosShim,
+    'express.js': expressShim,
+    'marked.js': markedShim,
+    'markdown-it.js': markedShim,
+    'noop.js': noopShim,
+  };
+  for (const [name, content] of Object.entries(shimFiles)) {
+    fs.writeFileSync(path.join(shimDir, name), content, 'utf-8');
+  }
+
+  // Shim index — only activates a shim if the REAL package is missing.
+  // This lets a project that has its own dotenv/cors/etc. installed use the
+  // real implementation, and only falls back to our shim when resolution fails.
+  // Also supports NHA_OFFLINE_SHIM=1 to no-op any unresolvable module.
+  const shimList = JSON.stringify(Object.keys(shimFiles).filter(f => f !== 'noop.js').map(f => f.replace(/\.js$/, '')));
+  // ALIAS map: bare names the LLM tends to invent → real package name we shim.
+  // Must stay in sync with _PACKAGE_ALIASES in the parent module so pre-scan
+  // and runtime shim agree on what to resolve.
+  const aliasJson = JSON.stringify({
+    'bcrypt': 'bcryptjs',
+    'jwt': 'jsonwebtoken',
+    'mongo': 'mongoose',
+    'postgres': 'pg',
+    'postgresql': 'pg',
+    'env': 'dotenv',
+    'express-cors': 'cors',
+    'express-helmet': 'helmet',
+    'express-body-parser': 'body-parser',
+  });
   const shimIndex = `
 const Module = require('module');
 const path = require('path');
 const __shimDir = ${JSON.stringify(shimDir)};
-
-const SHIMS = {
-  'pg': path.join(__shimDir, 'pg.js'),
-  'redis': path.join(__shimDir, 'redis.js'),
-  'ioredis': path.join(__shimDir, 'redis.js'),
-  'helmet': path.join(__shimDir, 'helmet.js'),
-  'mongoose': path.join(__shimDir, 'mongoose.js'),
-  'sequelize': path.join(__shimDir, 'sequelize.js'),
-};
-
+const SHIM_NAMES = new Set(${shimList});
+const ALIAS = ${aliasJson};
+const OFFLINE = process.env.NHA_OFFLINE_SHIM === '1';
 const _original = Module._resolveFilename.bind(Module);
+
+function shimPath(name) {
+  const f = (ALIAS[name] || name) + '.js';
+  return path.join(__shimDir, f);
+}
+
 Module._resolveFilename = function(request, parent, isMain, options) {
-  if (SHIMS[request]) return SHIMS[request];
-  return _original(request, parent, isMain, options);
+  try {
+    return _original(request, parent, isMain, options);
+  } catch (err) {
+    if (err && err.code === 'MODULE_NOT_FOUND') {
+      if (SHIM_NAMES.has(request) || ALIAS[request]) {
+        return shimPath(request);
+      }
+      if (OFFLINE && !request.startsWith('.') && !request.startsWith('/') && !request.startsWith('node:')) {
+        try { console.error('[nha-shim] offline-noop for missing module: ' + request); } catch {}
+        return path.join(__shimDir, 'noop.js');
+      }
+    }
+    throw err;
+  }
 };
 `;
   fs.writeFileSync(path.join(shimDir, 'index.js'), shimIndex, 'utf-8');

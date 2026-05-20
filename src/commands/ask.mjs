@@ -182,11 +182,11 @@ export async function cmdAsk(args) {
     const callFn = getProviderCall(provider);
     if (!callFn) {
       fail(`Unknown provider: ${provider}`);
-      info('Supported: anthropic, openai, gemini, deepseek, grok, mistral, cohere');
+      info('Supported: anthropic, openai, gemini, deepseek, grok, mistral, cohere, openrouter');
       process.exit(1);
     }
 
-    const useStream = stream && (provider === 'anthropic' || provider === 'openai' || provider === 'deepseek' || provider === 'grok' || provider === 'mistral');
+    const useStream = stream && (provider === 'anthropic' || provider === 'openai' || provider === 'deepseek' || provider === 'grok' || provider === 'mistral' || provider === 'openrouter');
     const result = await callFn(apiKey, model, systemPrompt, userMessage, useStream);
 
     if (!useStream && result) {

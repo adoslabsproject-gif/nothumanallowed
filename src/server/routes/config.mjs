@@ -307,6 +307,7 @@ export function register(router) {
         // Key presence flags (never expose the actual key)
         hasApiKey:    !!(config.llm?.apiKey),
         hasOpenaiKey: !!(config.llm?.openaiKey),
+        hasOpenrouterKey: !!(config.llm?.openrouterKey),
         hasGeminiKey: !!(config.llm?.geminiKey),
         hasDeepseekKey: !!(config.llm?.deepseekKey),
         hasGrokKey:   !!(config.llm?.grokKey),

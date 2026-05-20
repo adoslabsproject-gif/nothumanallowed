@@ -2672,7 +2672,69 @@ class TelegramResponder {
           }
         }
       } catch (e) { this.log(`[direct] pagination failed: ${e.message}`); }
-      // Fall through if no cached list
+
+      // NO CACHE FALLBACK (Giovanni's recurring bug): if user asks "mostra i
+      // prossimi" but no calendar list was cached in this session, the LLM
+      // hallucinates plausible-but-fake events. Instead, run calendar_upcoming
+      // for the next 7 days directly here. Deterministic, zero LLM call.
+      try {
+        const { listEvents } = await import('./google-calendar.mjs');
+        const now = new Date();
+        const weekAhead = new Date(now.getTime() + 7 * 86400000);
+        const evs = await listEvents(config, 'primary', now, weekAhead);
+        if (Array.isArray(evs) && evs.length > 0) {
+          const items = evs.map(e => ({
+            eventId: e.id,
+            id: e.id,
+            summary: e.summary || '(senza titolo)',
+            time: (e.start || '').slice(11, 16),
+            date: (e.start || '').slice(0, 10),
+            start: e.start,
+          }));
+          // Persist into list-cache so subsequent "mostra i prossimi" paginates
+          try {
+            const { rememberList } = await import('./list-cache.mjs');
+            rememberList(chatId || '__last_list__', 'calendar', items);
+          } catch {}
+          const pageSize = 8;
+          const firstSlice = items.slice(0, pageSize);
+          const lines = [`📅 Prossimi eventi (7 giorni, ${items.length} totali):`];
+          const byDay = new Map();
+          for (const e of firstSlice) {
+            const day = e.date || 'misc';
+            if (!byDay.has(day)) byDay.set(day, []);
+            byDay.get(day).push(e);
+          }
+          for (const [day, evs] of [...byDay.entries()].sort()) {
+            const d = day !== 'misc' ? new Date(day + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+            if (d) lines.push(`\n${d}:`);
+            for (const e of evs) lines.push(`  ${e.time || '—'} — ${e.summary}`);
+          }
+          if (items.length > pageSize) {
+            lines.push(`\n... ${items.length - pageSize} eventi rimanenti. Scrivi "mostra i prossimi" per continuare.`);
+          } else {
+            lines.push(`\n✓ Fine elenco.`);
+          }
+          // Track shownCount so next "mostra i prossimi" works
+          try {
+            const cacheFile = path.join(os.homedir(), '.nha', 'list-cache.json');
+            const cacheNow = fs.existsSync(cacheFile) ? JSON.parse(fs.readFileSync(cacheFile, 'utf-8')) : {};
+            const key = chatId || '__last_list__';
+            if (!cacheNow[key]) cacheNow[key] = {};
+            cacheNow[key].lastList_calendar_shownCount = pageSize;
+            fs.writeFileSync(cacheFile, JSON.stringify(cacheNow, null, 2));
+          } catch {}
+          this.log(`[direct] PAGINATION fallback: fetched ${items.length} events from calendar_upcoming(7d)`);
+          return { action: 'calendar_page', success: true, message: lines.join('\n') };
+        }
+        // No events in next 7 days — say so explicitly, do NOT fall to LLM
+        return { action: 'calendar_page', success: true, message: '📅 Nessun evento programmato nei prossimi 7 giorni. Scrivi "appuntamenti di [data/mese]" per cercare in un altro periodo.' };
+      } catch (e) {
+        this.log(`[direct] pagination fallback failed: ${e.message}`);
+        // CRITICAL: do NOT fall through to LLM — return error instead of
+        // letting HERALD hallucinate fake events (Giovanni's bug).
+        return { action: 'calendar_page', success: false, message: `Non riesco a leggere il calendario in questo momento (${e.message.slice(0, 100)}). Verifica la connessione Google in Settings.` };
+      }
     }
 
     // ─── ANAPHORIC delete + CONFIRMATION yes ────────────────────────────────
