@@ -473,20 +473,64 @@ export async function startServer({ port = 3847, host = '127.0.0.1', noBrowser =
 
   if (!noBrowser) openBrowser(`http://localhost:${port}`);
 
-  // Cleanup sandbox processes on server shutdown
+  // ── Unified graceful shutdown ─────────────────────────────────────────────
+  // Stops, in this order: PAO daemon (Telegram bot + cron + Gmail/Calendar
+  // pollers), orphan WS listener on 3848, sandbox processes on 4000-4010, the
+  // HTTP server itself. Second Ctrl+C bails out hard. 5-second hard timeout
+  // guards against any step hanging.
+  let shuttingDown = false;
   const cleanup = async () => {
+    if (shuttingDown) {
+      process.stderr.write(`\n  ${R}✗${NC} ${D}Force exit${NC}\n`);
+      process.exit(130);
+    }
+    shuttingDown = true;
+    process.stdout.write(`\n  ${D}Shutting down...${NC}\n`);
+
+    const hardTimeout = setTimeout(() => {
+      process.stderr.write(`  ${R}!${NC} ${D}Timed out, killing process${NC}\n`);
+      process.exit(1);
+    }, 5000);
+    hardTimeout.unref();
+
+    // 1. PAO daemon (Telegram, cron, Gmail/Calendar pollers, notifications)
     try {
-      const { exec } = await import('child_process');
-      const { promisify } = await import('util');
-      const execAsync = promisify(exec);
-      for (let p = 4000; p <= 4010; p++) {
-        try {
-          const { stdout } = await execAsync(`lsof -ti:${p} 2>/dev/null || fuser ${p}/tcp 2>/dev/null`, { timeout: 2000 });
-          const pids = stdout.trim().split(/\s+/).filter(Boolean);
-          for (const pid of pids) { try { process.kill(parseInt(pid), 'SIGKILL'); } catch {} }
-        } catch {}
+      const { stopDaemon, isRunning: isDaemonRunning } = await import('../services/ops-daemon.mjs');
+      if (isDaemonRunning()) {
+        const r = stopDaemon();
+        if (r.ok) process.stdout.write(`  ${G}✓${NC} ${D}PAO daemon stopped (PID ${r.pid})${NC}\n`);
       }
     } catch {}
+
+    // 2. Orphan WS listeners on port 3848 (stale daemon instances from
+    //    previous sessions that never cleaned up)
+    try {
+      const { execSync } = await import('child_process');
+      const out = execSync('lsof -ti:3848 2>/dev/null', { encoding: 'utf-8', timeout: 1500 }).trim();
+      const pids = out.split('\n').filter(Boolean).filter((p) => p !== String(process.pid));
+      for (const pid of pids) { try { process.kill(parseInt(pid), 'SIGTERM'); } catch {} }
+      if (pids.length) process.stdout.write(`  ${G}✓${NC} ${D}Cleaned ${pids.length} orphan(s) on port 3848${NC}\n`);
+    } catch {}
+
+    // 3. WebCraft sandbox processes (4000-4010)
+    try {
+      const { execSync } = await import('child_process');
+      let sandboxKilled = 0;
+      for (let p = 4000; p <= 4010; p++) {
+        try {
+          const out = execSync(`lsof -ti:${p} 2>/dev/null`, { encoding: 'utf-8', timeout: 1500 }).trim();
+          const pids = out.split('\n').filter(Boolean);
+          for (const pid of pids) { try { process.kill(parseInt(pid), 'SIGKILL'); sandboxKilled++; } catch {} }
+        } catch {}
+      }
+      if (sandboxKilled) process.stdout.write(`  ${G}✓${NC} ${D}Stopped ${sandboxKilled} sandbox process(es)${NC}\n`);
+    } catch {}
+
+    // 4. HTTP server — close listening socket so the port frees up immediately
+    try { server.close(); } catch {}
+
+    process.stdout.write(`  ${G}✓${NC} ${D}Bye${NC}\n`);
+    clearTimeout(hardTimeout);
     process.exit(0);
   };
   process.on('SIGINT', cleanup);

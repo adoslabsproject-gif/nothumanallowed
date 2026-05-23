@@ -1,6 +1,6 @@
 {
   "name": "nothumanallowed",
-  "version": "16.0.63",
+  "version": "16.0.64",
   "description": "Local AI assistant: 80 tools (Gmail, Calendar, Drive, GitHub, Slack, browser, code, files), 38 agents, visual workflows (Studio, AWF, WebCraft). Install with `npm i -g nothumanallowed`, run with `nha ui`. Free tier built-in (Liara), no API key required. Your data stays on your PC — OAuth tokens local, no cloud. Open-source MIT.",
   "type": "module",
   "bin": {
