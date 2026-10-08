@@ -3868,7 +3868,7 @@ export function startResponder(config, log, wsBroadcast) {
   const provider = (config.llm?.provider || 'nha').toLowerCase();
   const PAID_PROVIDERS = new Set(['anthropic', 'openai', 'gemini', 'deepseek', 'grok', 'mistral', 'cohere']);
   if (PAID_PROVIDERS.has(provider) && !config.llm?.apiKey) {
-    log(`[Responder] Provider "${provider}" requires an API key — cannot respond. Run: nha config set provider nha   (to switch to free Liara)   OR   nha config set ${provider}-key YOUR_KEY`);
+    log(`[Responder] Provider "${provider}" requires an API key — cannot respond. Run: nha config set key YOUR_KEY`);
     return { telegram: false, discord: false, reason: `missing_key:${provider}` };
   }
 

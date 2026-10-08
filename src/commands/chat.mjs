@@ -572,7 +572,7 @@ export async function cmdChat(args) {
 
   const activeProvider = config.llm.provider || 'anthropic';
   if (activeProvider !== 'nha' && !config.llm.apiKey) {
-    fail('No API key configured. Run: nha config set key YOUR_KEY\n  Or use the free tier: nha config set provider nha');
+    fail('No API key configured. Run: nha config set key YOUR_KEY');
     process.exit(1);
   }
 

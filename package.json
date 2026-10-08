@@ -57,10 +57,11 @@
   "homepage": "https://nothumanallowed.com",
   "scripts": {
     "check-bundle": "node check-bundle.mjs",
+    "check-legion-source": "node check-legion-source.mjs",
     "build:ui": "cd ../nha-ui && pnpm build",
     "prebuild": "cd ../nha-ui && pnpm build",
-    "test": "node test/sandbox.test.mjs && node --test test/legion-bundle.test.mjs test/legion-run.test.mjs",
-    "prepublishOnly": "node check-bundle.mjs && npm test"
+    "test": "node test/sandbox.test.mjs && node --test test/legion-bundle.test.mjs test/legion-run.test.mjs test/hosted-offline.test.mjs",
+    "prepublishOnly": "node check-bundle.mjs && node check-legion-source.mjs && npm test"
   },
   "dependencies": {
     "acorn": "^8.16.0",

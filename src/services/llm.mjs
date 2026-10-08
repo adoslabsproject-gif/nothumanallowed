@@ -720,6 +720,29 @@ export async function callCohere(apiKey, model, systemPrompt, userMessage, _stre
   return data.text || '';
 }
 
+// ── Hosted free model offline ──────────────────────────────────────────────
+
+/**
+ * What the user reads when the hosted free model is switched off. The server
+ * then answers 200 with a canned assistant message ("try again in a few
+ * minutes") marked `__liara_unavailable`: shown as an answer, it reads like a
+ * passing fault and never says that another model has to be set.
+ */
+export const HOSTED_OFFLINE_MESSAGE = [
+  'The hosted free model (Liara) is offline. Set your own model:',
+  '  nha config set provider anthropic   (or openai, gemini, deepseek, grok, mistral, cohere, openrouter)',
+  '  nha config set key YOUR_API_KEY',
+  'For deliberations (nha run) a local model works with no key:',
+  '  nha config set legion-provider ollama',
+].join('\n');
+
+/** The error for a `__liara_unavailable` answer, flagged so callers can tell it apart. */
+export function hostedOfflineError() {
+  const err = new Error(HOSTED_OFFLINE_MESSAGE);
+  err.__hosted_offline = true;
+  return err;
+}
+
 // ── SSE Stream Parser ──────────────────────────────────────────────────────
 
 export async function streamSSE(res, format) {
@@ -741,23 +764,23 @@ export async function streamSSE(res, format) {
       const data = line.slice(6).trim();
       if (data === '[DONE]') continue;
 
-      try {
-        const json = JSON.parse(data);
-        let chunk = '';
+      let json;
+      try { json = JSON.parse(data); } catch { continue; }
+      if (json.__liara_unavailable) throw hostedOfflineError();
 
-        if (format === 'anthropic') {
-          if (json.type === 'content_block_delta') {
-            chunk = json.delta?.text || '';
-          }
-        } else {
-          chunk = json.choices?.[0]?.delta?.content || '';
+      let chunk = '';
+      if (format === 'anthropic') {
+        if (json.type === 'content_block_delta') {
+          chunk = json.delta?.text || '';
         }
+      } else {
+        chunk = json.choices?.[0]?.delta?.content || '';
+      }
 
-        if (chunk) {
-          process.stdout.write(chunk);
-          fullText += chunk;
-        }
-      } catch {}
+      if (chunk) {
+        process.stdout.write(chunk);
+        fullText += chunk;
+      }
     }
   }
 
@@ -832,6 +855,7 @@ export async function callNHA(apiKey, model, systemPrompt, userMessage, stream =
   }
   if (stream) return streamSSE(res, 'openai');
   const data = await res.json();
+  if (data.__liara_unavailable) throw hostedOfflineError();
   let content = data.choices?.[0]?.message?.content || '';
   // Strip thinking tags if present
   content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -1228,7 +1252,7 @@ export async function callLLMVision(config, systemPrompt, userMessage, media) {
   }
 
   const apiKey = getApiKey(config, provider);
-  if (!apiKey) throw new Error(`No API key for ${provider}. Vision requires Claude, GPT-4, Gemini, or NHA Free (nha config set provider nha).`);
+  if (!apiKey) throw new Error(`No API key for ${provider}. Vision requires Claude, GPT-4 or Gemini with your own key (nha config set key YOUR_KEY).`);
 
   const { base64, mimeType } = media;
   if (!base64 || !mimeType) throw new Error('media.base64 and media.mimeType are required');
@@ -1410,6 +1434,11 @@ export async function callLLMStream(config, systemPrompt, userMessage, onToken, 
     }
     // Non-streaming: vLLM returns complete text — no BPE subword splitting issues
     const nhaJson = await nhaRes.json();
+    // Hosted model switched off — shown to the user, never saved as an answer
+    if (nhaJson.__liara_unavailable) {
+      if (onToken) onToken(HOSTED_OFFLINE_MESSAGE);
+      throw hostedOfflineError();
+    }
     // SENTINEL blocked — throw special error so caller skips conversation persistence
     if (nhaJson.__sentinel_blocked) {
       const blockedMsg = nhaJson.choices?.[0]?.message?.content || 'Message blocked by SENTINEL.';

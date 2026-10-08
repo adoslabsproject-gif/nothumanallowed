@@ -105,7 +105,7 @@ export async function cmdOps(args) {
       let inactiveHintTel = 'configured but inactive (try: nha ops stop && nha ops start)';
       if (reason.startsWith('missing_key:')) {
         const p = reason.slice('missing_key:'.length);
-        inactiveHintTel = `configured but LLM key missing for provider "${p}" — fix with:  nha config set provider nha  (free Liara)  OR  nha config set ${p}-key YOUR_KEY`;
+        inactiveHintTel = `configured but LLM key missing for provider "${p}" — fix with:  nha config set key YOUR_KEY`;
       }
       console.log(`  Telegram:         ${responder.telegram ? G + 'active' + NC : telegramConfigured ? Y + inactiveHintTel + NC : D + 'not configured' + NC}`);
       console.log(`  Discord:          ${responder.discord ? G + 'active' + NC : discordConfigured ? Y + inactiveHintTel + NC : D + 'not configured' + NC}`);
