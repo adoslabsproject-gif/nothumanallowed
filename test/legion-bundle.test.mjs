@@ -10,7 +10,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { AGENTS } from '../src/constants.mjs';
+import { AGENTS, VERSION } from '../src/constants.mjs';
 import { bundledLegionVersion, syncBundledAgents } from '../src/legion-bundle.mjs';
 import { buildLegionConfig, legionReadiness } from '../src/legion-config.mjs';
 
@@ -38,6 +38,11 @@ describe('what the package ships', () => {
   it('is published: the bundle sits under a directory listed in package.json "files"', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
     assert.ok(pkg.files.includes('src/'));
+  });
+
+  it('states one version: the one in package.json is the one the command prints', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+    assert.equal(VERSION, pkg.version);
   });
 });
 

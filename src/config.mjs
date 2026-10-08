@@ -11,7 +11,10 @@ const LEGACY_PIF = path.join(os.homedir(), '.pif-agent.json');
 const DEFAULT_CONFIG = {
   version: 1,
   llm: {
-    provider: 'nha',
+    // Empty = not chosen yet. It used to be 'nha', the hosted free model,
+    // which is offline: a new install must not start on a provider that
+    // cannot answer. A provider saved by an existing user is left as it is.
+    provider: '',
     apiKey: '',
     openaiKey: '',
     geminiKey: '',

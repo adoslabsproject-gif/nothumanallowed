@@ -27,7 +27,7 @@ nha run "Design a Kubernetes deployment for a 10K RPS API"
 nha ui
 ```
 
-**Do I need a local model?** No. You need one LLM, and you choose which: an API key of a cloud provider, or a model running on your machine. A local model is the option that needs no key and sends nothing out. The hosted free tier (Liara) that earlier versions used by default is currently offline: set a provider before the first prompt.
+**Do I need a local model?** No. You need one LLM, and you choose which: an API key of a cloud provider, or a model running on your machine. A local model is the option that needs no key and sends nothing out. Earlier versions started on a hosted free model (Liara). It is offline and no longer the default: a new install has no provider until you set one.
 
 ## Studio — Visual Agentic Workflows
 

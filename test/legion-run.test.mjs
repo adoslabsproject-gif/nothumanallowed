@@ -102,7 +102,22 @@ describe('first run', () => {
 
   it('prints the version of the Legion X it ships', async () => {
     const result = await nha(['version']);
-    assert.match(result.stdout, /^nha v17\.0\.0\nLegion X v\d+\.\d+\.\d+\n/);
+    assert.match(result.stdout, /^nha v17\.0\.1\nLegion X v\d+\.\d+\.\d+\n/);
+  });
+
+  it('starts with no provider chosen: the hosted model is not the default any more', async () => {
+    const result = await nha(['config']);
+    const shown = result.stdout.replace(/\x1b\[[0-9;]*m/g, '');
+    assert.match(shown, /Provider:\s+\(not set\)/);
+    const saved = JSON.parse(fs.readFileSync(path.join(home, '.nha', 'config.json'), 'utf-8'));
+    assert.equal(saved.llm.provider, '');
+  });
+
+  it('leaves alone a provider an existing user had saved', async () => {
+    fs.mkdirSync(path.join(home, '.nha', 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.nha', 'config.json'), JSON.stringify({ version: 1, llm: { provider: 'openai', apiKey: 'K' } }));
+    const result = await nha(['config']);
+    assert.match(result.stdout.replace(/\x1b\[[0-9;]*m/g, ''), /Provider:\s+openai/);
   });
 });
 

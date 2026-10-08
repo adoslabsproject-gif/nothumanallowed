@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { loadConfig } from '../config.mjs';
 import { AGENTS_DIR, AGENTS } from '../constants.mjs';
-import { getProviderCall, getApiKey, parseAgentFile } from '../services/llm.mjs';
+import { getProviderCall, getApiKey, hostedOfflineError, parseAgentFile } from '../services/llm.mjs';
 import { fail, info, ok, C, G, Y, D, W, BOLD, NC, M } from '../ui.mjs';
 
 export async function cmdAsk(args) {
@@ -108,15 +108,8 @@ export async function cmdAsk(args) {
       let response = '';
 
       if (provider === 'nha') {
-        // NHA Free tier — Liara Vision
-        const res = await fetch('https://nothumanallowed.com/api/v1/liara/vision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_base64: base64, prompt: imagePrompt }),
-        });
-        if (!res.ok) throw new Error(`Liara Vision ${res.status}`);
-        const data = await res.json();
-        response = data.description || data.text || JSON.stringify(data);
+        // The hosted model no longer reads images: nothing is sent to it.
+        throw hostedOfflineError();
       } else if (provider === 'anthropic') {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',

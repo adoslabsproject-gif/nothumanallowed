@@ -582,7 +582,7 @@ function cmdConfig(args) {
   console.log(`\n  ${BOLD}NHA Configuration${NC}  ${D}(~/.nha/config.json)${NC}\n`);
 
   console.log(`  ${C}LLM${NC}`);
-  console.log(`    Provider:     ${W}${config.llm.provider}${NC}`);
+  console.log(`    Provider:     ${config.llm.provider ? W + config.llm.provider : R + '(not set)'}${NC}`);
   console.log(`    API Key:      ${config.llm.apiKey ? G + config.llm.apiKey.slice(0, 12) + '...' + NC : R + '(not set)' + NC}`);
   if (config.llm.openaiKey) console.log(`    OpenAI Key:   ${G}${config.llm.openaiKey.slice(0, 12)}...${NC}`);
   if (config.llm.geminiKey) console.log(`    Gemini Key:   ${G}${config.llm.geminiKey.slice(0, 12)}...${NC}`);

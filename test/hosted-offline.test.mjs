@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 
-import { callNHA, HOSTED_OFFLINE_MESSAGE, streamSSE } from '../src/services/llm.mjs';
+import { callLLMVision, callNHA, HOSTED_OFFLINE_MESSAGE, streamSSE } from '../src/services/llm.mjs';
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -43,6 +43,16 @@ describe('hosted free model switched off', () => {
     const chunk = { choices: [{ index: 0, delta: { role: 'assistant', content: CANNED } }], __liara_unavailable: true };
     const res = new Response('data: ' + JSON.stringify(chunk) + '\n\ndata: [DONE]\n\n', { status: 200 });
     await assert.rejects(() => streamSSE(res, 'openai'), (err) => err.__hosted_offline === true);
+  });
+
+  it('does not send an image to the hosted model: vision there is gone', async () => {
+    let requests = 0;
+    globalThis.fetch = async () => { requests++; return new Response('{}', { status: 200 }); };
+    await assert.rejects(
+      () => callLLMVision({ llm: { provider: 'nha' } }, 'system', 'what is this?', { base64: 'AAAA', mimeType: 'image/png' }),
+      (err) => err.__hosted_offline === true && /nha config set provider/.test(err.message),
+    );
+    assert.equal(requests, 0);
   });
 
   it('still returns a real answer when the model is on', async () => {

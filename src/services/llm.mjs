@@ -1234,22 +1234,8 @@ export async function callLLMVision(config, systemPrompt, userMessage, media) {
   const provider = config.llm.provider || 'anthropic';
   const model = config.llm.model || null;
 
-  // NHA Free tier — use Liara Vision (no API key needed)
-  if (provider === 'nha') {
-    const { base64, mimeType } = media;
-    if (!base64) throw new Error('media.base64 required for vision');
-    const res = await fetch('https://nothumanallowed.com/api/v1/liara/vision', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-nha-client': 'cli' },
-      body: JSON.stringify({ image_base64: base64, prompt: userMessage || 'Describe this image in detail.' }),
-    });
-    if (!res.ok) {
-      const err = await res.text().catch(() => '');
-      throw new Error(`Liara Vision ${res.status}: ${err.slice(0, 200)}`);
-    }
-    const data = await res.json();
-    return data.description || data.text || JSON.stringify(data);
-  }
+  // The hosted model no longer reads images: nothing is sent to it.
+  if (provider === 'nha') throw hostedOfflineError();
 
   const apiKey = getApiKey(config, provider);
   if (!apiKey) throw new Error(`No API key for ${provider}. Vision requires Claude, GPT-4 or Gemini with your own key (nha config set key YOUR_KEY).`);

@@ -1,6 +1,6 @@
 {
   "name": "nothumanallowed",
-  "version": "17.0.0",
+  "version": "17.0.1",
   "description": "Local AI assistant: 80 tools (Gmail, Calendar, Drive, GitHub, Slack, browser, code, files), 38 agents, multi-agent deliberation that runs entirely on your machine (Legion X), visual workflows (Studio, AWF, WebCraft). Install with `npm i -g nothumanallowed`, run with `nha ui`. Bring your own LLM: an API key or a local model (Ollama, any OpenAI-compatible endpoint). Your data stays on your PC — OAuth tokens local, no cloud. Open-source MIT.",
   "type": "module",
   "bin": {
