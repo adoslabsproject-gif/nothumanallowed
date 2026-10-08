@@ -5,7 +5,9 @@ import { createRequire } from 'module';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const acorn = require('/Users/zelistore/NotHumanAllowed/node_modules/.pnpm/acorn@8.15.0/node_modules/acorn/dist/acorn.js');
+// acorn is a dependency of this package: it is resolved from here, not from a
+// path on one machine that broke as soon as that copy changed version.
+const acorn = require('acorn');
 
 const assetsDir = path.join(__dirname, 'src/ui-dist/assets');
 const jsFiles = fs.readdirSync(assetsDir).filter((f) => f.endsWith('.js'));

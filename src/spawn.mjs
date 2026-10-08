@@ -4,51 +4,22 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { loadConfig } from './config.mjs';
-import { NHA_DIR, LEGION_FILE, PIF_FILE, AGENTS_DIR, EXTENSIONS_DIR, SESSIONS_DIR } from './constants.mjs';
+import { buildLegionConfig, CLOUD_KEY_ENV } from './legion-config.mjs';
+import {
+  NHA_DIR, LEGION_FILE, LEGION_CONFIG_FILE, PIF_FILE, AGENTS_DIR, EXTENSIONS_DIR, SESSIONS_DIR,
+} from './constants.mjs';
 
 /**
- * Write a Legion-compatible flat config from the NHA structured config.
- * Legion expects: { llmProvider, llmApiKey, nhaAgentId, nhaPrivateKeyPem, ... }
- * NHA stores: { llm: { provider, apiKey }, agent: { id, privateKeyPem }, ... }
+ * Write the flat config Legion X reads, derived in full from the nha config.
+ * The file holds API keys: it is readable by its owner only.
  */
 function writeLegionConfig(config) {
-  const legionConfig = {
-    llmProvider: config.llm?.provider || 'anthropic',
-    llmApiKey: config.llm?.apiKey || '',
-    llmModel: config.llm?.model || '',
-    openaiKey: config.llm?.openaiKey || '',
-    geminiKey: config.llm?.geminiKey || '',
-    deepseekKey: config.llm?.deepseekKey || '',
-    grokKey: config.llm?.grokKey || '',
-    mistralKey: config.llm?.mistralKey || '',
-    cohereKey: config.llm?.cohereKey || '',
-    timeout: config.llm?.timeout || 120000,
-    maxRetries: config.llm?.maxRetries || 2,
-    parallelism: config.llm?.parallelism || 4,
-    verbose: config.features?.verbose ?? true,
-    immersive: config.features?.immersive ?? true,
-    knowledgeEnabled: config.features?.knowledgeEnabled ?? true,
-    workspaceEnabled: config.features?.workspaceEnabled ?? true,
-    latentSpaceEnabled: config.features?.latentSpaceEnabled ?? true,
-    knowledgeGraphEnabled: config.features?.knowledgeGraphEnabled ?? true,
-    promptEvolutionEnabled: config.features?.promptEvolutionEnabled ?? true,
-    metaIntelligenceEnabled: config.features?.metaIntelligenceEnabled ?? true,
-    deliberationEnabled: config.deliberation?.enabled ?? true,
-    deliberationRounds: config.deliberation?.rounds || 3,
-    deliberationConvergence: config.deliberation?.convergence || 0.82,
-    minDeliberationRounds: config.deliberation?.minRounds || 2,
-    semanticConvergenceEnabled: config.deliberation?.semanticConvergence ?? true,
-    tribunalEnabled: config.deliberation?.tribunalEnabled ?? true,
-    // Agent identity
-    nhaAgentId: config.agent?.id || '',
-    nhaAgentName: config.agent?.name || '',
-    nhaPrivateKeyPem: config.agent?.privateKeyPem || '',
-    nhaPublicKeyHex: config.agent?.publicKeyHex || '',
-  };
-
-  const legionConfigFile = path.join(NHA_DIR, '.legion-config.json');
-  fs.writeFileSync(legionConfigFile, JSON.stringify(legionConfig, null, 2) + '\n', 'utf-8');
-  return legionConfigFile;
+  const legionConfig = buildLegionConfig(config);
+  fs.mkdirSync(NHA_DIR, { recursive: true });
+  fs.writeFileSync(LEGION_CONFIG_FILE, JSON.stringify(legionConfig, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
+  // The mode above applies to a new file only: an existing one is tightened here.
+  fs.chmodSync(LEGION_CONFIG_FILE, 0o600);
+  return legionConfig;
 }
 
 /**
@@ -62,9 +33,8 @@ export function spawnCore(target, args) {
   const config = loadConfig();
 
   // For Legion: write a flat config it can understand
-  const configFile = target === 'legion'
-    ? writeLegionConfig(config)
-    : path.join(NHA_DIR, 'config.json');
+  const legionConfig = target === 'legion' ? writeLegionConfig(config) : null;
+  const configFile = legionConfig ? LEGION_CONFIG_FILE : path.join(NHA_DIR, 'config.json');
 
   const env = {
     ...process.env,
@@ -72,7 +42,15 @@ export function spawnCore(target, args) {
     NHA_EXTENSIONS_DIR: EXTENSIONS_DIR,
     NHA_SESSIONS_DIR: SESSIONS_DIR,
     NHA_CONFIG_FILE: configFile,
+    // Legion ships with this package and is updated with it: it has no
+    // version of its own to look up.
+    LEGION_NO_UPDATE_CHECK: '1',
   };
+
+  // Local-only: a cloud key exported in the shell must not reach Legion either.
+  if (legionConfig?.localOnly) {
+    for (const name of Object.values(CLOUD_KEY_ENV)) delete env[name];
+  }
 
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [file, ...args], {

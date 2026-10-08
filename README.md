@@ -8,20 +8,26 @@
 # Install globally
 npm install -g nothumanallowed
 
-# Configure your LLM provider (or use Liara free — no API key needed)
+# Configure your LLM provider with your own API key...
 nha config set provider anthropic
 nha config set key sk-ant-api03-YOUR_KEY
+
+# ...or, for deliberations, a local model with no key at all
+nha config set legion-provider ollama
+nha config set ollama-model qwen2.5:7b
 
 # Ask a single agent directly (no server, instant response)
 nha ask saber "Audit this Express app for OWASP Top 10"
 nha ask oracle "Analyze this dataset" --file data.csv
 
-# Run multi-agent deliberation
+# Run multi-agent deliberation, entirely on your machine
 nha run "Design a Kubernetes deployment for a 10K RPS API"
 
 # Open the web UI with Studio, Chat, Email, Calendar, Drive, Tasks and more
 nha ui
 ```
+
+**Do I need a local model?** No. You need one LLM, and you choose which: an API key of a cloud provider, or a model running on your machine. A local model is the option that needs no key and sends nothing out. The hosted free tier (Liara) that earlier versions used by default is currently offline: set a provider before the first prompt.
 
 ## Studio — Visual Agentic Workflows
 
@@ -34,7 +40,7 @@ EmailAgent → WebSearchAgent → WriterAgent
   (reads)     (searches)       (synthesizes)
 ```
 
-- **No configuration** — works with any LLM provider including Liara (free, no API key)
+- **No extra configuration** — works with the LLM provider you already set
 - **Live canvas** — see each agent activate, stream output, and hand off to the next
 - **HTML dashboard** — canvas generates a downloadable visual report (HTML + PDF)
 - **Parliament mode** — enable for 2+ specialist agents to cross-read and deliberate: R1 (independent), R2 (agents read each other), R3 (HERALD mediation), convergence score
@@ -69,7 +75,7 @@ Open nha ui → click WebCraft in the sidebar
 
 ### WebCraft Agent
 
-An AI assistant permanently available in the chat panel. Powered by Liara (Qwen3 32B, free) or your own API key.
+An AI assistant permanently available in the chat panel, powered by the LLM provider you configured.
 
 **What it can do:**
 - Edit files surgically (old → new string replace) or rewrite them completely
@@ -96,7 +102,7 @@ Add more skill files (unlimited) for specific integrations (Stripe, email templa
 | **Search** 🔍 | Grep across all project files — click a result to jump to that file |
 | **Snapshot** 💾 | Save a full point-in-time backup of all files. Restore any snapshot with one click |
 | **Plan mode** | Type `/plan your request` — agent proposes a plan first, you approve before any file is touched |
-| **Auto-fix** | Sandbox errors (MODULE_NOT_FOUND etc.) trigger automatic Liara fix attempts (3 free, unlimited with own key) |
+| **Auto-fix** | Sandbox errors (MODULE_NOT_FOUND etc.) trigger automatic fix attempts with your provider |
 
 ### Example session
 
@@ -151,9 +157,10 @@ OpenClaw reads your email with 1 generic agent. NHA sends it through 5 specialis
 
 ### Privacy
 
-**Zero data touches NHA servers.** The only network calls are:
+**Your emails, calendar and tasks never touch NHA servers.** The network calls are:
 - Google APIs (your OAuth token, direct from your machine)
 - Your LLM provider (your API key, direct from your machine)
+- One usage ping per command to nothumanallowed.com: platform name and CLI version, nothing else (see Privacy & Ownership)
 
 All data stored locally in `~/.nha/ops/`. Tokens encrypted with AES-256-GCM. You own everything. Inspect it, delete it, export it anytime.
 
@@ -247,6 +254,62 @@ When you don't specify `--agents`, NHA automatically:
 
 This is real deliberation, not prompt chaining. Agents read and respond to each other.
 
+### It runs on your machine
+
+Since v17 the whole deliberation is local. Legion X and the 38 agents ship inside this package; routing (PROMETHEUS), the adversarial tribunal (CASSANDRA), the convergence measurement and the final audit (ATHENA) all run with **your** models. No NHA server takes part, and nothing is downloaded to deliberate.
+
+**Choose the models.** Any mix of:
+
+| Kind | Providers | Needs |
+|---|---|---|
+| Cloud | `anthropic`, `openai`, `gemini`, `deepseek`, `grok`, `mistral`, `cohere` | that provider's API key |
+| Local | `ollama` (one or several models), `local-openai` (LM Studio, llama.cpp, vLLM, any OpenAI-compatible endpoint) | no key |
+
+```bash
+# One cloud provider
+nha config set provider anthropic
+nha config set key sk-ant-api03-YOUR_KEY
+
+# More than one: agents are spread across every provider that has a key
+nha config set openai-key sk-YOUR_OPENAI_KEY
+nha config set gemini-key YOUR_GEMINI_KEY
+
+# A local model, no key
+nha config set legion-provider ollama
+nha config set ollama-model qwen2.5:7b
+
+# Several local models: agents are spread across them
+nha config set ollama-models llama3.1,qwen2.5:7b,mistral
+
+# An OpenAI-compatible local server
+nha config set legion-provider local-openai
+nha config set local-openai-url http://localhost:1234/v1/chat/completions
+nha config set local-openai-model my-model
+```
+
+Cloud and local can work together in the same deliberation. To keep a deliberation on the machine even though a cloud key is configured for chat:
+
+```bash
+nha config set local-only true
+```
+
+**Other settings**
+
+| Key | What it does |
+|---|---|
+| `orchestrator-provider` | Which provider runs routing, tribunal and audit (default: the first available) |
+| `economy` / `nha run "..." --economy` | Shorter cross-reading, synthesis from the final positions: about half the tokens |
+| `cross-reading-chars` | Characters of each proposal the other agents read (0 = no cap) |
+| `ollama-embed-model` | A local embedding model for a semantic convergence measurement (default: word overlap) |
+| `fact-check` | Turn the claim review off (`false`) |
+| `rounds`, `convergence`, `tribunal` | Deliberation rounds, convergence threshold, tribunal on/off |
+
+**What to expect.** A deliberation is many model calls: one per agent per round, plus routing, tribunal, synthesis and audit. A typical one with six agents and three rounds used about 770,000 tokens on a cloud model, about 350,000 with `--economy`, and took about 14 minutes on a 7B model running on a laptop. Small local models complete the deliberation but follow the structured steps less reliably.
+
+**The fact-check is a model reviewing claims.** Nothing is verified against external sources, and the output says so. Earlier versions queried a knowledge base on the NHA server; that no longer exists.
+
+**Everything is saved.** Each deliberation leaves a transcript in `~/.legion/sessions/` (Markdown and JSON), the session state in `~/.legion/geth-sessions/`, and what the agents learned in `~/.legion/local-store.json`. `nha geth:sessions` lists them.
+
 ## Extensions
 
 15 downloadable agent modules for specific workflows:
@@ -270,10 +333,13 @@ nha ask forge "prompt"        # DevOps & infrastructure
 nha ask saber "review this" --file app.js   # Attach a file
 nha ask saber "prompt" --provider openai    # Override provider
 
-# Multi-agent collaboration (server-routed deliberation)
+# Multi-agent deliberation (runs on your machine, with your models)
 nha run "prompt"              # Auto-route to best agents
 nha run "prompt" --agents saber,zero   # Specific agents
+nha run "prompt" --economy    # About half the tokens
 nha run --file prompt.txt     # From file
+nha geth:sessions             # Past deliberations
+nha geth:providers            # Providers a deliberation can use
 
 # Explore agents
 nha agents                    # List all 38 agents
@@ -293,35 +359,42 @@ nha pif feed                  # Activity feed
 nha config                    # Show settings
 nha config set provider anthropic
 nha config set key YOUR_KEY
-nha update                    # Update agents & core
+nha config set legion-provider ollama   # Deliberate with a local model
+nha update                    # Update the package (Legion X and agents come with it)
 nha doctor                    # Health check
 nha mcp                       # Start MCP server (Claude Code, Cursor)
 ```
 
 ## Supported Providers
 
-Anthropic, OpenAI, Google Gemini, DeepSeek, xAI Grok, Mistral, Cohere.
+**Cloud:** Anthropic, OpenAI, Google Gemini, DeepSeek, xAI Grok, Mistral, Cohere.
 
-Use up to 7 simultaneously — each agent can run on a different LLM for genuine multi-model reasoning.
+**Local, no key:** Ollama (one or several models) and any OpenAI-compatible endpoint. Local models are available to deliberations (`nha run`); chat and the web UI use the cloud provider set with `nha config set provider`.
+
+Use several at once — each agent can run on a different model, cloud or local, for genuine multi-model reasoning.
 
 ## Privacy & Ownership
 
-- **Your API key never leaves your machine** — zero-knowledge architecture
-- **Zero dependencies** — no supply chain risk
-- **Zero telemetry** — no tracking, no phone-home
-- **Agents are local files** — inspect, modify, fork them
-- **Works offline** after first install (only LLM calls need network)
+- **Your API keys go to your own LLM provider and nowhere else.** They are stored in `~/.nha/config.json`, readable by your user only.
+- **Deliberations run on your machine.** With local models and `local-only`, nothing leaves it.
+- **One usage ping per command.** The CLI sends the platform name (`cli`) and its version to nothumanallowed.com. The server sees your IP address, as for any web request. No prompt, file, key or answer is sent.
+- **Agents are local files** in `~/.nha/agents/` — inspect, modify, fork them. A package upgrade replaces them with the new version.
+- **Works offline** with a local model: Legion X and the agents are in the package.
 
 ## How It Works
 
 ```
-Your Machine                          NHA Server (optional)
-┌─────────────────────┐              ┌──────────────────────┐
-│ 38 agents run HERE  │  routing     │ Task decomposition   │
-│ with YOUR API key   │ ◄──────────► │ Knowledge grounding  │
-│                     │              │ (2.6M verified facts) │
-│ Key NEVER sent      │              │ Convergence scoring   │
-└─────────────────────┘              └──────────────────────┘
+Your Machine
+┌──────────────────────────────────────────────┐
+│ nha run "prompt"                             │
+│                                              │
+│  PROMETHEUS routes ─► 38 agents deliberate   │      ┌──────────────────────┐
+│  CASSANDRA challenges   (round 1, 2, 3)      │ ───► │ YOUR LLM provider    │
+│  convergence measured ─► synthesis           │      │ cloud API with your  │
+│  ATHENA audits                               │      │ key, or a local model│
+│                                              │      └──────────────────────┘
+│  transcript saved in ~/.legion/sessions/     │
+└──────────────────────────────────────────────┘
 ```
 
 ## Links

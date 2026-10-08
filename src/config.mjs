@@ -39,6 +39,24 @@ const DEFAULT_CONFIG = {
     semanticConvergence: true,
     tribunalEnabled: true,
   },
+  // Deliberations (nha run). An empty provider means "the llm provider above,
+  // when Legion supports it". Local models need no API key.
+  legion: {
+    provider: '',
+    ollamaUrl: '',
+    ollamaModel: '',
+    ollamaModels: '',
+    ollamaEmbedModel: '',
+    localOpenaiUrl: '',
+    localOpenaiModel: '',
+    localOpenaiKey: '',
+    orchestratorProvider: '',
+    // true = no cloud key reaches Legion, even when one is configured for chat
+    localOnly: false,
+    economy: false,
+    factCheck: true,
+    crossReadingChars: 0,
+  },
   features: {
     verbose: true,
     immersive: true,
@@ -236,7 +254,10 @@ export function loadConfig() {
  */
 export function saveConfig(config) {
   fs.mkdirSync(NHA_DIR, { recursive: true });
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  // The file holds API keys and tokens: readable by its owner only. The mode
+  // applies to a new file, chmod tightens one written by an older version.
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
+  fs.chmodSync(CONFIG_FILE, 0o600);
 }
 
 /**
@@ -294,6 +315,21 @@ export function setConfigValue(key, value) {
     'openrouterkey':    'llm.openrouterKey',
     'openrouterKey':    'llm.openrouterKey',
     'openrouter_key':   'llm.openrouterKey',
+    'anthropic-key':    'llm.anthropicKey',
+    // Deliberations (nha run): provider and local models
+    'legion-provider':       'legion.provider',
+    'ollama-url':            'legion.ollamaUrl',
+    'ollama-model':          'legion.ollamaModel',
+    'ollama-models':         'legion.ollamaModels',
+    'ollama-embed-model':    'legion.ollamaEmbedModel',
+    'local-openai-url':      'legion.localOpenaiUrl',
+    'local-openai-model':    'legion.localOpenaiModel',
+    'local-openai-key':      'legion.localOpenaiKey',
+    'orchestrator-provider': 'legion.orchestratorProvider',
+    'local-only':            'legion.localOnly',
+    'economy':               'legion.economy',
+    'fact-check':            'legion.factCheck',
+    'cross-reading-chars':   'legion.crossReadingChars',
     'model': 'llm.model',
     'timeout': 'llm.timeout',
     'verbose': 'features.verbose',

@@ -2,8 +2,9 @@
 /**
  * nha — NotHumanAllowed CLI
  *
- * Thin launcher for Legion (multi-agent deliberation) and PIF (agent social client).
- * Zero dependencies. Downloads core files on first run to ~/.nha/.
+ * Launcher for Legion X (multi-agent deliberation, shipped inside this package
+ * and run on this machine) and the rest of the toolkit. The first run copies
+ * the 38 agents to ~/.nha/agents; nothing is downloaded to deliberate.
  *
  * Usage:
  *   npx nha run "Compare React vs Vue for enterprise"

@@ -1,7 +1,7 @@
 {
   "name": "nothumanallowed",
-  "version": "16.0.64",
-  "description": "Local AI assistant: 80 tools (Gmail, Calendar, Drive, GitHub, Slack, browser, code, files), 38 agents, visual workflows (Studio, AWF, WebCraft). Install with `npm i -g nothumanallowed`, run with `nha ui`. Free tier built-in (Liara), no API key required. Your data stays on your PC — OAuth tokens local, no cloud. Open-source MIT.",
+  "version": "17.0.0",
+  "description": "Local AI assistant: 80 tools (Gmail, Calendar, Drive, GitHub, Slack, browser, code, files), 38 agents, multi-agent deliberation that runs entirely on your machine (Legion X), visual workflows (Studio, AWF, WebCraft). Install with `npm i -g nothumanallowed`, run with `nha ui`. Bring your own LLM: an API key or a local model (Ollama, any OpenAI-compatible endpoint). Your data stays on your PC — OAuth tokens local, no cloud. Open-source MIT.",
   "type": "module",
   "bin": {
     "nha": "bin/nha",
@@ -32,6 +32,8 @@
     "openai",
     "gemini",
     "deepseek",
+    "ollama",
+    "local-llm",
     "telegram-bot",
     "discord-bot",
     "voice-assistant",
@@ -57,8 +59,8 @@
     "check-bundle": "node check-bundle.mjs",
     "build:ui": "cd ../nha-ui && pnpm build",
     "prebuild": "cd ../nha-ui && pnpm build",
-    "test": "node test/sandbox.test.mjs",
-    "prepublishOnly": "node check-bundle.mjs && node test/sandbox.test.mjs"
+    "test": "node test/sandbox.test.mjs && node --test test/legion-bundle.test.mjs test/legion-run.test.mjs",
+    "prepublishOnly": "node check-bundle.mjs && npm test"
   },
   "dependencies": {
     "acorn": "^8.16.0",

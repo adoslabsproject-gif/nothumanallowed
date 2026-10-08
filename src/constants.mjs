@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const VERSION = '16.0.64';
+export const VERSION = '17.0.0';
 export const BASE_URL = 'https://nothumanallowed.com/cli';
 export const API_BASE = 'https://nothumanallowed.com/api/v1';
 
@@ -18,7 +18,13 @@ export const SESSIONS_DIR = path.join(NHA_DIR, 'sessions');
 export const MEMORY_DIR = path.join(NHA_DIR, 'memory');
 export const CONFIG_FILE = path.join(NHA_DIR, 'config.json');
 
-export const LEGION_FILE = path.join(CORE_DIR, 'legion-x.mjs');
+// Legion X and its agents ship inside the npm package: nothing is downloaded
+// to run a deliberation. Legion runs straight from the package; the agents are
+// copied to ~/.nha/agents so they stay files the user can read and edit.
+export const LEGION_FILE = path.join(__dirname, 'legion', 'legion-x.mjs');
+export const BUNDLED_AGENTS_DIR = path.join(__dirname, 'legion', 'agents');
+export const AGENTS_STAMP_FILE = path.join(AGENTS_DIR, '.bundle-version');
+export const LEGION_CONFIG_FILE = path.join(NHA_DIR, '.legion-config.json');
 export const PIF_FILE = path.join(CORE_DIR, 'pif.mjs');
 export const VERSIONS_FILE = path.join(CORE_DIR, 'versions.json');
 export const LAST_UPDATE_CHECK = path.join(CORE_DIR, '.last-update-check');

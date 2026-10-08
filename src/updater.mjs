@@ -1,12 +1,18 @@
-/** Update checker and updater for core files + agents */
+/**
+ * Update checker and updater.
+ *
+ * Legion X and the agents ship inside the npm package: they are updated by
+ * updating the package, never downloaded on their own. Only PIF still comes
+ * from the website.
+ */
 
 import fs from 'fs';
 import {
-  BASE_URL, VERSIONS_FILE, LAST_UPDATE_CHECK,
-  LEGION_FILE, PIF_FILE, AGENTS_DIR, AGENTS, VERSION,
+  BASE_URL, VERSIONS_FILE, LAST_UPDATE_CHECK, PIF_FILE, VERSION,
 } from './constants.mjs';
-import { download, downloadBatch } from './downloader.mjs';
-import { info, ok, warn, progress } from './ui.mjs';
+import { download } from './downloader.mjs';
+import { bundledLegionVersion, syncBundledAgents } from './legion-bundle.mjs';
+import { info, ok, warn } from './ui.mjs';
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -37,10 +43,7 @@ export async function checkForUpdates() {
     }
 
     const updates = [];
-    if (remote['legion-x']?.latest !== local['legion-x']?.latest) {
-      updates.push({ name: 'Legion X', from: local['legion-x']?.latest ?? '?', to: remote['legion-x'].latest });
-    }
-    if (remote['pif']?.latest !== local['pif']?.latest) {
+    if (remote['pif']?.latest && remote['pif'].latest !== local['pif']?.latest) {
       updates.push({ name: 'PIF', from: local['pif']?.latest ?? '?', to: remote['pif'].latest });
     }
 
@@ -128,7 +131,7 @@ async function npmSelfInstall(targetVersion) {
 }
 
 /**
- * Full update: re-download core files + agents + self-upgrade the npm package.
+ * Full update: self-upgrade the npm package (which carries Legion X and the agents) and refresh PIF.
  */
 export async function runUpdate() {
   info('Checking for updates...');
@@ -169,64 +172,46 @@ export async function runUpdate() {
     ok(`npm package nothumanallowed@${npmCheck.current} (up to date)`);
   }
 
-  // ── Agents + Legion + PIF (downloaded from website, not npm) ───────────
-  // 45s timeout (was 15s) — VMs / slow connections can take that long for
-  // the first manifest fetch. The downloader retries internally for batch
-  // downloads, so this is just for the initial manifest.
-  const res = await fetch(`${BASE_URL}/versions.json`, {
-    signal: AbortSignal.timeout(45000),
-    headers: { 'User-Agent': `nha-cli/${(await import('./constants.mjs')).VERSION}` },
-  });
-  if (!res.ok) {
-    warn('Could not reach nothumanallowed.com for agent updates.');
-    return;
-  }
-
-  const remote = await res.json();
-  let local = {};
-  if (fs.existsSync(VERSIONS_FILE)) {
-    try { local = JSON.parse(fs.readFileSync(VERSIONS_FILE, 'utf-8')); } catch {}
-  }
-
-  const legionCurrent = local['legion-x']?.latest ?? '?';
-  const legionLatest = remote['legion-x']?.latest ?? '?';
-  const pifCurrent = local['pif']?.latest ?? '?';
-  const pifLatest = remote['pif']?.latest ?? '?';
-
   let updated = npmUpdated;
 
-  // Update Legion
-  if (legionCurrent !== legionLatest) {
-    info(`Legion X: ${legionCurrent} → ${legionLatest}`);
-    const success = await download(`${BASE_URL}/legion-x.mjs`, LEGION_FILE, { timeout: 90_000, retries: 4 });
-    if (success) { ok(`Legion X updated to v${legionLatest}`); updated = true; }
+  // ── Legion X + agents: part of the package ─────────────────────────────
+  // A freshly installed package brings its own Legion and agents; they are
+  // put in place the next time `nha` starts. Here the agents of the running
+  // version are restored if any went missing.
+  ok(`Legion X v${bundledLegionVersion()} (bundled with nothumanallowed@${VERSION})`);
+  const agents = syncBundledAgents();
+  if (agents.copied > 0) { ok(`${agents.copied} agents restored from the package`); updated = true; }
+
+  // ── PIF (downloaded from website, not npm) ─────────────────────────────
+  // 45s timeout — VMs / slow connections can take that long for the manifest.
+  let remote = null;
+  try {
+    const res = await fetch(`${BASE_URL}/versions.json`, {
+      signal: AbortSignal.timeout(45000),
+      headers: { 'User-Agent': `nha-cli/${VERSION}` },
+    });
+    if (res.ok) remote = await res.json();
+  } catch { /* reported below */ }
+
+  if (!remote) {
+    warn('Could not reach nothumanallowed.com: PIF not checked. Nothing else depends on it.');
   } else {
-    ok(`Legion X v${legionCurrent} (up to date)`);
+    let local = {};
+    if (fs.existsSync(VERSIONS_FILE)) {
+      try { local = JSON.parse(fs.readFileSync(VERSIONS_FILE, 'utf-8')); } catch {}
+    }
+    const pifCurrent = local['pif']?.latest ?? '?';
+    const pifLatest = remote['pif']?.latest ?? '?';
+    if (pifCurrent !== pifLatest || !fs.existsSync(PIF_FILE)) {
+      info(`PIF: ${pifCurrent} → ${pifLatest}`);
+      const success = await download(`${BASE_URL}/pif.mjs`, PIF_FILE, { timeout: 90_000, retries: 4 });
+      if (success) { ok(`PIF updated to v${pifLatest}`); updated = true; }
+    } else {
+      ok(`PIF v${pifCurrent} (up to date)`);
+    }
+    await download(`${BASE_URL}/versions.json`, VERSIONS_FILE);
+    fs.writeFileSync(LAST_UPDATE_CHECK, String(Date.now()));
   }
-
-  // Update PIF
-  if (pifCurrent !== pifLatest) {
-    info(`PIF: ${pifCurrent} → ${pifLatest}`);
-    const success = await download(`${BASE_URL}/pif.mjs`, PIF_FILE, { timeout: 90_000, retries: 4 });
-    if (success) { ok(`PIF updated to v${pifLatest}`); updated = true; }
-  } else {
-    ok(`PIF v${pifCurrent} (up to date)`);
-  }
-
-  // Re-download all agents (they may have been updated)
-  info(`Updating ${AGENTS.length} agents...`);
-  const agentTasks = AGENTS.map(name => ({
-    url: `${BASE_URL}/agents/${name}.mjs`,
-    dest: `${AGENTS_DIR}/${name}.mjs`,
-  }));
-  const result = await downloadBatch(agentTasks, 8, (done, total) => {
-    progress(done, total, 'agents');
-  });
-  ok(`${result.ok}/${AGENTS.length} agents updated`);
-
-  // Save new versions manifest
-  await download(`${BASE_URL}/versions.json`, VERSIONS_FILE);
-  fs.writeFileSync(LAST_UPDATE_CHECK, String(Date.now()));
 
   if (updated) {
     console.log('');

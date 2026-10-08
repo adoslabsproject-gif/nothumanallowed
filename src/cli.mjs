@@ -2,10 +2,12 @@
 
 import fs from 'fs';
 import path from 'path';
-import { VERSION, NHA_DIR, AGENTS_DIR, EXTENSIONS_DIR, AGENTS, EXTENSIONS, BASE_URL } from './constants.mjs';
+import { VERSION, NHA_DIR, AGENTS_DIR, EXTENSIONS_DIR, AGENTS, EXTENSIONS, BASE_URL, LEGION_FILE } from './constants.mjs';
 import { needsBootstrap, bootstrap } from './bootstrap.mjs';
 import { spawnCore } from './spawn.mjs';
 import { loadConfig, setConfigValue } from './config.mjs';
+import { buildLegionConfig, legionReadiness } from './legion-config.mjs';
+import { bundledLegionVersion, syncBundledAgents } from './legion-bundle.mjs';
 import { checkForUpdates, runUpdate, checkNpmVersion } from './updater.mjs';
 import { download } from './downloader.mjs';
 import { cmdAsk } from './commands/ask.mjs';
@@ -31,6 +33,9 @@ export async function main(argv) {
   if (needsBootstrap() && cmd !== 'help' && cmd !== 'version' && cmd !== '--help' && cmd !== '-h') {
     await bootstrap();
     if (cmd === 'setup') return; // setup was the goal
+  } else if (cmd !== 'help' && cmd !== 'version' && cmd !== '--help' && cmd !== '-h') {
+    // After a package upgrade the agents of the new version replace the old ones.
+    try { syncBundledAgents(); } catch (err) { warn(`Could not refresh the agents: ${err.message}`); }
   }
 
   // ── Telemetry ping (anonymous, fire-and-forget, non-blocking) ────────────
@@ -220,6 +225,14 @@ export async function main(argv) {
       if (pluginMatch && pluginMatch.plugin.run) {
         const { cmdPlugin: runPlugin } = await import('./commands/plugin.mjs');
         return runPlugin(['run', cmd, ...args]);
+      }
+      // Legion's own config:set writes a file that is rebuilt from the nha
+      // config at every run: a value set there would vanish without a word.
+      if (cmd === 'config:set') {
+        fail('Settings are kept in the nha config. Use:  nha config set <key> <value>');
+        info('Deliberation keys: legion-provider, ollama-url, ollama-model, ollama-models, ollama-embed-model,');
+        info('local-openai-url, local-openai-model, local-openai-key, orchestrator-provider, economy, fact-check, cross-reading-chars');
+        process.exit(1);
       }
       // Try as Legion command passthrough (only if legion is installed)
       try {
@@ -422,12 +435,19 @@ async function cmdRun(args) {
     process.exit(1);
   }
 
-  const config = loadConfig();
-  if (!config.llm.apiKey) {
-    fail('No API key configured. Run:');
+  // A deliberation runs on this machine with the user's own models: a cloud
+  // provider with its key, or a local model with no key at all.
+  const readiness = legionReadiness(buildLegionConfig(loadConfig()));
+  if (!readiness.ready) {
+    fail(readiness.reason);
     console.log('');
-    console.log('  nha config set provider anthropic');
-    console.log('  nha config set key sk-ant-api03-YOUR_KEY');
+    console.log('  With an API key (anthropic, openai, gemini, deepseek, grok, mistral, cohere):');
+    console.log('    nha config set provider anthropic');
+    console.log('    nha config set key sk-ant-api03-YOUR_KEY');
+    console.log('');
+    console.log('  With a local model, no key (Ollama or any OpenAI-compatible endpoint):');
+    console.log('    nha config set legion-provider ollama');
+    console.log('    nha config set ollama-model qwen2.5:7b');
     console.log('');
     process.exit(1);
   }
@@ -533,6 +553,8 @@ function cmdConfig(args) {
       console.log('');
       info('Keys: provider, key, openai-key, gemini-key, deepseek-key, grok-key (X.AI), groq-key (voice/Whisper), mistral-key, cohere-key, model, timeout');
       info('      verbose, immersive, deliberation, rounds, convergence, tribunal, knowledge');
+      info('      legion-provider, ollama-url, ollama-model, ollama-models, ollama-embed-model (local models for "nha run")');
+      info('      local-openai-url, local-openai-model, local-openai-key, orchestrator-provider, economy, fact-check, cross-reading-chars');
       info('      google-client-id, google-client-secret');
       info('      microsoft-client-id, microsoft-client-secret, microsoft-tenant');
       info('      telegram-bot-token, discord-bot-token, responder-auto-route');
@@ -541,7 +563,9 @@ function cmdConfig(args) {
     }
     const success = setConfigValue(key, value);
     if (success) {
-      ok(`${key} = ${value.startsWith('sk-') ? value.slice(0, 12) + '...' : value}`);
+      // A secret is never echoed back, whatever it starts with.
+      const secret = /(key|token|secret)$/i.test(key) || value.startsWith('sk-');
+      ok(`${key} = ${secret ? '***' : value}`);
     } else {
       fail(`Unknown config key: ${key}`);
     }
@@ -577,6 +601,14 @@ function cmdConfig(args) {
   console.log(`    Rounds:       ${W}${config.deliberation.rounds}${NC}`);
   console.log(`    Convergence:  ${W}${config.deliberation.convergence}${NC}`);
   console.log(`    Tribunal:     ${config.deliberation.tribunalEnabled ? G + 'yes' : D + 'no'}${NC}`);
+  const legionConfig = buildLegionConfig(config);
+  const readiness = legionReadiness(legionConfig);
+  console.log(`    Provider:     ${W}${legionConfig.provider || '(any configured)'}${NC}`);
+  console.log(`    Can run with: ${readiness.ready ? G + readiness.providers.join(', ') : R + readiness.reason}${NC}`);
+  if (legionConfig.ollamaModels || legionConfig.ollamaModel) {
+    console.log(`    Local models: ${W}${legionConfig.ollamaModels || legionConfig.ollamaModel}${NC}  ${D}(${legionConfig.ollamaUrl})${NC}`);
+  }
+  if (legionConfig.economy) console.log(`    Economy:      ${G}yes${NC}`);
 
   console.log(`\n  ${C}Agent Identity${NC}`);
   if (config.agent.name) {
@@ -745,10 +777,10 @@ async function cmdDoctor() {
   console.log(`  Node.js:          ${nodeV >= 22 ? G + process.version : Y + process.version + ' (need 22+)'}${NC}`);
 
   // Check core files
-  const legionOk = fs.existsSync(path.join(NHA_DIR, 'core', 'legion-x.mjs'));
+  const legionOk = fs.existsSync(LEGION_FILE);
   const pifOk = fs.existsSync(path.join(NHA_DIR, 'core', 'pif.mjs'));
-  console.log(`  Legion X:         ${legionOk ? G + 'installed' : R + 'missing'}${NC}`);
-  console.log(`  PIF:              ${pifOk ? G + 'installed' : R + 'missing'}${NC}`);
+  console.log(`  Legion X:         ${legionOk ? G + 'v' + bundledLegionVersion() + ' (bundled)' : R + 'missing'}${NC}`);
+  console.log(`  PIF:              ${pifOk ? G + 'installed' : D + 'not installed (optional)'}${NC}`);
 
   // Check agents
   const agentCount = AGENTS.filter(a => fs.existsSync(path.join(AGENTS_DIR, `${a}.mjs`))).length;
@@ -769,6 +801,10 @@ async function cmdDoctor() {
   // Check API key
   console.log(`  API Key:          ${config.llm.apiKey ? G + 'configured (' + config.llm.provider + ')' : R + 'NOT SET'}${NC}`);
 
+  // Deliberations run locally: which of the user's providers they can use
+  const readiness = legionReadiness(buildLegionConfig(config));
+  console.log(`  Deliberations:    ${readiness.ready ? G + 'ready (' + readiness.providers.join(', ') + ')' : R + readiness.reason}${NC}`);
+
   // Check connectivity
   try {
     const res = await fetch('https://nothumanallowed.com/api/v1/health', {
@@ -787,24 +823,27 @@ async function cmdDoctor() {
   if (!config.llm.apiKey) {
     warn('Configure an API key: nha config set provider anthropic && nha config set key YOUR_KEY');
   }
-  if (!legionOk || !pifOk) {
-    warn('Missing core files. Run "nha update" to re-download.');
+  if (!readiness.ready) {
+    warn('For "nha run" with a local model and no key: nha config set legion-provider ollama && nha config set ollama-model <model>');
+  }
+  if (!legionOk) {
+    warn('Legion X is missing from this installation. Reinstall: npm install -g nothumanallowed');
   }
   if (agentCount < AGENTS.length) {
-    warn(`${AGENTS.length - agentCount} agents missing. Run "nha update" to re-download.`);
+    warn(`${AGENTS.length - agentCount} agents missing. Run "nha update" to restore them from the package.`);
   }
 }
 
 // ── nha version ────────────────────────────────────────────────────────────
 function cmdVersion() {
   console.log(`nha v${VERSION}`);
+  console.log(`Legion X v${bundledLegionVersion()}`);
 
-  // Show core versions if available
+  // PIF is downloaded separately: show its version if it is there
   const versionsFile = path.join(NHA_DIR, 'core', 'versions.json');
   if (fs.existsSync(versionsFile)) {
     try {
       const v = JSON.parse(fs.readFileSync(versionsFile, 'utf-8'));
-      if (v['legion-x']?.latest) console.log(`Legion X v${v['legion-x'].latest}`);
       if (v['pif']?.latest) console.log(`PIF v${v['pif'].latest}`);
     } catch {}
   }
@@ -823,8 +862,10 @@ function cmdHelp() {
   console.log(`    agents info <name>    Show agent capabilities & domain`);
   console.log(`    scan <path>           Security scan a project with SABER + ZERO`);
   console.log(`    scan . ${D}--output report.md${NC}   Save report to file`);
-  console.log(`    run "prompt"          Multi-agent collaboration (server-routed)`);
-  console.log(`    run "prompt" ${D}--agents saber,zero${NC}   Collaborate with specific agents\n`);
+  console.log(`    run "prompt"          Multi-agent deliberation, on this machine with your own models`);
+  console.log(`    run "prompt" ${D}--agents saber,zero${NC}   Deliberate with specific agents`);
+  console.log(`    run "prompt" ${D}--economy${NC}   About half the tokens (shorter cross-reading)`);
+  console.log(`    ${D}Local model, no key: config set legion-provider ollama + config set ollama-model <model>${NC}\n`);
 
   console.log(`  ${C}Daily Operations${NC}  ${D}(Gmail + Calendar + Tasks)${NC}`);
   console.log(`    ui                    Open local web dashboard (http://127.0.0.1:3847)`);
@@ -902,7 +943,7 @@ function cmdHelp() {
   console.log(`  ${C}Configuration${NC}`);
   console.log(`    config                Show current config`);
   console.log(`    config set <k> <v>    Set a config value`);
-  console.log(`    update                Update agents, core files & npm package`);
+  console.log(`    update                Update the npm package (Legion X and agents come with it)`);
   console.log(`    upgrade               Update npm package only (alias: self-update)`);
   console.log(`    doctor                Health check`);
   console.log(`    mcp                   Start MCP server (Claude Code, Cursor)\n`);
@@ -914,6 +955,7 @@ function cmdHelp() {
 
   console.log(`  ${D}38 agents: security, code, data, devops, creative, integration, and more.${NC}`);
   console.log(`  ${D}Use them solo or let them collaborate via multi-round deliberation.${NC}`);
-  console.log(`  ${D}Your API key never leaves your machine. Zero dependencies. Zero telemetry.${NC}`);
+  console.log(`  ${D}Your API keys go to your own LLM provider and nowhere else.${NC}`);
+  console.log(`  ${D}Each command sends one usage ping (platform and version) to nothumanallowed.com.${NC}`);
   console.log(`  ${D}Docs: https://nothumanallowed.com/docs/cli — v${VERSION}${NC}\n`);
 }

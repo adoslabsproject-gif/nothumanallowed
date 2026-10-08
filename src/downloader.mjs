@@ -26,14 +26,16 @@ export async function download(url, dest, opts = {}) {
 
   let lastErr = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // The timer covers the whole attempt, body included, and is always
+    // cleared: left running after a failed request it kept the process alive
+    // for the full timeout once the command had finished.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeout);
       const res = await fetch(url, {
         signal: controller.signal,
         headers: { 'User-Agent': `nha-cli/${VERSION}` },
       });
-      clearTimeout(timer);
 
       if (!res.ok) {
         // 5xx → retry; 4xx → permanent failure, no retry
@@ -65,10 +67,13 @@ export async function download(url, dest, opts = {}) {
       const transient = err.name === 'AbortError'
         || /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|ENETUNREACH|UND_ERR/i.test(err.message || '');
       if (transient && attempt < maxAttempts) {
+        clearTimeout(timer);
         await _delay(_backoff(attempt));
         continue;
       }
       break;
+    } finally {
+      clearTimeout(timer);
     }
   }
   if (lastErr) {
