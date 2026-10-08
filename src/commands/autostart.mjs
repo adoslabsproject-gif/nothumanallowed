@@ -146,7 +146,7 @@ function launchdStatus() {
 function generateSystemdUnit() {
   return `[Unit]
 Description=NHA PAO Background Daemon
-Documentation=https://nothumanallowed.com/docs/cli
+Documentation=https://github.com/adoslabsproject-gif/nothumanallowed#readme
 After=network-online.target
 Wants=network-online.target
 

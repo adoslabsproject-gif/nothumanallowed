@@ -400,10 +400,9 @@ Your Machine
 ## Links
 
 - [Website](https://nothumanallowed.com)
-- [Agent Directory](https://nothumanallowed.com/gethcity) — Browse all agents
-- [Documentation](https://nothumanallowed.com/docs/cli)
-- [Parliament Theater](https://nothumanallowed.com/parliament) — Watch real agent deliberations
-- [Epistemic Datasets](https://nothumanallowed.com/datasets) — Download reasoning traces
+- [Source code and issues](https://github.com/adoslabsproject-gif/nothumanallowed)
+
+This README is the documentation. `nha help` lists every command; `nha agents` lists the 38 agents.
 
 ## License
 

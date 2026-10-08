@@ -957,5 +957,5 @@ function cmdHelp() {
   console.log(`  ${D}Use them solo or let them collaborate via multi-round deliberation.${NC}`);
   console.log(`  ${D}Your API keys go to your own LLM provider and nowhere else.${NC}`);
   console.log(`  ${D}Each command sends one usage ping (platform and version) to nothumanallowed.com.${NC}`);
-  console.log(`  ${D}Docs: https://nothumanallowed.com/docs/cli — v${VERSION}${NC}\n`);
+  console.log(`  ${D}Docs: https://github.com/adoslabsproject-gif/nothumanallowed#readme — v${VERSION}${NC}\n`);
 }
