@@ -6061,9 +6061,30 @@ var GETH_DOMAIN_AFFINITY = {
  * A replacement comes from the preferred categories, then the allowed ones,
  * and is never an agent already in the list. With no replacement left the
  * original stays: too few agents is worse than one out of place.
- * LOGOS always passes (domain-agnostic reasoner). A general or uncertain
- * domain (confidence below 0.3) changes nothing.
+ * The domain-agnostic agents always pass. A general or uncertain domain
+ * (confidence below 0.3) changes nothing.
  */
+// Their work applies to any subject, whatever category the catalog files them
+// under: LOGOS checks the reasoning, VERITAS checks the claims.
+var GETH_DOMAIN_AGNOSTIC_AGENTS = ['LOGOS', 'VERITAS'];
+
+var GETH_DOMAIN_TIER_PROHIBITED = 3;
+
+/**
+ * How well an agent fits the question's domain: 0 preferred category,
+ * 1 allowed, 2 neither listed, 3 prohibited. A general or uncertain domain
+ * (confidence below 0.3) ranks every agent the same, and the domain-agnostic
+ * agents are never prohibited.
+ */
+function gethDomainTier(agentName, category, domain) {
+  if (!domain || domain.family === 'general' || domain.confidence < 0.3) return 0;
+  var affinity = GETH_DOMAIN_AFFINITY[domain.family] || GETH_DOMAIN_AFFINITY.general;
+  if (affinity.preferred.indexOf(category) !== -1) return 0;
+  if (affinity.allowed.indexOf(category) !== -1) return 1;
+  if (affinity.prohibited.indexOf(category) === -1) return 2;
+  return GETH_DOMAIN_AGNOSTIC_AGENTS.indexOf(String(agentName).toUpperCase()) !== -1 ? 1 : GETH_DOMAIN_TIER_PROHIBITED;
+}
+
 function gethValidateAgentDomainAffinity(agents, domain, available) {
   var unchanged = agents.map(function(a) { return { name: a.name, category: a.category }; });
   if (domain.family === 'general' || domain.confidence < 0.3) return unchanged;
@@ -6085,7 +6106,7 @@ function gethValidateAgentDomainAffinity(agents, domain, available) {
   }
 
   return agents.map(function(agent) {
-    if (agent.name.toUpperCase() === 'LOGOS' || affinity.prohibited.indexOf(agent.category) === -1) {
+    if (GETH_DOMAIN_AGNOSTIC_AGENTS.indexOf(agent.name.toUpperCase()) !== -1 || affinity.prohibited.indexOf(agent.category) === -1) {
       return { name: agent.name, category: agent.category };
     }
     var replacement = findReplacement();
@@ -7300,21 +7321,32 @@ class LocalGethOrchestrator {
   /**
    * One orchestrator call with provider fallback. Tries the preferred provider,
    * then the others in order; throws the last error when all of them fail.
+   *
+   * `usable(text)` is optional: when it returns false the answer cannot be
+   * read (a model that chats instead of following the format), and the next
+   * configured provider is asked. If none does better, the first unreadable
+   * answer is returned and the caller decides what to make of it.
    */
-  async orchestratorChat(session, systemPrompt, userMessage, maxTokens, agentTag) {
+  async orchestratorChat(session, systemPrompt, userMessage, maxTokens, agentTag, usable) {
     var preferred = this.pickOrchestratorProvider(session);
     var order = [preferred].concat(session.providers.filter(function(p) { return p !== preferred; }));
     var lastErr = null;
+    var unreadable = null;
     for (var i = 0; i < order.length; i++) {
       try {
         var text = await this.llm.chatWithProvider(order[i], systemPrompt, userMessage, {
           maxTokens: maxTokens, agentTag: agentTag,
         });
+        if (usable && !usable(text)) {
+          if (!unreadable) unreadable = { text: text, provider: order[i] };
+          continue;
+        }
         return { text: text, provider: order[i] };
       } catch (err) {
         lastErr = err;
       }
     }
+    if (unreadable) return unreadable;
     throw lastErr || new Error('No provider available for the orchestrator');
   }
 
@@ -7882,11 +7914,22 @@ class LocalGethOrchestrator {
       assignments.forEach(function(a) { assigned[a.agentName] = true; });
       var categoriesInUse = {};
       assignments.forEach(function(a) { categoriesInUse[a.category] = true; });
+      // The agents added here answer the same question as the ones PROMETHEUS
+      // chose, so the same domain rule applies: an agent the guardrail just
+      // removed, or one of a category prohibited for the domain, is not
+      // brought back in by the top-up. Fitting categories come first.
+      var topUpDomain = session.domain || gethClassifyDomain(session.prompt);
+      var removedByGuardrail = {};
+      (session.domainReplacements || []).forEach(function(r) { removedByGuardrail[String(r.from).toUpperCase()] = true; });
       var candidates = this.getCatalog()
-        .filter(function(a) { return !assigned[a.agentName] && PARLIAMENT_AGENT_NAMES.indexOf(a.agentName) === -1; });
+        .filter(function(a) { return !assigned[a.agentName] && PARLIAMENT_AGENT_NAMES.indexOf(a.agentName) === -1; })
+        .filter(function(a) { return !removedByGuardrail[a.agentName.toUpperCase()]; })
+        .map(function(a) { return { agent: a, tier: gethDomainTier(a.agentName, a.category, topUpDomain) }; })
+        .filter(function(c) { return c.tier < GETH_DOMAIN_TIER_PROHIBITED; });
       candidates = gethShuffle(candidates).sort(function(x, y) {
-        return (categoriesInUse[x.category] ? 1 : 0) - (categoriesInUse[y.category] ? 1 : 0);
-      });
+        if (x.tier !== y.tier) return x.tier - y.tier;
+        return (categoriesInUse[x.agent.category] ? 1 : 0) - (categoriesInUse[y.agent.category] ? 1 : 0);
+      }).map(function(c) { return c.agent; });
       for (var ci = 0; ci < candidates.length && assignments.length < providerFloor; ci++) {
         assignments.push({
           agentName: candidates[ci].agentName,
@@ -8465,16 +8508,23 @@ class LocalGethOrchestrator {
       'At most 12 claims, the most consequential first. If nothing deserves a warning, return an empty list.\n\n' +
       'Respond ONLY with JSON: {"claims":[{"claim":"the claim, quoted or closely paraphrased","agents":["AGENT"],"status":"contradicted|doubtful|unsupported","note":"why, in one sentence"}]}';
 
+    // A list of claims, even an empty one, or null when the answer is not one.
+    function readClaims(text) {
+      var json = extractJSON(text);
+      if (json && Array.isArray(json.claims)) return json;
+      // Cut off by the token limit: the claims already written still count.
+      var salvagedClaims = gethSalvageArrayObjects(text, 'claims');
+      return salvagedClaims.length > 0 ? { claims: salvagedClaims } : null;
+    }
+
     try {
+      // Any of the user's providers can do this: one that cannot answer in
+      // the format is followed by the next.
       var result = await this.orchestratorChat(session, systemPrompt,
-        'Question: ' + session.prompt + '\n\nAgents\' final positions:\n\n' + body, 4096, '_fact_check');
-      var parsed = extractJSON(result.text);
-      if (!parsed || !Array.isArray(parsed.claims)) {
-        // Cut off by the token limit: the claims already written still count.
-        var salvagedClaims = gethSalvageArrayObjects(result.text, 'claims');
-        if (salvagedClaims.length === 0) return null;
-        parsed = { claims: salvagedClaims };
-      }
+        'Question: ' + session.prompt + '\n\nAgents\' final positions:\n\n' + body, 4096, '_fact_check',
+        function(text) { return readClaims(text) !== null; });
+      var parsed = readClaims(result.text);
+      if (!parsed) return null;
       var allowed = ['contradicted', 'doubtful', 'unsupported'];
       var claims = [];
       for (var i = 0; i < parsed.claims.length && claims.length < 12; i++) {
@@ -8792,7 +8842,10 @@ class LocalGethOrchestrator {
 
     try {
       // 1024 tokens cut the list of omissions short on real deliberations.
-      var result = await this.orchestratorChat(session, systemPrompt, userMessage, 4096, 'ATHENA');
+      var result = await this.orchestratorChat(session, systemPrompt, userMessage, 4096, 'ATHENA', function(text) {
+        var json = extractJSON(text);
+        return !!(json && (json.verdict === 'PASS' || json.verdict === 'FLAG')) || gethSalvageAthenaVerdict(text) !== null;
+      });
       var parsed = extractJSON(result.text);
       var truncated = false;
       if (!parsed || (parsed.verdict !== 'PASS' && parsed.verdict !== 'FLAG')) {

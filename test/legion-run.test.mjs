@@ -102,7 +102,10 @@ describe('first run', () => {
 
   it('prints the version of the Legion X it ships', async () => {
     const result = await nha(['version']);
-    assert.match(result.stdout, /^nha v17\.0\.1\nLegion X v\d+\.\d+\.\d+\n/);
+    // The number comes from package.json, so this test does not need editing at every release.
+    const released = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).version;
+    assert.ok(result.stdout.startsWith('nha v' + released + '\n'), result.stdout);
+    assert.match(result.stdout, /\nLegion X v\d+\.\d+\.\d+\n/);
   });
 
   it('starts with no provider chosen: the hosted model is not the default any more', async () => {
