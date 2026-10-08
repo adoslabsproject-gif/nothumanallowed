@@ -24,6 +24,11 @@ export async function download(url, dest, opts = {}) {
   const maxAttempts = Math.max(1, opts.retries ?? 3);
   const { VERSION } = await import('./constants.mjs').catch(() => ({ VERSION: 'dev' }));
 
+  if (!_isSafeUrl(url)) {
+    fail(`Refusing to download from untrusted or internal URL: ${url}`);
+    return false;
+  }
+
   let lastErr = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     // The timer covers the whole attempt, body included, and is always
