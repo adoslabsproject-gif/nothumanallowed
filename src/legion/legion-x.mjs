@@ -5569,6 +5569,42 @@ function gethWordJaccard(a, b) {
 }
 
 /** Cut a text at a paragraph, sentence, line or word boundary within maxChars. */
+/** How much of the synthesis ATHENA reads. Far above any real one: a safety cap, not a budget. */
+var LOCAL_GETH_ATHENA_SYNTHESIS_CHARS = 80000;
+
+/**
+ * Read an ATHENA verdict from an answer that stops before its JSON closes.
+ * The verdict comes first and every finding is a string: each string that was
+ * completed is kept, the one that was cut off is dropped.
+ * Returns { verdict, omissions, droppedObjections, recommendation } or null.
+ */
+function gethSalvageAthenaVerdict(text) {
+  text = String(text || '');
+  var verdict = text.match(/"verdict"\s*:\s*"(PASS|FLAG)"/);
+  if (!verdict) return null;
+
+  function completeStrings(field) {
+    var opening = text.match(new RegExp('"' + field + '"\\s*:\\s*\\['));
+    if (!opening) return [];
+    var body = text.substring(opening.index + opening[0].length);
+    var item = /\s*"((?:[^"\\]|\\.)*)"\s*(,|\])/y;
+    var found = [];
+    var m;
+    while ((m = item.exec(body)) !== null) {
+      try { found.push(JSON.parse('"' + m[1] + '"')); } catch (_) { /* a broken escape: not a finding we can trust */ }
+      if (m[2] === ']') break;
+    }
+    return found;
+  }
+
+  return {
+    verdict: verdict[1],
+    omissions: completeStrings('omissions'),
+    droppedObjections: completeStrings('droppedObjections'),
+    recommendation: '',
+  };
+}
+
 function gethTrimToCharBudget(text, maxChars) {
   text = String(text || '');
   if (text.length <= maxChars) return text;
@@ -5943,6 +5979,9 @@ function gethCountStemMatches(text, regex) {
   return count;
 }
 
+/** A second family scoring at least this share of the best one makes the question ambiguous. */
+var GETH_DOMAIN_AMBIGUITY_RATIO = 0.75;
+
 /**
  * Domain and family of a question.
  * 1. An explicit [domain:X] tag wins, with confidence 1.
@@ -5962,14 +6001,30 @@ function gethClassifyDomain(prompt) {
   var wordCount = lower.split(/\s+/).filter(Boolean).length;
   var bestDomain = 'general';
   var bestScore = 0;
+  var bestByFamily = {};
   for (var i = 0; i < GETH_DOMAIN_PATTERNS.length; i++) {
+    var domainId = GETH_DOMAIN_PATTERNS[i][0];
     var score = gethCountStemMatches(lower, GETH_DOMAIN_PATTERNS[i][1]) * GETH_DOMAIN_PATTERNS[i][2];
     if (score > bestScore) {
       bestScore = score;
-      bestDomain = GETH_DOMAIN_PATTERNS[i][0];
+      bestDomain = domainId;
     }
+    var familyOfDomain = GETH_DOMAIN_TO_FAMILY[domainId] || 'general';
+    if (score > (bestByFamily[familyOfDomain] || 0)) bestByFamily[familyOfDomain] = score;
   }
   if (bestScore === 0) return { domainId: 'general', family: 'general', confidence: 0 };
+
+  // A family wins only with a clear lead over every other one. One keyword
+  // each for two families is a tie in all but the weights: the question
+  // belongs to neither more than the other, and the one listed first would be
+  // a guess that then decides which agents are allowed to answer.
+  var winningFamily = GETH_DOMAIN_TO_FAMILY[bestDomain] || 'general';
+  var families = Object.keys(bestByFamily);
+  for (var f = 0; f < families.length; f++) {
+    if (families[f] !== winningFamily && bestByFamily[families[f]] >= bestScore * GETH_DOMAIN_AMBIGUITY_RATIO) {
+      return { domainId: 'general', family: 'general', confidence: 0 };
+    }
+  }
 
   var density = bestScore / Math.max(wordCount, 1);
   return {
@@ -8699,6 +8754,7 @@ class LocalGethOrchestrator {
 
   /** ATHENA: does the synthesis represent the deliberation? Returns the audit or null. */
   async runAthenaAudit(session, synthesis) {
+    session.athenaError = null;
     var usable = this.usableProposals(session);
     var perProposal = Math.floor(16000 / Math.max(usable.length, 1));
     var proposalsSummary = usable.map(function(p) {
@@ -8718,8 +8774,13 @@ class LocalGethOrchestrator {
       '{"verdict":"PASS","omissions":[],"droppedObjections":[],"recommendation":""}\n' +
       'or\n' +
       '{"verdict":"FLAG","omissions":["specific omission"],"droppedObjections":["specific objection"],"recommendation":"detailed fix suggestion"}\n\n' +
-      'PASS if nothing significant was missed. Be thorough — list ALL omissions and dropped objections you find.';
-    var userMessage = 'Query: ' + session.prompt + '\n\nSynthesis to audit:\n' + gethTrimToCharBudget(synthesis, 16000) +
+      'PASS if nothing significant was missed. List the most important omissions and dropped objections first: ' +
+      'at most 8 per list, one sentence each. Keep the recommendation under 120 words.';
+    // The synthesis is what gets audited, so it is given whole: cut at 16,000
+    // characters, a longer answer was reported by ATHENA as "truncated", a
+    // finding about this prompt and not about the synthesis. The proposals and
+    // the challenges are the reference material, and those are what is trimmed.
+    var userMessage = 'Query: ' + session.prompt + '\n\nSynthesis to audit:\n' + gethTrimToCharBudget(synthesis, LOCAL_GETH_ATHENA_SYNTHESIS_CHARS) +
       '\n\nAgent proposals:\n' + proposalsSummary +
       (challengesText ? '\n\nTribunal challenges:\n' + gethTrimToCharBudget(challengesText, 6000) : '');
 
@@ -8727,7 +8788,13 @@ class LocalGethOrchestrator {
       // 1024 tokens cut the list of omissions short on real deliberations.
       var result = await this.orchestratorChat(session, systemPrompt, userMessage, 4096, 'ATHENA');
       var parsed = extractJSON(result.text);
+      var truncated = false;
       if (!parsed || (parsed.verdict !== 'PASS' && parsed.verdict !== 'FLAG')) {
+        // An answer that ran out of tokens still holds a verdict and findings.
+        parsed = gethSalvageAthenaVerdict(result.text);
+        truncated = !!parsed;
+      }
+      if (!parsed) {
         session.athenaError = 'the answer was not a PASS/FLAG verdict';
         return null;
       }
@@ -8740,6 +8807,7 @@ class LocalGethOrchestrator {
         droppedObjections: strings(parsed.droppedObjections),
         recommendation: typeof parsed.recommendation === 'string' ? parsed.recommendation : '',
         provider: result.provider,
+        truncated: truncated,
       };
     } catch (err) {
       session.athenaError = err.message;
@@ -8765,6 +8833,8 @@ class LocalGethOrchestrator {
           droppedObjections: audit.droppedObjections,
           model: audit.provider + '/' + this.modelNameFor(audit.provider),
         };
+        // Said only when it happened: the list of findings may be incomplete.
+        if (audit.truncated) athena.truncated = true;
         var issues = audit.omissions.concat(audit.droppedObjections);
         if (audit.verdict === 'FLAG' && issues.length > 0) {
           finalSynthesis += '\n\n---\n**Audit**: ' + issues.join('; ');
@@ -10122,7 +10192,10 @@ async function runClientOrchestration(prompt, options, legionConfig, client, sha
     }
     if (athenaInfo && athenaInfo.active) {
       var athenaVerdict = athenaInfo.verdict === 'PASS' ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFLAG\x1b[0m';
-      console.log('\x1b[35m[PARLIAMENT] \x1b[0mATHENA (\x1b[35m' + (athenaInfo.model || 'qwen-7b') + '\x1b[0m) audit: ' + athenaVerdict);
+      console.log('\x1b[35m[PARLIAMENT] \x1b[0mATHENA (\x1b[35m' + (athenaInfo.model || 'unknown model') + '\x1b[0m) audit: ' + athenaVerdict);
+      if (athenaInfo.truncated) {
+        console.log('  ' + colors.yellow + 'The audit answer was cut off: the findings below may not be all of them.' + colors.reset);
+      }
       if (athenaInfo.verdict === 'FLAG') {
         var athenaIssues = (athenaInfo.omissions || []).concat(athenaInfo.droppedObjections || []);
         for (var athi = 0; athi < athenaIssues.length; athi++) {
@@ -10385,11 +10458,18 @@ async function runClientOrchestration(prompt, options, legionConfig, client, sha
             var cass = assignments.filter(function(a) { return a.agentName === 'CASSANDRA'; })[0];
             return cass ? { active: true, provider: cass.provider, model: cass.model, serverSide: false } : { active: false };
           })(),
+          // The saved deliberation keeps what the audit found, and says when
+          // an audit was asked for and did not happen.
           athena: athenaInfo && athenaInfo.active ? {
             active: true,
             verdict: athenaInfo.verdict,
             model: athenaInfo.model,
-          } : { active: false },
+            omissions: athenaInfo.omissions || [],
+            droppedObjections: athenaInfo.droppedObjections || [],
+            truncated: athenaInfo.truncated === true,
+          } : (athenaInfo && athenaInfo.requested
+            ? { active: false, requested: true, reason: athenaInfo.reason || 'unknown' }
+            : { active: false }),
         },
         tribunalMetrics: allTribunalMetrics.length > 0 ? allTribunalMetrics : undefined,
         synthesis: synthRaw,
