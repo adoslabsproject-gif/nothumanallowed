@@ -5569,6 +5569,12 @@ function gethWordJaccard(a, b) {
 }
 
 /** Cut a text at a paragraph, sentence, line or word boundary within maxChars. */
+/** First line of an error, short enough for a progress line. */
+function gethShortError(err) {
+  var message = String((err && err.message) || err || 'unknown error').split('\n')[0];
+  return message.length > 120 ? message.substring(0, 117) + '...' : message;
+}
+
 /** How much of the synthesis ATHENA reads. Far above any real one: a safety cap, not a budget. */
 var LOCAL_GETH_ATHENA_SYNTHESIS_CHARS = 80000;
 
@@ -9361,21 +9367,12 @@ async function runClientOrchestration(prompt, options, legionConfig, client, sha
         decompProvider = tryDecompProv;
         break;
       } catch (decompErr) {
-        var isDecompRetryable = decompErr.message && (
-          decompErr.message.includes('429') ||
-          decompErr.message.includes('503') ||
-          decompErr.message.includes('529') ||
-          decompErr.message.includes('overloaded') ||
-          decompErr.message.includes('Overloaded') ||
-          decompErr.message.includes('RESOURCE_EXHAUSTED') ||
-          decompErr.message.includes('UNAVAILABLE') ||
-          decompErr.message.includes('high demand') ||
-          decompErr.message.includes('rate')
-        );
-        if (isDecompRetryable && dpi < decompProviderOrder.length - 1) {
-          console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + colors.yellow + tryDecompProv + ' unavailable (' +
-            (decompErr.message.includes('529') || decompErr.message.includes('503') || decompErr.message.includes('overloaded') || decompErr.message.includes('Overloaded') || decompErr.message.includes('UNAVAILABLE') || decompErr.message.includes('high demand') ? 'overloaded' : 'rate-limited') +
-            '), trying ' + decompProviderOrder[dpi + 1] + '...' + colors.reset);
+        // Whatever went wrong (overload, wrong key, nobody listening), another
+        // configured provider may still answer: the deliberation stops only
+        // when none is left. It used to move on for rate limits alone.
+        if (dpi < decompProviderOrder.length - 1) {
+          console.log('\x1b[36m[DECOMPOSE]  \x1b[0m' + colors.yellow + tryDecompProv + ' failed (' +
+            gethShortError(decompErr) + '), trying ' + decompProviderOrder[dpi + 1] + '...' + colors.reset);
           continue;
         }
         throw decompErr;
@@ -9661,10 +9658,21 @@ async function runClientOrchestration(prompt, options, legionConfig, client, sha
           try {
             var cassProv = cassandraInstr.provider || userProvider;
             console.log('\x1b[35m[TRIBUNAL]   \x1b[0mCASSANDRA \u2192 ' + cassProv);
-            cassandraResult = await llm.chatWithProvider(cassProv, cassandraInstr.systemPrompt, cassandraInstr.userMessage, {
-              maxTokens: cassandraInstr.maxTokens || 4096,
-              agentTag: 'CASSANDRA',
-            });
+            // The tribunal is not lost because one provider is down: the others are tried in turn.
+            var cassProvOrder = [cassProv].concat(availableProviders.filter(function(p) { return p !== cassProv; }));
+            for (var cpi = 0; cpi < cassProvOrder.length; cpi++) {
+              try {
+                cassandraResult = await llm.chatWithProvider(cassProvOrder[cpi], cassandraInstr.systemPrompt, cassandraInstr.userMessage, {
+                  maxTokens: cassandraInstr.maxTokens || 4096,
+                  agentTag: 'CASSANDRA',
+                });
+                if (cpi > 0) console.log('\x1b[35m[TRIBUNAL]   \x1b[0m' + colors.yellow + 'Fallback: used ' + cassProvOrder[cpi] + ' (' + cassProv + ' failed)' + colors.reset);
+                break;
+              } catch (cassProvErr) {
+                if (cpi < cassProvOrder.length - 1) continue;
+                throw cassProvErr;
+              }
+            }
           } catch (cassErr) {
             console.error('\x1b[31m[TRIBUNAL]   CASSANDRA failed: ' + cassErr.message + '\x1b[0m');
             cassandraResult = 'Error: ' + cassErr.message;
@@ -9767,20 +9775,8 @@ async function runClientOrchestration(prompt, options, legionConfig, client, sha
                 agentProvider = tryAgentProv;
                 break;
               } catch (agentProvErr) {
-                var isAgentRetryable = agentProvErr.message && (
-                  agentProvErr.message.includes('429') ||
-                  agentProvErr.message.includes('503') ||
-                  agentProvErr.message.includes('529') ||
-                  agentProvErr.message.includes('overloaded') ||
-                  agentProvErr.message.includes('Overloaded') ||
-                  agentProvErr.message.includes('RESOURCE_EXHAUSTED') ||
-                  agentProvErr.message.includes('UNAVAILABLE') ||
-                  agentProvErr.message.includes('high demand') ||
-                  agentProvErr.message.includes('rate')
-                );
-                if (isAgentRetryable && api < agentProviderOrder.length - 1) {
-                  continue;
-                }
+                // Any failure moves the agent to the next configured provider.
+                if (api < agentProviderOrder.length - 1) continue;
                 throw agentProvErr;
               }
             }
@@ -10169,9 +10165,8 @@ async function runClientOrchestration(prompt, options, legionConfig, client, sha
         synthProvider = tryProv;
         break;
       } catch (synthErr) {
-        var isSynthRetryable = synthErr.message && (synthErr.message.includes('429') || synthErr.message.includes('503') || synthErr.message.includes('529') || synthErr.message.includes('overloaded') || synthErr.message.includes('Overloaded') || synthErr.message.includes('RESOURCE_EXHAUSTED') || synthErr.message.includes('UNAVAILABLE') || synthErr.message.includes('high demand') || synthErr.message.includes('rate') || synthErr.message.includes('max_tokens') || synthErr.message.includes('invalid_request'));
-        if (isSynthRetryable && spi < synthProviderOrder.length - 1) {
-          console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + tryProv + ' failed, trying ' + synthProviderOrder[spi + 1] + '...' + colors.reset);
+        if (spi < synthProviderOrder.length - 1) {
+          console.log('\x1b[36m[SYNTHESIS]  \x1b[0m' + colors.yellow + tryProv + ' failed (' + gethShortError(synthErr) + '), trying ' + synthProviderOrder[spi + 1] + '...' + colors.reset);
           continue;
         }
         throw synthErr;
@@ -10234,8 +10229,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client, sha
             valProvider = valProvOrder[vpi];
             break;
           } catch (valRetryErr) {
-            var isValRL = valRetryErr.message && (valRetryErr.message.includes('429') || valRetryErr.message.includes('503') || valRetryErr.message.includes('529') || valRetryErr.message.includes('overloaded') || valRetryErr.message.includes('Overloaded') || valRetryErr.message.includes('RESOURCE_EXHAUSTED') || valRetryErr.message.includes('UNAVAILABLE') || valRetryErr.message.includes('high demand') || valRetryErr.message.includes('rate'));
-            if (isValRL && vpi < valProvOrder.length - 1) continue;
+            if (vpi < valProvOrder.length - 1) continue;
             throw valRetryErr;
           }
         }
@@ -10305,8 +10299,7 @@ async function runClientOrchestration(prompt, options, legionConfig, client, sha
               });
               break;
             } catch (bpRetryErr) {
-              var isBpRL = bpRetryErr.message && (bpRetryErr.message.includes('429') || bpRetryErr.message.includes('503') || bpRetryErr.message.includes('529') || bpRetryErr.message.includes('overloaded') || bpRetryErr.message.includes('Overloaded') || bpRetryErr.message.includes('RESOURCE_EXHAUSTED') || bpRetryErr.message.includes('UNAVAILABLE') || bpRetryErr.message.includes('high demand') || bpRetryErr.message.includes('rate'));
-              if (isBpRL && bpi < bpProvOrder.length - 1) continue;
+              if (bpi < bpProvOrder.length - 1) continue;
               throw bpRetryErr;
             }
           }
